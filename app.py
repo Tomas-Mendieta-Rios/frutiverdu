@@ -1,3 +1,4 @@
+import re
 import streamlit as st
 import pandas as pd
 from pathlib import Path
@@ -9,6 +10,8 @@ PRODUCTOS_CSV = Path("productos.csv")
 COMPUESTOS_CSV = Path("compuestos.csv")
 if not COMPUESTOS_CSV.exists():
     COMPUESTOS_CSV = Path("compuestos")
+
+STOCK_CSV = Path("stock.csv")
 
 st.title("🍎 Frutiverdu - Editor de Compuestos")
 
@@ -31,8 +34,190 @@ def guardar_compuestos(df):
     df.to_csv(COMPUESTOS_CSV, index=False)
 
 
+def cargar_stock():
+    if not STOCK_CSV.exists():
+        return pd.DataFrame(
+            columns=["codigo", "producto", "unidad_medida", "cantidad"]
+        )
+    return pd.read_csv(STOCK_CSV, dtype={"codigo": str})
+
+
+def guardar_stock(df):
+    df.to_csv(STOCK_CSV, index=False)
+
+
+def construir_grafo_conversion(compuestos_df):
+    grafo = {}
+    for _, row in compuestos_df.iterrows():
+        c_orig = str(row["codigo_origen"])
+        c_comp = str(row["codigo_componente"])
+        q_orig = row.get("cantidad_origen")
+        q_comp = row.get("cantidad_componente")
+        if pd.isna(q_orig) or pd.isna(q_comp) or q_orig == 0 or q_comp == 0:
+            continue
+        grafo.setdefault(c_orig, {})[c_comp] = q_comp / q_orig
+        grafo.setdefault(c_comp, {})[c_orig] = q_orig / q_comp
+    return grafo
+
+
+def convertir(grafo, desde, hasta):
+    if desde == hasta:
+        return 1.0
+    visitados = {desde}
+    cola = [(desde, 1.0)]
+    while cola:
+        actual, factor = cola.pop(0)
+        for vecino, peso in grafo.get(actual, {}).items():
+            if vecino in visitados:
+                continue
+            nuevo = factor * peso
+            if vecino == hasta:
+                return nuevo
+            visitados.add(vecino)
+            cola.append((vecino, nuevo))
+    return None
+
+
+UNIDAD_BASE_PRIORIDAD = [
+    "KG",
+    "UNIDAD",
+    "ATADO",
+    "CABEZA",
+    "LITRO",
+    "PLANTA",
+    "MAPLE",
+    "CUBETA",
+    "BANDEJA",
+    "BOLSA",
+    "CAJA",
+    "RIESTRA",
+]
+
+UNIDAD_SINGULAR = {
+    "UNIDADES": "UNIDAD", "UNIDAD": "UNIDAD",
+    "ATADOS": "ATADO", "ATADO": "ATADO",
+    "CUBETAS": "CUBETA", "CUBETA": "CUBETA",
+    "PLANTAS": "PLANTA", "PLANTA": "PLANTA",
+    "CABEZAS": "CABEZA", "CABEZA": "CABEZA",
+    "BANDEJAS": "BANDEJA", "BANDEJA": "BANDEJA",
+    "BOLSAS": "BOLSA", "BOLSA": "BOLSA",
+    "CAJAS": "CAJA", "CAJA": "CAJA",
+    "MAPLES": "MAPLE", "MAPLE": "MAPLE",
+    "RIESTRAS": "RIESTRA", "RIESTRA": "RIESTRA",
+    "LITROS": "LITRO", "LITRO": "LITRO",
+    "KG": "KG", "KILOS": "KG", "KILO": "KG",
+}
+
+
+def parsear_descripcion(desc):
+    if not isinstance(desc, str) or not desc.strip():
+        return (None, None)
+    texto = desc.strip().upper()
+    match = re.search(
+        r"APROX\.?\s*([0-9]+(?:[.,/][0-9]+)?)\s*([A-ZÁÉÍÓÚÑ]+)",
+        texto,
+    )
+    if not match:
+        return (None, None)
+    num_str = match.group(1).replace(",", ".")
+    unit_raw = match.group(2)
+    try:
+        if "/" in num_str:
+            n, d = num_str.split("/")
+            cantidad = float(n) / float(d)
+        else:
+            cantidad = float(num_str)
+    except (ValueError, ZeroDivisionError):
+        return (None, None)
+    if unit_raw in ("GRAMOS", "GRAMO", "GR", "GRS", "G"):
+        return (cantidad / 1000.0, "KG")
+    unit = UNIDAD_SINGULAR.get(unit_raw)
+    if unit is None:
+        return (None, None)
+    return (cantidad, unit)
+
+
+def completar_relaciones(compuestos_df, productos_df):
+    prio = {u: i for i, u in enumerate(UNIDAD_BASE_PRIORIDAD)}
+
+    df = productos_df.copy()
+    partes = df["producto"].str.rsplit(" - ", n=1, expand=True)
+    df["base"] = partes[0].str.strip()
+    df["unidad"] = partes[1].fillna("").str.strip() if 1 in partes.columns else ""
+    df["prio"] = df["unidad"].map(lambda u: prio.get(u, 99))
+    if "descripcion" not in df.columns:
+        df["descripcion"] = ""
+    df["descripcion"] = df["descripcion"].fillna("")
+
+    nuevas = []
+    for _, grupo in df.groupby("base"):
+        if len(grupo) < 2:
+            continue
+        grupo = grupo.sort_values(["prio", "codigo"])
+        base_row = grupo.iloc[0]
+        unidad_a_row = {r["unidad"]: r for _, r in grupo.iterrows()}
+
+        for _, origen in grupo.iloc[1:].iterrows():
+            cantidad_comp = float("nan")
+            componente = base_row
+
+            target_cant, target_unit = parsear_descripcion(origen["descripcion"])
+            if (
+                target_unit is not None
+                and target_unit in unidad_a_row
+                and unidad_a_row[target_unit]["codigo"] != origen["codigo"]
+            ):
+                componente = unidad_a_row[target_unit]
+                cantidad_comp = target_cant
+
+            nuevas.append(
+                {
+                    "codigo_origen": origen["codigo"],
+                    "producto_origen": origen["producto"],
+                    "cantidad_origen": 1.0,
+                    "codigo_componente": componente["codigo"],
+                    "producto_componente": componente["producto"],
+                    "cantidad_componente": cantidad_comp,
+                }
+            )
+
+    columnas = [
+        "codigo_origen",
+        "producto_origen",
+        "cantidad_origen",
+        "codigo_componente",
+        "producto_componente",
+        "cantidad_componente",
+    ]
+
+    generadas = pd.DataFrame(nuevas)
+
+    if generadas.empty:
+        return compuestos_df[columnas].sort_values("producto_origen").reset_index(drop=True)
+
+    existentes = set(
+        zip(
+            compuestos_df["codigo_origen"].astype(str),
+            compuestos_df["codigo_componente"].astype(str),
+        )
+    )
+    generadas = generadas[
+        ~generadas.apply(
+            lambda r: (str(r["codigo_origen"]), str(r["codigo_componente"]))
+            in existentes,
+            axis=1,
+        )
+    ]
+
+    merged = pd.concat([compuestos_df[columnas], generadas[columnas]], ignore_index=True)
+    return merged.sort_values("producto_origen").reset_index(drop=True)
+
+
 productos = cargar_productos()
-compuestos = cargar_compuestos()
+compuestos_orig = cargar_compuestos()
+compuestos = completar_relaciones(compuestos_orig, productos)
+if len(compuestos) != len(compuestos_orig):
+    guardar_compuestos(compuestos)
 
 productos["label"] = productos["codigo"] + " - " + productos["producto"]
 
@@ -40,13 +225,6 @@ opciones = productos["label"].tolist()
 
 map_label_a_producto = dict(zip(productos["label"], productos["producto"]))
 map_label_a_codigo = dict(zip(productos["label"], productos["codigo"]))
-
-st.info(
-    "Editá las equivalencias. Ejemplo: "
-    "1 REPOLLO ROJO - CAJA = 15 REPOLLO ROJO - KG."
-)
-
-st.subheader("⚙️ Tabla editable")
 
 compuestos["origen_label"] = (
     compuestos["codigo_origen"].astype(str)
@@ -60,125 +238,335 @@ compuestos["componente_label"] = (
     + compuestos["producto_componente"].astype(str)
 )
 
-tabla_editor = compuestos[
-    [
-        "origen_label",
-        "cantidad_origen",
-        "componente_label",
-        "cantidad_componente",
-    ]
-].copy()
+map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 
-tabla_editada = st.data_editor(
-    tabla_editor,
-    use_container_width=True,
-    num_rows="dynamic",
-    column_config={
-        "origen_label": st.column_config.SelectboxColumn(
-            "Producto origen",
-            options=opciones,
-            required=True,
-        ),
-        "cantidad_origen": st.column_config.NumberColumn(
-            "Cantidad origen",
-            min_value=0.0,
-            step=1.0,
-            format="%.3f",
-            required=True,
-        ),
-        "componente_label": st.column_config.SelectboxColumn(
-            "Producto componente/base",
-            options=opciones,
-            required=True,
-        ),
-        "cantidad_componente": st.column_config.NumberColumn(
-            "Cantidad componente/base",
-            min_value=0.0,
-            step=0.5,
-            format="%.3f",
-            required=True,
-        ),
-    },
+tab_editar, tab_probar, tab_stock, tab_pedidos = st.tabs(
+    ["⚙️ Editar valores", "🧪 Probar conversión", "📦 Stock", "📋 Pedidos"]
 )
 
-col1, col2 = st.columns([1, 4])
+with tab_editar:
+    st.info(
+        "Editá las cantidades de las equivalencias. Ejemplo: "
+        "1 REPOLLO ROJO - CAJA = 15 REPOLLO ROJO - KG."
+    )
 
-with col1:
-    guardar = st.button("💾 Guardar cambios", type="primary")
-
-with col2:
-    st.caption("Los cambios se guardan en compuestos.csv o compuestos.")
-
-if guardar:
-    salida = tabla_editada.copy()
-
-    salida = salida.dropna(
-        subset=[
+    tabla_editor = compuestos[
+        [
             "origen_label",
             "cantidad_origen",
             "componente_label",
             "cantidad_componente",
         ]
+    ].copy()
+
+    tabla_editada = st.data_editor(
+        tabla_editor,
+        use_container_width=True,
+        num_rows="fixed",
+        disabled=["origen_label", "componente_label"],
+        column_config={
+            "origen_label": st.column_config.TextColumn(
+                "Producto origen",
+            ),
+            "cantidad_origen": st.column_config.NumberColumn(
+                "Cantidad origen",
+                min_value=0.0,
+                step=1.0,
+                format="%.3f",
+            ),
+            "componente_label": st.column_config.TextColumn(
+                "Producto componente/base",
+            ),
+            "cantidad_componente": st.column_config.NumberColumn(
+                "Cantidad componente/base",
+                min_value=0.0,
+                step=0.5,
+                format="%.3f",
+            ),
+        },
+        key="editor_valores",
     )
 
-    salida["codigo_origen"] = salida["origen_label"].map(map_label_a_codigo)
-    salida["producto_origen"] = salida["origen_label"].map(map_label_a_producto)
+    col1, col2 = st.columns([1, 4])
 
-    salida["codigo_componente"] = salida["componente_label"].map(map_label_a_codigo)
-    salida["producto_componente"] = salida["componente_label"].map(map_label_a_producto)
+    with col1:
+        guardar = st.button("💾 Guardar cambios", type="primary")
 
-    salida = salida[
-        [
-            "codigo_origen",
-            "producto_origen",
-            "cantidad_origen",
-            "codigo_componente",
-            "producto_componente",
-            "cantidad_componente",
+    with col2:
+        st.caption("Los cambios se guardan en compuestos.csv o compuestos.")
+
+    if guardar:
+        salida = tabla_editada.copy()
+
+        salida = salida.dropna(subset=["origen_label", "componente_label"])
+
+        salida["codigo_origen"] = salida["origen_label"].map(map_label_a_codigo)
+        salida["producto_origen"] = salida["origen_label"].map(map_label_a_producto)
+
+        salida["codigo_componente"] = salida["componente_label"].map(map_label_a_codigo)
+        salida["producto_componente"] = salida["componente_label"].map(map_label_a_producto)
+
+        salida = salida[
+            [
+                "codigo_origen",
+                "producto_origen",
+                "cantidad_origen",
+                "codigo_componente",
+                "producto_componente",
+                "cantidad_componente",
+            ]
         ]
-    ]
 
-    guardar_compuestos(salida)
-    st.success("Compuestos guardados correctamente.")
+        guardar_compuestos(salida)
+        st.success("Compuestos guardados correctamente.")
 
-st.divider()
+with tab_probar:
+    opciones_prueba = tabla_editada["origen_label"].dropna().unique()
 
-st.subheader("🧪 Probar conversión")
+    if len(opciones_prueba) == 0:
+        st.warning("No hay productos origen para probar.")
+    else:
+        producto_prueba = st.selectbox(
+            "Producto origen",
+            opciones_prueba,
+        )
 
-opciones_prueba = tabla_editada["origen_label"].dropna().unique()
+        cantidad_prueba = st.number_input(
+            "Cantidad",
+            min_value=0.0,
+            value=1.0,
+            step=0.5,
+        )
 
-if len(opciones_prueba) == 0:
-    st.warning("No hay productos origen para probar.")
-else:
-    producto_prueba = st.selectbox(
-        "Producto origen",
-        opciones_prueba,
+        fila = tabla_editada[tabla_editada["origen_label"] == producto_prueba]
+
+        if not fila.empty:
+            fila = fila.iloc[0]
+
+            cantidad_origen = fila["cantidad_origen"]
+            cantidad_componente = fila["cantidad_componente"]
+
+            if pd.isna(cantidad_origen) or pd.isna(cantidad_componente):
+                st.error("La equivalencia está incompleta.")
+            elif cantidad_origen == 0:
+                st.error("La cantidad origen no puede ser 0.")
+            else:
+                factor = cantidad_componente / cantidad_origen
+                resultado = cantidad_prueba * factor
+
+                st.metric(
+                    "Resultado",
+                    f"{resultado:.2f} {fila['componente_label']}",
+                )
+
+with tab_stock:
+    st.info(
+        "Cargá la cantidad de cada producto. "
+        "Los cambios se guardan en stock.csv."
     )
 
-    cantidad_prueba = st.number_input(
-        "Cantidad",
-        min_value=0.0,
-        value=1.0,
-        step=0.5,
+    stock_actual = cargar_stock()
+    map_codigo_a_cantidad = dict(
+        zip(stock_actual["codigo"].astype(str), stock_actual["cantidad"])
     )
 
-    fila = tabla_editada[tabla_editada["origen_label"] == producto_prueba]
+    stock_base = productos[["codigo", "producto", "unidad_medida"]].copy()
+    stock_base["cantidad"] = (
+        stock_base["codigo"].map(map_codigo_a_cantidad).fillna(0.0).astype(float)
+    )
 
-    if not fila.empty:
-        fila = fila.iloc[0]
+    if st.session_state.get("resetear_stock"):
+        stock_base["cantidad"] = 0.0
+        guardar_stock(stock_base)
+        st.session_state["resetear_stock"] = False
+        st.success("Stock puesto en cero.")
 
-        cantidad_origen = fila["cantidad_origen"]
-        cantidad_componente = fila["cantidad_componente"]
+    stock_editado = st.data_editor(
+        stock_base,
+        use_container_width=True,
+        num_rows="fixed",
+        disabled=["codigo", "producto", "unidad_medida"],
+        column_config={
+            "codigo": st.column_config.TextColumn("Código"),
+            "producto": st.column_config.TextColumn("Producto"),
+            "unidad_medida": st.column_config.TextColumn("Unidad"),
+            "cantidad": st.column_config.NumberColumn(
+                "Cantidad",
+                min_value=0.0,
+                step=1.0,
+                format="%.3f",
+            ),
+        },
+        key="editor_stock",
+    )
 
-        if pd.isna(cantidad_origen) or pd.isna(cantidad_componente):
-            st.error("La equivalencia está incompleta.")
-        elif cantidad_origen == 0:
-            st.error("La cantidad origen no puede ser 0.")
-        else:
-            factor = cantidad_componente / cantidad_origen
-            resultado = cantidad_prueba * factor
+    col_s1, col_s2, col_s3 = st.columns([1, 1, 3])
 
-            st.metric(
-                "Resultado",
-                f"{resultado:.2f} {fila['componente_label']}",
+    with col_s1:
+        guardar_s = st.button(
+            "💾 Guardar stock",
+            type="primary",
+            key="btn_guardar_stock",
+        )
+
+    with col_s2:
+        cero_s = st.button(
+            "🧹 Poner stock a cero",
+            key="btn_cero_stock",
+        )
+
+    with col_s3:
+        st.caption("Los cambios se guardan en stock.csv.")
+
+    if guardar_s:
+        salida_s = stock_editado.copy()
+        salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
+        salida_s = salida_s[["codigo", "producto", "unidad_medida", "cantidad"]]
+        guardar_stock(salida_s)
+        st.success("Stock guardado correctamente.")
+
+    if cero_s:
+        st.session_state["resetear_stock"] = True
+        st.rerun()
+
+with tab_pedidos:
+    st.info(
+        "Subí el Excel de pedidos. Se leen las columnas "
+        "**Código Producto** y **Cantidad**."
+    )
+
+    archivo_pedidos = st.file_uploader(
+        "Archivo de pedidos (.xlsx)",
+        type=["xlsx", "xls"],
+        key="uploader_pedidos",
+    )
+
+    if archivo_pedidos is not None:
+        try:
+            df_pedidos = pd.read_excel(
+                archivo_pedidos,
+                header=2,
+                dtype={"Código Producto": str},
             )
+        except Exception as e:
+            st.error(f"No se pudo leer el archivo: {e}")
+            df_pedidos = None
+
+        if df_pedidos is not None:
+            columnas_requeridas = ["Código Producto", "Cantidad"]
+            faltantes = [c for c in columnas_requeridas if c not in df_pedidos.columns]
+
+            if faltantes:
+                st.error(
+                    f"Faltan columnas en el archivo: {', '.join(faltantes)}. "
+                    f"Columnas encontradas: {', '.join(df_pedidos.columns)}"
+                )
+            else:
+                pedidos = df_pedidos[["Código Producto", "Cantidad"]].copy()
+                pedidos.columns = ["codigo", "cantidad"]
+                pedidos["codigo"] = pedidos["codigo"].astype(str).str.strip()
+                pedidos = pedidos.dropna(subset=["codigo", "cantidad"])
+
+                map_codigo_a_producto = dict(
+                    zip(productos["codigo"], productos["producto"])
+                )
+                map_codigo_a_unidad = dict(
+                    zip(productos["codigo"], productos["unidad_medida"])
+                )
+
+                pedidos["producto"] = pedidos["codigo"].map(map_codigo_a_producto)
+                pedidos["unidad_medida"] = pedidos["codigo"].map(map_codigo_a_unidad)
+
+                desconocidos = pedidos[pedidos["producto"].isna()]
+                if not desconocidos.empty:
+                    st.warning(
+                        f"Códigos no encontrados en productos.csv: "
+                        f"{', '.join(desconocidos['codigo'].unique())}"
+                    )
+
+                pedidos = pedidos[["codigo", "producto", "unidad_medida", "cantidad"]]
+
+                st.subheader("Pedidos cargados")
+                st.dataframe(pedidos, use_container_width=True)
+
+                st.caption(
+                    f"{len(pedidos)} filas leídas · "
+                    f"{pedidos['producto'].notna().sum()} con producto válido"
+                )
+
+                st.divider()
+                st.subheader("Totales por producto")
+
+                grafo = construir_grafo_conversion(compuestos)
+
+                pedidos_validos = pedidos.dropna(
+                    subset=["producto", "cantidad"]
+                ).copy()
+
+                partes_ped = pedidos_validos["producto"].str.rsplit(
+                    " - ", n=1, expand=True
+                )
+                pedidos_validos["base"] = partes_ped[0].str.strip()
+
+                productos_base = productos.copy()
+                partes_pr = productos_base["producto"].str.rsplit(
+                    " - ", n=1, expand=True
+                )
+                productos_base["base"] = partes_pr[0].str.strip()
+                productos_base["unidad"] = (
+                    partes_pr[1].fillna("").str.strip()
+                    if 1 in partes_pr.columns
+                    else ""
+                )
+
+                for base, grupo in pedidos_validos.groupby("base"):
+                    opciones_grupo = productos_base[productos_base["base"] == base]
+
+                    if opciones_grupo.empty:
+                        continue
+
+                    grupo_agg = (
+                        grupo.groupby(["codigo", "producto"], as_index=False)[
+                            "cantidad"
+                        ].sum()
+                    )
+
+                    col_t, col_u, col_m = st.columns([3, 2, 2])
+
+                    col_t.markdown(f"**{base}**")
+
+                    unidades = opciones_grupo["unidad"].tolist()
+                    unidad_destino = col_u.selectbox(
+                        "Unidad",
+                        unidades,
+                        key=f"unidad_dest_{base}",
+                        label_visibility="collapsed",
+                    )
+                    codigo_destino = opciones_grupo[
+                        opciones_grupo["unidad"] == unidad_destino
+                    ].iloc[0]["codigo"]
+
+                    total = 0.0
+                    sin_relacion = []
+                    for _, fila in grupo_agg.iterrows():
+                        codigo = str(fila["codigo"])
+                        cantidad = float(fila["cantidad"])
+                        factor = convertir(grafo, codigo, codigo_destino)
+                        if factor is None:
+                            sin_relacion.append(fila["producto"])
+                            continue
+                        total += cantidad * factor
+
+                    col_m.metric(
+                        f"Total en {unidad_destino}",
+                        f"{total:.3f}",
+                    )
+
+                    if sin_relacion:
+                        st.caption(
+                            f"⚠️ Sin relación cargada para: "
+                            f"{', '.join(set(sin_relacion))}"
+                        )
+
+
+#python -m streamlit run app.py
