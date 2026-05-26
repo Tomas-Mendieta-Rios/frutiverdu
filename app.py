@@ -15,6 +15,10 @@ STOCK_CSV = Path("stock.csv")
 
 PEDIDOS_CSV = Path("pedidos.csv")
 
+EXCEPCIONES = {
+    ("061", "062"),
+}
+
 st.title("🍎 Frutiverdu - Editor de Compuestos")
 
 
@@ -51,7 +55,10 @@ def guardar_stock(df):
 def cargar_pedidos():
     if not PEDIDOS_CSV.exists():
         return None
-    return pd.read_csv(PEDIDOS_CSV, dtype={"codigo": str})
+    df = pd.read_csv(PEDIDOS_CSV, dtype={"codigo": str})
+    if "estimado" not in df.columns:
+        df["estimado"] = 0.0
+    return df
 
 
 def guardar_pedidos(df):
@@ -88,6 +95,28 @@ def convertir(grafo, desde, hasta):
             visitados.add(vecino)
             cola.append((vecino, nuevo))
     return None
+
+
+def componentes_conectados(codigos, grafo):
+    codigos = set(map(str, codigos))
+    componentes = []
+    visitados = set()
+    for codigo in codigos:
+        if codigo in visitados:
+            continue
+        comp = set()
+        cola = [codigo]
+        while cola:
+            actual = cola.pop(0)
+            if actual in comp:
+                continue
+            comp.add(actual)
+            for vecino in grafo.get(actual, {}):
+                if vecino in codigos and vecino not in comp:
+                    cola.append(vecino)
+        componentes.append(comp)
+        visitados |= comp
+    return componentes
 
 
 UNIDAD_BASE_PRIORIDAD = [
@@ -149,8 +178,30 @@ def parsear_descripcion(desc):
     return (cantidad, unit)
 
 
-def completar_relaciones(compuestos_df, productos_df):
+def completar_relaciones(compuestos_df, productos_df, excepciones=None):
+    excepciones = excepciones or set()
     prio = {u: i for i, u in enumerate(UNIDAD_BASE_PRIORIDAD)}
+
+    columnas = [
+        "codigo_origen",
+        "producto_origen",
+        "cantidad_origen",
+        "codigo_componente",
+        "producto_componente",
+        "cantidad_componente",
+    ]
+
+    if excepciones and not compuestos_df.empty:
+        compuestos_df = compuestos_df[
+            ~compuestos_df.apply(
+                lambda r: (
+                    str(r["codigo_origen"]),
+                    str(r["codigo_componente"]),
+                )
+                in excepciones,
+                axis=1,
+            )
+        ]
 
     df = productos_df.copy()
     partes = df["producto"].str.rsplit(" - ", n=1, expand=True)
@@ -182,6 +233,10 @@ def completar_relaciones(compuestos_df, productos_df):
                 componente = unidad_a_row[target_unit]
                 cantidad_comp = target_cant
 
+            par = (str(origen["codigo"]), str(componente["codigo"]))
+            if par in excepciones:
+                continue
+
             nuevas.append(
                 {
                     "codigo_origen": origen["codigo"],
@@ -192,15 +247,6 @@ def completar_relaciones(compuestos_df, productos_df):
                     "cantidad_componente": cantidad_comp,
                 }
             )
-
-    columnas = [
-        "codigo_origen",
-        "producto_origen",
-        "cantidad_origen",
-        "codigo_componente",
-        "producto_componente",
-        "cantidad_componente",
-    ]
 
     generadas = pd.DataFrame(nuevas)
 
@@ -227,7 +273,7 @@ def completar_relaciones(compuestos_df, productos_df):
 
 productos = cargar_productos()
 compuestos_orig = cargar_compuestos()
-compuestos = completar_relaciones(compuestos_orig, productos)
+compuestos = completar_relaciones(compuestos_orig, productos, EXCEPCIONES)
 if len(compuestos) != len(compuestos_orig):
     guardar_compuestos(compuestos)
 
@@ -283,9 +329,7 @@ with tab_editar:
         num_rows="fixed",
         disabled=["origen_label", "componente_label"],
         column_config={
-            "origen_label": st.column_config.TextColumn(
-                "Producto origen",
-            ),
+            "origen_label": st.column_config.TextColumn("Producto origen"),
             "cantidad_origen": st.column_config.NumberColumn(
                 "Cantidad origen",
                 min_value=0.0,
@@ -293,7 +337,7 @@ with tab_editar:
                 format="%.3f",
             ),
             "componente_label": st.column_config.TextColumn(
-                "Producto componente/base",
+                "Producto componente/base"
             ),
             "cantidad_componente": st.column_config.NumberColumn(
                 "Cantidad componente/base",
@@ -311,16 +355,14 @@ with tab_editar:
         guardar = st.button("💾 Guardar cambios", type="primary")
 
     with col2:
-        st.caption("Los cambios se guardan en compuestos.csv o compuestos.")
+        st.caption("Los cambios se guardan en compuestos.csv.")
 
     if guardar:
         salida = tabla_editada.copy()
-
         salida = salida.dropna(subset=["origen_label", "componente_label"])
 
         salida["codigo_origen"] = salida["origen_label"].map(map_label_a_codigo)
         salida["producto_origen"] = salida["origen_label"].map(map_label_a_producto)
-
         salida["codigo_componente"] = salida["componente_label"].map(map_label_a_codigo)
         salida["producto_componente"] = salida["componente_label"].map(map_label_a_producto)
 
@@ -339,43 +381,43 @@ with tab_editar:
         st.success("Compuestos guardados correctamente.")
 
 with tab_probar:
-    opciones_prueba = tabla_editada["origen_label"].dropna().unique()
+    st.info("Elegí un producto y se muestran todas las equivalencias de su familia.")
 
-    if len(opciones_prueba) == 0:
-        st.warning("No hay productos origen para probar.")
+    producto_prueba = st.selectbox("Producto", opciones, key="probar_producto")
+
+    codigo_prueba = map_label_a_codigo[producto_prueba]
+    producto_nombre = map_label_a_producto[producto_prueba]
+
+    partes_sel = producto_nombre.rsplit(" - ", 1)
+    if len(partes_sel) < 2:
+        st.info("Este producto no tiene una unidad parseable para convertir.")
     else:
-        producto_prueba = st.selectbox(
-            "Producto origen",
-            opciones_prueba,
-        )
+        base_sel = partes_sel[0].strip()
 
-        cantidad_prueba = st.number_input(
-            "Cantidad",
-            min_value=0.0,
-            value=1.0,
-            step=0.5,
-        )
+        productos_fam = productos.copy()
+        partes_fam = productos_fam["producto"].str.rsplit(" - ", n=1, expand=True)
+        productos_fam["base"] = partes_fam[0].str.strip()
 
-        fila = tabla_editada[tabla_editada["origen_label"] == producto_prueba]
+        familia = productos_fam[
+            (productos_fam["base"] == base_sel)
+            & (productos_fam["codigo"].astype(str) != str(codigo_prueba))
+        ]
 
-        if not fila.empty:
-            fila = fila.iloc[0]
+        if familia.empty:
+            st.info(f"No hay otras unidades en la familia **{base_sel}**.")
+        else:
+            grafo = construir_grafo_conversion(compuestos)
 
-            cantidad_origen = fila["cantidad_origen"]
-            cantidad_componente = fila["cantidad_componente"]
+            st.markdown(f"### 1 {producto_nombre} equivale a:")
 
-            if pd.isna(cantidad_origen) or pd.isna(cantidad_componente):
-                st.error("La equivalencia está incompleta.")
-            elif cantidad_origen == 0:
-                st.error("La cantidad origen no puede ser 0.")
-            else:
-                factor = cantidad_componente / cantidad_origen
-                resultado = cantidad_prueba * factor
-
-                st.metric(
-                    "Resultado",
-                    f"{resultado:.2f} {fila['componente_label']}",
-                )
+            for _, otro in familia.iterrows():
+                factor = convertir(grafo, str(codigo_prueba), str(otro["codigo"]))
+                if factor is None:
+                    st.markdown(
+                        f"- ❓ **{otro['producto']}** — sin relación cargada"
+                    )
+                else:
+                    st.markdown(f"- **{factor:,.3f}** {otro['producto']}")
 
 with tab_stock:
     st.info(
@@ -449,9 +491,9 @@ with tab_stock:
 
 with tab_pedidos:
     st.info(
-        "Subí el Excel de pedidos. Se leen las columnas "
-        "**Código Producto** y **Cantidad**. "
-        "Los pedidos quedan guardados en pedidos.csv y se sobrescriben al subir uno nuevo."
+        "Subí el Excel de pedidos o editá los valores a mano. "
+        "**Estimado** = cuánto querés comprar de más previendo ventas. "
+        "Los datos se guardan en pedidos.csv."
     )
 
     archivo_pedidos = st.file_uploader(
@@ -460,74 +502,192 @@ with tab_pedidos:
         key="uploader_pedidos",
     )
 
-    pedidos = None
-    error_carga = False
-
     if archivo_pedidos is not None:
-        try:
-            df_pedidos = pd.read_excel(
-                archivo_pedidos,
-                header=2,
-                dtype={"Código Producto": str},
-            )
-        except Exception as e:
-            st.error(f"No se pudo leer el archivo: {e}")
-            df_pedidos = None
-            error_carga = True
-
-        if df_pedidos is not None:
-            columnas_requeridas = ["Código Producto", "Cantidad"]
-            faltantes = [c for c in columnas_requeridas if c not in df_pedidos.columns]
-
-            if faltantes:
-                st.error(
-                    f"Faltan columnas en el archivo: {', '.join(faltantes)}. "
-                    f"Columnas encontradas: {', '.join(df_pedidos.columns)}"
+        file_id = (archivo_pedidos.name, archivo_pedidos.size)
+        if st.session_state.get("ultimo_upload_pedidos") != file_id:
+            try:
+                df_excel = pd.read_excel(
+                    archivo_pedidos,
+                    header=2,
+                    dtype={"Código Producto": str},
                 )
-                error_carga = True
-            else:
-                pedidos = df_pedidos[["Código Producto", "Cantidad"]].copy()
-                pedidos.columns = ["codigo", "cantidad"]
-                pedidos["codigo"] = pedidos["codigo"].astype(str).str.strip()
-                pedidos = pedidos.dropna(subset=["codigo", "cantidad"])
+            except Exception as e:
+                st.error(f"No se pudo leer el archivo: {e}")
+                df_excel = None
 
-                map_codigo_a_producto = dict(
-                    zip(productos["codigo"], productos["producto"])
-                )
-                map_codigo_a_unidad = dict(
-                    zip(productos["codigo"], productos["unidad_medida"])
-                )
+            if df_excel is not None:
+                columnas_requeridas = ["Código Producto", "Cantidad"]
+                faltantes = [
+                    c for c in columnas_requeridas if c not in df_excel.columns
+                ]
+                if faltantes:
+                    st.error(
+                        f"Faltan columnas: {', '.join(faltantes)}. "
+                        f"Encontradas: {', '.join(df_excel.columns)}"
+                    )
+                else:
+                    df_parsed = df_excel[["Código Producto", "Cantidad"]].copy()
+                    df_parsed.columns = ["codigo", "cantidad"]
+                    df_parsed["codigo"] = df_parsed["codigo"].astype(str).str.strip()
+                    df_parsed = df_parsed.dropna(subset=["codigo", "cantidad"])
+                    df_parsed = df_parsed.groupby("codigo", as_index=False)[
+                        "cantidad"
+                    ].sum()
 
-                pedidos["producto"] = pedidos["codigo"].map(map_codigo_a_producto)
-                pedidos["unidad_medida"] = pedidos["codigo"].map(map_codigo_a_unidad)
-                pedidos = pedidos[["codigo", "producto", "unidad_medida", "cantidad"]]
+                    map_cant_excel = dict(
+                        zip(df_parsed["codigo"], df_parsed["cantidad"])
+                    )
 
-                guardar_pedidos(pedidos)
-                st.success("Pedidos cargados y guardados en pedidos.csv.")
+                    pedidos_prev = cargar_pedidos()
+                    map_est = {}
+                    if pedidos_prev is not None and "estimado" in pedidos_prev.columns:
+                        map_est = dict(
+                            zip(
+                                pedidos_prev["codigo"].astype(str),
+                                pedidos_prev["estimado"].fillna(0),
+                            )
+                        )
 
-    if pedidos is None and not error_carga:
-        pedidos = cargar_pedidos()
-        if pedidos is not None and not pedidos.empty:
-            st.caption(
-                f"📂 Mostrando los últimos pedidos guardados ({PEDIDOS_CSV.name})."
-            )
+                    full = productos[
+                        ["codigo", "producto", "unidad_medida"]
+                    ].copy()
+                    full["cantidad"] = (
+                        full["codigo"]
+                        .astype(str)
+                        .map(map_cant_excel)
+                        .fillna(0)
+                        .astype(float)
+                    )
+                    full["estimado"] = (
+                        full["codigo"]
+                        .astype(str)
+                        .map(map_est)
+                        .fillna(0)
+                        .astype(float)
+                    )
 
-    if pedidos is not None and not pedidos.empty:
-        desconocidos = pedidos[pedidos["producto"].isna()]
-        if not desconocidos.empty:
-            st.warning(
-                f"Códigos no encontrados en productos.csv: "
-                f"{', '.join(desconocidos['codigo'].unique())}"
-            )
+                    guardar_pedidos(full)
+                    st.session_state["ultimo_upload_pedidos"] = file_id
 
-        st.subheader("Pedidos cargados")
-        st.dataframe(pedidos, use_container_width=True)
+                    codigos_excel = set(df_parsed["codigo"])
+                    codigos_prod = set(productos["codigo"].astype(str))
+                    desconocidos = codigos_excel - codigos_prod
+                    st.success(
+                        f"✅ Excel procesado. "
+                        f"{(full['cantidad'] > 0).sum()} productos con pedido."
+                    )
+                    if desconocidos:
+                        st.warning(
+                            f"Códigos del Excel que no están en productos.csv "
+                            f"(se ignoraron): {', '.join(sorted(desconocidos))}"
+                        )
 
-        st.caption(
-            f"{len(pedidos)} filas · "
-            f"{pedidos['producto'].notna().sum()} con producto válido · "
-            "los totales y el cruce con stock están en la pestaña 🛒 Total a comprar."
+    pedidos_full = cargar_pedidos()
+    if pedidos_full is None or pedidos_full.empty:
+        pedidos_full = productos[["codigo", "producto", "unidad_medida"]].copy()
+        pedidos_full["cantidad"] = 0.0
+        pedidos_full["estimado"] = 0.0
+    else:
+        if "estimado" not in pedidos_full.columns:
+            pedidos_full["estimado"] = 0.0
+        existentes = set(pedidos_full["codigo"].astype(str))
+        nuevos = productos[
+            ~productos["codigo"].astype(str).isin(existentes)
+        ].copy()
+        if not nuevos.empty:
+            nuevos = nuevos[["codigo", "producto", "unidad_medida"]]
+            nuevos["cantidad"] = 0.0
+            nuevos["estimado"] = 0.0
+            pedidos_full = pd.concat([pedidos_full, nuevos], ignore_index=True)
+
+    pedidos_full["cantidad"] = pedidos_full["cantidad"].fillna(0).astype(float)
+    pedidos_full["estimado"] = pedidos_full["estimado"].fillna(0).astype(float)
+    pedidos_full = pedidos_full[
+        ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
+    ].sort_values("producto").reset_index(drop=True)
+
+    col_f1, col_f2 = st.columns([2, 4])
+    with col_f1:
+        solo_pedidos = st.checkbox(
+            "Mostrar solo productos pedidos",
+            value=False,
+            help="Oculta filas con pedido = 0 y estimado = 0",
         )
+    with col_f2:
+        st.caption(
+            f"{(pedidos_full['cantidad'] > 0).sum()} con pedido · "
+            f"{(pedidos_full['estimado'] > 0).sum()} con estimado · "
+            f"{len(pedidos_full)} productos totales"
+        )
+
+    if solo_pedidos:
+        pedidos_view = pedidos_full[
+            (pedidos_full["cantidad"] > 0) | (pedidos_full["estimado"] > 0)
+        ].copy()
+    else:
+        pedidos_view = pedidos_full.copy()
+
+    if pedidos_view.empty:
+        st.warning("No hay productos con pedido o estimado para mostrar.")
+    else:
+        pedidos_editado = st.data_editor(
+            pedidos_view,
+            use_container_width=True,
+            num_rows="fixed",
+            disabled=["codigo", "producto", "unidad_medida"],
+            column_config={
+                "codigo": st.column_config.TextColumn("Código"),
+                "producto": st.column_config.TextColumn("Producto"),
+                "unidad_medida": st.column_config.TextColumn("Unidad"),
+                "cantidad": st.column_config.NumberColumn(
+                    "Pedido",
+                    min_value=0.0,
+                    step=1.0,
+                    format="%.3f",
+                ),
+                "estimado": st.column_config.NumberColumn(
+                    "Estimado (extra)",
+                    min_value=0.0,
+                    step=1.0,
+                    format="%.3f",
+                ),
+            },
+            key="editor_pedidos",
+        )
+
+        col_g1, col_g2 = st.columns([1, 4])
+        with col_g1:
+            guardar_ped = st.button(
+                "💾 Guardar pedidos",
+                type="primary",
+                key="btn_guardar_pedidos",
+            )
+        with col_g2:
+            st.caption("Los cambios se guardan en pedidos.csv.")
+
+        if guardar_ped:
+            edit_cant = dict(
+                zip(
+                    pedidos_editado["codigo"].astype(str),
+                    pedidos_editado["cantidad"].fillna(0).astype(float),
+                )
+            )
+            edit_est = dict(
+                zip(
+                    pedidos_editado["codigo"].astype(str),
+                    pedidos_editado["estimado"].fillna(0).astype(float),
+                )
+            )
+            pedidos_full["cantidad"] = pedidos_full.apply(
+                lambda r: edit_cant.get(str(r["codigo"]), r["cantidad"]),
+                axis=1,
+            )
+            pedidos_full["estimado"] = pedidos_full.apply(
+                lambda r: edit_est.get(str(r["codigo"]), r["estimado"]),
+                axis=1,
+            )
+            guardar_pedidos(pedidos_full)
+            st.success("Pedidos guardados.")
 
 with tab_comprar:
     st.info(
@@ -561,7 +721,11 @@ with tab_comprar:
             else ""
         )
 
-        ped = pedidos_actual.dropna(subset=["producto", "cantidad"]).copy()
+        ped = pedidos_actual.dropna(subset=["producto"]).copy()
+        ped["cantidad"] = ped["cantidad"].fillna(0).astype(float)
+        if "estimado" not in ped.columns:
+            ped["estimado"] = 0.0
+        ped["estimado"] = ped["estimado"].fillna(0).astype(float)
         partes_ped = ped["producto"].str.rsplit(" - ", n=1, expand=True)
         ped["base"] = partes_ped[0].str.strip()
 
@@ -576,93 +740,136 @@ with tab_comprar:
             )
 
         if modo.startswith("Detallada"):
-            bases = sorted(ped["base"].unique())
+            ped_relevante = ped[(ped["cantidad"] > 0) | (ped["estimado"] > 0)]
+            bases = sorted(ped_relevante["base"].unique())
 
-            col_h1, col_h2, col_h3, col_h4, col_h5 = st.columns(
-                [2, 1.3, 1, 1, 1.5]
+            col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7 = st.columns(
+                [1.8, 1.0, 0.8, 0.9, 0.8, 1.4, 1.4]
             )
             col_h1.caption("**Producto**")
             col_h2.caption("**Unidad**")
             col_h3.caption("**Pedido**")
-            col_h4.caption("**Stock**")
-            col_h5.caption("**Resultado**")
+            col_h4.caption("**Estimado**")
+            col_h5.caption("**Stock**")
+            col_h6.caption("**Resultado**")
+            col_h7.caption("**Con estimado**")
 
             for base in bases:
                 opciones_grupo = prod_temp[prod_temp["base"] == base]
                 if opciones_grupo.empty:
                     continue
 
-                unidades = opciones_grupo["unidad"].tolist()
-                idx_default = unidades.index("KG") if "KG" in unidades else 0
+                codigos_familia = opciones_grupo["codigo"].astype(str).tolist()
+                componentes = componentes_conectados(codigos_familia, grafo)
 
-                col_t, col_u, col_p, col_s, col_r = st.columns(
-                    [2, 1.3, 1, 1, 1.5]
+                ped_base = ped[ped["base"] == base]
+                stk_base = stk[stk["base"] == base] if not stk.empty else stk
+
+                pedido_codigos = set(
+                    ped_base[
+                        (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
+                    ]["codigo"].astype(str)
                 )
 
-                col_t.markdown(f"**{base}**")
-                unidad_destino = col_u.selectbox(
-                    "Unidad",
-                    unidades,
-                    index=idx_default,
-                    key=f"unidad_comprar_{base}",
-                    label_visibility="collapsed",
-                )
-                codigo_destino = opciones_grupo[
-                    opciones_grupo["unidad"] == unidad_destino
-                ].iloc[0]["codigo"]
-
-                total_ped = 0.0
-                sin_rel = []
-                for _, fila in ped[ped["base"] == base].iterrows():
-                    factor = convertir(
-                        grafo, str(fila["codigo"]), codigo_destino
-                    )
-                    if factor is None:
-                        sin_rel.append(fila["producto"])
+                for comp in componentes:
+                    if not (comp & pedido_codigos):
                         continue
-                    total_ped += float(fila["cantidad"]) * factor
 
-                total_stk = 0.0
-                for _, fila in stk[stk["base"] == base].iterrows():
-                    cant = float(fila["cantidad"])
-                    if cant == 0:
-                        continue
-                    factor = convertir(
-                        grafo, str(fila["codigo"]), codigo_destino
+                    comp_productos = opciones_grupo[
+                        opciones_grupo["codigo"].astype(str).isin(comp)
+                    ]
+                    unidades_comp = comp_productos["unidad"].tolist()
+
+                    col_t, col_u, col_p, col_est, col_s, col_r, col_e = st.columns(
+                        [1.8, 1.0, 0.8, 0.9, 0.8, 1.4, 1.4]
                     )
-                    if factor is None:
-                        continue
-                    total_stk += cant * factor
 
-                diff = total_ped - total_stk
+                    if len(comp) == 1:
+                        unica = comp_productos.iloc[0]
+                        col_t.markdown(f"**{unica['producto']}**")
+                        unidad_destino = unica["unidad"]
+                        codigo_destino = str(unica["codigo"])
+                        col_u.markdown(f"_{unidad_destino}_")
+                    else:
+                        col_t.markdown(f"**{base}**")
+                        idx_default = (
+                            unidades_comp.index("KG")
+                            if "KG" in unidades_comp
+                            else 0
+                        )
+                        key_sufijo = "-".join(sorted(comp))
+                        unidad_destino = col_u.selectbox(
+                            "Unidad",
+                            unidades_comp,
+                            index=idx_default,
+                            key=f"unidad_comprar_{base}_{key_sufijo}",
+                            label_visibility="collapsed",
+                        )
+                        codigo_destino = str(
+                            comp_productos[
+                                comp_productos["unidad"] == unidad_destino
+                            ].iloc[0]["codigo"]
+                        )
 
-                col_p.markdown(f"{total_ped:,.2f}")
-                col_s.markdown(f"{total_stk:,.2f}")
+                    total_ped = 0.0
+                    total_est = 0.0
+                    for _, fila in ped_base.iterrows():
+                        if str(fila["codigo"]) not in comp:
+                            continue
+                        factor = convertir(
+                            grafo, str(fila["codigo"]), codigo_destino
+                        )
+                        if factor is None:
+                            continue
+                        total_ped += float(fila["cantidad"]) * factor
+                        total_est += float(fila["estimado"]) * factor
 
-                if diff > 0:
-                    col_r.markdown(
-                        f"<span style='color:#d11; font-weight:bold;'>"
-                        f"Falta {diff:,.2f} {unidad_destino}</span>",
-                        unsafe_allow_html=True,
-                    )
-                elif diff < 0:
-                    col_r.markdown(
-                        f"<span style='color:#1a8a1a; font-weight:bold;'>"
-                        f"Sobra {-diff:,.2f} {unidad_destino}</span>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    col_r.markdown(f"OK ({unidad_destino})")
+                    total_stk = 0.0
+                    if not stk_base.empty:
+                        for _, fila in stk_base.iterrows():
+                            if str(fila["codigo"]) not in comp:
+                                continue
+                            cant = float(fila["cantidad"])
+                            if cant == 0:
+                                continue
+                            factor = convertir(
+                                grafo, str(fila["codigo"]), codigo_destino
+                            )
+                            if factor is None:
+                                continue
+                            total_stk += cant * factor
 
-                if sin_rel:
-                    st.caption(
-                        f"⚠️ Sin relación cargada para: "
-                        f"{', '.join(set(sin_rel))}"
-                    )
+                    diff = total_ped - total_stk
+                    diff_est = (total_ped + total_est) - total_stk
+
+                    col_p.markdown(f"{total_ped:,.2f}")
+                    col_est.markdown(f"{total_est:,.2f}")
+                    col_s.markdown(f"{total_stk:,.2f}")
+
+                    def render_diff(valor, col, unidad):
+                        if valor > 0:
+                            col.markdown(
+                                f"<span style='color:#d11; font-weight:bold;'>"
+                                f"Falta {valor:,.2f} {unidad}</span>",
+                                unsafe_allow_html=True,
+                            )
+                        elif valor < 0:
+                            col.markdown(
+                                f"<span style='color:#1a8a1a; font-weight:bold;'>"
+                                f"Sobra {-valor:,.2f} {unidad}</span>",
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            col.markdown(f"OK ({unidad})")
+
+                    render_diff(diff, col_r, unidad_destino)
+                    render_diff(diff_est, col_e, unidad_destino)
 
         else:
-            ped_agg = ped.groupby(["codigo"], as_index=False)["cantidad"].sum()
-            ped_agg.columns = ["codigo", "pedido"]
+            ped_agg = ped.groupby(["codigo"], as_index=False)[
+                ["cantidad", "estimado"]
+            ].sum()
+            ped_agg.columns = ["codigo", "pedido", "estimado"]
 
             if not stk.empty:
                 stk_agg = stk.groupby(["codigo"], as_index=False)["cantidad"].sum()
@@ -672,8 +879,12 @@ with tab_comprar:
 
             merged = ped_agg.merge(stk_agg, on="codigo", how="outer")
             merged["pedido"] = merged["pedido"].fillna(0).astype(float)
+            merged["estimado"] = merged["estimado"].fillna(0).astype(float)
             merged["stock"] = merged["stock"].fillna(0).astype(float)
             merged["a_comprar"] = merged["pedido"] - merged["stock"]
+            merged["a_comprar_estimado"] = (
+                merged["pedido"] + merged["estimado"] - merged["stock"]
+            )
 
             map_codigo_a_prod = dict(
                 zip(productos["codigo"].astype(str), productos["producto"])
@@ -685,7 +896,16 @@ with tab_comprar:
             merged["unidad"] = merged["codigo"].astype(str).map(map_codigo_a_un)
             merged = merged.sort_values("producto").reset_index(drop=True)
             merged = merged[
-                ["codigo", "producto", "unidad", "pedido", "stock", "a_comprar"]
+                [
+                    "codigo",
+                    "producto",
+                    "unidad",
+                    "pedido",
+                    "estimado",
+                    "stock",
+                    "a_comprar",
+                    "a_comprar_estimado",
+                ]
             ]
 
             def color_a_comprar(v):
@@ -696,25 +916,32 @@ with tab_comprar:
                 return "color: #1a8a1a; font-weight: bold;"
 
             try:
-                styled = merged.style.map(color_a_comprar, subset=["a_comprar"])
+                styled = merged.style.map(
+                    color_a_comprar,
+                    subset=["a_comprar", "a_comprar_estimado"],
+                )
             except AttributeError:
                 styled = merged.style.applymap(
-                    color_a_comprar, subset=["a_comprar"]
+                    color_a_comprar,
+                    subset=["a_comprar", "a_comprar_estimado"],
                 )
 
             styled = styled.format(
                 {
                     "pedido": "{:.2f}",
+                    "estimado": "{:.2f}",
                     "stock": "{:.2f}",
                     "a_comprar": "{:+.2f}",
+                    "a_comprar_estimado": "{:+.2f}",
                 }
             )
 
             st.dataframe(styled, use_container_width=True, hide_index=True)
 
             st.caption(
-                "El valor en **a_comprar** es `pedido − stock`: "
-                "positivo (rojo) = falta comprar, negativo (verde) = sobra."
+                "**a_comprar** = `pedido − stock`. "
+                "**a_comprar_estimado** = `(pedido + estimado) − stock`. "
+                "Positivo (rojo) = falta comprar · negativo (verde) = sobra."
             )
 
 
