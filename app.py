@@ -1,10 +1,13 @@
 import re
+import time
 from datetime import date, timedelta
 
 import requests
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+
+DUX_RATE_LIMIT_SECONDS = 5.5
 
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
 
@@ -301,7 +304,16 @@ compuestos["componente_label"] = (
 
 map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 
-tab_editar, tab_probar, tab_stock, tab_pedidos, tab_comprar, tab_dux = st.tabs(
+(
+    tab_editar,
+    tab_probar,
+    tab_stock,
+    tab_pedidos,
+    tab_comprar,
+    tab_dux,
+    tab_dux_stock,
+    tab_wix,
+) = st.tabs(
     [
         "⚙️ Editar valores",
         "🧪 Probar conversión",
@@ -309,6 +321,8 @@ tab_editar, tab_probar, tab_stock, tab_pedidos, tab_comprar, tab_dux = st.tabs(
         "📋 Pedidos",
         "🛒 Total a comprar",
         "📡 DUX Pedidos",
+        "📡 DUX Stock",
+        "🛍️ Wix Orders",
     ]
 )
 
@@ -962,13 +976,84 @@ with tab_dux:
     id_empresa_default = int(dux_cfg.get("id_empresa", 3455))
     id_sucursal_default = int(dux_cfg.get("id_sucursal", 3))
 
+    def _get_first(d, claves):
+        if not isinstance(d, dict):
+            return None
+        for k in claves:
+            if k in d and d[k] not in (None, ""):
+                return d[k]
+        return None
+
+    def _extraer_cliente(orden):
+        cliente_obj = orden.get("cliente")
+        if isinstance(cliente_obj, dict):
+            nombre = _get_first(
+                cliente_obj,
+                ["razon_social", "nombre", "razonSocial", "nombre_completo"],
+            )
+            if nombre:
+                return str(nombre)
+        return str(
+            _get_first(
+                orden,
+                ["cliente", "razon_social", "razonSocial", "nombre_cliente",
+                 "apellido_razon_social"],
+            )
+            or "(sin cliente)"
+        )
+
+    def _extraer_items_dux(orden):
+        for f in ["detalles", "items", "productos", "lineas", "renglones", "detalle"]:
+            v = orden.get(f)
+            if isinstance(v, list):
+                return v
+        return []
+
+    def _extraer_item(item):
+        codigo = _get_first(
+            item,
+            ["cod_item", "codItem", "codigo", "codigoItem",
+             "codigoProducto", "cod_producto"],
+        )
+        descr = _get_first(
+            item,
+            ["item", "descripcion", "producto", "detalle", "nombre"],
+        )
+        cant = _get_first(
+            item,
+            [
+                "cantidad", "cant", "qty", "quantity",
+                "cantidad_pedida", "cantidadPedida",
+                "cantidad_solicitada", "cantidadSolicitada",
+                "cant_pedida", "cantPedida",
+                "unidades", "ctd",
+            ],
+        )
+        if cant is None:
+            for k, v in item.items():
+                if isinstance(k, str) and "cant" in k.lower() and isinstance(v, (int, float)):
+                    cant = v
+                    break
+        try:
+            cant = float(cant) if cant is not None else 0.0
+        except (ValueError, TypeError):
+            cant = 0.0
+        return {
+            "codigo": str(codigo) if codigo is not None else "",
+            "producto": descr or "",
+            "cantidad": cant,
+        }
+
     if not token:
         st.error(
             "Falta configurar el token de DUX en `.streamlit/secrets.toml` "
             "bajo `[dux] token = \"...\"`."
         )
     else:
-        col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+        id_empresa = id_empresa_default
+        id_sucursal = id_sucursal_default
+
+        col_d1, col_d2 = st.columns(2)
         with col_d1:
             fecha_desde = st.date_input(
                 "Fecha desde",
@@ -983,104 +1068,384 @@ with tab_dux:
                 key="dux_fecha_hasta",
                 format="YYYY-MM-DD",
             )
-        with col_d3:
-            id_empresa = st.number_input(
-                "ID Empresa",
-                value=id_empresa_default,
-                step=1,
-                key="dux_id_empresa",
-            )
-        with col_d4:
-            id_sucursal = st.number_input(
-                "ID Sucursal",
-                value=id_sucursal_default,
-                step=1,
-                key="dux_id_sucursal",
-            )
 
-        col_l1, col_l2 = st.columns(2)
-        with col_l1:
-            offset = st.number_input(
-                "Offset", value=0, min_value=0, step=1, key="dux_offset"
-            )
-        with col_l2:
-            limit = st.number_input(
-                "Limit",
-                value=20,
-                min_value=1,
-                max_value=50,
-                step=1,
-                key="dux_limit",
-            )
-
-        with st.expander("Filtros opcionales"):
-            col_e1, col_e2, col_e3 = st.columns(3)
-            with col_e1:
-                personal = st.text_input("Personal", key="dux_personal")
-                cuit = st.text_input("CUIT", key="dux_cuit")
-            with col_e2:
-                cliente = st.text_input("Cliente", key="dux_cliente")
-                nro_pedido = st.text_input("Nro Pedido", key="dux_nro_pedido")
-            with col_e3:
-                estado_fact = st.selectbox(
-                    "Estado facturación",
-                    ["", "FACTURADO", "FACTURADO_PARCIAL", "PENDIENTE", "CERRADO"],
-                    key="dux_estado_fact",
-                )
-                estado_rem = st.selectbox(
-                    "Estado remito",
-                    ["", "CON_REMITO", "PENDIENTE", "REMITO_PARCIAL", "CERRADO"],
-                    key="dux_estado_rem",
-                )
-            anulados = st.selectbox(
-                "Anulados",
-                ["(todos)", "Solo anulados", "Solo no anulados"],
-                key="dux_anulados",
-            )
-
-        consultar = st.button("🔎 Consultar pedidos", type="primary", key="dux_consultar")
+        consultar = st.button(
+            "🔎 Consultar pedidos pendientes",
+            type="primary",
+            key="dux_consultar",
+        )
 
         if consultar:
-            params = {
-                "idEmpresa": int(id_empresa),
-                "idSucursal": int(id_sucursal),
-                "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
-                "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
-                "offset": int(offset),
-                "limit": int(limit),
-            }
-            if personal:
-                params["personal"] = personal
-            if cliente:
-                params["cliente"] = cliente
-            if cuit:
-                params["cuit"] = cuit
-            if nro_pedido:
-                params["nroPedido"] = nro_pedido
-            if estado_fact:
-                params["estadoFacturacion"] = estado_fact
-            if estado_rem:
-                params["estadoRemito"] = estado_rem
-            if anulados == "Solo anulados":
-                params["anulados"] = "true"
-            elif anulados == "Solo no anulados":
-                params["anulados"] = "false"
+            url_p = f"{base_url}/pedidos"
+            headers_p = {"accept": "application/json", "authorization": token}
+            page_offset = 0
+            page_size = 50
+            all_orders = []
+            error_corte = False
 
-            url = f"{base_url}/pedidos"
+            with st.spinner("Consultando DUX..."):
+                while True:
+                    params_p = {
+                        "idEmpresa": int(id_empresa),
+                        "idSucursal": int(id_sucursal),
+                        "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+                        "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+                        "offset": page_offset,
+                        "limit": page_size,
+                        "estadoFacturacion": "PENDIENTE",
+                    }
+                    try:
+                        r = requests.get(
+                            url_p, params=params_p, headers=headers_p, timeout=30
+                        )
+                    except requests.RequestException as e:
+                        st.error(f"Error de red: {e}")
+                        error_corte = True
+                        break
+
+                    if r.status_code != 200:
+                        st.error(f"HTTP {r.status_code}: {r.text[:500]}")
+                        error_corte = True
+                        break
+
+                    try:
+                        d = r.json()
+                    except ValueError:
+                        st.error("Respuesta no JSON.")
+                        error_corte = True
+                        break
+
+                    if isinstance(d, dict) and "message" in d and "results" not in d:
+                        st.error(f"DUX respondió: {d['message']}")
+                        error_corte = True
+                        break
+
+                    if isinstance(d, dict) and "results" in d:
+                        page = d["results"]
+                    elif isinstance(d, list):
+                        page = d
+                    else:
+                        page = []
+
+                    if not page:
+                        break
+
+                    all_orders.extend(page)
+                    if len(page) < page_size:
+                        break
+                    page_offset += page_size
+                    time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+            if not error_corte:
+                if not all_orders:
+                    st.warning("No hay pedidos pendientes en ese rango.")
+                else:
+                    st.success(f"✅ {len(all_orders)} pedidos pendientes.")
+
+                    for i, orden in enumerate(all_orders, start=1):
+                        cliente_str = _extraer_cliente(orden)
+                        nro = _get_first(
+                            orden,
+                            ["nro_pedido", "nroPedido", "numero", "id"],
+                        )
+                        items = _extraer_items_dux(orden)
+                        titulo = f"#{nro or i} — {cliente_str} ({len(items)} ítems)"
+                        with st.expander(titulo):
+                            if items:
+                                filas = [_extraer_item(it) for it in items]
+                                st.dataframe(
+                                    pd.DataFrame(filas),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+                            else:
+                                st.caption("Este pedido no tiene ítems inline.")
+
+                    st.divider()
+                    st.subheader("📊 Suma de productos pendientes")
+
+                    items_planos = []
+                    sin_items = 0
+                    for orden in all_orders:
+                        items = _extraer_items_dux(orden)
+                        if not items:
+                            sin_items += 1
+                            continue
+                        for item in items:
+                            items_planos.append(_extraer_item(item))
+
+                    if items_planos:
+                        df_items = pd.DataFrame(items_planos)
+                        df_sum = (
+                            df_items.groupby(["codigo", "producto"], as_index=False)[
+                                "cantidad"
+                            ].sum()
+                            .sort_values("producto")
+                            .reset_index(drop=True)
+                        )
+                        st.dataframe(df_sum, use_container_width=True, hide_index=True)
+                        st.caption(
+                            f"{len(df_sum)} productos distintos · "
+                            f"Suma total: {df_sum['cantidad'].sum():,.2f}"
+                        )
+                    else:
+                        st.warning("No pude detectar items dentro de los pedidos.")
+
+                    if sin_items:
+                        st.caption(f"⚠️ {sin_items} pedidos sin ítems inline.")
+
+with tab_dux_stock:
+    st.info(
+        "Consulta stock de items en DUX para el depósito configurado."
+    )
+
+    if not token:
+        st.error(
+            "Falta configurar el token de DUX en `.streamlit/secrets.toml`."
+        )
+    else:
+        id_deposito_default = int(dux_cfg.get("id_deposito", 8313))
+
+        col_ds1, col_ds2, col_ds3 = st.columns([2, 2, 2])
+        with col_ds1:
+            fecha_mov_desde = st.date_input(
+                "Movimientos desde",
+                value=date.today() - timedelta(days=7),
+                key="dux_stock_fecha",
+                format="YYYY-MM-DD",
+                help=(
+                    "Filtra items con movimientos de stock o cambios de "
+                    "precio desde esa fecha. La API no acepta 'hasta'."
+                ),
+            )
+        with col_ds2:
+            solo_con_stock = st.checkbox(
+                "Solo items con stock > 0",
+                value=True,
+                key="dux_solo_con_stock",
+            )
+        with col_ds3:
+            st.caption(f"Depósito ID: {id_deposito_default}")
+
+        consultar_stock = st.button(
+            "🔎 Consultar stock",
+            type="primary",
+            key="dux_consultar_stock",
+        )
+
+        if consultar_stock:
+            url_s = f"{base_url}/items"
+            headers_s = {"accept": "application/json", "authorization": token}
+            page_offset = 0
+            page_size = 50
+            all_items = []
+            error_corte = False
+            total_servidor = None
+
+            fecha_param = fecha_mov_desde.strftime("%d%m%Y") + " 00:00"
+
+            progress = st.progress(0.0, text="Trayendo items...")
+
+            while True:
+                params_s = {
+                    "idDeposito": int(id_deposito_default),
+                    "offset": page_offset,
+                    "limit": page_size,
+                    "fecha": fecha_param,
+                }
+                try:
+                    r = requests.get(
+                        url_s, params=params_s, headers=headers_s, timeout=30
+                    )
+                except requests.RequestException as e:
+                    st.error(f"Error de red: {e}")
+                    error_corte = True
+                    break
+
+                if r.status_code != 200:
+                    st.error(f"HTTP {r.status_code}: {r.text[:500]}")
+                    error_corte = True
+                    break
+
+                try:
+                    d = r.json()
+                except ValueError:
+                    st.error("Respuesta no JSON.")
+                    error_corte = True
+                    break
+
+                if isinstance(d, dict) and "message" in d and "results" not in d:
+                    st.error(f"DUX respondió: {d['message']}")
+                    error_corte = True
+                    break
+
+                if isinstance(d, dict):
+                    page = d.get("results", []) or []
+                    if total_servidor is None:
+                        total_servidor = (d.get("paging") or {}).get("total")
+                else:
+                    page = []
+
+                if not page:
+                    break
+
+                all_items.extend(page)
+
+                if total_servidor:
+                    progress.progress(
+                        min(1.0, len(all_items) / total_servidor),
+                        text=f"{len(all_items)} / {total_servidor}",
+                    )
+
+                if len(page) < page_size:
+                    break
+                page_offset += page_size
+                time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+            progress.empty()
+
+            if not error_corte:
+                if not all_items:
+                    st.warning("No hay items en DUX.")
+                else:
+                    def _to_float(v):
+                        try:
+                            return float(v) if v is not None else 0.0
+                        except (ValueError, TypeError):
+                            return 0.0
+
+                    filas = []
+                    for item in all_items:
+                        stock_arr = item.get("stock") or []
+                        stock_dep = None
+                        for s in stock_arr:
+                            if str(s.get("id")) == str(id_deposito_default):
+                                stock_dep = s
+                                break
+                        if stock_dep is None and stock_arr:
+                            stock_dep = stock_arr[0]
+
+                        real = _to_float(stock_dep.get("stock_real")) if stock_dep else 0.0
+                        disp = _to_float(stock_dep.get("stock_disponible")) if stock_dep else 0.0
+                        reserv = _to_float(stock_dep.get("stock_reservado")) if stock_dep else 0.0
+
+                        if solo_con_stock and real == 0 and disp == 0:
+                            continue
+
+                        filas.append(
+                            {
+                                "codigo": str(item.get("cod_item", "")),
+                                "producto": str(item.get("item", "")),
+                                "stock_real": real,
+                                "stock_disponible": disp,
+                                "stock_reservado": reserv,
+                            }
+                        )
+
+                    if filas:
+                        df_stock_dux = (
+                            pd.DataFrame(filas)
+                            .sort_values("producto")
+                            .reset_index(drop=True)
+                        )
+                        st.success(
+                            f"✅ {len(df_stock_dux)} items "
+                            f"(de {len(all_items)} totales del depósito)."
+                        )
+                        st.dataframe(
+                            df_stock_dux,
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                    else:
+                        st.warning(
+                            "Ningún item con stock > 0 en este depósito. "
+                            "Destildá el filtro para ver todos."
+                        )
+
+with tab_wix:
+    st.info(
+        "Consulta orders de Wix Stores. "
+        "Las credenciales viven en `.streamlit/secrets.toml` (no se commitea)."
+    )
+
+    wix_cfg = st.secrets.get("wix", {})
+    wix_token = wix_cfg.get("api_key", "")
+    wix_account = wix_cfg.get("account_id", "")
+    wix_site = wix_cfg.get("site_id", "")
+
+    if not wix_token or not wix_account or not wix_site:
+        st.error(
+            "Falta configurar las credenciales de Wix en `.streamlit/secrets.toml`. "
+            "Agregá:\n\n"
+            "```toml\n"
+            "[wix]\n"
+            "api_key = \"...\"\n"
+            "account_id = \"...\"\n"
+            "site_id = \"...\"\n"
+            "```"
+        )
+    else:
+        col_w1, col_w2, col_w3 = st.columns(3)
+        with col_w1:
+            wix_desde = st.date_input(
+                "Fecha desde",
+                value=date.today() - timedelta(days=7),
+                key="wix_fecha_desde",
+                format="YYYY-MM-DD",
+            )
+        with col_w2:
+            wix_hasta = st.date_input(
+                "Fecha hasta",
+                value=date.today(),
+                key="wix_fecha_hasta",
+                format="YYYY-MM-DD",
+            )
+        with col_w3:
+            wix_limit = st.number_input(
+                "Límite",
+                value=50,
+                min_value=1,
+                max_value=100,
+                step=1,
+                key="wix_limit",
+            )
+
+        consultar_wix = st.button(
+            "🔎 Consultar orders",
+            type="primary",
+            key="wix_consultar",
+        )
+
+        if consultar_wix:
+            url = "https://www.wixapis.com/ecom/v1/orders/search"
             headers = {
-                "accept": "application/json",
-                "authorization": token,
+                "Authorization": wix_token,
+                "wix-account-id": wix_account,
+                "wix-site-id": wix_site,
+                "Content-Type": "application/json",
+            }
+            body = {
+                "search": {
+                    "filter": {
+                        "createdDate": {
+                            "$gte": f"{wix_desde}T00:00:00.000Z",
+                            "$lte": f"{wix_hasta}T23:59:59.999Z",
+                        }
+                    },
+                    "cursorPaging": {"limit": int(wix_limit)},
+                }
             }
 
             try:
-                with st.spinner("Consultando DUX..."):
-                    resp = requests.get(url, params=params, headers=headers, timeout=30)
+                with st.spinner("Consultando Wix..."):
+                    resp = requests.post(url, json=body, headers=headers, timeout=30)
             except requests.RequestException as e:
                 st.error(f"Error de red: {e}")
                 resp = None
 
             if resp is not None:
-                st.caption(f"GET {resp.url} → HTTP {resp.status_code}")
+                st.caption(f"POST {url} → HTTP {resp.status_code}")
 
                 if resp.status_code != 200:
                     st.error(f"Respuesta no OK ({resp.status_code}):")
@@ -1094,28 +1459,43 @@ with tab_dux:
                         data = None
 
                     if data is not None:
-                        if (
-                            isinstance(data, dict)
-                            and "message" in data
-                            and "results" not in data
-                        ):
-                            st.error(f"DUX respondió: {data['message']}")
-                        else:
-                            if isinstance(data, dict) and "results" in data:
-                                registros = data["results"]
-                            elif isinstance(data, list):
-                                registros = data
-                            else:
-                                registros = data
+                        orders = data.get("orders", [])
+                        if orders:
+                            st.success(f"✅ {len(orders)} orders recibidas.")
 
-                            if isinstance(registros, list) and registros:
-                                df_dux = pd.json_normalize(registros)
-                                st.success(f"✅ {len(df_dux)} pedidos recibidos.")
-                                st.dataframe(df_dux, use_container_width=True)
-                            elif isinstance(registros, list):
-                                st.warning("La consulta no devolvió pedidos.")
-                            else:
-                                st.json(data)
+                            resumen = []
+                            for o in orders:
+                                items = o.get("lineItems", [])
+                                resumen.append(
+                                    {
+                                        "numero": o.get("number"),
+                                        "fecha": o.get("createdDate"),
+                                        "estado": o.get("status"),
+                                        "cliente": (
+                                            o.get("buyerInfo", {}).get(
+                                                "contactDetails", {}
+                                            ).get("firstName", "")
+                                            + " "
+                                            + o.get("buyerInfo", {}).get(
+                                                "contactDetails", {}
+                                            ).get("lastName", "")
+                                        ).strip(),
+                                        "email": o.get("buyerInfo", {}).get(
+                                            "email", ""
+                                        ),
+                                        "items": len(items),
+                                        "total": o.get("priceSummary", {}).get(
+                                            "total", {}
+                                        ).get("formattedAmount", ""),
+                                    }
+                                )
+
+                            st.dataframe(
+                                pd.DataFrame(resumen),
+                                use_container_width=True,
+                            )
+                        else:
+                            st.warning("La consulta no devolvió orders.")
 
                         with st.expander("Ver JSON crudo"):
                             st.json(data)
