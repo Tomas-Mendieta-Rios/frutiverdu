@@ -1,4 +1,7 @@
 import re
+from datetime import date, timedelta
+
+import requests
 import streamlit as st
 import pandas as pd
 from pathlib import Path
@@ -298,13 +301,14 @@ compuestos["componente_label"] = (
 
 map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 
-tab_editar, tab_probar, tab_stock, tab_pedidos, tab_comprar = st.tabs(
+tab_editar, tab_probar, tab_stock, tab_pedidos, tab_comprar, tab_dux = st.tabs(
     [
         "⚙️ Editar valores",
         "🧪 Probar conversión",
         "📦 Stock",
         "📋 Pedidos",
         "🛒 Total a comprar",
+        "📡 DUX Pedidos",
     ]
 )
 
@@ -943,6 +947,178 @@ with tab_comprar:
                 "**a_comprar_estimado** = `(pedido + estimado) − stock`. "
                 "Positivo (rojo) = falta comprar · negativo (verde) = sobra."
             )
+
+with tab_dux:
+    st.info(
+        "Consulta pedidos del ERP DUX. "
+        "El token vive en `.streamlit/secrets.toml` (no se commitea)."
+    )
+
+    dux_cfg = st.secrets.get("dux", {})
+    token = dux_cfg.get("token", "")
+    base_url = dux_cfg.get(
+        "base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services"
+    )
+    id_empresa_default = int(dux_cfg.get("id_empresa", 3455))
+    id_sucursal_default = int(dux_cfg.get("id_sucursal", 3))
+
+    if not token:
+        st.error(
+            "Falta configurar el token de DUX en `.streamlit/secrets.toml` "
+            "bajo `[dux] token = \"...\"`."
+        )
+    else:
+        col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+        with col_d1:
+            fecha_desde = st.date_input(
+                "Fecha desde",
+                value=date.today() - timedelta(days=7),
+                key="dux_fecha_desde",
+                format="YYYY-MM-DD",
+            )
+        with col_d2:
+            fecha_hasta = st.date_input(
+                "Fecha hasta",
+                value=date.today(),
+                key="dux_fecha_hasta",
+                format="YYYY-MM-DD",
+            )
+        with col_d3:
+            id_empresa = st.number_input(
+                "ID Empresa",
+                value=id_empresa_default,
+                step=1,
+                key="dux_id_empresa",
+            )
+        with col_d4:
+            id_sucursal = st.number_input(
+                "ID Sucursal",
+                value=id_sucursal_default,
+                step=1,
+                key="dux_id_sucursal",
+            )
+
+        col_l1, col_l2 = st.columns(2)
+        with col_l1:
+            offset = st.number_input(
+                "Offset", value=0, min_value=0, step=1, key="dux_offset"
+            )
+        with col_l2:
+            limit = st.number_input(
+                "Limit",
+                value=20,
+                min_value=1,
+                max_value=50,
+                step=1,
+                key="dux_limit",
+            )
+
+        with st.expander("Filtros opcionales"):
+            col_e1, col_e2, col_e3 = st.columns(3)
+            with col_e1:
+                personal = st.text_input("Personal", key="dux_personal")
+                cuit = st.text_input("CUIT", key="dux_cuit")
+            with col_e2:
+                cliente = st.text_input("Cliente", key="dux_cliente")
+                nro_pedido = st.text_input("Nro Pedido", key="dux_nro_pedido")
+            with col_e3:
+                estado_fact = st.selectbox(
+                    "Estado facturación",
+                    ["", "FACTURADO", "FACTURADO_PARCIAL", "PENDIENTE", "CERRADO"],
+                    key="dux_estado_fact",
+                )
+                estado_rem = st.selectbox(
+                    "Estado remito",
+                    ["", "CON_REMITO", "PENDIENTE", "REMITO_PARCIAL", "CERRADO"],
+                    key="dux_estado_rem",
+                )
+            anulados = st.selectbox(
+                "Anulados",
+                ["(todos)", "Solo anulados", "Solo no anulados"],
+                key="dux_anulados",
+            )
+
+        consultar = st.button("🔎 Consultar pedidos", type="primary", key="dux_consultar")
+
+        if consultar:
+            params = {
+                "idEmpresa": int(id_empresa),
+                "idSucursal": int(id_sucursal),
+                "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+                "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+                "offset": int(offset),
+                "limit": int(limit),
+            }
+            if personal:
+                params["personal"] = personal
+            if cliente:
+                params["cliente"] = cliente
+            if cuit:
+                params["cuit"] = cuit
+            if nro_pedido:
+                params["nroPedido"] = nro_pedido
+            if estado_fact:
+                params["estadoFacturacion"] = estado_fact
+            if estado_rem:
+                params["estadoRemito"] = estado_rem
+            if anulados == "Solo anulados":
+                params["anulados"] = "true"
+            elif anulados == "Solo no anulados":
+                params["anulados"] = "false"
+
+            url = f"{base_url}/pedidos"
+            headers = {
+                "accept": "application/json",
+                "authorization": token,
+            }
+
+            try:
+                with st.spinner("Consultando DUX..."):
+                    resp = requests.get(url, params=params, headers=headers, timeout=30)
+            except requests.RequestException as e:
+                st.error(f"Error de red: {e}")
+                resp = None
+
+            if resp is not None:
+                st.caption(f"GET {resp.url} → HTTP {resp.status_code}")
+
+                if resp.status_code != 200:
+                    st.error(f"Respuesta no OK ({resp.status_code}):")
+                    st.code(resp.text[:2000])
+                else:
+                    try:
+                        data = resp.json()
+                    except ValueError:
+                        st.error("La respuesta no es JSON válido.")
+                        st.code(resp.text[:2000])
+                        data = None
+
+                    if data is not None:
+                        if (
+                            isinstance(data, dict)
+                            and "message" in data
+                            and "results" not in data
+                        ):
+                            st.error(f"DUX respondió: {data['message']}")
+                        else:
+                            if isinstance(data, dict) and "results" in data:
+                                registros = data["results"]
+                            elif isinstance(data, list):
+                                registros = data
+                            else:
+                                registros = data
+
+                            if isinstance(registros, list) and registros:
+                                df_dux = pd.json_normalize(registros)
+                                st.success(f"✅ {len(df_dux)} pedidos recibidos.")
+                                st.dataframe(df_dux, use_container_width=True)
+                            elif isinstance(registros, list):
+                                st.warning("La consulta no devolvió pedidos.")
+                            else:
+                                st.json(data)
+
+                        with st.expander("Ver JSON crudo"):
+                            st.json(data)
 
 
 #python -m streamlit run app.py
