@@ -58,6 +58,7 @@ SCHEMA = {
     ],
     "selecciones_dux": ["order_id", "fecha_entrega"],
     "selecciones_wix": ["order_id", "fecha_entrega"],
+    "config": ["key", "value"],
 }
 
 
@@ -344,3 +345,22 @@ def guardar_selecciones(fuente, selecciones):
     ]
     df = pd.DataFrame(rows, columns=SCHEMA[nombre])
     escribir_tabla(nombre, df)
+
+
+# ---------------- CONFIG (key/value para preferencias) ----------------
+
+def cargar_config():
+    """Devuelve dict {key: value} con la configuración persistida."""
+    df = leer_tabla("config")
+    if df.empty or "key" not in df.columns:
+        return {}
+    return dict(zip(df["key"].astype(str), df["value"].astype(str)))
+
+
+def guardar_config(updates):
+    """Merge dict updates con la config existente y persiste a Sheets."""
+    actual = cargar_config()
+    actual.update({k: str(v) for k, v in updates.items() if v is not None})
+    rows = [{"key": k, "value": v} for k, v in actual.items()]
+    df = pd.DataFrame(rows, columns=SCHEMA["config"])
+    escribir_tabla("config", df)
