@@ -42,20 +42,11 @@ st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
 EXCEPCIONES = {
     ("061", "062"),
     ("0256", "0205"),
+    ("095", "094"),
+    ("096", "097"),
 }
 
-col_titulo, col_refresh = st.columns([5, 1])
-with col_titulo:
-    st.title("🍎 Frutiverdu ")
-with col_refresh:
-    st.write("")
-    if st.button(
-        "🔄 Refrescar datos",
-        help="Limpia el cache y vuelve a leer del Sheet (útil si editaste en Google Sheets)",
-        key="btn_refrescar_global",
-    ):
-        db.leer_tabla.clear()
-        st.rerun()
+st.title("🍎 Frutiverdu ")
 
 st.markdown(
     """
