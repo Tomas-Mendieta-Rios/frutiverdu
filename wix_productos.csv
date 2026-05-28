@@ -1,0 +1,67 @@
+wix_id,producto,sku,tipo
+1b8b1430-478d-b3d3-b96c-dccd947dc8f2,ACELGA - ATADO,,physical
+2298199c-744b-e8e7-5ef7-317b093762c8,AJO - CABEZA,,physical
+55239dde-7271-5b58-fe4f-7a429680352e,ALBAHACA - ATADO,,physical
+1380594c-450c-4e27-e6ff-8fd4fbe9f5f2,ANANA - UNIDAD,,physical
+e711fa26-3a75-9bed-6e39-48ce6af47f86,ANCO - UNIDAD,,physical
+c8427493-3d18-3495-ad5c-b0ae5d4a1fdd,ANCO CORTADO - BANDEJA,,physical
+620ebc1d-3377-9e12-c613-2bdfaac6f0c2,APIO - PLANTA,,physical
+dc61cbf8-bceb-246e-a1fb-739fe0644881,BANANA - KG,,physical
+1053b539-cf6d-dbd3-b11c-532b7231135d,BATATA - KG,,physical
+dda08afc-f669-dc3b-09f5-d4dc30477999,BERENJENA - KG,,physical
+dfc49d91-d74f-063f-c455-3ca86ea673a8,BONIATO - KG,,physical
+53d5f8f6-e517-8548-19fa-ffeb42a67a1d,BROCOLI - UNIDAD,,physical
+4a7a2615-aaa7-90ec-da4a-15492323fa98,CABUTIA - UNIDAD,,physical
+2878ef52-49c5-ca85-c8d9-147493a17688,CEBOLLA - KG,,physical
+5a1a2481-13ca-e48d-7e72-47fc9eaca6fa,CEBOLLA MORADA - 1/2 KG,,physical
+8f2ad7e7-c61b-7cb0-1998-aae184480162,CHAMPINONES - BANDEJA,,physical
+0e5e3778-0476-1b54-1459-ed1e16f3d3b8,CHAUCHA - 1/2 KG,,physical
+55f6e3d3-16ea-fbdd-4dac-daac902749a8,CHOCLO - UNIDAD,,physical
+96c0ba5c-99e3-337d-fe17-2abf7af503b4,CIRUELA - KG,,physical
+24fe46dd-14ef-88b9-9fbb-36f639c07384,COLIFLOR - UNIDAD,,physical
+c2d39ec4-7ecc-7b16-074b-a139bc92e503,ENSALADA - BANDEJA,,physical
+a399db57-7f2b-f93b-ae33-dda8d8329c1e,ESPINACA - ATADO,,physical
+037aeb23-1177-2ca2-d436-933a581b4c2c,FRUTILLAS - 1/2 KG,,physical
+4d1fe119-8dd0-58de-7b71-5b0fbd923c0b,HUEVOS - MAPLE,,physical
+98ecf7b0-482c-7785-ad10-104665436b72,JENGIBRE - 1/4 KG,,physical
+4df147a4-65db-6608-7df9-413105cb74cd,KALE - ATADO,,physical
+4bef3239-3661-8c69-6fe9-6fb028428276,KIWI - UNIDAD,,physical
+e3a79bd0-da57-8d26-6c98-f57e35607d5b,LECHUGA - 1/2 KG,,physical
+05177c56-6b87-1863-4c3c-d3e553546706,LIMA - UNIDAD,,physical
+5ccddbd0-7eba-bbdc-1c41-ee132b876ed3,LIMON - UNIDAD,,physical
+3262ea5d-7ede-b39e-67fa-6812e1200848,MANDARINA - KG,,physical
+d9e1e350-ffea-a862-aec7-8cf2c748240b,MANDIOCA - KG,,physical
+96d7b535-b383-ddb1-0b57-1f3d538b4835,MANGO - UNIDAD,,physical
+f30fdbbf-1af4-d2a9-a830-7a754dd0386d,MANZANA ROJA PREMIUM - UNIDAD,,physical
+10af7f5b-9110-2ce4-752e-1bbb6587d6c2,MANZANA VERDE - UNIDAD,,physical
+495aaa50-3706-254b-66f5-b6b7223c28a0,MELON - UNIDAD,,physical
+3542ee0b-2975-cd23-aaea-9d4bc964ac36,MIEL - KG,3,physical
+c2af38c9-82d9-962b-ad4f-f910b9c1913e,MORRON ROJO - UNIDAD,,physical
+1af52c4e-01f9-34f0-0fea-f3c42812feab,MORRON VERDE - UNIDAD,,physical
+bd23b297-e6db-8399-a94f-251fff42c80b,NARANJA JUGO - UNIDAD,,physical
+7319936a-500e-3868-9bc1-829e7dc71332,PACK - FRUTAS,,physical
+8c85eca5-1f41-f40f-a0db-83b947721f15,PACK - LARGE,,physical
+8001e0e2-59ad-6103-ad50-9b90a6186cb3,PACK - XTRA LARGE,,physical
+0d2e47e2-c4a3-a060-8b05-68d251d2e95a,PALTA - UNIDAD,,physical
+974c00cf-95d8-18ab-e293-49920528b7d7,PAPA LAVADA - KG,,physical
+f3f9dbff-cf71-f45f-f3a5-7a6f570aa115,PAPINES ANDINOS - KG,,physical
+543dbc33-8d21-62ff-c458-449d6bdcd4f7,PEPINO - UNIDAD,,physical
+bf6456c4-be66-e92b-2647-ecbfb9eb4ac1,PERA PREMIUM - UNIDAD,,physical
+95f6b092-81fa-0b89-b05e-de8d12d76a6a,PEREJIL - 1/4 Kg,,physical
+3b9b27f7-74d9-950c-cd3e-5468ac394fa0,POMELO - UNIDAD,,physical
+b0b767d6-9785-5529-b7ff-22338a8ab7cf,PUERRO - 1/2 KG,,physical
+3f34d8a0-4543-6295-9b90-51cfe8430fad,REMOLACHA - ATADO,,physical
+dc4b889a-b79d-264e-382c-e3d47b33fd93,REPOLLITOS DE BRUSELAS - BANDEJA,,physical
+0d8f750d-990d-6d55-b805-ed1113491b25,REPOLLO BLANCO - UNIDAD,,physical
+30de39be-87fc-1981-cbc5-1657a52cdc41,REPOLLO ROJO - UNIDAD,,physical
+ae166f72-80bf-7f9c-eef5-8a3f98add0b3,RUCULA - ATADO,,physical
+f8a0bb4c-3240-b7f1-869d-82b42afbe24d,TOMATE CHERRY - 1/2 KG,,physical
+8064c9ef-8392-62ea-82e0-8610f0b3f6f3,TOMATE PERITA - KG,,physical
+f451f7a3-e2e8-81c0-e0b3-e08f8e6a3ab3,TOMATE REDONDO - KG,,physical
+daa20b67-2c1b-48ca-eeb2-62806ecd8fdf,TOMATE TRITURADO - LITRO,,physical
+42cc98c7-2678-3768-fac0-898c9be8e5c9,UVAS NEGRAS - KG,,physical
+a08342a2-e496-01b9-d4a8-d1f3b4c3873c,VERDEO - 1/4 KG,,physical
+563a1db3-3540-9029-77c5-7f07a9fd61d3,VERDURAS SOPA - BANDEJA,,physical
+e3de173f-d599-3b01-5fe8-c774ffe2236e,ZANAHORIA - KG,,physical
+6e35ab69-bd39-df98-2500-579e7a67ec37,ZAPALLITO - KG,,physical
+085d80bf-2cd8-f6e6-4e2d-c5ca664f1e6c,ZUCCHINI - KG,,physical

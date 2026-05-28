@@ -34,12 +34,43 @@ ESTIMADO_CSV = Path("estimado.csv")
 
 WIX_PEDIDOS_JSON = Path("wix_pedidos.json")
 
+WIX_PRODUCTOS_CSV = Path("wix_productos.csv")
+
+MAPPING_WIX_DUX_CSV = Path("mapping_wix_dux.csv")
+
+PACKS_WIX_CSV = Path("packs_wix.csv")
+
 EXCEPCIONES = {
     ("061", "062"),
     ("0256", "0205"),
 }
 
-st.title("🍎 Frutiverdu - Editor de Compuestos")
+st.title("🍎 Frutiverdu ")
+
+st.markdown(
+    """
+<style>
+/* Operativas (1-5) - verde */
+.stTabs [data-baseweb="tab-list"] button:nth-child(-n+5) {
+    background-color: #e8f5e9;
+    border-top: 3px solid #2E7D32;
+}
+.stTabs [data-baseweb="tab-list"] button:nth-child(-n+5):hover {
+    background-color: #c8e6c9;
+}
+
+/* Configuración (6-10) - naranja */
+.stTabs [data-baseweb="tab-list"] button:nth-child(n+6) {
+    background-color: #fff3e0;
+    border-top: 3px solid #ef6c00;
+}
+.stTabs [data-baseweb="tab-list"] button:nth-child(n+6):hover {
+    background-color: #ffe0b2;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 
 def cargar_productos():
@@ -126,20 +157,94 @@ def cargar_stock_fecha(fecha):
     return df
 
 
-def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None):
+def _convertir_wix_orders_a_dux(orders_filtrados):
+    """Convierte orders Wix (filtrados) en dict {dux_codigo: cantidad_total}
+    usando mapping_wix_dux.csv y packs_wix.csv."""
+    resultado = {}
+
+    mapping = {}
+    if MAPPING_WIX_DUX_CSV.exists():
+        try:
+            df_m = pd.read_csv(MAPPING_WIX_DUX_CSV, dtype=str)
+            for _, r in df_m.iterrows():
+                wid = str(r.get("wix_id", ""))
+                dcod = str(r.get("dux_codigo", "") or "")
+                try:
+                    factor = float(r.get("factor", 1.0))
+                except (ValueError, TypeError):
+                    factor = 1.0
+                if wid and dcod:
+                    mapping[wid] = (dcod, factor)
+        except Exception:
+            pass
+
+    packs = {}
+    if PACKS_WIX_CSV.exists():
+        try:
+            df_p = pd.read_csv(PACKS_WIX_CSV, dtype={"dux_codigo": str, "wix_id_pack": str})
+            for _, r in df_p.iterrows():
+                pid = str(r.get("wix_id_pack", ""))
+                dcod = str(r.get("dux_codigo", "") or "")
+                try:
+                    cant = float(r.get("cantidad", 0))
+                except (ValueError, TypeError):
+                    cant = 0.0
+                if pid and dcod:
+                    packs.setdefault(pid, []).append((dcod, cant))
+        except Exception:
+            pass
+
+    for orden in orders_filtrados:
+        for item in orden.get("lineItems", []):
+            qty = item.get("quantity") or 0
+            try:
+                qty = float(qty)
+            except (ValueError, TypeError):
+                qty = 0.0
+            cat_id = (
+                (item.get("catalogReference") or {}).get("catalogItemId")
+                or item.get("productId")
+                or ""
+            )
+            cat_id = str(cat_id)
+
+            if cat_id in packs:
+                for dcod, cant in packs[cat_id]:
+                    resultado[dcod] = resultado.get(dcod, 0.0) + cant * qty
+            elif cat_id in mapping:
+                dcod, factor = mapping[cat_id]
+                resultado[dcod] = resultado.get(dcod, 0.0) + qty * factor
+
+    return resultado
+
+
+def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compra=None):
     """Lee pedidos_dux.json, agrega cantidades por código y suma estimado
-    de estimado.csv (de la fecha indicada o la última si es None)."""
+    de estimado.csv (de la fecha indicada o la última si es None).
+    Si fecha_compra está dada, filtra los pedidos DUX por selecciones[fecha_compra]
+    y agrega los pedidos de Wix con esa misma fecha de entrega."""
     cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
     if not PEDIDOS_DUX_JSON.exists():
-        return pd.DataFrame(columns=cols)
+        df_agg = pd.DataFrame(columns=["codigo", "producto", "cantidad"])
+        all_orders = []
+        selecciones_dux = {}
+    else:
+        try:
+            with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+        except Exception:
+            saved = {"orders": [], "selecciones": {}}
+        all_orders = saved.get("orders", [])
+        selecciones_dux = saved.get("selecciones", {}) or {}
 
-    try:
-        with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
-            saved = json.load(f)
-    except Exception:
-        return pd.DataFrame(columns=cols)
+    if fecha_compra is not None:
+        fecha_str = str(fecha_compra)
+        all_orders = [
+            o
+            for o in all_orders
+            if selecciones_dux.get(str(o.get("id") or o.get("nro_pedido") or "")) == fecha_str
+        ]
 
-    all_orders = saved.get("orders", [])
     items_planos = []
     for orden in all_orders:
         for item in extraer_items_dux(orden):
@@ -157,6 +262,43 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None):
         df_agg = df_items.groupby(["codigo", "producto"], as_index=False)[
             "cantidad"
         ].sum()
+
+    # Sumar pedidos de Wix con fecha de entrega = fecha_compra
+    if fecha_compra is not None and WIX_PEDIDOS_JSON.exists():
+        try:
+            with open(WIX_PEDIDOS_JSON, "r", encoding="utf-8") as f:
+                wix_saved_full = json.load(f)
+            wix_orders = wix_saved_full.get("orders", [])
+            wix_sel = wix_saved_full.get("selecciones", {}) or {}
+            fecha_str = str(fecha_compra)
+            wix_filtrados = [
+                o for o in wix_orders if wix_sel.get(o.get("id")) == fecha_str
+            ]
+            wix_dux_map = _convertir_wix_orders_a_dux(wix_filtrados)
+            if wix_dux_map:
+                map_prod_dux_x = dict(
+                    zip(productos_df["codigo"].astype(str), productos_df["producto"])
+                )
+                wix_rows = [
+                    {
+                        "codigo": str(dcod),
+                        "producto": map_prod_dux_x.get(str(dcod), ""),
+                        "cantidad": cant,
+                    }
+                    for dcod, cant in wix_dux_map.items()
+                ]
+                df_wix_agg = pd.DataFrame(wix_rows)
+                if df_agg.empty:
+                    df_agg = df_wix_agg
+                else:
+                    df_agg = (
+                        pd.concat([df_agg, df_wix_agg], ignore_index=True)
+                        .groupby(["codigo", "producto"], as_index=False)[
+                            "cantidad"
+                        ].sum()
+                    )
+        except Exception:
+            pass
 
     if estimado_fecha is None:
         df_est = cargar_estimado_ultimo()
@@ -479,24 +621,30 @@ compuestos["componente_label"] = (
 map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 
 (
+    tab_comprar,
+    tab_dux,
+    tab_wix,
+    tab_stock,
+    tab_estimado,
+    tab_mapeo,
+    tab_packs,
+    tab_dux_productos,
+    tab_wix_productos,
     tab_editar,
     tab_probar,
-    tab_stock,
-    tab_comprar,
-    tab_estimado,
-    tab_dux,
-    tab_dux_productos,
-    tab_wix,
 ) = st.tabs(
     [
+        "🛒 Total a comprar",
+        "📡 DUX Pedidos",
+        "🛍️ Wix Orders",
+        "📦 Stock",
+        "📈 Estimado",
+        "🔗 Mapeo Wix↔DUX",
+        "🎁 Packs Wix",
+        "📡 DUX Productos",
+        "🛍️ Wix Productos",
         "⚙️ Editar valores",
         "🧪 Probar conversión",
-        "📦 Stock",
-        "🛒 Total a comprar",
-        "📈 Estimado",
-        "📡 DUX Pedidos",
-        "📡 DUX Productos",
-        "🛍️ Wix Orders",
     ]
 )
 
@@ -768,48 +916,33 @@ with tab_stock:
 
 with tab_comprar:
     ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
+    ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
     ts_stk = ultima_sync(STOCK_CSV)
     ts_est = ultima_sync(ESTIMADO_CSV)
     st.caption(
-        f"🕒 Pedidos DUX: **{ts_ped or '?'}** · "
+        f"🕒 DUX: **{ts_ped or '?'}** · "
+        f"Wix: **{ts_wix or '?'}** · "
         f"Stock: **{ts_stk or '?'}** · "
         f"Estimado: **{ts_est or '?'}**"
     )
 
-    fechas_st_disp = fechas_disponibles(STOCK_CSV)
-    fechas_es_disp = fechas_disponibles(ESTIMADO_CSV)
+    fecha_compra = st.date_input(
+        "🛒 Fecha de compra (fecha de entrega)",
+        value=date.today() + timedelta(days=1),
+        key="comprar_fecha",
+        format="YYYY-MM-DD",
+        help=(
+            "Filtra pedidos DUX y Wix con esa fecha de entrega asignada. "
+            "Stock y estimado se leen de esa misma fecha."
+        ),
+    )
 
-    col_fs, col_fe = st.columns(2)
-    with col_fs:
-        if fechas_st_disp:
-            fecha_stock_sel = st.selectbox(
-                "📦 Fecha de stock",
-                fechas_st_disp,
-                index=0,
-                key="comprar_fecha_stock",
-            )
-        else:
-            fecha_stock_sel = None
-            st.warning("No hay fechas de stock guardadas.")
-    with col_fe:
-        if fechas_es_disp:
-            fecha_estimado_sel = st.selectbox(
-                "📈 Fecha de estimado",
-                fechas_es_disp,
-                index=0,
-                key="comprar_fecha_estimado",
-            )
-        else:
-            fecha_estimado_sel = None
-            st.caption("No hay fechas de estimado guardadas (se usará 0).")
-
-    pedidos_actual = cargar_pedidos_dux_aggregated(productos, estimado_fecha=fecha_estimado_sel)
-    if fecha_stock_sel is not None:
-        stock_actual = cargar_stock_fecha(fecha_stock_sel)
-    else:
-        stock_actual = pd.DataFrame(
-            columns=["codigo", "producto", "unidad_medida", "cantidad"]
-        )
+    pedidos_actual = cargar_pedidos_dux_aggregated(
+        productos,
+        estimado_fecha=fecha_compra,
+        fecha_compra=fecha_compra,
+    )
+    stock_actual = cargar_stock_fecha(fecha_compra)
 
     if pedidos_actual is None or pedidos_actual.empty:
         st.warning(
@@ -1325,6 +1458,7 @@ with tab_dux:
         id_sucursal = id_sucursal_default
 
         all_orders_saved = []
+        selecciones_dux = {}
         fecha_desde_default = date.today() - timedelta(days=7)
         fecha_hasta_default = date.today()
         if PEDIDOS_DUX_JSON.exists():
@@ -1332,6 +1466,7 @@ with tab_dux:
                 with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
                     saved = json.load(f)
                 all_orders_saved = saved.get("orders", [])
+                selecciones_dux = saved.get("selecciones", {}) or {}
                 if saved.get("fecha_desde"):
                     fecha_desde_default = pd.to_datetime(saved["fecha_desde"]).date()
                 if saved.get("fecha_hasta"):
@@ -1430,6 +1565,7 @@ with tab_dux:
                                 "fecha_desde": str(fecha_desde),
                                 "fecha_hasta": str(fecha_hasta),
                                 "orders": all_orders,
+                                "selecciones": selecciones_dux,
                             },
                             f,
                             ensure_ascii=False,
@@ -1450,9 +1586,11 @@ with tab_dux:
 
         if all_orders_saved:
             ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
+            n_asignados = sum(1 for v in selecciones_dux.values() if v)
             st.caption(
                 f"📅 Rango: {fecha_desde_default} → {fecha_hasta_default} · "
-                f"🕒 Última sync: **{ts_ped or '?'}**"
+                f"🕒 Última sync: **{ts_ped or '?'}** · "
+                f"{n_asignados} con entrega asignada."
             )
 
             buscar_dux_ped = st.text_input(
@@ -1461,28 +1599,86 @@ with tab_dux:
                 placeholder="Filtra por nombre de cliente o número...",
             )
 
-            for i, orden in enumerate(all_orders_saved, start=1):
-                cliente_str = _extraer_cliente(orden)
-                nro = _get_first(
-                    orden,
-                    ["nro_pedido", "nroPedido", "numero", "id"],
+            with st.form(key="form_dux_seleccion", clear_on_submit=False):
+                nuevas_selecciones_dux = {}
+                for i, orden in enumerate(all_orders_saved, start=1):
+                    cliente_str = _extraer_cliente(orden)
+                    nro = _get_first(
+                        orden,
+                        ["nro_pedido", "nroPedido", "numero", "id"],
+                    )
+                    if buscar_dux_ped:
+                        q = buscar_dux_ped.lower()
+                        if q not in cliente_str.lower() and q not in str(nro or "").lower():
+                            continue
+                    items = _extraer_items_dux(orden)
+
+                    oid = str(orden.get("id") or nro or i)
+                    asignado_prev = selecciones_dux.get(oid)
+                    fecha_default_entrega = (
+                        pd.to_datetime(asignado_prev).date()
+                        if asignado_prev
+                        else date.today() + timedelta(days=1)
+                    )
+
+                    with st.container(border=True):
+                        c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
+                        with c_info:
+                            badge = f" · 📦 {asignado_prev}" if asignado_prev else ""
+                            st.markdown(
+                                f"**#{nro or i}** — {cliente_str} · {len(items)} ítems{badge}"
+                            )
+                        with c_chk:
+                            asignar = st.checkbox(
+                                "Asignar entrega",
+                                value=bool(asignado_prev),
+                                key=f"dux_chk_{oid}",
+                            )
+                        with c_fec:
+                            fecha_entrega = st.date_input(
+                                "Fecha de entrega",
+                                value=fecha_default_entrega,
+                                key=f"dux_fent_{oid}",
+                                format="YYYY-MM-DD",
+                                label_visibility="collapsed",
+                            )
+
+                        if asignar:
+                            nuevas_selecciones_dux[oid] = str(fecha_entrega)
+
+                        if items:
+                            with st.expander("Ver productos"):
+                                filas = [_extraer_item(it) for it in items]
+                                st.dataframe(
+                                    pd.DataFrame(filas),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+
+                guardar_sel_dux = st.form_submit_button(
+                    "💾 Guardar selección de entregas", type="primary"
                 )
-                if buscar_dux_ped:
-                    q = buscar_dux_ped.lower()
-                    if q not in cliente_str.lower() and q not in str(nro or "").lower():
-                        continue
-                items = _extraer_items_dux(orden)
-                titulo = f"#{nro or i} — {cliente_str} ({len(items)} ítems)"
-                with st.expander(titulo):
-                    if items:
-                        filas = [_extraer_item(it) for it in items]
-                        st.dataframe(
-                            pd.DataFrame(filas),
-                            use_container_width=True,
-                            hide_index=True,
+
+            if guardar_sel_dux:
+                try:
+                    with open(PEDIDOS_DUX_JSON, "w", encoding="utf-8") as f:
+                        json.dump(
+                            {
+                                "fecha_desde": str(fecha_desde_default),
+                                "fecha_hasta": str(fecha_hasta_default),
+                                "orders": all_orders_saved,
+                                "selecciones": nuevas_selecciones_dux,
+                            },
+                            f,
+                            ensure_ascii=False,
+                            indent=2,
                         )
-                    else:
-                        st.caption("Este pedido no tiene ítems inline.")
+                    st.success(
+                        f"✅ {len(nuevas_selecciones_dux)} entregas guardadas."
+                    )
+                    selecciones_dux = nuevas_selecciones_dux
+                except Exception as e:
+                    st.error(f"No se pudo guardar: {e}")
 
             st.divider()
             st.subheader("📊 Suma de productos pendientes")
@@ -1960,6 +2156,506 @@ with tab_wix:
                     )
                 except Exception as e:
                     st.error(f"No se pudo guardar: {e}")
+
+with tab_wix_productos:
+    st.info(
+        "Catálogo local de Wix (`wix_productos.csv`). "
+        "Apretá **Sincronizar** para refrescar desde Wix."
+    )
+
+    wix_cfg_p = st.secrets.get("wix", {})
+    wix_token_p = wix_cfg_p.get("api_key", "")
+    wix_account_p = wix_cfg_p.get("account_id", "")
+    wix_site_p = wix_cfg_p.get("site_id", "")
+
+    if not wix_token_p or not wix_account_p or not wix_site_p:
+        st.error("Faltan credenciales de Wix en `.streamlit/secrets.toml`.")
+    else:
+        sincronizar_wix_p = st.button(
+            "🔄 Sincronizar productos desde Wix",
+            type="primary",
+            key="wix_sincronizar_productos",
+        )
+
+        if sincronizar_wix_p:
+            url_wp = "https://www.wixapis.com/stores/v1/products/query"
+            headers_wp = {
+                "Authorization": wix_token_p,
+                "wix-account-id": wix_account_p,
+                "wix-site-id": wix_site_p,
+                "Content-Type": "application/json",
+            }
+            all_wix_prods = []
+            page_offset = 0
+            page_size = 100
+            error_corte = False
+            total_servidor = None
+
+            progress = st.progress(0.0, text="Trayendo productos desde Wix...")
+
+            while True:
+                body_wp = {
+                    "query": {
+                        "paging": {"limit": page_size, "offset": page_offset}
+                    }
+                }
+                try:
+                    r = requests.post(
+                        url_wp, json=body_wp, headers=headers_wp, timeout=30
+                    )
+                except requests.RequestException as e:
+                    st.error(f"Error de red: {e}")
+                    error_corte = True
+                    break
+
+                if r.status_code != 200:
+                    st.error(f"HTTP {r.status_code}: {r.text[:500]}")
+                    error_corte = True
+                    break
+
+                try:
+                    d = r.json()
+                except ValueError:
+                    st.error("Respuesta no JSON.")
+                    error_corte = True
+                    break
+
+                page = d.get("products", []) if isinstance(d, dict) else []
+                if total_servidor is None:
+                    total_servidor = d.get("totalResults") if isinstance(d, dict) else None
+
+                if not page:
+                    break
+
+                all_wix_prods.extend(page)
+
+                if total_servidor:
+                    progress.progress(
+                        min(1.0, len(all_wix_prods) / total_servidor),
+                        text=f"{len(all_wix_prods)} / {total_servidor}",
+                    )
+
+                if len(page) < page_size:
+                    break
+                page_offset += page_size
+
+            progress.empty()
+
+            if not error_corte:
+                if not all_wix_prods:
+                    st.warning("Wix no devolvió productos.")
+                else:
+                    filas = []
+                    for p in all_wix_prods:
+                        filas.append(
+                            {
+                                "wix_id": p.get("id", ""),
+                                "producto": p.get("name", ""),
+                                "descripcion": (p.get("description") or "").strip(),
+                            }
+                        )
+                    df_wix_prods = (
+                        pd.DataFrame(filas)
+                        .sort_values("producto")
+                        .reset_index(drop=True)
+                    )
+                    df_wix_prods.to_csv(WIX_PRODUCTOS_CSV, index=False)
+                    st.success(
+                        f"✅ Sincronizado. {len(df_wix_prods)} productos guardados en `wix_productos.csv`."
+                    )
+
+        st.divider()
+        st.subheader("📋 Productos cargados")
+
+        if WIX_PRODUCTOS_CSV.exists():
+            try:
+                df_wix_csv = pd.read_csv(WIX_PRODUCTOS_CSV)
+                ts_wix_prod = ultima_sync(WIX_PRODUCTOS_CSV)
+                st.caption(
+                    f"{len(df_wix_csv)} productos · "
+                    f"🕒 última sync: **{ts_wix_prod or '?'}**"
+                )
+
+                buscar_wix_prod = st.text_input(
+                    "🔎 Buscar producto",
+                    key="buscar_wix_productos",
+                    placeholder="Filtra por nombre o descripción...",
+                )
+
+                df_show_wp = df_wix_csv.copy()
+                if "descripcion" not in df_show_wp.columns:
+                    df_show_wp["descripcion"] = ""
+                if buscar_wix_prod:
+                    q = buscar_wix_prod.lower()
+                    mask = (
+                        df_show_wp["producto"].astype(str).str.lower().str.contains(q, na=False)
+                        | df_show_wp["descripcion"].astype(str).str.lower().str.contains(q, na=False)
+                    )
+                    df_show_wp = df_show_wp[mask].reset_index(drop=True)
+
+                st.dataframe(
+                    df_show_wp[["producto", "descripcion"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            except Exception as e:
+                st.error(f"No se pudo leer wix_productos.csv: {e}")
+        else:
+            st.warning(
+                "Todavía no hay `wix_productos.csv`. Apretá **Sincronizar**."
+            )
+
+with tab_mapeo:
+    st.info(
+        "Mapeá cada producto de Wix con su equivalente en DUX. "
+        "Lo que no tenga equivalente, dejalo en **(sin mapear)**."
+    )
+
+    falta_dux = not PRODUCTOS_CSV.exists()
+    falta_wix = not WIX_PRODUCTOS_CSV.exists()
+
+    if falta_dux or falta_wix:
+        faltantes = []
+        if falta_dux:
+            faltantes.append("📡 DUX Productos")
+        if falta_wix:
+            faltantes.append("🛍️ Wix Productos")
+        st.warning(
+            "Antes de mapear necesitás sincronizar: " + " y ".join(faltantes) + "."
+        )
+    else:
+        df_dux_p = pd.read_csv(PRODUCTOS_CSV, dtype={"codigo": str})
+        df_wix_p = pd.read_csv(WIX_PRODUCTOS_CSV)
+        df_wix_p["wix_id"] = df_wix_p["wix_id"].astype(str)
+        df_wix_p["producto"] = df_wix_p["producto"].astype(str)
+        df_wix_p = df_wix_p.sort_values("producto").reset_index(drop=True)
+
+        mapping_actual = {}
+        factor_actual = {}
+        if MAPPING_WIX_DUX_CSV.exists():
+            try:
+                df_map = pd.read_csv(MAPPING_WIX_DUX_CSV, dtype=str)
+                mapping_actual = dict(
+                    zip(df_map["wix_id"].astype(str), df_map["dux_codigo"].astype(str))
+                )
+                if "factor" in df_map.columns:
+                    factor_actual = {}
+                    for wid, f in zip(df_map["wix_id"].astype(str), df_map["factor"]):
+                        try:
+                            factor_actual[wid] = float(f)
+                        except (ValueError, TypeError):
+                            factor_actual[wid] = 1.0
+            except Exception as e:
+                st.error(f"No se pudo leer mapping_wix_dux.csv: {e}")
+
+        opciones_dux = ["(sin mapear)"] + [
+            f"{c} - {p}"
+            for c, p in zip(
+                df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str)
+            )
+        ]
+        label_to_codigo = {
+            f"{c} - {p}": c
+            for c, p in zip(
+                df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str)
+            )
+        }
+        codigo_to_label = {v: k for k, v in label_to_codigo.items()}
+
+        col_h1, col_h2 = st.columns([3, 1])
+        with col_h1:
+            buscar_mapeo = st.text_input(
+                "🔎 Buscar producto Wix",
+                key="buscar_mapeo",
+                placeholder="Filtra por nombre Wix...",
+            )
+        with col_h2:
+            solo_sin_mapear = st.checkbox(
+                "Solo sin mapear",
+                value=False,
+                key="solo_sin_mapear",
+            )
+
+        ts_map = ultima_sync(MAPPING_WIX_DUX_CSV)
+        mapeados = sum(1 for v in mapping_actual.values() if v)
+        st.caption(
+            f"{mapeados} / {len(df_wix_p)} productos mapeados · "
+            f"🕒 última edición: **{ts_map or '?'}**"
+        )
+
+        with st.form(key="form_mapeo_wix_dux", clear_on_submit=False):
+            st.caption(
+                "💡 **Factor** = cuántas unidades DUX representa 1 unidad Wix. "
+                "Ej: Wix `VERDEO - 1/4 KG` → DUX `VERDEO - ATADO` con factor `0.25`."
+            )
+            nuevo_mapping = {}
+            nuevo_factor = {}
+            mostradas = 0
+            for _, row in df_wix_p.iterrows():
+                wid = str(row["wix_id"])
+                wname = str(row["producto"])
+
+                if buscar_mapeo and buscar_mapeo.lower() not in wname.lower():
+                    continue
+
+                current_codigo = mapping_actual.get(wid, "")
+                if solo_sin_mapear and current_codigo:
+                    continue
+
+                default_idx = 0
+                if current_codigo and current_codigo in codigo_to_label:
+                    try:
+                        default_idx = opciones_dux.index(
+                            codigo_to_label[current_codigo]
+                        )
+                    except ValueError:
+                        default_idx = 0
+
+                default_factor = float(factor_actual.get(wid, 1.0))
+
+                col_a, col_b, col_c = st.columns([2, 2, 1])
+                with col_a:
+                    st.markdown(f"**{wname}**")
+                with col_b:
+                    sel = st.selectbox(
+                        "DUX equivalente",
+                        opciones_dux,
+                        index=default_idx,
+                        key=f"map_{wid}",
+                        label_visibility="collapsed",
+                    )
+                with col_c:
+                    factor_val = st.number_input(
+                        "Factor",
+                        value=default_factor,
+                        min_value=0.0,
+                        step=0.25,
+                        format="%.4f",
+                        key=f"factor_{wid}",
+                        label_visibility="collapsed",
+                    )
+
+                if sel != "(sin mapear)":
+                    nuevo_mapping[wid] = label_to_codigo[sel]
+                    nuevo_factor[wid] = float(factor_val)
+                mostradas += 1
+
+            st.caption(f"Mostrando {mostradas} productos.")
+
+            guardar_map = st.form_submit_button(
+                "💾 Guardar mapeo", type="primary"
+            )
+
+        if guardar_map:
+            # Merge: keep existing mappings for products NOT shown (e.g., filtered out)
+            shown_ids = set()
+            for _, row in df_wix_p.iterrows():
+                wid = str(row["wix_id"])
+                wname = str(row["producto"])
+                if buscar_mapeo and buscar_mapeo.lower() not in wname.lower():
+                    continue
+                if solo_sin_mapear and mapping_actual.get(wid, ""):
+                    continue
+                shown_ids.add(wid)
+
+            # Start from existing, override only the shown ones
+            merged_map = {
+                wid: code for wid, code in mapping_actual.items() if wid not in shown_ids
+            }
+            merged_map.update(nuevo_mapping)
+
+            merged_factor = {
+                wid: factor_actual.get(wid, 1.0)
+                for wid in mapping_actual
+                if wid not in shown_ids
+            }
+            merged_factor.update(nuevo_factor)
+
+            map_prod_dux = dict(
+                zip(df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str))
+            )
+            map_prod_wix = dict(zip(df_wix_p["wix_id"], df_wix_p["producto"]))
+
+            rows = []
+            for wid, code in merged_map.items():
+                if not code:
+                    continue
+                rows.append(
+                    {
+                        "wix_id": wid,
+                        "wix_producto": map_prod_wix.get(wid, ""),
+                        "dux_codigo": code,
+                        "dux_producto": map_prod_dux.get(code, ""),
+                        "factor": merged_factor.get(wid, 1.0),
+                    }
+                )
+
+            pd.DataFrame(
+                rows,
+                columns=[
+                    "wix_id",
+                    "wix_producto",
+                    "dux_codigo",
+                    "dux_producto",
+                    "factor",
+                ],
+            ).to_csv(MAPPING_WIX_DUX_CSV, index=False)
+
+            st.success(f"✅ {len(rows)} mapeos guardados.")
+
+with tab_packs:
+    st.info(
+        "Configurá la composición de cada PACK de Wix con productos DUX y cantidades. "
+        "Agregá / quitá filas según necesites."
+    )
+
+    if not WIX_PRODUCTOS_CSV.exists():
+        st.warning("Falta sincronizar 🛍️ Wix Productos primero.")
+    elif not PRODUCTOS_CSV.exists():
+        st.warning("Falta sincronizar 📡 DUX Productos primero.")
+    else:
+        df_wix_p_packs = pd.read_csv(WIX_PRODUCTOS_CSV)
+        df_dux_p_packs = pd.read_csv(PRODUCTOS_CSV, dtype={"codigo": str})
+
+        df_packs = df_wix_p_packs[
+            df_wix_p_packs["producto"].astype(str).str.upper().str.startswith("PACK")
+        ].copy()
+
+        if df_packs.empty:
+            st.warning(
+                "No se encontraron productos PACK en `wix_productos.csv`."
+            )
+        else:
+            opciones_dux_pack = [
+                f"{c} - {p}"
+                for c, p in zip(
+                    df_dux_p_packs["codigo"].astype(str),
+                    df_dux_p_packs["producto"].astype(str),
+                )
+            ]
+            label_to_cod = {
+                f"{c} - {p}": (c, p)
+                for c, p in zip(
+                    df_dux_p_packs["codigo"].astype(str),
+                    df_dux_p_packs["producto"].astype(str),
+                )
+            }
+
+            df_packs_saved = pd.DataFrame(
+                columns=[
+                    "wix_id_pack",
+                    "pack_nombre",
+                    "dux_codigo",
+                    "dux_producto",
+                    "cantidad",
+                ]
+            )
+            if PACKS_WIX_CSV.exists():
+                try:
+                    df_packs_saved = pd.read_csv(
+                        PACKS_WIX_CSV, dtype={"dux_codigo": str, "wix_id_pack": str}
+                    )
+                except Exception as e:
+                    st.error(f"No se pudo leer packs_wix.csv: {e}")
+
+            ts_packs = ultima_sync(PACKS_WIX_CSV)
+            st.caption(f"🕒 última edición: **{ts_packs or '?'}**")
+
+            editor_outputs = {}
+
+            for _, pack_row in df_packs.iterrows():
+                pack_id = str(pack_row["wix_id"])
+                pack_nombre = str(pack_row["producto"])
+
+                st.markdown(f"### 🎁 {pack_nombre}")
+
+                comp_actual = df_packs_saved[
+                    df_packs_saved["wix_id_pack"].astype(str) == pack_id
+                ]
+                if not comp_actual.empty:
+                    comp_view = pd.DataFrame(
+                        {
+                            "producto": [
+                                f"{c} - {p}"
+                                for c, p in zip(
+                                    comp_actual["dux_codigo"].astype(str),
+                                    comp_actual["dux_producto"].astype(str),
+                                )
+                            ],
+                            "cantidad": comp_actual["cantidad"]
+                            .fillna(0)
+                            .astype(float)
+                            .values,
+                        }
+                    )
+                else:
+                    comp_view = pd.DataFrame(
+                        {"producto": pd.Series(dtype=str), "cantidad": pd.Series(dtype=float)}
+                    )
+
+                edited = st.data_editor(
+                    comp_view,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "producto": st.column_config.SelectboxColumn(
+                            "Producto DUX",
+                            options=opciones_dux_pack,
+                            required=True,
+                        ),
+                        "cantidad": st.column_config.NumberColumn(
+                            "Cantidad",
+                            min_value=0.0,
+                            step=0.25,
+                            format="%.3f",
+                            required=True,
+                        ),
+                    },
+                    key=f"editor_pack_{pack_id}",
+                )
+
+                editor_outputs[pack_id] = (pack_nombre, edited)
+
+            if st.button("💾 Guardar packs", type="primary", key="btn_guardar_packs"):
+                rows_save = []
+                for pack_id, (pack_nombre, edited) in editor_outputs.items():
+                    if edited is None or edited.empty:
+                        continue
+                    for _, r in edited.iterrows():
+                        prod_label = r.get("producto")
+                        if not prod_label or prod_label not in label_to_cod:
+                            continue
+                        try:
+                            cant = float(r.get("cantidad") or 0)
+                        except (ValueError, TypeError):
+                            cant = 0.0
+                        if cant <= 0:
+                            continue
+                        codigo, producto_nombre = label_to_cod[prod_label]
+                        rows_save.append(
+                            {
+                                "wix_id_pack": pack_id,
+                                "pack_nombre": pack_nombre,
+                                "dux_codigo": codigo,
+                                "dux_producto": producto_nombre,
+                                "cantidad": cant,
+                            }
+                        )
+
+                pd.DataFrame(
+                    rows_save,
+                    columns=[
+                        "wix_id_pack",
+                        "pack_nombre",
+                        "dux_codigo",
+                        "dux_producto",
+                        "cantidad",
+                    ],
+                ).to_csv(PACKS_WIX_CSV, index=False)
+
+                st.success(
+                    f"✅ Packs guardados ({len(rows_save)} líneas totales)."
+                )
 
 
 #python -m streamlit run app.py
