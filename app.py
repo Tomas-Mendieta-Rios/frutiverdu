@@ -529,9 +529,24 @@ def completar_relaciones(compuestos_df, productos_df, excepciones=None):
 
 productos = cargar_productos()
 compuestos_orig = cargar_compuestos()
-compuestos = completar_relaciones(compuestos_orig, productos, EXCEPCIONES)
-if len(compuestos) != len(compuestos_orig):
-    guardar_compuestos(compuestos)
+# Si compuestos esta vacio (Sheet corrupto), no llamamos completar_relaciones
+# (rompe por columnas faltantes). El usuario debera re-sincronizar.
+if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
+    st.error(
+        "⚠️ La tabla `compuestos` del Sheet está vacía o corrupta. "
+        "Re-subí los datos corriendo localmente: `python inicializar_sheets.py`."
+    )
+    compuestos = pd.DataFrame(
+        columns=[
+            "codigo_origen", "producto_origen", "cantidad_origen",
+            "codigo_componente", "producto_componente", "cantidad_componente",
+        ]
+    )
+else:
+    compuestos = completar_relaciones(compuestos_orig, productos, EXCEPCIONES)
+    # Solo guardar si tiene contenido (defensivo: no pisar Sheet con vacío)
+    if len(compuestos) != len(compuestos_orig) and not compuestos.empty:
+        guardar_compuestos(compuestos)
 
 productos["label"] = productos["codigo"] + " - " + productos["producto"]
 
