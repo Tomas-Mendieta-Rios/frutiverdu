@@ -1,6 +1,7 @@
+import json
 import re
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import requests
 import streamlit as st
@@ -8,6 +9,14 @@ import pandas as pd
 from pathlib import Path
 
 DUX_RATE_LIMIT_SECONDS = 5.5
+
+
+def ultima_sync(path):
+    if not path.exists():
+        return None
+    return datetime.fromtimestamp(path.stat().st_mtime).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
 
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
 
@@ -19,10 +28,15 @@ if not COMPUESTOS_CSV.exists():
 
 STOCK_CSV = Path("stock.csv")
 
-PEDIDOS_CSV = Path("pedidos.csv")
+PEDIDOS_DUX_JSON = Path("pedidos_dux.json")
+
+ESTIMADO_CSV = Path("estimado.csv")
+
+WIX_PEDIDOS_JSON = Path("wix_pedidos.json")
 
 EXCEPCIONES = {
     ("061", "062"),
+    ("0256", "0205"),
 }
 
 st.title("🍎 Frutiverdu - Editor de Compuestos")
@@ -47,28 +61,188 @@ def guardar_compuestos(df):
 
 
 def cargar_stock():
+    """Devuelve el stock de la última fecha guardada (para uso en Total a comprar)."""
     if not STOCK_CSV.exists():
         return pd.DataFrame(
             columns=["codigo", "producto", "unidad_medida", "cantidad"]
         )
-    return pd.read_csv(STOCK_CSV, dtype={"codigo": str})
+    df = pd.read_csv(STOCK_CSV, dtype={"codigo": str})
+    if "fecha" in df.columns and not df.empty:
+        try:
+            latest = pd.to_datetime(df["fecha"]).max()
+            df = df[pd.to_datetime(df["fecha"]) == latest].drop(columns=["fecha"])
+        except Exception:
+            pass
+    return df
+
+
+def cargar_estimado_ultimo():
+    """Devuelve el estimado de la última fecha guardada en estimado.csv."""
+    if not ESTIMADO_CSV.exists():
+        return pd.DataFrame(
+            columns=["codigo", "producto", "unidad_medida", "estimado"]
+        )
+    df = pd.read_csv(ESTIMADO_CSV, dtype={"codigo": str})
+    if "fecha" in df.columns and not df.empty:
+        try:
+            latest = pd.to_datetime(df["fecha"]).max()
+            df = df[pd.to_datetime(df["fecha"]) == latest].drop(columns=["fecha"])
+        except Exception:
+            pass
+    return df
+
+
+def fechas_disponibles(csv_path):
+    if not csv_path.exists():
+        return []
+    try:
+        df = pd.read_csv(csv_path, dtype=str)
+        if "fecha" not in df.columns:
+            return []
+        return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
+    except Exception:
+        return []
+
+
+def cargar_estimado_fecha(fecha):
+    if not ESTIMADO_CSV.exists():
+        return pd.DataFrame(
+            columns=["codigo", "producto", "unidad_medida", "estimado"]
+        )
+    df = pd.read_csv(ESTIMADO_CSV, dtype={"codigo": str})
+    if "fecha" in df.columns:
+        df = df[df["fecha"] == str(fecha)].drop(columns=["fecha"])
+    return df
+
+
+def cargar_stock_fecha(fecha):
+    if not STOCK_CSV.exists():
+        return pd.DataFrame(
+            columns=["codigo", "producto", "unidad_medida", "cantidad"]
+        )
+    df = pd.read_csv(STOCK_CSV, dtype={"codigo": str})
+    if "fecha" in df.columns:
+        df = df[df["fecha"] == str(fecha)].drop(columns=["fecha"])
+    return df
+
+
+def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None):
+    """Lee pedidos_dux.json, agrega cantidades por código y suma estimado
+    de estimado.csv (de la fecha indicada o la última si es None)."""
+    cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
+    if not PEDIDOS_DUX_JSON.exists():
+        return pd.DataFrame(columns=cols)
+
+    try:
+        with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+    except Exception:
+        return pd.DataFrame(columns=cols)
+
+    all_orders = saved.get("orders", [])
+    items_planos = []
+    for orden in all_orders:
+        for item in extraer_items_dux(orden):
+            items_planos.append(extraer_item_dux(item))
+
+    df_items = (
+        pd.DataFrame(items_planos)
+        if items_planos
+        else pd.DataFrame(columns=["codigo", "producto", "cantidad"])
+    )
+
+    if df_items.empty:
+        df_agg = pd.DataFrame(columns=["codigo", "producto", "cantidad"])
+    else:
+        df_agg = df_items.groupby(["codigo", "producto"], as_index=False)[
+            "cantidad"
+        ].sum()
+
+    if estimado_fecha is None:
+        df_est = cargar_estimado_ultimo()
+    else:
+        df_est = cargar_estimado_fecha(estimado_fecha)
+
+    # Outer merge so items con solo estimado también aparecen
+    if not df_est.empty:
+        df_merge = df_agg.merge(
+            df_est[["codigo", "estimado"]], on="codigo", how="outer"
+        )
+    else:
+        df_merge = df_agg.copy()
+        df_merge["estimado"] = 0.0
+
+    df_merge["cantidad"] = df_merge["cantidad"].fillna(0).astype(float)
+    df_merge["estimado"] = df_merge["estimado"].fillna(0).astype(float)
+
+    map_prod = dict(zip(productos_df["codigo"].astype(str), productos_df["producto"]))
+    map_unid = dict(zip(productos_df["codigo"].astype(str), productos_df["unidad_medida"]))
+    df_merge["codigo"] = df_merge["codigo"].astype(str)
+    df_merge["producto"] = df_merge.apply(
+        lambda r: r.get("producto") if pd.notna(r.get("producto")) and r.get("producto")
+        else map_prod.get(r["codigo"], ""),
+        axis=1,
+    )
+    df_merge["unidad_medida"] = df_merge["codigo"].map(map_unid).fillna("")
+
+    return df_merge[cols]
 
 
 def guardar_stock(df):
     df.to_csv(STOCK_CSV, index=False)
 
 
-def cargar_pedidos():
-    if not PEDIDOS_CSV.exists():
+def _dux_get_first(d, claves):
+    if not isinstance(d, dict):
         return None
-    df = pd.read_csv(PEDIDOS_CSV, dtype={"codigo": str})
-    if "estimado" not in df.columns:
-        df["estimado"] = 0.0
-    return df
+    for k in claves:
+        if k in d and d[k] not in (None, ""):
+            return d[k]
+    return None
 
 
-def guardar_pedidos(df):
-    df.to_csv(PEDIDOS_CSV, index=False)
+def extraer_items_dux(orden):
+    for f in ["detalles", "items", "productos", "lineas", "renglones", "detalle"]:
+        v = orden.get(f)
+        if isinstance(v, list):
+            return v
+    return []
+
+
+def extraer_item_dux(item):
+    codigo = _dux_get_first(
+        item,
+        ["cod_item", "codItem", "codigo", "codigoItem",
+         "codigoProducto", "cod_producto"],
+    )
+    descr = _dux_get_first(
+        item,
+        ["item", "descripcion", "producto", "detalle", "nombre"],
+    )
+    cant = _dux_get_first(
+        item,
+        [
+            "cantidad", "cant", "qty", "quantity",
+            "cantidad_pedida", "cantidadPedida",
+            "cantidad_solicitada", "cantidadSolicitada",
+            "cant_pedida", "cantPedida",
+            "unidades", "ctd",
+        ],
+    )
+    if cant is None:
+        for k, v in item.items():
+            if isinstance(k, str) and "cant" in k.lower() and isinstance(v, (int, float)):
+                cant = v
+                break
+    try:
+        cant = float(cant) if cant is not None else 0.0
+    except (ValueError, TypeError):
+        cant = 0.0
+    return {
+        "codigo": str(codigo) if codigo is not None else "",
+        "producto": descr or "",
+        "cantidad": cant,
+    }
 
 
 def construir_grafo_conversion(compuestos_df):
@@ -308,20 +482,20 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
     tab_editar,
     tab_probar,
     tab_stock,
-    tab_pedidos,
     tab_comprar,
+    tab_estimado,
     tab_dux,
-    tab_dux_stock,
+    tab_dux_productos,
     tab_wix,
 ) = st.tabs(
     [
         "⚙️ Editar valores",
         "🧪 Probar conversión",
         "📦 Stock",
-        "📋 Pedidos",
         "🛒 Total a comprar",
+        "📈 Estimado",
         "📡 DUX Pedidos",
-        "📡 DUX Stock",
+        "📡 DUX Productos",
         "🛍️ Wix Orders",
     ]
 )
@@ -439,217 +613,94 @@ with tab_probar:
 
 with tab_stock:
     st.info(
-        "Cargá la cantidad de cada producto. "
-        "Los cambios se guardan en stock.csv."
+        "Cargá el stock por producto y fecha. "
+        "Se guarda en `stock.csv` con histórico por fecha."
     )
 
-    stock_actual = cargar_stock()
-    map_codigo_a_cantidad = dict(
-        zip(stock_actual["codigo"].astype(str), stock_actual["cantidad"])
-    )
+    df_stock_full = None
+    if STOCK_CSV.exists():
+        try:
+            df_stock_full = pd.read_csv(STOCK_CSV, dtype={"codigo": str})
+        except Exception as e:
+            st.error(f"No se pudo leer stock.csv: {e}")
 
-    stock_base = productos[["codigo", "producto", "unidad_medida"]].copy()
-    stock_base["cantidad"] = (
-        stock_base["codigo"].map(map_codigo_a_cantidad).fillna(0.0).astype(float)
+    fecha_stock_default = date.today()
+    if (
+        df_stock_full is not None
+        and "fecha" in df_stock_full.columns
+        and not df_stock_full.empty
+    ):
+        try:
+            fecha_stock_default = pd.to_datetime(df_stock_full["fecha"]).max().date()
+        except Exception:
+            pass
+
+    col_st1, col_st2 = st.columns([1, 3])
+    with col_st1:
+        fecha_stock = st.date_input(
+            "Fecha",
+            value=fecha_stock_default,
+            key="fecha_stock_local",
+            format="YYYY-MM-DD",
+        )
+    with col_st2:
+        ts_stock = ultima_sync(STOCK_CSV)
+        st.caption(f"🕒 Última edición: **{ts_stock or '?'}**")
+
+    map_stock_dia = {}
+    if df_stock_full is not None and "fecha" in df_stock_full.columns:
+        df_dia_stk = df_stock_full[df_stock_full["fecha"] == str(fecha_stock)]
+        map_stock_dia = dict(
+            zip(df_dia_stk["codigo"].astype(str), df_dia_stk["cantidad"])
+        )
+
+    base_stk = productos[["codigo", "producto", "unidad_medida"]].copy()
+    base_stk["cantidad"] = (
+        base_stk["codigo"]
+        .astype(str)
+        .map(map_stock_dia)
+        .fillna(0.0)
+        .astype(float)
     )
 
     if st.session_state.get("resetear_stock"):
-        stock_base["cantidad"] = 0.0
-        guardar_stock(stock_base)
+        base_stk["cantidad"] = 0.0
+        otros = (
+            df_stock_full[df_stock_full["fecha"] != str(fecha_stock)]
+            if df_stock_full is not None and "fecha" in df_stock_full.columns
+            else pd.DataFrame(
+                columns=["fecha", "codigo", "producto", "unidad_medida", "cantidad"]
+            )
+        )
+        nuevo = base_stk.copy()
+        nuevo["fecha"] = str(fecha_stock)
+        combinado = pd.concat(
+            [
+                otros,
+                nuevo[["fecha", "codigo", "producto", "unidad_medida", "cantidad"]],
+            ],
+            ignore_index=True,
+        )
+        combinado.to_csv(STOCK_CSV, index=False)
         st.session_state["resetear_stock"] = False
-        st.success("Stock puesto en cero.")
+        st.success(f"Stock del {fecha_stock} puesto en cero.")
 
-    stock_editado = st.data_editor(
-        stock_base,
-        use_container_width=True,
-        num_rows="fixed",
-        disabled=["codigo", "producto", "unidad_medida"],
-        column_config={
-            "codigo": st.column_config.TextColumn("Código"),
-            "producto": st.column_config.TextColumn("Producto"),
-            "unidad_medida": st.column_config.TextColumn("Unidad"),
-            "cantidad": st.column_config.NumberColumn(
-                "Cantidad",
-                min_value=0.0,
-                step=1.0,
-                format="%.3f",
-            ),
-        },
-        key="editor_stock",
+    buscar_stk = st.text_input(
+        "🔎 Buscar producto",
+        key="buscar_stock",
+        placeholder="Filtra por nombre o código...",
     )
-
-    col_s1, col_s2, col_s3 = st.columns([1, 1, 3])
-
-    with col_s1:
-        guardar_s = st.button(
-            "💾 Guardar stock",
-            type="primary",
-            key="btn_guardar_stock",
-        )
-
-    with col_s2:
-        cero_s = st.button(
-            "🧹 Poner stock a cero",
-            key="btn_cero_stock",
-        )
-
-    with col_s3:
-        st.caption("Los cambios se guardan en stock.csv.")
-
-    if guardar_s:
-        salida_s = stock_editado.copy()
-        salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
-        salida_s = salida_s[["codigo", "producto", "unidad_medida", "cantidad"]]
-        guardar_stock(salida_s)
-        st.success("Stock guardado correctamente.")
-
-    if cero_s:
-        st.session_state["resetear_stock"] = True
-        st.rerun()
-
-with tab_pedidos:
-    st.info(
-        "Subí el Excel de pedidos o editá los valores a mano. "
-        "**Estimado** = cuánto querés comprar de más previendo ventas. "
-        "Los datos se guardan en pedidos.csv."
-    )
-
-    archivo_pedidos = st.file_uploader(
-        "Archivo de pedidos (.xlsx)",
-        type=["xlsx", "xls"],
-        key="uploader_pedidos",
-    )
-
-    if archivo_pedidos is not None:
-        file_id = (archivo_pedidos.name, archivo_pedidos.size)
-        if st.session_state.get("ultimo_upload_pedidos") != file_id:
-            try:
-                df_excel = pd.read_excel(
-                    archivo_pedidos,
-                    header=2,
-                    dtype={"Código Producto": str},
-                )
-            except Exception as e:
-                st.error(f"No se pudo leer el archivo: {e}")
-                df_excel = None
-
-            if df_excel is not None:
-                columnas_requeridas = ["Código Producto", "Cantidad"]
-                faltantes = [
-                    c for c in columnas_requeridas if c not in df_excel.columns
-                ]
-                if faltantes:
-                    st.error(
-                        f"Faltan columnas: {', '.join(faltantes)}. "
-                        f"Encontradas: {', '.join(df_excel.columns)}"
-                    )
-                else:
-                    df_parsed = df_excel[["Código Producto", "Cantidad"]].copy()
-                    df_parsed.columns = ["codigo", "cantidad"]
-                    df_parsed["codigo"] = df_parsed["codigo"].astype(str).str.strip()
-                    df_parsed = df_parsed.dropna(subset=["codigo", "cantidad"])
-                    df_parsed = df_parsed.groupby("codigo", as_index=False)[
-                        "cantidad"
-                    ].sum()
-
-                    map_cant_excel = dict(
-                        zip(df_parsed["codigo"], df_parsed["cantidad"])
-                    )
-
-                    pedidos_prev = cargar_pedidos()
-                    map_est = {}
-                    if pedidos_prev is not None and "estimado" in pedidos_prev.columns:
-                        map_est = dict(
-                            zip(
-                                pedidos_prev["codigo"].astype(str),
-                                pedidos_prev["estimado"].fillna(0),
-                            )
-                        )
-
-                    full = productos[
-                        ["codigo", "producto", "unidad_medida"]
-                    ].copy()
-                    full["cantidad"] = (
-                        full["codigo"]
-                        .astype(str)
-                        .map(map_cant_excel)
-                        .fillna(0)
-                        .astype(float)
-                    )
-                    full["estimado"] = (
-                        full["codigo"]
-                        .astype(str)
-                        .map(map_est)
-                        .fillna(0)
-                        .astype(float)
-                    )
-
-                    guardar_pedidos(full)
-                    st.session_state["ultimo_upload_pedidos"] = file_id
-
-                    codigos_excel = set(df_parsed["codigo"])
-                    codigos_prod = set(productos["codigo"].astype(str))
-                    desconocidos = codigos_excel - codigos_prod
-                    st.success(
-                        f"✅ Excel procesado. "
-                        f"{(full['cantidad'] > 0).sum()} productos con pedido."
-                    )
-                    if desconocidos:
-                        st.warning(
-                            f"Códigos del Excel que no están en productos.csv "
-                            f"(se ignoraron): {', '.join(sorted(desconocidos))}"
-                        )
-
-    pedidos_full = cargar_pedidos()
-    if pedidos_full is None or pedidos_full.empty:
-        pedidos_full = productos[["codigo", "producto", "unidad_medida"]].copy()
-        pedidos_full["cantidad"] = 0.0
-        pedidos_full["estimado"] = 0.0
+    if buscar_stk:
+        mask = base_stk["producto"].str.contains(buscar_stk, case=False, na=False) | base_stk[
+            "codigo"
+        ].astype(str).str.contains(buscar_stk, case=False, na=False)
+        base_stk_view = base_stk[mask].reset_index(drop=True)
     else:
-        if "estimado" not in pedidos_full.columns:
-            pedidos_full["estimado"] = 0.0
-        existentes = set(pedidos_full["codigo"].astype(str))
-        nuevos = productos[
-            ~productos["codigo"].astype(str).isin(existentes)
-        ].copy()
-        if not nuevos.empty:
-            nuevos = nuevos[["codigo", "producto", "unidad_medida"]]
-            nuevos["cantidad"] = 0.0
-            nuevos["estimado"] = 0.0
-            pedidos_full = pd.concat([pedidos_full, nuevos], ignore_index=True)
+        base_stk_view = base_stk
 
-    pedidos_full["cantidad"] = pedidos_full["cantidad"].fillna(0).astype(float)
-    pedidos_full["estimado"] = pedidos_full["estimado"].fillna(0).astype(float)
-    pedidos_full = pedidos_full[
-        ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
-    ].sort_values("producto").reset_index(drop=True)
-
-    col_f1, col_f2 = st.columns([2, 4])
-    with col_f1:
-        solo_pedidos = st.checkbox(
-            "Mostrar solo productos pedidos",
-            value=False,
-            help="Oculta filas con pedido = 0 y estimado = 0",
-        )
-    with col_f2:
-        st.caption(
-            f"{(pedidos_full['cantidad'] > 0).sum()} con pedido · "
-            f"{(pedidos_full['estimado'] > 0).sum()} con estimado · "
-            f"{len(pedidos_full)} productos totales"
-        )
-
-    if solo_pedidos:
-        pedidos_view = pedidos_full[
-            (pedidos_full["cantidad"] > 0) | (pedidos_full["estimado"] > 0)
-        ].copy()
-    else:
-        pedidos_view = pedidos_full.copy()
-
-    if pedidos_view.empty:
-        st.warning("No hay productos con pedido o estimado para mostrar.")
-    else:
-        pedidos_editado = st.data_editor(
-            pedidos_view,
+    with st.form(key=f"form_stock_{fecha_stock}", clear_on_submit=False):
+        stock_editado = st.data_editor(
+            base_stk_view,
             use_container_width=True,
             num_rows="fixed",
             disabled=["codigo", "producto", "unidad_medida"],
@@ -658,75 +709,127 @@ with tab_pedidos:
                 "producto": st.column_config.TextColumn("Producto"),
                 "unidad_medida": st.column_config.TextColumn("Unidad"),
                 "cantidad": st.column_config.NumberColumn(
-                    "Pedido",
-                    min_value=0.0,
-                    step=1.0,
-                    format="%.3f",
-                ),
-                "estimado": st.column_config.NumberColumn(
-                    "Estimado (extra)",
+                    "Cantidad",
                     min_value=0.0,
                     step=1.0,
                     format="%.3f",
                 ),
             },
-            key="editor_pedidos",
+            key=f"editor_stock_{fecha_stock}",
+        )
+        guardar_s = st.form_submit_button(
+            "💾 Guardar stock", type="primary"
         )
 
-        col_g1, col_g2 = st.columns([1, 4])
-        with col_g1:
-            guardar_ped = st.button(
-                "💾 Guardar pedidos",
-                type="primary",
-                key="btn_guardar_pedidos",
-            )
-        with col_g2:
-            st.caption("Los cambios se guardan en pedidos.csv.")
+    col_s2, col_s3 = st.columns([1, 4])
+    with col_s2:
+        cero_s = st.button(
+            "🧹 Poner stock a cero",
+            key="btn_cero_stock",
+        )
+    with col_s3:
+        st.caption(f"Guarda para la fecha {fecha_stock}.")
 
-        if guardar_ped:
-            edit_cant = dict(
-                zip(
-                    pedidos_editado["codigo"].astype(str),
-                    pedidos_editado["cantidad"].fillna(0).astype(float),
-                )
+    if guardar_s:
+        # merge edits filtrados de vuelta al dataset completo
+        edits_map = dict(
+            zip(
+                stock_editado["codigo"].astype(str),
+                stock_editado["cantidad"].fillna(0).astype(float),
             )
-            edit_est = dict(
-                zip(
-                    pedidos_editado["codigo"].astype(str),
-                    pedidos_editado["estimado"].fillna(0).astype(float),
-                )
+        )
+        salida_s = base_stk.copy()
+        salida_s["cantidad"] = [
+            edits_map.get(str(c), v)
+            for c, v in zip(salida_s["codigo"], salida_s["cantidad"])
+        ]
+        salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
+        salida_s["fecha"] = str(fecha_stock)
+        otros = (
+            df_stock_full[df_stock_full["fecha"] != str(fecha_stock)]
+            if df_stock_full is not None and "fecha" in df_stock_full.columns
+            else pd.DataFrame(
+                columns=["fecha", "codigo", "producto", "unidad_medida", "cantidad"]
             )
-            pedidos_full["cantidad"] = pedidos_full.apply(
-                lambda r: edit_cant.get(str(r["codigo"]), r["cantidad"]),
-                axis=1,
-            )
-            pedidos_full["estimado"] = pedidos_full.apply(
-                lambda r: edit_est.get(str(r["codigo"]), r["estimado"]),
-                axis=1,
-            )
-            guardar_pedidos(pedidos_full)
-            st.success("Pedidos guardados.")
+        )
+        combinado = pd.concat(
+            [
+                otros,
+                salida_s[["fecha", "codigo", "producto", "unidad_medida", "cantidad"]],
+            ],
+            ignore_index=True,
+        )
+        combinado.to_csv(STOCK_CSV, index=False)
+        st.success(f"Stock del {fecha_stock} guardado.")
+
+    if cero_s:
+        st.session_state["resetear_stock"] = True
+        st.rerun()
 
 with tab_comprar:
-    st.info(
-        "Cuánto hay que comprar = pedidos − stock. "
-        "Si te sobra (stock > pedido) aparece en **verde**; si te falta, en **rojo**."
+    ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
+    ts_stk = ultima_sync(STOCK_CSV)
+    ts_est = ultima_sync(ESTIMADO_CSV)
+    st.caption(
+        f"🕒 Pedidos DUX: **{ts_ped or '?'}** · "
+        f"Stock: **{ts_stk or '?'}** · "
+        f"Estimado: **{ts_est or '?'}**"
     )
 
-    pedidos_actual = cargar_pedidos()
-    stock_actual = cargar_stock()
+    fechas_st_disp = fechas_disponibles(STOCK_CSV)
+    fechas_es_disp = fechas_disponibles(ESTIMADO_CSV)
+
+    col_fs, col_fe = st.columns(2)
+    with col_fs:
+        if fechas_st_disp:
+            fecha_stock_sel = st.selectbox(
+                "📦 Fecha de stock",
+                fechas_st_disp,
+                index=0,
+                key="comprar_fecha_stock",
+            )
+        else:
+            fecha_stock_sel = None
+            st.warning("No hay fechas de stock guardadas.")
+    with col_fe:
+        if fechas_es_disp:
+            fecha_estimado_sel = st.selectbox(
+                "📈 Fecha de estimado",
+                fechas_es_disp,
+                index=0,
+                key="comprar_fecha_estimado",
+            )
+        else:
+            fecha_estimado_sel = None
+            st.caption("No hay fechas de estimado guardadas (se usará 0).")
+
+    pedidos_actual = cargar_pedidos_dux_aggregated(productos, estimado_fecha=fecha_estimado_sel)
+    if fecha_stock_sel is not None:
+        stock_actual = cargar_stock_fecha(fecha_stock_sel)
+    else:
+        stock_actual = pd.DataFrame(
+            columns=["codigo", "producto", "unidad_medida", "cantidad"]
+        )
 
     if pedidos_actual is None or pedidos_actual.empty:
         st.warning(
-            "No hay pedidos cargados. Subí un Excel en la pestaña 📋 Pedidos."
+            "No hay pedidos sincronizados. Andá a 📡 DUX Pedidos y apretá Sincronizar."
         )
     else:
-        modo = st.radio(
-            "Vista",
-            ["Detallada (agrupada por producto)", "Simple (por código)"],
-            horizontal=True,
-            key="modo_comprar",
-        )
+        col_mc1, col_mc2 = st.columns([3, 2])
+        with col_mc1:
+            modo = st.radio(
+                "Vista",
+                ["Detallada (agrupada por producto)", "Simple (por código)"],
+                horizontal=True,
+                key="modo_comprar",
+            )
+        with col_mc2:
+            buscar_comprar = st.text_input(
+                "🔎 Buscar producto",
+                key="buscar_comprar",
+                placeholder="Filtra por nombre o código...",
+            )
 
         grafo = construir_grafo_conversion(compuestos)
 
@@ -760,6 +863,8 @@ with tab_comprar:
         if modo.startswith("Detallada"):
             ped_relevante = ped[(ped["cantidad"] > 0) | (ped["estimado"] > 0)]
             bases = sorted(ped_relevante["base"].unique())
+            if buscar_comprar:
+                bases = [b for b in bases if buscar_comprar.lower() in b.lower()]
 
             col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7 = st.columns(
                 [1.8, 1.0, 0.8, 0.9, 0.8, 1.4, 1.4]
@@ -926,6 +1031,14 @@ with tab_comprar:
                 ]
             ]
 
+            if buscar_comprar:
+                mask = merged["producto"].astype(str).str.contains(
+                    buscar_comprar, case=False, na=False
+                ) | merged["codigo"].astype(str).str.contains(
+                    buscar_comprar, case=False, na=False
+                )
+                merged = merged[mask].reset_index(drop=True)
+
             def color_a_comprar(v):
                 if pd.isna(v) or v == 0:
                     return ""
@@ -961,6 +1074,164 @@ with tab_comprar:
                 "**a_comprar_estimado** = `(pedido + estimado) − stock`. "
                 "Positivo (rojo) = falta comprar · negativo (verde) = sobra."
             )
+
+with tab_estimado:
+    st.info(
+        "Cargá el estimado de compra adicional por producto y fecha. "
+        "Se guarda en `estimado.csv` con histórico por fecha."
+    )
+
+    df_est_full = None
+    if ESTIMADO_CSV.exists():
+        try:
+            df_est_full = pd.read_csv(ESTIMADO_CSV, dtype={"codigo": str})
+        except Exception as e:
+            st.error(f"No se pudo leer estimado.csv: {e}")
+
+    fecha_est_default = date.today()
+    if (
+        df_est_full is not None
+        and "fecha" in df_est_full.columns
+        and not df_est_full.empty
+    ):
+        try:
+            fecha_est_default = pd.to_datetime(df_est_full["fecha"]).max().date()
+        except Exception:
+            pass
+
+    col_es1, col_es2 = st.columns([1, 3])
+    with col_es1:
+        fecha_estimado = st.date_input(
+            "Fecha",
+            value=fecha_est_default,
+            key="fecha_estimado",
+            format="YYYY-MM-DD",
+        )
+    with col_es2:
+        ts_est = ultima_sync(ESTIMADO_CSV)
+        st.caption(f"🕒 Última edición: **{ts_est or '?'}**")
+
+    map_est_dia = {}
+    if df_est_full is not None and "fecha" in df_est_full.columns:
+        df_dia = df_est_full[df_est_full["fecha"] == str(fecha_estimado)]
+        map_est_dia = dict(
+            zip(df_dia["codigo"].astype(str), df_dia["estimado"])
+        )
+
+    base_est = productos[["codigo", "producto", "unidad_medida"]].copy()
+    base_est["estimado"] = (
+        base_est["codigo"]
+        .astype(str)
+        .map(map_est_dia)
+        .fillna(0.0)
+        .astype(float)
+    )
+
+    if st.session_state.get("reset_estimado"):
+        base_est["estimado"] = 0.0
+        # persist reset
+        otros = (
+            df_est_full[df_est_full["fecha"] != str(fecha_estimado)]
+            if df_est_full is not None and "fecha" in df_est_full.columns
+            else pd.DataFrame(
+                columns=["fecha", "codigo", "producto", "unidad_medida", "estimado"]
+            )
+        )
+        nuevo = base_est.copy()
+        nuevo["fecha"] = str(fecha_estimado)
+        combinado = pd.concat(
+            [
+                otros,
+                nuevo[["fecha", "codigo", "producto", "unidad_medida", "estimado"]],
+            ],
+            ignore_index=True,
+        )
+        combinado.to_csv(ESTIMADO_CSV, index=False)
+        st.session_state["reset_estimado"] = False
+        st.success(f"Estimado del {fecha_estimado} puesto en cero.")
+
+    buscar_est = st.text_input(
+        "🔎 Buscar producto",
+        key="buscar_estimado",
+        placeholder="Filtra por nombre o código...",
+    )
+    if buscar_est:
+        mask = base_est["producto"].str.contains(buscar_est, case=False, na=False) | base_est[
+            "codigo"
+        ].astype(str).str.contains(buscar_est, case=False, na=False)
+        base_est_view = base_est[mask].reset_index(drop=True)
+    else:
+        base_est_view = base_est
+
+    with st.form(key=f"form_estimado_{fecha_estimado}", clear_on_submit=False):
+        editor_estimado = st.data_editor(
+            base_est_view,
+            use_container_width=True,
+            num_rows="fixed",
+            disabled=["codigo", "producto", "unidad_medida"],
+            column_config={
+                "codigo": st.column_config.TextColumn("Código"),
+                "producto": st.column_config.TextColumn("Producto"),
+                "unidad_medida": st.column_config.TextColumn("Unidad"),
+                "estimado": st.column_config.NumberColumn(
+                    "Estimado",
+                    min_value=0.0,
+                    step=1.0,
+                    format="%.3f",
+                ),
+            },
+            key=f"editor_estimado_{fecha_estimado}",
+        )
+        guardar_est = st.form_submit_button(
+            "💾 Guardar estimado", type="primary"
+        )
+
+    col_eb2, col_eb3 = st.columns([1, 4])
+    with col_eb2:
+        reset_est = st.button(
+            "🧹 Resetear a cero",
+            key="btn_reset_estimado",
+        )
+    with col_eb3:
+        st.caption(f"Guarda para la fecha {fecha_estimado}.")
+
+    if guardar_est:
+        # merge edits filtrados de vuelta al dataset completo
+        edits_map_e = dict(
+            zip(
+                editor_estimado["codigo"].astype(str),
+                editor_estimado["estimado"].fillna(0).astype(float),
+            )
+        )
+        salida = base_est.copy()
+        salida["estimado"] = [
+            edits_map_e.get(str(c), v)
+            for c, v in zip(salida["codigo"], salida["estimado"])
+        ]
+        salida["estimado"] = salida["estimado"].fillna(0).astype(float)
+        salida["fecha"] = str(fecha_estimado)
+
+        otros = (
+            df_est_full[df_est_full["fecha"] != str(fecha_estimado)]
+            if df_est_full is not None and "fecha" in df_est_full.columns
+            else pd.DataFrame(
+                columns=["fecha", "codigo", "producto", "unidad_medida", "estimado"]
+            )
+        )
+
+        combinado = pd.concat(
+            [
+                otros,
+                salida[["fecha", "codigo", "producto", "unidad_medida", "estimado"]],
+            ],
+            ignore_index=True,
+        )
+        combinado.to_csv(ESTIMADO_CSV, index=False)
+        st.success(f"Estimado del {fecha_estimado} guardado.")
+
+    if reset_est:
+        st.session_state["reset_estimado"] = True
+        st.rerun()
 
 with tab_dux:
     st.info(
@@ -1053,24 +1324,39 @@ with tab_dux:
         id_empresa = id_empresa_default
         id_sucursal = id_sucursal_default
 
+        all_orders_saved = []
+        fecha_desde_default = date.today() - timedelta(days=7)
+        fecha_hasta_default = date.today()
+        if PEDIDOS_DUX_JSON.exists():
+            try:
+                with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                all_orders_saved = saved.get("orders", [])
+                if saved.get("fecha_desde"):
+                    fecha_desde_default = pd.to_datetime(saved["fecha_desde"]).date()
+                if saved.get("fecha_hasta"):
+                    fecha_hasta_default = pd.to_datetime(saved["fecha_hasta"]).date()
+            except Exception as e:
+                st.error(f"No se pudo leer pedidos_dux.json: {e}")
+
         col_d1, col_d2 = st.columns(2)
         with col_d1:
             fecha_desde = st.date_input(
                 "Fecha desde",
-                value=date.today() - timedelta(days=7),
+                value=fecha_desde_default,
                 key="dux_fecha_desde",
                 format="YYYY-MM-DD",
             )
         with col_d2:
             fecha_hasta = st.date_input(
                 "Fecha hasta",
-                value=date.today(),
+                value=fecha_hasta_default,
                 key="dux_fecha_hasta",
                 format="YYYY-MM-DD",
             )
 
         consultar = st.button(
-            "🔎 Consultar pedidos pendientes",
+            "🔄 Sincronizar pedidos desde DUX",
             type="primary",
             key="dux_consultar",
         )
@@ -1137,125 +1423,135 @@ with tab_dux:
                     time.sleep(DUX_RATE_LIMIT_SECONDS)
 
             if not error_corte:
-                if not all_orders:
-                    st.warning("No hay pedidos pendientes en ese rango.")
+                try:
+                    with open(PEDIDOS_DUX_JSON, "w", encoding="utf-8") as f:
+                        json.dump(
+                            {
+                                "fecha_desde": str(fecha_desde),
+                                "fecha_hasta": str(fecha_hasta),
+                                "orders": all_orders,
+                            },
+                            f,
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                except Exception as e:
+                    st.error(f"No se pudo guardar pedidos_dux.json: {e}")
+
+                all_orders_saved = all_orders
+                if all_orders:
+                    st.success(
+                        f"✅ {len(all_orders)} pedidos guardados en `pedidos_dux.json`."
+                    )
                 else:
-                    st.success(f"✅ {len(all_orders)} pedidos pendientes.")
+                    st.warning("No hay pedidos pendientes en ese rango.")
 
-                    for i, orden in enumerate(all_orders, start=1):
-                        cliente_str = _extraer_cliente(orden)
-                        nro = _get_first(
-                            orden,
-                            ["nro_pedido", "nroPedido", "numero", "id"],
-                        )
-                        items = _extraer_items_dux(orden)
-                        titulo = f"#{nro or i} — {cliente_str} ({len(items)} ítems)"
-                        with st.expander(titulo):
-                            if items:
-                                filas = [_extraer_item(it) for it in items]
-                                st.dataframe(
-                                    pd.DataFrame(filas),
-                                    use_container_width=True,
-                                    hide_index=True,
-                                )
-                            else:
-                                st.caption("Este pedido no tiene ítems inline.")
+        st.divider()
 
-                    st.divider()
-                    st.subheader("📊 Suma de productos pendientes")
+        if all_orders_saved:
+            ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
+            st.caption(
+                f"📅 Rango: {fecha_desde_default} → {fecha_hasta_default} · "
+                f"🕒 Última sync: **{ts_ped or '?'}**"
+            )
 
-                    items_planos = []
-                    sin_items = 0
-                    for orden in all_orders:
-                        items = _extraer_items_dux(orden)
-                        if not items:
-                            sin_items += 1
-                            continue
-                        for item in items:
-                            items_planos.append(_extraer_item(item))
+            buscar_dux_ped = st.text_input(
+                "🔎 Buscar pedido (cliente / nro)",
+                key="buscar_dux_pedidos",
+                placeholder="Filtra por nombre de cliente o número...",
+            )
 
-                    if items_planos:
-                        df_items = pd.DataFrame(items_planos)
-                        df_sum = (
-                            df_items.groupby(["codigo", "producto"], as_index=False)[
-                                "cantidad"
-                            ].sum()
-                            .sort_values("producto")
-                            .reset_index(drop=True)
-                        )
-                        st.dataframe(df_sum, use_container_width=True, hide_index=True)
-                        st.caption(
-                            f"{len(df_sum)} productos distintos · "
-                            f"Suma total: {df_sum['cantidad'].sum():,.2f}"
+            for i, orden in enumerate(all_orders_saved, start=1):
+                cliente_str = _extraer_cliente(orden)
+                nro = _get_first(
+                    orden,
+                    ["nro_pedido", "nroPedido", "numero", "id"],
+                )
+                if buscar_dux_ped:
+                    q = buscar_dux_ped.lower()
+                    if q not in cliente_str.lower() and q not in str(nro or "").lower():
+                        continue
+                items = _extraer_items_dux(orden)
+                titulo = f"#{nro or i} — {cliente_str} ({len(items)} ítems)"
+                with st.expander(titulo):
+                    if items:
+                        filas = [_extraer_item(it) for it in items]
+                        st.dataframe(
+                            pd.DataFrame(filas),
+                            use_container_width=True,
+                            hide_index=True,
                         )
                     else:
-                        st.warning("No pude detectar items dentro de los pedidos.")
+                        st.caption("Este pedido no tiene ítems inline.")
 
-                    if sin_items:
-                        st.caption(f"⚠️ {sin_items} pedidos sin ítems inline.")
+            st.divider()
+            st.subheader("📊 Suma de productos pendientes")
 
-with tab_dux_stock:
+            items_planos = []
+            sin_items = 0
+            for orden in all_orders_saved:
+                items = _extraer_items_dux(orden)
+                if not items:
+                    sin_items += 1
+                    continue
+                for item in items:
+                    items_planos.append(_extraer_item(item))
+
+            if items_planos:
+                df_items = pd.DataFrame(items_planos)
+                df_sum = (
+                    df_items.groupby(["codigo", "producto"], as_index=False)[
+                        "cantidad"
+                    ].sum()
+                    .sort_values("producto")
+                    .reset_index(drop=True)
+                )
+                st.dataframe(df_sum, use_container_width=True, hide_index=True)
+                st.caption(
+                    f"{len(df_sum)} productos distintos · "
+                    f"Suma total: {df_sum['cantidad'].sum():,.2f}"
+                )
+            else:
+                st.warning("No pude detectar items dentro de los pedidos.")
+        else:
+            st.warning(
+                "Todavía no hay pedidos guardados. Apretá **Sincronizar** para traerlos."
+            )
+
+with tab_dux_productos:
     st.info(
-        "Consulta stock de items en DUX para el depósito configurado."
+        "Catálogo local (`productos.csv`). El resto del app lee de acá. "
+        "Si actualizaste productos en DUX, apretá **Sincronizar** para refrescar el CSV."
     )
 
     if not token:
-        st.error(
-            "Falta configurar el token de DUX en `.streamlit/secrets.toml`."
-        )
+        st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
     else:
-        id_deposito_default = int(dux_cfg.get("id_deposito", 8313))
-
-        col_ds1, col_ds2, col_ds3 = st.columns([2, 2, 2])
-        with col_ds1:
-            fecha_mov_desde = st.date_input(
-                "Movimientos desde",
-                value=date.today() - timedelta(days=7),
-                key="dux_stock_fecha",
-                format="YYYY-MM-DD",
-                help=(
-                    "Filtra items con movimientos de stock o cambios de "
-                    "precio desde esa fecha. La API no acepta 'hasta'."
-                ),
-            )
-        with col_ds2:
-            solo_con_stock = st.checkbox(
-                "Solo items con stock > 0",
-                value=True,
-                key="dux_solo_con_stock",
-            )
-        with col_ds3:
-            st.caption(f"Depósito ID: {id_deposito_default}")
-
-        consultar_stock = st.button(
-            "🔎 Consultar stock",
+        sincronizar = st.button(
+            "🔄 Sincronizar productos desde DUX",
             type="primary",
-            key="dux_consultar_stock",
+            key="dux_sincronizar_productos",
         )
 
-        if consultar_stock:
-            url_s = f"{base_url}/items"
-            headers_s = {"accept": "application/json", "authorization": token}
+        if sincronizar:
+            url_pr = f"{base_url}/items"
+            headers_pr = {"accept": "application/json", "authorization": token}
             page_offset = 0
             page_size = 50
-            all_items = []
+            all_prods = []
             error_corte = False
             total_servidor = None
 
-            fecha_param = fecha_mov_desde.strftime("%d%m%Y") + " 00:00"
-
-            progress = st.progress(0.0, text="Trayendo items...")
+            progress = st.progress(0.0, text="Trayendo productos desde DUX...")
 
             while True:
-                params_s = {
-                    "idDeposito": int(id_deposito_default),
+                params_pr = {
                     "offset": page_offset,
                     "limit": page_size,
-                    "fecha": fecha_param,
                 }
                 try:
                     r = requests.get(
-                        url_s, params=params_s, headers=headers_s, timeout=30
+                        url_pr, params=params_pr, headers=headers_pr, timeout=30
                     )
                 except requests.RequestException as e:
                     st.error(f"Error de red: {e}")
@@ -1289,12 +1585,12 @@ with tab_dux_stock:
                 if not page:
                     break
 
-                all_items.extend(page)
+                all_prods.extend(page)
 
                 if total_servidor:
                     progress.progress(
-                        min(1.0, len(all_items) / total_servidor),
-                        text=f"{len(all_items)} / {total_servidor}",
+                        min(1.0, len(all_prods) / total_servidor),
+                        text=f"{len(all_prods)} / {total_servidor}",
                     )
 
                 if len(page) < page_size:
@@ -1305,70 +1601,81 @@ with tab_dux_stock:
             progress.empty()
 
             if not error_corte:
-                if not all_items:
-                    st.warning("No hay items en DUX.")
+                if not all_prods:
+                    st.warning("No hay productos en DUX.")
                 else:
-                    def _to_float(v):
-                        try:
-                            return float(v) if v is not None else 0.0
-                        except (ValueError, TypeError):
-                            return 0.0
-
                     filas = []
-                    for item in all_items:
-                        stock_arr = item.get("stock") or []
-                        stock_dep = None
-                        for s in stock_arr:
-                            if str(s.get("id")) == str(id_deposito_default):
-                                stock_dep = s
-                                break
-                        if stock_dep is None and stock_arr:
-                            stock_dep = stock_arr[0]
-
-                        real = _to_float(stock_dep.get("stock_real")) if stock_dep else 0.0
-                        disp = _to_float(stock_dep.get("stock_disponible")) if stock_dep else 0.0
-                        reserv = _to_float(stock_dep.get("stock_reservado")) if stock_dep else 0.0
-
-                        if solo_con_stock and real == 0 and disp == 0:
-                            continue
-
+                    for p in all_prods:
+                        nombre = str(p.get("item", "")).strip()
+                        if " - " in nombre:
+                            unidad = nombre.rsplit(" - ", 1)[1].strip()
+                        else:
+                            unidad = ""
                         filas.append(
                             {
-                                "codigo": str(item.get("cod_item", "")),
-                                "producto": str(item.get("item", "")),
-                                "stock_real": real,
-                                "stock_disponible": disp,
-                                "stock_reservado": reserv,
+                                "codigo": str(p.get("cod_item", "")).strip(),
+                                "producto": nombre,
+                                "unidad_medida": unidad,
+                                "descripcion": "",
                             }
                         )
 
-                    if filas:
-                        df_stock_dux = (
-                            pd.DataFrame(filas)
-                            .sort_values("producto")
-                            .reset_index(drop=True)
-                        )
-                        st.success(
-                            f"✅ {len(df_stock_dux)} items "
-                            f"(de {len(all_items)} totales del depósito)."
-                        )
-                        st.dataframe(
-                            df_stock_dux,
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-                    else:
-                        st.warning(
-                            "Ningún item con stock > 0 en este depósito. "
-                            "Destildá el filtro para ver todos."
-                        )
+                    df_nuevo = (
+                        pd.DataFrame(filas)
+                        .sort_values("codigo")
+                        .reset_index(drop=True)
+                    )
+
+                    df_nuevo.to_csv(PRODUCTOS_CSV, index=False)
+
+                    st.success(
+                        f"✅ Sincronizado. {len(df_nuevo)} productos guardados en `productos.csv`."
+                    )
+
+        st.divider()
+        st.subheader("📋 Productos cargados")
+
+        if PRODUCTOS_CSV.exists():
+            try:
+                df_csv_actual = pd.read_csv(PRODUCTOS_CSV, dtype={"codigo": str})
+                cols_mostrar = [
+                    c
+                    for c in ["codigo", "producto", "unidad_medida"]
+                    if c in df_csv_actual.columns
+                ]
+                ts_prod = ultima_sync(PRODUCTOS_CSV)
+                st.caption(
+                    f"{len(df_csv_actual)} productos · "
+                    f"🕒 última sync: **{ts_prod or '?'}**"
+                )
+
+                buscar_prod = st.text_input(
+                    "🔎 Buscar producto",
+                    key="buscar_dux_productos",
+                    placeholder="Filtra por nombre o código...",
+                )
+                df_show = df_csv_actual[cols_mostrar].sort_values("producto").reset_index(drop=True)
+                if buscar_prod:
+                    mask = df_show["producto"].astype(str).str.contains(
+                        buscar_prod, case=False, na=False
+                    ) | df_show["codigo"].astype(str).str.contains(
+                        buscar_prod, case=False, na=False
+                    )
+                    df_show = df_show[mask].reset_index(drop=True)
+
+                st.dataframe(
+                    df_show,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            except Exception as e:
+                st.error(f"No se pudo leer productos.csv: {e}")
+        else:
+            st.warning(
+                "Todavía no hay `productos.csv`. Apretá **Sincronizar** para crearlo."
+            )
 
 with tab_wix:
-    st.info(
-        "Consulta orders de Wix Stores. "
-        "Las credenciales viven en `.streamlit/secrets.toml` (no se commitea)."
-    )
-
     wix_cfg = st.secrets.get("wix", {})
     wix_token = wix_cfg.get("api_key", "")
     wix_account = wix_cfg.get("account_id", "")
@@ -1376,43 +1683,48 @@ with tab_wix:
 
     if not wix_token or not wix_account or not wix_site:
         st.error(
-            "Falta configurar las credenciales de Wix en `.streamlit/secrets.toml`. "
-            "Agregá:\n\n"
-            "```toml\n"
-            "[wix]\n"
-            "api_key = \"...\"\n"
-            "account_id = \"...\"\n"
-            "site_id = \"...\"\n"
-            "```"
+            "Falta configurar las credenciales de Wix en `.streamlit/secrets.toml`."
         )
     else:
-        col_w1, col_w2, col_w3 = st.columns(3)
+        wix_saved = {"orders": [], "selecciones": {}, "fecha_desde": None, "fecha_hasta": None}
+        if WIX_PEDIDOS_JSON.exists():
+            try:
+                with open(WIX_PEDIDOS_JSON, "r", encoding="utf-8") as f:
+                    wix_saved = json.load(f)
+            except Exception as e:
+                st.error(f"No se pudo leer wix_pedidos.json: {e}")
+
+        fecha_desde_default = date.today() - timedelta(days=3)
+        fecha_hasta_default = date.today()
+        if wix_saved.get("fecha_desde"):
+            try:
+                fecha_desde_default = pd.to_datetime(wix_saved["fecha_desde"]).date()
+            except Exception:
+                pass
+        if wix_saved.get("fecha_hasta"):
+            try:
+                fecha_hasta_default = pd.to_datetime(wix_saved["fecha_hasta"]).date()
+            except Exception:
+                pass
+
+        col_w1, col_w2 = st.columns(2)
         with col_w1:
             wix_desde = st.date_input(
                 "Fecha desde",
-                value=date.today() - timedelta(days=7),
+                value=fecha_desde_default,
                 key="wix_fecha_desde",
                 format="YYYY-MM-DD",
             )
         with col_w2:
             wix_hasta = st.date_input(
                 "Fecha hasta",
-                value=date.today(),
+                value=fecha_hasta_default,
                 key="wix_fecha_hasta",
                 format="YYYY-MM-DD",
             )
-        with col_w3:
-            wix_limit = st.number_input(
-                "Límite",
-                value=50,
-                min_value=1,
-                max_value=100,
-                step=1,
-                key="wix_limit",
-            )
 
         consultar_wix = st.button(
-            "🔎 Consultar orders",
+            "🔄 Sincronizar orders desde Wix",
             type="primary",
             key="wix_consultar",
         )
@@ -1428,12 +1740,12 @@ with tab_wix:
             body = {
                 "search": {
                     "filter": {
-                        "createdDate": {
-                            "$gte": f"{wix_desde}T00:00:00.000Z",
-                            "$lte": f"{wix_hasta}T23:59:59.999Z",
-                        }
+                        "$and": [
+                            {"createdDate": {"$gte": f"{wix_desde}T00:00:00.000Z"}},
+                            {"createdDate": {"$lte": f"{wix_hasta}T23:59:59.999Z"}},
+                        ]
                     },
-                    "cursorPaging": {"limit": int(wix_limit)},
+                    "cursorPaging": {"limit": 100},
                 }
             }
 
@@ -1445,60 +1757,209 @@ with tab_wix:
                 resp = None
 
             if resp is not None:
-                st.caption(f"POST {url} → HTTP {resp.status_code}")
-
                 if resp.status_code != 200:
-                    st.error(f"Respuesta no OK ({resp.status_code}):")
-                    st.code(resp.text[:2000])
+                    st.error(f"HTTP {resp.status_code}: {resp.text[:500]}")
                 else:
                     try:
                         data = resp.json()
                     except ValueError:
-                        st.error("La respuesta no es JSON válido.")
-                        st.code(resp.text[:2000])
+                        st.error("Respuesta no JSON.")
                         data = None
 
                     if data is not None:
                         orders = data.get("orders", [])
-                        if orders:
-                            st.success(f"✅ {len(orders)} orders recibidas.")
-
-                            resumen = []
-                            for o in orders:
-                                items = o.get("lineItems", [])
-                                resumen.append(
+                        try:
+                            with open(WIX_PEDIDOS_JSON, "w", encoding="utf-8") as f:
+                                json.dump(
                                     {
-                                        "numero": o.get("number"),
-                                        "fecha": o.get("createdDate"),
-                                        "estado": o.get("status"),
-                                        "cliente": (
-                                            o.get("buyerInfo", {}).get(
-                                                "contactDetails", {}
-                                            ).get("firstName", "")
-                                            + " "
-                                            + o.get("buyerInfo", {}).get(
-                                                "contactDetails", {}
-                                            ).get("lastName", "")
-                                        ).strip(),
-                                        "email": o.get("buyerInfo", {}).get(
-                                            "email", ""
-                                        ),
-                                        "items": len(items),
-                                        "total": o.get("priceSummary", {}).get(
-                                            "total", {}
-                                        ).get("formattedAmount", ""),
-                                    }
+                                        "fecha_desde": str(wix_desde),
+                                        "fecha_hasta": str(wix_hasta),
+                                        "orders": orders,
+                                        "selecciones": wix_saved.get("selecciones", {}),
+                                    },
+                                    f,
+                                    ensure_ascii=False,
+                                    indent=2,
+                                )
+                        except Exception as e:
+                            st.error(f"No se pudo guardar wix_pedidos.json: {e}")
+                        wix_saved["orders"] = orders
+                        st.success(f"✅ {len(orders)} orders guardadas.")
+
+        st.divider()
+
+        orders_saved = wix_saved.get("orders", []) or []
+        selecciones = dict(wix_saved.get("selecciones", {}) or {})
+
+        if not orders_saved:
+            st.warning("Todavía no hay orders. Apretá **Sincronizar**.")
+        else:
+            ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
+            st.caption(
+                f"{len(orders_saved)} orders · 🕒 última sync: **{ts_wix or '?'}** · "
+                f"{len(selecciones)} con entrega asignada."
+            )
+
+            buscar_wix = st.text_input(
+                "🔎 Buscar pedido (número o cliente)",
+                key="buscar_wix",
+                placeholder="Filtra...",
+            )
+
+            def _wix_contact(o):
+                bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+                if bi.get("firstName") or bi.get("lastName"):
+                    return bi
+                si = (
+                    ((o.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
+                    .get("shippingDestination", {})
+                    .get("contactDetails", {})
+                ) or {}
+                if si.get("firstName") or si.get("lastName"):
+                    return si
+                return (o.get("buyerInfo", {}) or {}).get("contactDetails", {}) or {}
+
+            def _wix_address(o):
+                bi = (o.get("billingInfo", {}) or {}).get("address", {}) or {}
+                if bi.get("addressLine") or bi.get("city"):
+                    return bi
+                si = (
+                    ((o.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
+                    .get("shippingDestination", {})
+                    .get("address", {})
+                ) or {}
+                return si or bi
+
+            def _fmt_addr(a):
+                if not a:
+                    return ""
+                parts = [
+                    a.get("addressLine"),
+                    a.get("addressLine2"),
+                    a.get("city"),
+                    a.get("subdivision"),
+                ]
+                return ", ".join(p for p in parts if p)
+
+            def _wix_cliente(o):
+                c = _wix_contact(o)
+                nombre = ((c.get("firstName") or "") + " " + (c.get("lastName") or "")).strip()
+                return nombre or "(sin nombre)"
+
+            def _wix_email(o):
+                return (
+                    (o.get("buyerInfo", {}) or {}).get("email")
+                    or _wix_contact(o).get("email")
+                    or ""
+                )
+
+            def _wix_nro(o):
+                return str(o.get("number") or o.get("id", "?"))
+
+            with st.form(key="form_wix_seleccion", clear_on_submit=False):
+                nuevas_selecciones = {}
+                for o in orders_saved:
+                    nro = _wix_nro(o)
+                    cliente = _wix_cliente(o)
+                    items = o.get("lineItems", [])
+                    total = (
+                        o.get("priceSummary", {}).get("total", {}).get("formattedAmount", "")
+                    )
+                    direccion = _fmt_addr(_wix_address(o))
+                    email = _wix_email(o)
+
+                    if buscar_wix:
+                        q = buscar_wix.lower()
+                        if q not in nro.lower() and q not in cliente.lower():
+                            continue
+
+                    oid = o.get("id") or nro
+                    asignado_prev = selecciones.get(oid)
+                    fecha_default_entrega = (
+                        pd.to_datetime(asignado_prev).date()
+                        if asignado_prev
+                        else date.today() + timedelta(days=1)
+                    )
+
+                    with st.container(border=True):
+                        c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
+                        with c_info:
+                            badge = f" · 📦 {asignado_prev}" if asignado_prev else ""
+                            st.markdown(
+                                f"**#{nro}** — {cliente} · {len(items)} ítems · "
+                                f"**{total}**{badge}"
+                            )
+                            detalles = []
+                            if direccion:
+                                detalles.append(f"📍 {direccion}")
+                            if email:
+                                detalles.append(f"✉️ {email}")
+                            if detalles:
+                                st.caption(" · ".join(detalles))
+                        with c_chk:
+                            asignar = st.checkbox(
+                                "Asignar entrega",
+                                value=bool(asignado_prev),
+                                key=f"wix_chk_{oid}",
+                            )
+                        with c_fec:
+                            fecha_entrega = st.date_input(
+                                "Fecha de entrega",
+                                value=fecha_default_entrega,
+                                key=f"wix_fent_{oid}",
+                                format="YYYY-MM-DD",
+                                label_visibility="collapsed",
+                            )
+
+                        if asignar:
+                            nuevas_selecciones[oid] = str(fecha_entrega)
+
+                        if items:
+                            with st.expander("Ver productos"):
+                                filas = []
+                                for it in items:
+                                    nombre_obj = it.get("productName", {}) or {}
+                                    nombre = (
+                                        nombre_obj.get("original")
+                                        or nombre_obj.get("translated")
+                                        or ""
+                                    )
+                                    filas.append(
+                                        {
+                                            "producto": nombre,
+                                            "cantidad": it.get("quantity", 0),
+                                        }
+                                    )
+                                st.dataframe(
+                                    pd.DataFrame(filas),
+                                    use_container_width=True,
+                                    hide_index=True,
                                 )
 
-                            st.dataframe(
-                                pd.DataFrame(resumen),
-                                use_container_width=True,
-                            )
-                        else:
-                            st.warning("La consulta no devolvió orders.")
+                guardar_sel = st.form_submit_button(
+                    "💾 Guardar selección de entregas", type="primary"
+                )
 
-                        with st.expander("Ver JSON crudo"):
-                            st.json(data)
+            if guardar_sel:
+                wix_saved["selecciones"] = nuevas_selecciones
+                try:
+                    with open(WIX_PEDIDOS_JSON, "w", encoding="utf-8") as f:
+                        json.dump(
+                            {
+                                "fecha_desde": wix_saved.get("fecha_desde"),
+                                "fecha_hasta": wix_saved.get("fecha_hasta"),
+                                "orders": wix_saved.get("orders", []),
+                                "selecciones": nuevas_selecciones,
+                            },
+                            f,
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                    st.success(
+                        f"✅ {len(nuevas_selecciones)} entregas guardadas."
+                    )
+                except Exception as e:
+                    st.error(f"No se pudo guardar: {e}")
 
 
 #python -m streamlit run app.py
