@@ -44,7 +44,18 @@ EXCEPCIONES = {
     ("0256", "0205"),
 }
 
-st.title("🍎 Frutiverdu ")
+col_titulo, col_refresh = st.columns([5, 1])
+with col_titulo:
+    st.title("🍎 Frutiverdu ")
+with col_refresh:
+    st.write("")
+    if st.button(
+        "🔄 Refrescar datos",
+        help="Limpia el cache y vuelve a leer del Sheet (útil si editaste en Google Sheets)",
+        key="btn_refrescar_global",
+    ):
+        db.leer_tabla.clear()
+        st.rerun()
 
 st.markdown(
     """
