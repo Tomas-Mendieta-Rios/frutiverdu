@@ -17,3 +17,10 @@ Thumbs.db
 # Datos sensibles de clientes (regenerables por sync)
 pedidos_dux.json
 wix_pedidos.json
+
+# Datos locales legacy: ahora viven en Google Sheets
+stock.csv
+estimado.csv
+mapping_wix_dux.csv
+packs_wix.csv
+wix_productos.csv

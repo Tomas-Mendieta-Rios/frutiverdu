@@ -8,7 +8,25 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
+import gsheets_db as db
+
 DUX_RATE_LIMIT_SECONDS = 5.5
+
+# Archivos LOCALES (regenerables via sync) — solo guardan orders crudas, las
+# selecciones viven en Sheets.
+PEDIDOS_DUX_JSON = Path("pedidos_dux.json")
+WIX_PEDIDOS_JSON = Path("wix_pedidos.json")
+
+# Path constants — antes apuntaban a CSVs locales. Ahora son placeholders
+# para que las referencias `XXX_CSV.exists()` o `ultima_sync(XXX_CSV)` no
+# rompan; toda la I/O real va por Sheets.
+PRODUCTOS_CSV = Path("_unused_productos.csv")
+COMPUESTOS_CSV = Path("_unused_compuestos.csv")
+STOCK_CSV = Path("_unused_stock.csv")
+ESTIMADO_CSV = Path("_unused_estimado.csv")
+WIX_PRODUCTOS_CSV = Path("_unused_wix_productos.csv")
+MAPPING_WIX_DUX_CSV = Path("_unused_mapping.csv")
+PACKS_WIX_CSV = Path("_unused_packs.csv")
 
 
 def ultima_sync(path):
@@ -18,27 +36,8 @@ def ultima_sync(path):
         "%Y-%m-%d %H:%M:%S"
     )
 
+
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
-
-PRODUCTOS_CSV = Path("productos.csv")
-
-COMPUESTOS_CSV = Path("compuestos.csv")
-if not COMPUESTOS_CSV.exists():
-    COMPUESTOS_CSV = Path("compuestos")
-
-STOCK_CSV = Path("stock.csv")
-
-PEDIDOS_DUX_JSON = Path("pedidos_dux.json")
-
-ESTIMADO_CSV = Path("estimado.csv")
-
-WIX_PEDIDOS_JSON = Path("wix_pedidos.json")
-
-WIX_PRODUCTOS_CSV = Path("wix_productos.csv")
-
-MAPPING_WIX_DUX_CSV = Path("mapping_wix_dux.csv")
-
-PACKS_WIX_CSV = Path("packs_wix.csv")
 
 EXCEPCIONES = {
     ("061", "062"),
@@ -74,125 +73,64 @@ st.markdown(
 
 
 def cargar_productos():
-    return pd.read_csv(PRODUCTOS_CSV, dtype={"codigo": str})
+    return db.cargar_productos()
 
 
 def cargar_compuestos():
-    return pd.read_csv(
-        COMPUESTOS_CSV,
-        dtype={
-            "codigo_origen": str,
-            "codigo_componente": str,
-        },
-    )
+    return db.cargar_compuestos()
 
 
 def guardar_compuestos(df):
-    df.to_csv(COMPUESTOS_CSV, index=False)
+    db.guardar_compuestos(df)
 
 
 def cargar_stock():
-    """Devuelve el stock de la última fecha guardada (para uso en Total a comprar)."""
-    if not STOCK_CSV.exists():
-        return pd.DataFrame(
-            columns=["codigo", "producto", "unidad_medida", "cantidad"]
-        )
-    df = pd.read_csv(STOCK_CSV, dtype={"codigo": str})
-    if "fecha" in df.columns and not df.empty:
-        try:
-            latest = pd.to_datetime(df["fecha"]).max()
-            df = df[pd.to_datetime(df["fecha"]) == latest].drop(columns=["fecha"])
-        except Exception:
-            pass
-    return df
+    """Stock de la última fecha guardada (para Total a comprar fallback)."""
+    return db.cargar_stock()
 
 
 def cargar_estimado_ultimo():
-    """Devuelve el estimado de la última fecha guardada en estimado.csv."""
-    if not ESTIMADO_CSV.exists():
-        return pd.DataFrame(
-            columns=["codigo", "producto", "unidad_medida", "estimado"]
-        )
-    df = pd.read_csv(ESTIMADO_CSV, dtype={"codigo": str})
-    if "fecha" in df.columns and not df.empty:
-        try:
-            latest = pd.to_datetime(df["fecha"]).max()
-            df = df[pd.to_datetime(df["fecha"]) == latest].drop(columns=["fecha"])
-        except Exception:
-            pass
-    return df
-
-
-def fechas_disponibles(csv_path):
-    if not csv_path.exists():
-        return []
-    try:
-        df = pd.read_csv(csv_path, dtype=str)
-        if "fecha" not in df.columns:
-            return []
-        return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
-    except Exception:
-        return []
+    return db.cargar_estimado()
 
 
 def cargar_estimado_fecha(fecha):
-    if not ESTIMADO_CSV.exists():
-        return pd.DataFrame(
-            columns=["codigo", "producto", "unidad_medida", "estimado"]
-        )
-    df = pd.read_csv(ESTIMADO_CSV, dtype={"codigo": str})
-    if "fecha" in df.columns:
-        df = df[df["fecha"] == str(fecha)].drop(columns=["fecha"])
-    return df
+    return db.cargar_estimado(fecha=fecha)
 
 
 def cargar_stock_fecha(fecha):
-    if not STOCK_CSV.exists():
-        return pd.DataFrame(
-            columns=["codigo", "producto", "unidad_medida", "cantidad"]
-        )
-    df = pd.read_csv(STOCK_CSV, dtype={"codigo": str})
-    if "fecha" in df.columns:
-        df = df[df["fecha"] == str(fecha)].drop(columns=["fecha"])
-    return df
+    return db.cargar_stock(fecha=fecha)
 
 
 def _convertir_wix_orders_a_dux(orders_filtrados):
     """Convierte orders Wix (filtrados) en dict {dux_codigo: cantidad_total}
-    usando mapping_wix_dux.csv y packs_wix.csv."""
+    usando mapping_wix_dux y packs_wix (ambos en Sheets)."""
     resultado = {}
 
+    df_m = db.cargar_mapping_wix_dux()
     mapping = {}
-    if MAPPING_WIX_DUX_CSV.exists():
-        try:
-            df_m = pd.read_csv(MAPPING_WIX_DUX_CSV, dtype=str)
-            for _, r in df_m.iterrows():
-                wid = str(r.get("wix_id", ""))
-                dcod = str(r.get("dux_codigo", "") or "")
-                try:
-                    factor = float(r.get("factor", 1.0))
-                except (ValueError, TypeError):
-                    factor = 1.0
-                if wid and dcod:
-                    mapping[wid] = (dcod, factor)
-        except Exception:
-            pass
+    if not df_m.empty:
+        for _, r in df_m.iterrows():
+            wid = str(r.get("wix_id", ""))
+            dcod = str(r.get("dux_codigo", "") or "")
+            try:
+                factor = float(r.get("factor", 1.0))
+            except (ValueError, TypeError):
+                factor = 1.0
+            if wid and dcod:
+                mapping[wid] = (dcod, factor)
 
+    df_p = db.cargar_packs_wix()
     packs = {}
-    if PACKS_WIX_CSV.exists():
-        try:
-            df_p = pd.read_csv(PACKS_WIX_CSV, dtype={"dux_codigo": str, "wix_id_pack": str})
-            for _, r in df_p.iterrows():
-                pid = str(r.get("wix_id_pack", ""))
-                dcod = str(r.get("dux_codigo", "") or "")
-                try:
-                    cant = float(r.get("cantidad", 0))
-                except (ValueError, TypeError):
-                    cant = 0.0
-                if pid and dcod:
-                    packs.setdefault(pid, []).append((dcod, cant))
-        except Exception:
-            pass
+    if not df_p.empty:
+        for _, r in df_p.iterrows():
+            pid = str(r.get("wix_id_pack", ""))
+            dcod = str(r.get("dux_codigo", "") or "")
+            try:
+                cant = float(r.get("cantidad", 0))
+            except (ValueError, TypeError):
+                cant = 0.0
+            if pid and dcod:
+                packs.setdefault(pid, []).append((dcod, cant))
 
     for orden in orders_filtrados:
         for item in orden.get("lineItems", []):
@@ -219,23 +157,21 @@ def _convertir_wix_orders_a_dux(orders_filtrados):
 
 
 def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compra=None):
-    """Lee pedidos_dux.json, agrega cantidades por código y suma estimado
-    de estimado.csv (de la fecha indicada o la última si es None).
-    Si fecha_compra está dada, filtra los pedidos DUX por selecciones[fecha_compra]
-    y agrega los pedidos de Wix con esa misma fecha de entrega."""
+    """Agrega pedidos DUX + Wix (filtrados por fecha_compra vía selecciones)
+    + estimado de la fecha indicada (default: última)."""
     cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
     if not PEDIDOS_DUX_JSON.exists():
         df_agg = pd.DataFrame(columns=["codigo", "producto", "cantidad"])
         all_orders = []
-        selecciones_dux = {}
     else:
         try:
             with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
                 saved = json.load(f)
         except Exception:
-            saved = {"orders": [], "selecciones": {}}
+            saved = {"orders": []}
         all_orders = saved.get("orders", [])
-        selecciones_dux = saved.get("selecciones", {}) or {}
+
+    selecciones_dux = db.cargar_selecciones("dux")
 
     if fecha_compra is not None:
         fecha_str = str(fecha_compra)
@@ -269,10 +205,10 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
             with open(WIX_PEDIDOS_JSON, "r", encoding="utf-8") as f:
                 wix_saved_full = json.load(f)
             wix_orders = wix_saved_full.get("orders", [])
-            wix_sel = wix_saved_full.get("selecciones", {}) or {}
+            wix_sel = db.cargar_selecciones("wix")
             fecha_str = str(fecha_compra)
             wix_filtrados = [
-                o for o in wix_orders if wix_sel.get(o.get("id")) == fecha_str
+                o for o in wix_orders if wix_sel.get(str(o.get("id"))) == fecha_str
             ]
             wix_dux_map = _convertir_wix_orders_a_dux(wix_filtrados)
             if wix_dux_map:
@@ -328,10 +264,6 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
     df_merge["unidad_medida"] = df_merge["codigo"].map(map_unid).fillna("")
 
     return df_merge[cols]
-
-
-def guardar_stock(df):
-    df.to_csv(STOCK_CSV, index=False)
 
 
 def _dux_get_first(d, claves):
@@ -762,26 +694,17 @@ with tab_probar:
 with tab_stock:
     st.info(
         "Cargá el stock por producto y fecha. "
-        "Se guarda en `stock.csv` con histórico por fecha."
+        "Se guarda en Google Sheets (`stock_historico`) con histórico por fecha."
     )
 
-    df_stock_full = None
-    if STOCK_CSV.exists():
-        try:
-            df_stock_full = pd.read_csv(STOCK_CSV, dtype={"codigo": str})
-        except Exception as e:
-            st.error(f"No se pudo leer stock.csv: {e}")
+    df_stock_full = db.cargar_stock_completo()
 
-    fecha_stock_default = date.today()
-    if (
-        df_stock_full is not None
-        and "fecha" in df_stock_full.columns
-        and not df_stock_full.empty
-    ):
-        try:
-            fecha_stock_default = pd.to_datetime(df_stock_full["fecha"]).max().date()
-        except Exception:
-            pass
+    fechas_stock_disp = db.fechas_stock()
+    fecha_stock_default = (
+        pd.to_datetime(fechas_stock_disp[0]).date()
+        if fechas_stock_disp
+        else date.today()
+    )
 
     col_st1, col_st2 = st.columns([1, 3])
     with col_st1:
@@ -792,15 +715,12 @@ with tab_stock:
             format="YYYY-MM-DD",
         )
     with col_st2:
-        ts_stock = ultima_sync(STOCK_CSV)
-        st.caption(f"🕒 Última edición: **{ts_stock or '?'}**")
+        st.caption(f"📅 Fechas guardadas: {len(fechas_stock_disp)}")
 
-    map_stock_dia = {}
-    if df_stock_full is not None and "fecha" in df_stock_full.columns:
-        df_dia_stk = df_stock_full[df_stock_full["fecha"] == str(fecha_stock)]
-        map_stock_dia = dict(
-            zip(df_dia_stk["codigo"].astype(str), df_dia_stk["cantidad"])
-        )
+    df_dia_stk_full = db.cargar_stock(fecha=fecha_stock)
+    map_stock_dia = dict(
+        zip(df_dia_stk_full["codigo"].astype(str), df_dia_stk_full["cantidad"])
+    ) if not df_dia_stk_full.empty else {}
 
     base_stk = productos[["codigo", "producto", "unidad_medida"]].copy()
     base_stk["cantidad"] = (
@@ -813,23 +733,7 @@ with tab_stock:
 
     if st.session_state.get("resetear_stock"):
         base_stk["cantidad"] = 0.0
-        otros = (
-            df_stock_full[df_stock_full["fecha"] != str(fecha_stock)]
-            if df_stock_full is not None and "fecha" in df_stock_full.columns
-            else pd.DataFrame(
-                columns=["fecha", "codigo", "producto", "unidad_medida", "cantidad"]
-            )
-        )
-        nuevo = base_stk.copy()
-        nuevo["fecha"] = str(fecha_stock)
-        combinado = pd.concat(
-            [
-                otros,
-                nuevo[["fecha", "codigo", "producto", "unidad_medida", "cantidad"]],
-            ],
-            ignore_index=True,
-        )
-        combinado.to_csv(STOCK_CSV, index=False)
+        db.guardar_stock(base_stk, fecha_stock)
         st.session_state["resetear_stock"] = False
         st.success(f"Stock del {fecha_stock} puesto en cero.")
 
@@ -879,7 +783,6 @@ with tab_stock:
         st.caption(f"Guarda para la fecha {fecha_stock}.")
 
     if guardar_s:
-        # merge edits filtrados de vuelta al dataset completo
         edits_map = dict(
             zip(
                 stock_editado["codigo"].astype(str),
@@ -892,23 +795,8 @@ with tab_stock:
             for c, v in zip(salida_s["codigo"], salida_s["cantidad"])
         ]
         salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
-        salida_s["fecha"] = str(fecha_stock)
-        otros = (
-            df_stock_full[df_stock_full["fecha"] != str(fecha_stock)]
-            if df_stock_full is not None and "fecha" in df_stock_full.columns
-            else pd.DataFrame(
-                columns=["fecha", "codigo", "producto", "unidad_medida", "cantidad"]
-            )
-        )
-        combinado = pd.concat(
-            [
-                otros,
-                salida_s[["fecha", "codigo", "producto", "unidad_medida", "cantidad"]],
-            ],
-            ignore_index=True,
-        )
-        combinado.to_csv(STOCK_CSV, index=False)
-        st.success(f"Stock del {fecha_stock} guardado.")
+        db.guardar_stock(salida_s, fecha_stock)
+        st.success(f"Stock del {fecha_stock} guardado en Sheets.")
 
     if cero_s:
         st.session_state["resetear_stock"] = True
@@ -1211,26 +1099,15 @@ with tab_comprar:
 with tab_estimado:
     st.info(
         "Cargá el estimado de compra adicional por producto y fecha. "
-        "Se guarda en `estimado.csv` con histórico por fecha."
+        "Se guarda en Google Sheets (`estimado_historico`) con histórico por fecha."
     )
 
-    df_est_full = None
-    if ESTIMADO_CSV.exists():
-        try:
-            df_est_full = pd.read_csv(ESTIMADO_CSV, dtype={"codigo": str})
-        except Exception as e:
-            st.error(f"No se pudo leer estimado.csv: {e}")
-
-    fecha_est_default = date.today()
-    if (
-        df_est_full is not None
-        and "fecha" in df_est_full.columns
-        and not df_est_full.empty
-    ):
-        try:
-            fecha_est_default = pd.to_datetime(df_est_full["fecha"]).max().date()
-        except Exception:
-            pass
+    fechas_est_disp = db.fechas_estimado()
+    fecha_est_default = (
+        pd.to_datetime(fechas_est_disp[0]).date()
+        if fechas_est_disp
+        else date.today()
+    )
 
     col_es1, col_es2 = st.columns([1, 3])
     with col_es1:
@@ -1241,15 +1118,14 @@ with tab_estimado:
             format="YYYY-MM-DD",
         )
     with col_es2:
-        ts_est = ultima_sync(ESTIMADO_CSV)
-        st.caption(f"🕒 Última edición: **{ts_est or '?'}**")
+        st.caption(f"📅 Fechas guardadas: {len(fechas_est_disp)}")
 
-    map_est_dia = {}
-    if df_est_full is not None and "fecha" in df_est_full.columns:
-        df_dia = df_est_full[df_est_full["fecha"] == str(fecha_estimado)]
-        map_est_dia = dict(
-            zip(df_dia["codigo"].astype(str), df_dia["estimado"])
-        )
+    df_dia_est = db.cargar_estimado(fecha=fecha_estimado)
+    map_est_dia = (
+        dict(zip(df_dia_est["codigo"].astype(str), df_dia_est["estimado"]))
+        if not df_dia_est.empty
+        else {}
+    )
 
     base_est = productos[["codigo", "producto", "unidad_medida"]].copy()
     base_est["estimado"] = (
@@ -1262,24 +1138,7 @@ with tab_estimado:
 
     if st.session_state.get("reset_estimado"):
         base_est["estimado"] = 0.0
-        # persist reset
-        otros = (
-            df_est_full[df_est_full["fecha"] != str(fecha_estimado)]
-            if df_est_full is not None and "fecha" in df_est_full.columns
-            else pd.DataFrame(
-                columns=["fecha", "codigo", "producto", "unidad_medida", "estimado"]
-            )
-        )
-        nuevo = base_est.copy()
-        nuevo["fecha"] = str(fecha_estimado)
-        combinado = pd.concat(
-            [
-                otros,
-                nuevo[["fecha", "codigo", "producto", "unidad_medida", "estimado"]],
-            ],
-            ignore_index=True,
-        )
-        combinado.to_csv(ESTIMADO_CSV, index=False)
+        db.guardar_estimado(base_est, fecha_estimado)
         st.session_state["reset_estimado"] = False
         st.success(f"Estimado del {fecha_estimado} puesto en cero.")
 
@@ -1329,7 +1188,6 @@ with tab_estimado:
         st.caption(f"Guarda para la fecha {fecha_estimado}.")
 
     if guardar_est:
-        # merge edits filtrados de vuelta al dataset completo
         edits_map_e = dict(
             zip(
                 editor_estimado["codigo"].astype(str),
@@ -1342,25 +1200,8 @@ with tab_estimado:
             for c, v in zip(salida["codigo"], salida["estimado"])
         ]
         salida["estimado"] = salida["estimado"].fillna(0).astype(float)
-        salida["fecha"] = str(fecha_estimado)
-
-        otros = (
-            df_est_full[df_est_full["fecha"] != str(fecha_estimado)]
-            if df_est_full is not None and "fecha" in df_est_full.columns
-            else pd.DataFrame(
-                columns=["fecha", "codigo", "producto", "unidad_medida", "estimado"]
-            )
-        )
-
-        combinado = pd.concat(
-            [
-                otros,
-                salida[["fecha", "codigo", "producto", "unidad_medida", "estimado"]],
-            ],
-            ignore_index=True,
-        )
-        combinado.to_csv(ESTIMADO_CSV, index=False)
-        st.success(f"Estimado del {fecha_estimado} guardado.")
+        db.guardar_estimado(salida, fecha_estimado)
+        st.success(f"Estimado del {fecha_estimado} guardado en Sheets.")
 
     if reset_est:
         st.session_state["reset_estimado"] = True
@@ -1458,7 +1299,7 @@ with tab_dux:
         id_sucursal = id_sucursal_default
 
         all_orders_saved = []
-        selecciones_dux = {}
+        selecciones_dux = db.cargar_selecciones("dux")
         fecha_desde_default = date.today() - timedelta(days=7)
         fecha_hasta_default = date.today()
         if PEDIDOS_DUX_JSON.exists():
@@ -1466,7 +1307,6 @@ with tab_dux:
                 with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
                     saved = json.load(f)
                 all_orders_saved = saved.get("orders", [])
-                selecciones_dux = saved.get("selecciones", {}) or {}
                 if saved.get("fecha_desde"):
                     fecha_desde_default = pd.to_datetime(saved["fecha_desde"]).date()
                 if saved.get("fecha_hasta"):
@@ -1661,20 +1501,9 @@ with tab_dux:
 
             if guardar_sel_dux:
                 try:
-                    with open(PEDIDOS_DUX_JSON, "w", encoding="utf-8") as f:
-                        json.dump(
-                            {
-                                "fecha_desde": str(fecha_desde_default),
-                                "fecha_hasta": str(fecha_hasta_default),
-                                "orders": all_orders_saved,
-                                "selecciones": nuevas_selecciones_dux,
-                            },
-                            f,
-                            ensure_ascii=False,
-                            indent=2,
-                        )
+                    db.guardar_selecciones("dux", nuevas_selecciones_dux)
                     st.success(
-                        f"✅ {len(nuevas_selecciones_dux)} entregas guardadas."
+                        f"✅ {len(nuevas_selecciones_dux)} entregas guardadas en Sheets."
                     )
                     selecciones_dux = nuevas_selecciones_dux
                 except Exception as e:
@@ -1822,28 +1651,24 @@ with tab_dux_productos:
                         .reset_index(drop=True)
                     )
 
-                    df_nuevo.to_csv(PRODUCTOS_CSV, index=False)
+                    db.guardar_productos(df_nuevo)
 
                     st.success(
-                        f"✅ Sincronizado. {len(df_nuevo)} productos guardados en `productos.csv`."
+                        f"✅ Sincronizado. {len(df_nuevo)} productos guardados en Sheets."
                     )
 
         st.divider()
         st.subheader("📋 Productos cargados")
 
-        if PRODUCTOS_CSV.exists():
-            try:
-                df_csv_actual = pd.read_csv(PRODUCTOS_CSV, dtype={"codigo": str})
+        try:
+            df_csv_actual = db.cargar_productos()
+            if not df_csv_actual.empty:
                 cols_mostrar = [
                     c
                     for c in ["codigo", "producto", "unidad_medida"]
                     if c in df_csv_actual.columns
                 ]
-                ts_prod = ultima_sync(PRODUCTOS_CSV)
-                st.caption(
-                    f"{len(df_csv_actual)} productos · "
-                    f"🕒 última sync: **{ts_prod or '?'}**"
-                )
+                st.caption(f"{len(df_csv_actual)} productos en Sheets.")
 
                 buscar_prod = st.text_input(
                     "🔎 Buscar producto",
@@ -1864,12 +1689,12 @@ with tab_dux_productos:
                     use_container_width=True,
                     hide_index=True,
                 )
-            except Exception as e:
-                st.error(f"No se pudo leer productos.csv: {e}")
-        else:
-            st.warning(
-                "Todavía no hay `productos.csv`. Apretá **Sincronizar** para crearlo."
-            )
+            else:
+                st.warning(
+                    "Todavía no hay productos en Sheets. Apretá **Sincronizar**."
+                )
+        except Exception as e:
+            st.error(f"No se pudieron leer productos: {e}")
 
 with tab_wix:
     wix_cfg = st.secrets.get("wix", {})
@@ -1985,7 +1810,7 @@ with tab_wix:
         st.divider()
 
         orders_saved = wix_saved.get("orders", []) or []
-        selecciones = dict(wix_saved.get("selecciones", {}) or {})
+        selecciones = db.cargar_selecciones("wix")
 
         if not orders_saved:
             st.warning("Todavía no hay orders. Apretá **Sincronizar**.")
@@ -2137,22 +1962,11 @@ with tab_wix:
                 )
 
             if guardar_sel:
-                wix_saved["selecciones"] = nuevas_selecciones
                 try:
-                    with open(WIX_PEDIDOS_JSON, "w", encoding="utf-8") as f:
-                        json.dump(
-                            {
-                                "fecha_desde": wix_saved.get("fecha_desde"),
-                                "fecha_hasta": wix_saved.get("fecha_hasta"),
-                                "orders": wix_saved.get("orders", []),
-                                "selecciones": nuevas_selecciones,
-                            },
-                            f,
-                            ensure_ascii=False,
-                            indent=2,
-                        )
+                    db.guardar_selecciones("wix", nuevas_selecciones)
+                    selecciones = nuevas_selecciones
                     st.success(
-                        f"✅ {len(nuevas_selecciones)} entregas guardadas."
+                        f"✅ {len(nuevas_selecciones)} entregas guardadas en Sheets."
                     )
                 except Exception as e:
                     st.error(f"No se pudo guardar: {e}")
@@ -2259,22 +2073,18 @@ with tab_wix_productos:
                         .sort_values("producto")
                         .reset_index(drop=True)
                     )
-                    df_wix_prods.to_csv(WIX_PRODUCTOS_CSV, index=False)
+                    db.guardar_wix_productos(df_wix_prods)
                     st.success(
-                        f"✅ Sincronizado. {len(df_wix_prods)} productos guardados en `wix_productos.csv`."
+                        f"✅ Sincronizado. {len(df_wix_prods)} productos guardados en Sheets."
                     )
 
         st.divider()
         st.subheader("📋 Productos cargados")
 
-        if WIX_PRODUCTOS_CSV.exists():
-            try:
-                df_wix_csv = pd.read_csv(WIX_PRODUCTOS_CSV)
-                ts_wix_prod = ultima_sync(WIX_PRODUCTOS_CSV)
-                st.caption(
-                    f"{len(df_wix_csv)} productos · "
-                    f"🕒 última sync: **{ts_wix_prod or '?'}**"
-                )
+        try:
+            df_wix_csv = db.cargar_wix_productos()
+            if not df_wix_csv.empty:
+                st.caption(f"{len(df_wix_csv)} productos en Sheets.")
 
                 buscar_wix_prod = st.text_input(
                     "🔎 Buscar producto",
@@ -2298,12 +2108,10 @@ with tab_wix_productos:
                     use_container_width=True,
                     hide_index=True,
                 )
-            except Exception as e:
-                st.error(f"No se pudo leer wix_productos.csv: {e}")
-        else:
-            st.warning(
-                "Todavía no hay `wix_productos.csv`. Apretá **Sincronizar**."
-            )
+            else:
+                st.warning("Todavía no hay productos Wix en Sheets. Apretá **Sincronizar**.")
+        except Exception as e:
+            st.error(f"No se pudieron leer wix productos: {e}")
 
 with tab_mapeo:
     st.info(
@@ -2311,8 +2119,10 @@ with tab_mapeo:
         "Lo que no tenga equivalente, dejalo en **(sin mapear)**."
     )
 
-    falta_dux = not PRODUCTOS_CSV.exists()
-    falta_wix = not WIX_PRODUCTOS_CSV.exists()
+    df_dux_p = db.cargar_productos()
+    df_wix_p = db.cargar_wix_productos()
+    falta_dux = df_dux_p.empty
+    falta_wix = df_wix_p.empty
 
     if falta_dux or falta_wix:
         faltantes = []
@@ -2324,29 +2134,22 @@ with tab_mapeo:
             "Antes de mapear necesitás sincronizar: " + " y ".join(faltantes) + "."
         )
     else:
-        df_dux_p = pd.read_csv(PRODUCTOS_CSV, dtype={"codigo": str})
-        df_wix_p = pd.read_csv(WIX_PRODUCTOS_CSV)
         df_wix_p["wix_id"] = df_wix_p["wix_id"].astype(str)
         df_wix_p["producto"] = df_wix_p["producto"].astype(str)
         df_wix_p = df_wix_p.sort_values("producto").reset_index(drop=True)
 
         mapping_actual = {}
         factor_actual = {}
-        if MAPPING_WIX_DUX_CSV.exists():
-            try:
-                df_map = pd.read_csv(MAPPING_WIX_DUX_CSV, dtype=str)
-                mapping_actual = dict(
-                    zip(df_map["wix_id"].astype(str), df_map["dux_codigo"].astype(str))
-                )
-                if "factor" in df_map.columns:
-                    factor_actual = {}
-                    for wid, f in zip(df_map["wix_id"].astype(str), df_map["factor"]):
-                        try:
-                            factor_actual[wid] = float(f)
-                        except (ValueError, TypeError):
-                            factor_actual[wid] = 1.0
-            except Exception as e:
-                st.error(f"No se pudo leer mapping_wix_dux.csv: {e}")
+        df_map = db.cargar_mapping_wix_dux()
+        if not df_map.empty:
+            mapping_actual = dict(
+                zip(df_map["wix_id"].astype(str), df_map["dux_codigo"].astype(str))
+            )
+            for wid, f in zip(df_map["wix_id"].astype(str), df_map.get("factor", [])):
+                try:
+                    factor_actual[wid] = float(f)
+                except (ValueError, TypeError):
+                    factor_actual[wid] = 1.0
 
         opciones_dux = ["(sin mapear)"] + [
             f"{c} - {p}"
@@ -2490,7 +2293,7 @@ with tab_mapeo:
                     }
                 )
 
-            pd.DataFrame(
+            df_to_save = pd.DataFrame(
                 rows,
                 columns=[
                     "wix_id",
@@ -2499,9 +2302,9 @@ with tab_mapeo:
                     "dux_producto",
                     "factor",
                 ],
-            ).to_csv(MAPPING_WIX_DUX_CSV, index=False)
-
-            st.success(f"✅ {len(rows)} mapeos guardados.")
+            )
+            db.guardar_mapping_wix_dux(df_to_save)
+            st.success(f"✅ {len(rows)} mapeos guardados en Sheets.")
 
 with tab_packs:
     st.info(
@@ -2509,22 +2312,20 @@ with tab_packs:
         "Agregá / quitá filas según necesites."
     )
 
-    if not WIX_PRODUCTOS_CSV.exists():
+    df_wix_p_packs = db.cargar_wix_productos()
+    df_dux_p_packs = db.cargar_productos()
+
+    if df_wix_p_packs.empty:
         st.warning("Falta sincronizar 🛍️ Wix Productos primero.")
-    elif not PRODUCTOS_CSV.exists():
+    elif df_dux_p_packs.empty:
         st.warning("Falta sincronizar 📡 DUX Productos primero.")
     else:
-        df_wix_p_packs = pd.read_csv(WIX_PRODUCTOS_CSV)
-        df_dux_p_packs = pd.read_csv(PRODUCTOS_CSV, dtype={"codigo": str})
-
         df_packs = df_wix_p_packs[
             df_wix_p_packs["producto"].astype(str).str.upper().str.startswith("PACK")
         ].copy()
 
         if df_packs.empty:
-            st.warning(
-                "No se encontraron productos PACK en `wix_productos.csv`."
-            )
+            st.warning("No se encontraron productos PACK en Wix.")
         else:
             opciones_dux_pack = [
                 f"{c} - {p}"
@@ -2541,25 +2342,7 @@ with tab_packs:
                 )
             }
 
-            df_packs_saved = pd.DataFrame(
-                columns=[
-                    "wix_id_pack",
-                    "pack_nombre",
-                    "dux_codigo",
-                    "dux_producto",
-                    "cantidad",
-                ]
-            )
-            if PACKS_WIX_CSV.exists():
-                try:
-                    df_packs_saved = pd.read_csv(
-                        PACKS_WIX_CSV, dtype={"dux_codigo": str, "wix_id_pack": str}
-                    )
-                except Exception as e:
-                    st.error(f"No se pudo leer packs_wix.csv: {e}")
-
-            ts_packs = ultima_sync(PACKS_WIX_CSV)
-            st.caption(f"🕒 última edición: **{ts_packs or '?'}**")
+            df_packs_saved = db.cargar_packs_wix()
 
             editor_outputs = {}
 
@@ -2642,7 +2425,7 @@ with tab_packs:
                             }
                         )
 
-                pd.DataFrame(
+                df_to_save = pd.DataFrame(
                     rows_save,
                     columns=[
                         "wix_id_pack",
@@ -2651,10 +2434,10 @@ with tab_packs:
                         "dux_producto",
                         "cantidad",
                     ],
-                ).to_csv(PACKS_WIX_CSV, index=False)
-
+                )
+                db.guardar_packs_wix(df_to_save)
                 st.success(
-                    f"✅ Packs guardados ({len(rows_save)} líneas totales)."
+                    f"✅ Packs guardados en Sheets ({len(rows_save)} líneas totales)."
                 )
 
 
