@@ -106,12 +106,12 @@ def escribir_tabla(nombre, df):
         if c not in df.columns:
             df[c] = ""
     df = df[cols]
-    df = df.astype(object).where(pd.notna(df), "")
+    # Convertir TODO a string para preservar ceros a la izquierda en códigos
+    df = df.astype(str).replace({"nan": "", "None": "", "<NA>": ""})
     ws = _get_ws(nombre)
     ws.clear()
     valores = [cols] + df.values.tolist()
-    # RAW para que los códigos con ceros a la izquierda (ej. "032") no se
-    # conviertan a número y pierdan los ceros.
+    # RAW para que Sheets no reinterprete tipos
     ws.update(values=valores, range_name="A1", value_input_option="RAW")
     leer_tabla.clear()
 
