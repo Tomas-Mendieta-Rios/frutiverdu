@@ -568,7 +568,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
     [
         "🛒 Total a comprar",
         "📡 DUX Pedidos",
-        "🛍️ Wix Orders",
+        "🛍️ Wix Pedidos",
         "📦 Stock",
         "📈 Estimado",
         "🔗 Mapeo Wix↔DUX",
@@ -692,11 +692,6 @@ with tab_probar:
                     st.markdown(f"- **{factor:,.3f}** {otro['producto']}")
 
 with tab_stock:
-    st.info(
-        "Cargá el stock por producto y fecha. "
-        "Se guarda en Google Sheets (`stock_historico`) con histórico por fecha."
-    )
-
     df_stock_full = db.cargar_stock_completo()
 
     fechas_stock_disp = db.fechas_stock()
@@ -1208,11 +1203,6 @@ with tab_estimado:
         st.rerun()
 
 with tab_dux:
-    st.info(
-        "Consulta pedidos del ERP DUX. "
-        "El token vive en `.streamlit/secrets.toml` (no se commitea)."
-    )
-
     dux_cfg = st.secrets.get("dux", {})
     token = dux_cfg.get("token", "")
     base_url = dux_cfg.get(
@@ -1509,45 +1499,12 @@ with tab_dux:
                 except Exception as e:
                     st.error(f"No se pudo guardar: {e}")
 
-            st.divider()
-            st.subheader("📊 Suma de productos pendientes")
-
-            items_planos = []
-            sin_items = 0
-            for orden in all_orders_saved:
-                items = _extraer_items_dux(orden)
-                if not items:
-                    sin_items += 1
-                    continue
-                for item in items:
-                    items_planos.append(_extraer_item(item))
-
-            if items_planos:
-                df_items = pd.DataFrame(items_planos)
-                df_sum = (
-                    df_items.groupby(["codigo", "producto"], as_index=False)[
-                        "cantidad"
-                    ].sum()
-                    .sort_values("producto")
-                    .reset_index(drop=True)
-                )
-                st.dataframe(df_sum, use_container_width=True, hide_index=True)
-                st.caption(
-                    f"{len(df_sum)} productos distintos · "
-                    f"Suma total: {df_sum['cantidad'].sum():,.2f}"
-                )
-            else:
-                st.warning("No pude detectar items dentro de los pedidos.")
         else:
             st.warning(
                 "Todavía no hay pedidos guardados. Apretá **Sincronizar** para traerlos."
             )
 
 with tab_dux_productos:
-    st.info(
-        "Catálogo local (`productos.csv`). El resto del app lee de acá. "
-        "Si actualizaste productos en DUX, apretá **Sincronizar** para refrescar el CSV."
-    )
 
     if not token:
         st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
@@ -1745,7 +1702,7 @@ with tab_wix:
             )
 
         consultar_wix = st.button(
-            "🔄 Sincronizar orders desde Wix",
+            "🔄 Sincronizar pedidos desde Wix",
             type="primary",
             key="wix_consultar",
         )
@@ -1805,7 +1762,7 @@ with tab_wix:
                         except Exception as e:
                             st.error(f"No se pudo guardar wix_pedidos.json: {e}")
                         wix_saved["orders"] = orders
-                        st.success(f"✅ {len(orders)} orders guardadas.")
+                        st.success(f"✅ {len(orders)} pedidos guardados.")
 
         st.divider()
 
@@ -1813,11 +1770,11 @@ with tab_wix:
         selecciones = db.cargar_selecciones("wix")
 
         if not orders_saved:
-            st.warning("Todavía no hay orders. Apretá **Sincronizar**.")
+            st.warning("Todavía no hay pedidos. Apretá **Sincronizar**.")
         else:
             ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
             st.caption(
-                f"{len(orders_saved)} orders · 🕒 última sync: **{ts_wix or '?'}** · "
+                f"{len(orders_saved)} pedidos · 🕒 última sync: **{ts_wix or '?'}** · "
                 f"{len(selecciones)} con entrega asignada."
             )
 
@@ -1972,10 +1929,6 @@ with tab_wix:
                     st.error(f"No se pudo guardar: {e}")
 
 with tab_wix_productos:
-    st.info(
-        "Catálogo local de Wix (`wix_productos.csv`). "
-        "Apretá **Sincronizar** para refrescar desde Wix."
-    )
 
     wix_cfg_p = st.secrets.get("wix", {})
     wix_token_p = wix_cfg_p.get("api_key", "")
