@@ -110,7 +110,9 @@ def escribir_tabla(nombre, df):
     ws = _get_ws(nombre)
     ws.clear()
     valores = [cols] + df.values.tolist()
-    ws.update(values=valores, range_name="A1", value_input_option="USER_ENTERED")
+    # RAW para que los códigos con ceros a la izquierda (ej. "032") no se
+    # conviertan a número y pierdan los ceros.
+    ws.update(values=valores, range_name="A1", value_input_option="RAW")
     leer_tabla.clear()
 
 

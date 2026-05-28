@@ -90,12 +90,14 @@ def escribir(ws, df, columnas):
     for c in columnas:
         if c not in df.columns:
             df[c] = ""
-    df = df[columnas].astype(object).where(pd.notna(df), "")
+    df = df[columnas]
+    # Convertir TODO a string para preservar ceros a la izquierda
+    df = df.astype(str).replace({"nan": "", "None": ""})
     ws.clear()
     ws.update(
         values=[columnas] + df.values.tolist(),
         range_name="A1",
-        value_input_option="USER_ENTERED",
+        value_input_option="RAW",
     )
 
 
@@ -104,7 +106,9 @@ def subir_csv(sheet, archivo, hoja, dtype=None):
     if not p.exists():
         print(f"  (no existe {archivo}, omitido)")
         return 0
-    df = pd.read_csv(p, dtype=dtype or {})
+    # Forzar TODAS las columnas como string para preservar ceros a la izquierda
+    df = pd.read_csv(p, dtype=str)
+    df = df.fillna("")
     ws = get_or_create_ws(sheet, hoja)
     escribir(ws, df, SCHEMA[hoja])
     print(f"  ✅ {hoja}: {len(df)} filas")
