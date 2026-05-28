@@ -829,6 +829,121 @@ with tab_comprar:
     )
     stock_actual = cargar_stock_fecha(fecha_compra)
 
+    # ---- Debug expander: muestra de dónde sale cada número ----
+    with st.expander("🔍 Debug — qué pedidos sumaron y de dónde salen los números"):
+        st.caption(
+            "Esta sección es solo para verificar. Muestra los pedidos que "
+            "matchean la fecha y sus contribuciones por producto."
+        )
+
+        # 1. DUX orders seleccionadas
+        st.markdown("**📡 DUX — pedidos asignados a esta fecha**")
+        sel_dux_dbg = db.cargar_selecciones("dux")
+        dux_orders_dbg = []
+        if PEDIDOS_DUX_JSON.exists():
+            try:
+                with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as _f:
+                    _saved = json.load(_f)
+                dux_orders_dbg = _saved.get("orders", [])
+            except Exception:
+                pass
+        fecha_str_dbg = str(fecha_compra)
+        dux_matched = [
+            o for o in dux_orders_dbg
+            if sel_dux_dbg.get(str(o.get("id") or o.get("nro_pedido") or "")) == fecha_str_dbg
+        ]
+        if dux_matched:
+            for o in dux_matched:
+                nro = o.get("nro_pedido") or o.get("id")
+                cli = (
+                    o.get("cliente", {}).get("razon_social")
+                    if isinstance(o.get("cliente"), dict)
+                    else o.get("cliente", "")
+                )
+                items = extraer_items_dux(o)
+                filas_dbg = [extraer_item_dux(it) for it in items]
+                st.markdown(f"#{nro} — {cli} ({len(items)} ítems)")
+                if filas_dbg:
+                    st.dataframe(
+                        pd.DataFrame(filas_dbg),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+        else:
+            st.caption("Ningún pedido DUX con esta fecha de entrega.")
+
+        # 2. Wix orders seleccionadas + conversión
+        st.markdown("**🛍️ Wix — pedidos asignados a esta fecha (con conversión a DUX)**")
+        sel_wix_dbg = db.cargar_selecciones("wix")
+        wix_orders_dbg = []
+        if WIX_PEDIDOS_JSON.exists():
+            try:
+                with open(WIX_PEDIDOS_JSON, "r", encoding="utf-8") as _f:
+                    _wsaved = json.load(_f)
+                wix_orders_dbg = _wsaved.get("orders", [])
+            except Exception:
+                pass
+        wix_matched = [
+            o for o in wix_orders_dbg
+            if sel_wix_dbg.get(str(o.get("id"))) == fecha_str_dbg
+        ]
+        if wix_matched:
+            for o in wix_matched:
+                nro = o.get("number") or o.get("id")
+                items = o.get("lineItems", [])
+                st.markdown(f"#{nro} ({len(items)} líneas)")
+                items_raw = []
+                for it in items:
+                    nombre_obj = it.get("productName", {}) or {}
+                    items_raw.append(
+                        {
+                            "wix_id": (it.get("catalogReference") or {}).get("catalogItemId", ""),
+                            "producto": nombre_obj.get("original", ""),
+                            "cantidad": it.get("quantity", 0),
+                        }
+                    )
+                if items_raw:
+                    st.dataframe(
+                        pd.DataFrame(items_raw),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                wix_conv = _convertir_wix_orders_a_dux([o])
+                if wix_conv:
+                    st.caption("→ Convertido a DUX:")
+                    map_prod = dict(zip(productos["codigo"].astype(str), productos["producto"]))
+                    st.dataframe(
+                        pd.DataFrame(
+                            [
+                                {
+                                    "dux_codigo": k,
+                                    "dux_producto": map_prod.get(k, ""),
+                                    "cantidad_dux": v,
+                                }
+                                for k, v in wix_conv.items()
+                            ]
+                        ),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+        else:
+            st.caption("Ningún pedido Wix con esta fecha de entrega.")
+
+        # 3. Pedidos agregados final
+        st.markdown("**📊 Pedidos agregados (DUX + Wix convertido)**")
+        st.dataframe(pedidos_actual, use_container_width=True, hide_index=True)
+
+        # 4. Stock fecha
+        st.markdown(f"**📦 Stock del {fecha_compra}**")
+        if stock_actual is not None and not stock_actual.empty:
+            st.dataframe(
+                stock_actual[stock_actual["cantidad"] > 0],
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.caption("Sin stock para esa fecha.")
+
     if pedidos_actual is None or pedidos_actual.empty:
         st.warning(
             "No hay pedidos sincronizados. Andá a 📡 DUX Pedidos y apretá Sincronizar."
