@@ -89,6 +89,24 @@ EXCEPCIONES = {
 
 st.title("Frutiverdu")
 
+# Password gate: si en secrets.toml hay [app] password = "...", la pide al entrar.
+_app_password_esperada = st.secrets.get("app", {}).get("password", "")
+if _app_password_esperada and not st.session_state.get("_authed", False):
+    st.markdown("### Ingresá la contraseña para continuar")
+    _pw_input = st.text_input(
+        "Contraseña",
+        type="password",
+        key="_pw_input",
+        label_visibility="collapsed",
+    )
+    if st.button("Entrar", type="primary", key="_pw_entrar"):
+        if _pw_input == _app_password_esperada:
+            st.session_state["_authed"] = True
+            st.rerun()
+        else:
+            st.error("Contraseña incorrecta.")
+    st.stop()
+
 # Multi-usuario: identificar quien esta usando la app + avisar si hay otros activos
 USUARIOS_APP = ["Carlos", "Ariel", "Tomás", "Claudia", "Otro"]
 PRESENCIA_WINDOW = 600  # 10 min — considerado "activo" si dio señal en este lapso
