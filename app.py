@@ -644,8 +644,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 )
 
 with tab_editar:
-    ts_comp = db.ultima_carga("compuestos")
-    st.caption(f"🕒 Última actualización: **{ts_comp or '?'}**")
+    ts_comp_ph = st.empty()
     st.info(
         "Editá las cantidades de las equivalencias. Ejemplo: "
         "1 REPOLLO ROJO - CAJA = 15 REPOLLO ROJO - KG. "
@@ -714,6 +713,9 @@ with tab_editar:
         guardar_compuestos(salida)
         st.success("Compuestos guardados correctamente.")
 
+    ts_comp = db.ultima_carga("compuestos")
+    ts_comp_ph.caption(f"🕒 Última actualización: **{ts_comp or '?'}**")
+
 with tab_probar:
     st.info("Elegí un producto y se muestran todas las equivalencias de su familia.")
 
@@ -771,12 +773,7 @@ with tab_stock:
             key="fecha_stock_local",
             format="YYYY-MM-DD",
         )
-    with col_st2:
-        ts_stk_ultimo = db.ultima_carga("stock")
-        st.caption(
-            f"📅 Fechas guardadas: {len(fechas_stock_disp)} · "
-            f"🕒 Última actualización: **{ts_stk_ultimo or '?'}**"
-        )
+    ts_stk_ph = col_st2.empty()
 
     df_dia_stk_full = db.cargar_stock(fecha=fecha_stock)
     map_stock_dia = dict(
@@ -866,6 +863,14 @@ with tab_stock:
         editor_key = f"editor_stock_{fecha_stock}"
         st.session_state.pop(editor_key, None)
         st.rerun()
+
+    # Refrescar fechas y timestamp despues del posible save
+    fechas_stock_disp_post = db.fechas_stock()
+    ts_stk_ultimo = db.ultima_carga("stock")
+    ts_stk_ph.caption(
+        f"📅 Fechas guardadas: {len(fechas_stock_disp_post)} · "
+        f"🕒 Última actualización: **{ts_stk_ultimo or '?'}**"
+    )
 
 with tab_comprar:
     ts_ped = db.ultima_carga("pedidos_dux")
@@ -1175,12 +1180,7 @@ with tab_estimado:
             key="fecha_estimado",
             format="YYYY-MM-DD",
         )
-    with col_es2:
-        ts_est_ultimo = db.ultima_carga("estimado")
-        st.caption(
-            f"📅 Fechas guardadas: {len(fechas_est_disp)} · "
-            f"🕒 Última actualización: **{ts_est_ultimo or '?'}**"
-        )
+    ts_est_ph = col_es2.empty()
 
     df_dia_est = db.cargar_estimado(fecha=fecha_estimado)
     map_est_dia = (
@@ -1272,6 +1272,14 @@ with tab_estimado:
         editor_key = f"editor_estimado_{fecha_estimado}"
         st.session_state.pop(editor_key, None)
         st.rerun()
+
+    # Refrescar fechas y timestamp despues del posible save
+    fechas_est_disp_post = db.fechas_estimado()
+    ts_est_ultimo = db.ultima_carga("estimado")
+    ts_est_ph.caption(
+        f"📅 Fechas guardadas: {len(fechas_est_disp_post)} · "
+        f"🕒 Última actualización: **{ts_est_ultimo or '?'}**"
+    )
 
 with tab_dux:
     dux_cfg = st.secrets.get("dux", {})
@@ -1548,8 +1556,7 @@ with tab_dux:
             )
 
 with tab_dux_productos:
-    ts_dux_prod = db.ultima_carga("dux_productos")
-    st.caption(f"🕒 Última actualización: **{ts_dux_prod or '?'}**")
+    ts_dux_prod_ph = st.empty()
 
     if not token:
         st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
@@ -1697,6 +1704,9 @@ with tab_dux_productos:
                 )
         except Exception as e:
             st.error(msg_error_sheets("leer productos", e))
+
+    ts_dux_prod = db.ultima_carga("dux_productos")
+    ts_dux_prod_ph.caption(f"🕒 Última actualización: **{ts_dux_prod or '?'}**")
 
 with tab_wix:
     wix_cfg = st.secrets.get("wix", {})
@@ -1976,8 +1986,7 @@ with tab_wix:
                     st.error(msg_error_sheets("guardar selecciones Wix", e))
 
 with tab_wix_productos:
-    ts_wix_prod = db.ultima_carga("wix_productos")
-    st.caption(f"🕒 Última actualización: **{ts_wix_prod or '?'}**")
+    ts_wix_prod_ph = st.empty()
 
     wix_cfg_p = st.secrets.get("wix", {})
     wix_token_p = wix_cfg_p.get("api_key", "")
@@ -2114,6 +2123,9 @@ with tab_wix_productos:
                 st.warning("Todavía no hay productos Wix en Sheets. Apretá **Sincronizar**.")
         except Exception as e:
             st.error(msg_error_sheets("leer productos Wix", e))
+
+    ts_wix_prod = db.ultima_carga("wix_productos")
+    ts_wix_prod_ph.caption(f"🕒 Última actualización: **{ts_wix_prod or '?'}**")
 
 with tab_mapeo:
     st.info(
@@ -2263,8 +2275,7 @@ with tab_mapeo:
             st.success(f"✅ {len(rows)} mapeos guardados en Sheets.")
 
 with tab_packs:
-    ts_packs = db.ultima_carga("packs")
-    st.caption(f"🕒 Última actualización: **{ts_packs or '?'}**")
+    ts_packs_ph = st.empty()
     st.info(
         "Configurá la composición de cada PACK de Wix con productos DUX y cantidades. "
         "Agregá / quitá filas según necesites. **Los cambios se aplican solo al apretar Guardar.**"
@@ -2401,6 +2412,9 @@ with tab_packs:
                 st.success(
                     f"✅ Packs guardados en Sheets ({len(rows_save)} líneas totales)."
                 )
+
+    ts_packs = db.ultima_carga("packs")
+    ts_packs_ph.caption(f"🕒 Última actualización: **{ts_packs or '?'}**")
 
 
 #python -m streamlit run app.py
