@@ -743,7 +743,11 @@ with tab_stock:
             format="YYYY-MM-DD",
         )
     with col_st2:
-        st.caption(f"📅 Fechas guardadas: {len(fechas_stock_disp)}")
+        ts_stk_ultimo = db.ultima_carga("stock")
+        st.caption(
+            f"📅 Fechas guardadas: {len(fechas_stock_disp)} · "
+            f"🕒 Última actualización: **{ts_stk_ultimo or '?'}**"
+        )
 
     df_dia_stk_full = db.cargar_stock(fecha=fecha_stock)
     map_stock_dia = dict(
@@ -764,6 +768,17 @@ with tab_stock:
     if st.session_state.get(f"_stk_zero_{fecha_stock}"):
         base_stk["cantidad"] = 0.0
 
+    # Botones arriba: Cero (fuera de form) + caption
+    col_btn_s1, col_btn_s2 = st.columns([1, 4])
+    with col_btn_s1:
+        cero_s = st.button(
+            "🧹 Poner stock a cero",
+            key="btn_cero_stock",
+            help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
+        )
+    with col_btn_s2:
+        st.caption(f"Guarda para la fecha **{fecha_stock}**.")
+
     buscar_stk = st.text_input(
         "🔎 Buscar producto",
         key="buscar_stock",
@@ -778,6 +793,9 @@ with tab_stock:
         base_stk_view = base_stk
 
     with st.form(key=f"form_stock_{fecha_stock}", clear_on_submit=False):
+        guardar_s = st.form_submit_button(
+            "💾 Guardar stock", type="primary"
+        )
         stock_editado = st.data_editor(
             base_stk_view,
             use_container_width=True,
@@ -796,19 +814,6 @@ with tab_stock:
             },
             key=f"editor_stock_{fecha_stock}",
         )
-        guardar_s = st.form_submit_button(
-            "💾 Guardar stock", type="primary"
-        )
-
-    col_s2, col_s3 = st.columns([1, 4])
-    with col_s2:
-        cero_s = st.button(
-            "🧹 Poner stock a cero",
-            key="btn_cero_stock",
-            help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
-        )
-    with col_s3:
-        st.caption(f"Guarda para la fecha {fecha_stock}.")
 
     if guardar_s:
         edits_map = dict(
@@ -1158,7 +1163,11 @@ with tab_estimado:
             format="YYYY-MM-DD",
         )
     with col_es2:
-        st.caption(f"📅 Fechas guardadas: {len(fechas_est_disp)}")
+        ts_est_ultimo = db.ultima_carga("estimado")
+        st.caption(
+            f"📅 Fechas guardadas: {len(fechas_est_disp)} · "
+            f"🕒 Última actualización: **{ts_est_ultimo or '?'}**"
+        )
 
     df_dia_est = db.cargar_estimado(fecha=fecha_estimado)
     map_est_dia = (
@@ -1181,6 +1190,17 @@ with tab_estimado:
     if st.session_state.get(f"_est_zero_{fecha_estimado}"):
         base_est["estimado"] = 0.0
 
+    # Botones arriba: Cero (fuera de form) + caption
+    col_btn_e1, col_btn_e2 = st.columns([1, 4])
+    with col_btn_e1:
+        reset_est = st.button(
+            "🧹 Resetear a cero",
+            key="btn_reset_estimado",
+            help="Llena todo el estimado con 0. No se guarda hasta apretar 💾 Guardar estimado.",
+        )
+    with col_btn_e2:
+        st.caption(f"Guarda para la fecha **{fecha_estimado}**.")
+
     buscar_est = st.text_input(
         "🔎 Buscar producto",
         key="buscar_estimado",
@@ -1195,6 +1215,9 @@ with tab_estimado:
         base_est_view = base_est
 
     with st.form(key=f"form_estimado_{fecha_estimado}", clear_on_submit=False):
+        guardar_est = st.form_submit_button(
+            "💾 Guardar estimado", type="primary"
+        )
         editor_estimado = st.data_editor(
             base_est_view,
             use_container_width=True,
@@ -1213,19 +1236,6 @@ with tab_estimado:
             },
             key=f"editor_estimado_{fecha_estimado}",
         )
-        guardar_est = st.form_submit_button(
-            "💾 Guardar estimado", type="primary"
-        )
-
-    col_eb2, col_eb3 = st.columns([1, 4])
-    with col_eb2:
-        reset_est = st.button(
-            "🧹 Resetear a cero",
-            key="btn_reset_estimado",
-            help="Llena todo el estimado con 0. No se guarda hasta apretar 💾 Guardar estimado.",
-        )
-    with col_eb3:
-        st.caption(f"Guarda para la fecha {fecha_estimado}.")
 
     if guardar_est:
         edits_map_e = dict(
