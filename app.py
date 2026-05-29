@@ -89,6 +89,63 @@ EXCEPCIONES = {
 
 st.title("Frutiverdu")
 
+# Multi-usuario: identificar quien esta usando la app + avisar si hay otros activos
+USUARIOS_APP = ["Carlos", "Ariel", "Tomás", "Claudia", "Otro"]
+PRESENCIA_WINDOW = 600  # 10 min — considerado "activo" si dio señal en este lapso
+HEARTBEAT_INTERVAL = 300  # 5 min — refrescamos nuestra presencia cada este lapso
+
+if "usuario_app" not in st.session_state:
+    st.markdown("### ¿Quién sos?")
+    cols_pick = st.columns(len(USUARIOS_APP))
+    for i_pick, u_pick in enumerate(USUARIOS_APP):
+        if cols_pick[i_pick].button(u_pick, key=f"pick_user_{u_pick}", use_container_width=True):
+            st.session_state["usuario_app"] = u_pick
+            try:
+                db.guardar_config({f"presencia_{u_pick}": str(int(time.time()))})
+                st.session_state["_ultimo_heartbeat"] = time.time()
+            except Exception:
+                pass
+            st.rerun()
+    st.stop()
+
+_usuario_actual = st.session_state["usuario_app"]
+_ahora = int(time.time())
+
+# Heartbeat: si pasaron >5 min desde el ultimo, refrescamos presencia
+if _ahora - st.session_state.get("_ultimo_heartbeat", 0) > HEARTBEAT_INTERVAL:
+    try:
+        db.guardar_config({f"presencia_{_usuario_actual}": str(_ahora)})
+        st.session_state["_ultimo_heartbeat"] = _ahora
+    except Exception:
+        pass
+
+# Detectar otros usuarios activos en los ultimos 10 min
+try:
+    _cfg_now = db.cargar_config()
+    _otros_activos = []
+    for _k_cfg, _v_cfg in _cfg_now.items():
+        if not _k_cfg.startswith("presencia_"):
+            continue
+        _nombre = _k_cfg.replace("presencia_", "")
+        if _nombre == _usuario_actual:
+            continue
+        try:
+            _ts_otro = int(_v_cfg)
+        except (ValueError, TypeError):
+            continue
+        if _ahora - _ts_otro < PRESENCIA_WINDOW:
+            _otros_activos.append(_nombre)
+    if _otros_activos:
+        st.warning(
+            f"⚠️ **{', '.join(_otros_activos)}** también está/n usando la app ahora. "
+            "Tené cuidado con los cambios para no pisarse."
+        )
+except Exception:
+    pass
+
+# Pequeño chip arriba mostrando quien sos
+st.caption(f"👤 Sesión: **{_usuario_actual}**")
+
 st.markdown(
     """
 <style>
