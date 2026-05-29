@@ -759,11 +759,10 @@ with tab_stock:
         .astype(float)
     )
 
-    if st.session_state.get("resetear_stock"):
+    # "Poner a cero" llena el editor con ceros (sin guardar).
+    # El usuario despues presiona Guardar para persistir.
+    if st.session_state.get(f"_stk_zero_{fecha_stock}"):
         base_stk["cantidad"] = 0.0
-        db.guardar_stock(base_stk, fecha_stock)
-        st.session_state["resetear_stock"] = False
-        st.success(f"Stock del {fecha_stock} puesto en cero.")
 
     buscar_stk = st.text_input(
         "🔎 Buscar producto",
@@ -801,18 +800,12 @@ with tab_stock:
             "💾 Guardar stock", type="primary"
         )
 
-    col_s2, col_s3 = st.columns([2, 3])
+    col_s2, col_s3 = st.columns([1, 4])
     with col_s2:
-        confirmar_cero_s = st.checkbox(
-            "Confirmar borrar TODO el stock",
-            key="confirmar_cero_stock",
-            value=False,
-        )
         cero_s = st.button(
             "🧹 Poner stock a cero",
             key="btn_cero_stock",
-            disabled=not confirmar_cero_s,
-            help="Tenés que tildar la confirmación para habilitar el botón.",
+            help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
         )
     with col_s3:
         st.caption(f"Guarda para la fecha {fecha_stock}.")
@@ -831,10 +824,13 @@ with tab_stock:
         ]
         salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
         db.guardar_stock(salida_s, fecha_stock)
+        st.session_state.pop(f"_stk_zero_{fecha_stock}", None)
         st.success(f"Stock del {fecha_stock} guardado en Sheets.")
 
     if cero_s:
-        st.session_state["resetear_stock"] = True
+        st.session_state[f"_stk_zero_{fecha_stock}"] = True
+        editor_key = f"editor_stock_{fecha_stock}"
+        st.session_state.pop(editor_key, None)
         st.rerun()
 
 with tab_comprar:
@@ -1232,11 +1228,10 @@ with tab_estimado:
         .astype(float)
     )
 
-    if st.session_state.get("reset_estimado"):
+    # "Poner a cero" llena el editor con ceros (sin guardar).
+    # El usuario despues presiona Guardar para persistir.
+    if st.session_state.get(f"_est_zero_{fecha_estimado}"):
         base_est["estimado"] = 0.0
-        db.guardar_estimado(base_est, fecha_estimado)
-        st.session_state["reset_estimado"] = False
-        st.success(f"Estimado del {fecha_estimado} puesto en cero.")
 
     buscar_est = st.text_input(
         "🔎 Buscar producto",
@@ -1274,18 +1269,12 @@ with tab_estimado:
             "💾 Guardar estimado", type="primary"
         )
 
-    col_eb2, col_eb3 = st.columns([2, 3])
+    col_eb2, col_eb3 = st.columns([1, 4])
     with col_eb2:
-        confirmar_cero_est = st.checkbox(
-            "Confirmar borrar TODO el estimado",
-            key="confirmar_cero_estimado",
-            value=False,
-        )
         reset_est = st.button(
             "🧹 Resetear a cero",
             key="btn_reset_estimado",
-            disabled=not confirmar_cero_est,
-            help="Tenés que tildar la confirmación para habilitar el botón.",
+            help="Llena todo el estimado con 0. No se guarda hasta apretar 💾 Guardar estimado.",
         )
     with col_eb3:
         st.caption(f"Guarda para la fecha {fecha_estimado}.")
@@ -1304,10 +1293,13 @@ with tab_estimado:
         ]
         salida["estimado"] = salida["estimado"].fillna(0).astype(float)
         db.guardar_estimado(salida, fecha_estimado)
+        st.session_state.pop(f"_est_zero_{fecha_estimado}", None)
         st.success(f"Estimado del {fecha_estimado} guardado en Sheets.")
 
     if reset_est:
-        st.session_state["reset_estimado"] = True
+        st.session_state[f"_est_zero_{fecha_estimado}"] = True
+        editor_key = f"editor_estimado_{fecha_estimado}"
+        st.session_state.pop(editor_key, None)
         st.rerun()
 
 with tab_dux:
