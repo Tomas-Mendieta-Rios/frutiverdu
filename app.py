@@ -50,6 +50,23 @@ def msg_error_sheets(accion, exc):
 
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
 
+# CSS para resaltar el dia de HOY en el calendario de st.date_input
+st.markdown(
+    """
+    <style>
+    /* Hoy: borde resaltado en el calendario popup */
+    [data-baseweb="calendar"] [aria-current="date"],
+    [data-baseweb="calendar"] button[aria-label*="Today"],
+    [data-baseweb="calendar"] div[aria-current="date"] {
+        border: 2px solid #ff8c00 !important;
+        border-radius: 50% !important;
+        font-weight: bold !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 EXCEPCIONES = {
     ("061", "062"),
     ("0256", "0205"),
