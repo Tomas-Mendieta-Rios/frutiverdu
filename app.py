@@ -834,6 +834,15 @@ with tab_stock:
         st.rerun()
 
 with tab_comprar:
+    # Detectar si este rerun fue gatillado por un cambio de selector de unidad.
+    # Si NO, reseteamos todos los selectores de unidad a su default (KG).
+    # Si SÍ, preservamos la seleccion del usuario para esa interaccion.
+    _unit_changed_now = st.session_state.pop("_unit_changed_flag", False)
+    if not _unit_changed_now:
+        for _k in list(st.session_state.keys()):
+            if isinstance(_k, str) and _k.startswith("unidad_comprar_"):
+                del st.session_state[_k]
+
     col_ts, col_refresh = st.columns([5, 1])
     with col_ts:
         ts_ped = db.ultima_carga("pedidos_dux")
@@ -1040,15 +1049,13 @@ with tab_comprar:
                         0,
                     )
                     key_sufijo = "-".join(sorted(comp))
-                    # Incluir las 3 fechas en el key: cuando cambian, el selector
-                    # se "olvida" lo seleccionado y vuelve al default.
-                    fechas_key = f"{fecha_entrega}_{fecha_stock_sel}_{fecha_estimado_sel}"
                     unidad_destino = col_u.selectbox(
                         "Unidad",
                         unidades_comp,
                         index=idx_default,
-                        key=f"unidad_comprar_{base}_{key_sufijo}_{fechas_key}",
+                        key=f"unidad_comprar_{base}_{key_sufijo}",
                         label_visibility="collapsed",
+                        on_change=lambda: st.session_state.__setitem__("_unit_changed_flag", True),
                     )
                     codigo_destino = str(
                         comp_productos[
