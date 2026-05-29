@@ -2440,23 +2440,7 @@ with tab_proveedores:
 with tab_compras:
     ts_compras_ph = st.empty()
 
-    # Defaults DUX para campos no editables
-    DEFAULTS_DUX_COMPRA = {
-        "CONDICION PAGO": "CONTADO",
-        "REALIZA RECEPCION": "S",
-        "DEPOSITO": "",
-        "OBSERVACIONES": "",
-        "TALLE": "",
-        "COLOR": "",
-        "PRECIO INCLUYE IVA": "N",
-        "PORCENTAJE DESCUENTO": 0,
-        "PORCENTAJE IVA": 21,
-        "COMENTARIOS": "",
-        "NUMERO IDENTIFICACION": "",
-        "DESCRIPCION TRAZABILIDAD": "",
-        "PERCEPCIONES": "",
-        "VALORES PERCEPCION": "",
-    }
+    COND_PAGO_OPCIONES = ["CONTADO", "EFECTIVO", "CHEQUE", "CUENTA CORRIENTE"]
     COLUMNAS_DUX = [
         "COMPROBANTE", "TIPO COMPROBANTE", "ID PROVEEDOR", "FECHA",
         "FECHA IMPUTACION CC", "FECHA VENCIMIENTO", "CONDICION PAGO",
@@ -2526,7 +2510,7 @@ with tab_compras:
         else:
             df_compras_fecha = pd.DataFrame(columns=db.SCHEMA["compras"])
 
-        # Armar vista editable (con labels concatenados para los selectbox)
+        # Armar vista editable
         if not df_compras_fecha.empty:
             view_rows = []
             for _, r in df_compras_fecha.iterrows():
@@ -2537,8 +2521,7 @@ with tab_compras:
                     "Producto": prod_label if prod_label in opciones_prod else "",
                     "Cantidad": float(r.get("cantidad", 0) or 0),
                     "Precio Unit.": float(r.get("precio", 0) or 0),
-                    "Comprobante": str(r.get("comprobante", "")),
-                    "Tipo Comprob.": str(r.get("tipo_comprobante", "") or "FACTURA A"),
+                    "Cond. Pago": str(r.get("condicion_pago", "") or "CONTADO"),
                 })
             df_view = pd.DataFrame(view_rows)
         else:
@@ -2547,8 +2530,7 @@ with tab_compras:
                 "Producto": pd.Series(dtype=str),
                 "Cantidad": pd.Series(dtype=float),
                 "Precio Unit.": pd.Series(dtype=float),
-                "Comprobante": pd.Series(dtype=str),
-                "Tipo Comprob.": pd.Series(dtype=str),
+                "Cond. Pago": pd.Series(dtype=str),
             })
 
         with st.form(f"form_compras_{fecha_compra_sel}", clear_on_submit=False, border=False):
@@ -2577,20 +2559,15 @@ with tab_compras:
                     "Precio Unit.": st.column_config.NumberColumn(
                         "Precio Unit.", min_value=0.0, step=0.01, format="%.2f",
                     ),
-                    "Comprobante": st.column_config.TextColumn(
-                        "Comprobante",
-                        help="Ej: 0001-00000123. Si lo dejás vacío, DUX lo asigna al importar.",
-                    ),
-                    "Tipo Comprob.": st.column_config.SelectboxColumn(
-                        "Tipo Comprob.",
-                        options=["FACTURA A", "FACTURA B", "FACTURA C", "REMITO", "FACTURA M"],
+                    "Cond. Pago": st.column_config.SelectboxColumn(
+                        "Cond. Pago",
+                        options=COND_PAGO_OPCIONES,
                     ),
                 },
                 key=f"editor_compras_{fecha_compra_sel}",
             )
 
         if guardar_c:
-            # Convertir back al schema
             rows_save = []
             for _, r in edited_compras.iterrows():
                 prov_label = r.get("Proveedor")
@@ -2614,8 +2591,7 @@ with tab_compras:
                     "producto_nombre": str(ppnom),
                     "cantidad": cant,
                     "precio": precio,
-                    "comprobante": str(r.get("Comprobante") or ""),
-                    "tipo_comprobante": str(r.get("Tipo Comprob.") or "FACTURA A"),
+                    "condicion_pago": str(r.get("Cond. Pago") or "CONTADO"),
                 })
             df_save = pd.DataFrame(rows_save, columns=db.SCHEMA["compras"])
             try:
@@ -2638,19 +2614,17 @@ with tab_compras:
             fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d/%m/%Y")
             excel_rows = []
             for _, r in df_compras_fecha_post.iterrows():
-                fila = {
-                    "COMPROBANTE": r.get("comprobante", "") or "",
-                    "TIPO COMPROBANTE": r.get("tipo_comprobante", "FACTURA A") or "FACTURA A",
-                    "ID PROVEEDOR": r.get("proveedor_id", "") or "",
-                    "FECHA": fecha_str_dux,
-                    "FECHA IMPUTACION CC": fecha_str_dux,
-                    "FECHA VENCIMIENTO": fecha_str_dux,
-                    "CÓDIGO PRODUCTO": r.get("codigo_producto", "") or "",
-                    "CANTIDAD": float(r.get("cantidad", 0) or 0),
-                    "PRECIO": float(r.get("precio", 0) or 0),
-                }
-                for k, v in DEFAULTS_DUX_COMPRA.items():
-                    fila[k] = v
+                fila = {col: "" for col in COLUMNAS_DUX}
+                fila["TIPO COMPROBANTE"] = "COMPROBANTE COMPRA"
+                fila["DEPOSITO"] = "DEPOSITO"
+                fila["ID PROVEEDOR"] = r.get("proveedor_id", "") or ""
+                fila["FECHA"] = fecha_str_dux
+                fila["FECHA IMPUTACION CC"] = fecha_str_dux
+                fila["FECHA VENCIMIENTO"] = fecha_str_dux
+                fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
+                fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
+                fila["CANTIDAD"] = float(r.get("cantidad", 0) or 0)
+                fila["PRECIO"] = float(r.get("precio", 0) or 0)
                 excel_rows.append(fila)
 
             df_excel_dux = pd.DataFrame(excel_rows, columns=COLUMNAS_DUX)
@@ -2664,11 +2638,11 @@ with tab_compras:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
             )
-            with st.expander(f"Ver resumen de la compra ({len(df_compras_fecha_post)} líneas)"):
+            with st.expander(f"Ver resumen ({len(df_compras_fecha_post)} líneas)"):
                 st.dataframe(
                     df_compras_fecha_post[[
                         "proveedor_nombre", "codigo_producto", "producto_nombre",
-                        "cantidad", "precio", "comprobante", "tipo_comprobante",
+                        "cantidad", "precio", "condicion_pago",
                     ]],
                     use_container_width=True,
                     hide_index=True,

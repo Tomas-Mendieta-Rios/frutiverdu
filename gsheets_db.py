@@ -93,8 +93,7 @@ SCHEMA = {
         "producto_nombre",
         "cantidad",
         "precio",
-        "comprobante",
-        "tipo_comprobante",
+        "condicion_pago",
     ],
     "config": ["key", "value"],
 }
