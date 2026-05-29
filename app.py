@@ -817,8 +817,8 @@ with tab_stock:
 with tab_comprar:
     ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
     ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
-    ts_stk = ultima_sync(STOCK_CSV)
-    ts_est = ultima_sync(ESTIMADO_CSV)
+    ts_stk = db.ultima_carga("stock")
+    ts_est = db.ultima_carga("estimado")
     st.caption(
         f"🕒 DUX: **{ts_ped or '?'}** · "
         f"Wix: **{ts_wix or '?'}** · "

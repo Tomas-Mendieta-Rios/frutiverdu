@@ -76,6 +76,7 @@ def _spreadsheet():
     return _client().open_by_key(st.secrets["gsheets"]["spreadsheet_id"])
 
 
+@st.cache_resource
 def _get_ws(nombre):
     sheet = _spreadsheet()
     try:
@@ -132,6 +133,23 @@ def fecha_modificacion(nombre):
         )
     except Exception:
         return None
+
+
+def _marcar_modificacion(clave):
+    """Persiste timestamp 'YYYY-MM-DD HH:MM:SS' en config con key=ultima_carga_<clave>."""
+    ts = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    try:
+        guardar_config({f"ultima_carga_{clave}": ts})
+    except Exception:
+        pass
+
+
+def ultima_carga(clave):
+    """Devuelve el timestamp de la última carga registrada para esa clave, o None."""
+    cfg = cargar_config()
+    return cfg.get(f"ultima_carga_{clave}") or None
 
 
 # ---------------- PRODUCTOS ----------------
@@ -210,6 +228,7 @@ def guardar_stock(df_fecha, fecha):
         [otros, nuevo[SCHEMA["stock_historico"]]], ignore_index=True
     )
     escribir_tabla("stock_historico", combinado)
+    _marcar_modificacion("stock")
 
 
 def fechas_stock():
@@ -264,6 +283,7 @@ def guardar_estimado(df_fecha, fecha):
         [otros, nuevo[SCHEMA["estimado_historico"]]], ignore_index=True
     )
     escribir_tabla("estimado_historico", combinado)
+    _marcar_modificacion("estimado")
 
 
 def fechas_estimado():
