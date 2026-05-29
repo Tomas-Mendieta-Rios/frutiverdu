@@ -826,23 +826,52 @@ with tab_comprar:
         f"Estimado: **{ts_est or '?'}**"
     )
 
-    fecha_compra = st.date_input(
-        "🛒 Fecha de compra (fecha de entrega)",
-        value=date.today() + timedelta(days=1),
-        key="comprar_fecha",
-        format="YYYY-MM-DD",
-        help=(
-            "Filtra pedidos DUX y Wix con esa fecha de entrega asignada. "
-            "Stock y estimado se leen de esa misma fecha."
-        ),
-    )
+    col_fc1, col_fc2, col_fc3 = st.columns(3)
+    with col_fc1:
+        fecha_entrega = st.date_input(
+            "📦 Fecha de entrega",
+            value=date.today() + timedelta(days=1),
+            key="comprar_fecha_entrega",
+            format="YYYY-MM-DD",
+            help="Filtra pedidos DUX y Wix con esa fecha de entrega asignada.",
+        )
+    with col_fc2:
+        fechas_stock_disp = db.fechas_stock()
+        fecha_stock_default_c = (
+            pd.to_datetime(fechas_stock_disp[0]).date()
+            if fechas_stock_disp
+            else date.today()
+        )
+        fecha_stock_sel = st.date_input(
+            "📦 Fecha de stock",
+            value=fecha_stock_default_c,
+            key="comprar_fecha_stock",
+            format="YYYY-MM-DD",
+            help="Qué stock usar para el cálculo.",
+        )
+    with col_fc3:
+        fechas_est_disp = db.fechas_estimado()
+        fecha_est_default_c = (
+            pd.to_datetime(fechas_est_disp[0]).date()
+            if fechas_est_disp
+            else date.today()
+        )
+        fecha_estimado_sel = st.date_input(
+            "📈 Fecha de estimado",
+            value=fecha_est_default_c,
+            key="comprar_fecha_estimado",
+            format="YYYY-MM-DD",
+            help="Qué estimado usar para el cálculo.",
+        )
 
     pedidos_actual = cargar_pedidos_dux_aggregated(
         productos,
-        estimado_fecha=fecha_compra,
-        fecha_compra=fecha_compra,
+        estimado_fecha=fecha_estimado_sel,
+        fecha_compra=fecha_entrega,
     )
-    stock_actual = cargar_stock_fecha(fecha_compra)
+    stock_actual = cargar_stock_fecha(fecha_stock_sel)
+    # Para mantener compatibilidad con el resto del código de la pestaña
+    fecha_compra = fecha_entrega
 
     if pedidos_actual is None or pedidos_actual.empty:
         st.warning(
