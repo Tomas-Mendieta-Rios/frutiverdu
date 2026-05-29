@@ -116,15 +116,11 @@ def escribir_tabla(nombre, df):
     df = df.astype(str).replace({"nan": "", "None": "", "<NA>": ""})
     ws = _get_ws(nombre)
     valores = [cols] + df.values.tolist()
-    # Escritura "atómica": primero sobreescribimos a partir de A1. Si esto falla,
-    # los datos viejos siguen estando. Recién después limpiamos las filas sobrantes
-    # más allá de los datos nuevos. RAW para que Sheets no reinterprete tipos.
+    # IMPORTANTE: clear() PRIMERO y después update() — caso contrario, si la tabla
+    # crecio mas alla del rango hardcodeado, quedan "filas fantasma" con datos viejos.
+    # RAW para que Sheets no reinterprete tipos (preserva ceros a la izquierda en codigos).
+    ws.clear()
     ws.update(values=valores, range_name="A1", value_input_option="RAW")
-    last_row = len(valores)
-    try:
-        ws.batch_clear([f"A{last_row + 1}:Z1000"])
-    except Exception:
-        pass
     leer_tabla.clear()
 
 
