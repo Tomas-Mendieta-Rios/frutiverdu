@@ -1123,10 +1123,6 @@ with tab_comprar:
     if buscar_comprar:
         bases = [b for b in bases if buscar_comprar.lower() in b.lower()]
 
-    st.caption(
-        "🔴 falta · 🟢 sobra · ⚪ ok — tocá cada producto para ver el detalle "
-        "en sus distintas unidades."
-    )
 
     for base in bases:
         opciones_grupo = prod_temp[prod_temp["base"] == base]
@@ -2272,10 +2268,6 @@ with tab_mapeo:
         )
 
         with st.form(key="form_mapeo_wix_dux", clear_on_submit=False):
-            st.caption(
-                "💡 **Factor** = cuántas unidades DUX representa 1 unidad Wix. "
-                "Ej: Wix `VERDEO - 1/4 KG` → DUX `VERDEO - ATADO` con factor `0.25`."
-            )
             guardar_map = st.form_submit_button(
                 "💾 Guardar mapeo", type="primary"
             )
@@ -2363,10 +2355,6 @@ with tab_mapeo:
 
 with tab_packs:
     ts_packs_ph = st.empty()
-    st.info(
-        "Configurá la composición de cada PACK de Wix con productos DUX y cantidades. "
-        "Agregá / quitá filas según necesites. **Los cambios se aplican solo al apretar Guardar.**"
-    )
 
     df_wix_p_packs = db.cargar_wix_productos()
     df_dux_p_packs = db.cargar_productos()
