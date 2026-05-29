@@ -2273,158 +2273,163 @@ with tab_wix_productos:
 with tab_proveedores:
     ts_prov_ph = st.empty()
 
-    dux_cfg_p = st.secrets.get("dux", {})
-    token_p = dux_cfg_p.get("token", "")
-    base_url_p = dux_cfg_p.get(
-        "base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services"
+    st.markdown(
+        "Subí el **Excel exportado desde DUX**. **Pisa todo lo cargado anteriormente.**"
     )
 
-    if not token_p:
-        st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
-    else:
-        sincronizar_prov = st.button(
-            "🔄 Sincronizar proveedores desde DUX",
-            type="primary",
-            key="sync_proveedores",
-        )
+    SCHEMA_PROV = [
+        "proveedor_id", "proveedor", "nombre_fantasia", "categoria_fiscal",
+        "tipo_documento", "numero_documento", "cuit_cuil", "codigo",
+        "email", "provincia", "localidad", "barrio", "domicilio",
+        "telefono", "celular", "condicion_pago", "fecha_creacion",
+        "persona_contacto", "lugar_entrega", "tipo_comprobante", "habilitado",
+    ]
+    # Mapeo de columnas del Excel de DUX → columnas del schema.
+    # Las claves del alias estan normalizadas: lowercase + espacios colapsados.
+    ALIAS_PROV = {
+        "proveedor_id": ["id"],
+        "proveedor": ["proveedor", "razon social", "razon_social"],
+        "nombre_fantasia": ["nombre de fantasia", "nombre fantasia"],
+        "categoria_fiscal": ["categoria fiscal"],
+        "tipo_documento": ["tipo documento"],
+        "numero_documento": ["numero documento", "nro documento"],
+        "cuit_cuil": ["cuit/cuil", "cuit_cuil", "cuit", "cuil"],
+        "codigo": ["codigo"],
+        "email": ["correo electronico", "email", "mail", "e-mail", "correo"],
+        "provincia": ["provincia"],
+        "localidad": ["localidad"],
+        "barrio": ["barrio"],
+        "domicilio": ["domicilio", "direccion"],
+        "telefono": ["telefono", "tel"],
+        "celular": ["celular", "movil"],
+        "condicion_pago": ["condicion pago", "condicion de pago"],
+        "fecha_creacion": ["fecha creacion"],
+        "persona_contacto": ["persona contacto", "contacto"],
+        "lugar_entrega": ["lugar entrega por defecto", "lugar entrega"],
+        "tipo_comprobante": ["tipo comprobante por defecto", "tipo comprobante"],
+        "habilitado": ["habilitado"],
+    }
 
-        if sincronizar_prov:
-            url_prov = f"{base_url_p}/proveedores"
-            headers_prov = {"accept": "application/json", "authorization": token_p}
-            page_offset = 0
-            page_size = 50
-            all_prov = []
-            error_corte = False
+    def _normalizar_col(c):
+        # Lower + sin acentos + espacios colapsados (DUX exporta 'Condición  Pago' con doble espacio)
+        s = str(c).strip().lower()
+        # Sacar tildes basicas
+        for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"),
+                     ("ñ", "n")):
+            s = s.replace(a, b)
+        # Colapsar espacios multiples
+        s = " ".join(s.split())
+        return s
 
-            with st.spinner("Trayendo proveedores desde DUX..."):
-                while True:
-                    params_prov = {
-                        "idEmpresa": int(dux_cfg_p.get("id_empresa", 4245)),
-                        "offset": page_offset,
-                        "limit": page_size,
-                    }
-                    try:
-                        r = requests.get(
-                            url_prov,
-                            params=params_prov,
-                            headers=headers_prov,
-                            timeout=30,
-                        )
-                    except requests.RequestException as e:
-                        st.error(msg_error_red("DUX", e))
-                        error_corte = True
-                        break
+    archivo_prov = st.file_uploader(
+        "Subir Excel (.xlsx) o CSV",
+        type=["xlsx", "xls", "csv"],
+        key="upload_proveedores",
+    )
 
-                    if r.status_code != 200:
-                        st.error(msg_error_http("DUX", r.status_code, r.text))
-                        error_corte = True
-                        break
+    if archivo_prov is not None:
+        try:
+            if archivo_prov.name.lower().endswith(".csv"):
+                df_excel = pd.read_csv(archivo_prov, dtype=str).fillna("")
+            else:
+                df_excel = pd.read_excel(archivo_prov, dtype=str).fillna("")
 
-                    try:
-                        d = r.json()
-                    except ValueError:
-                        st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
-                        error_corte = True
-                        break
+            df_excel.columns = [_normalizar_col(c) for c in df_excel.columns]
 
-                    if isinstance(d, dict) and "message" in d and "results" not in d:
-                        st.error(f"❌ DUX dice: {d['message']}.")
-                        error_corte = True
-                        break
-
-                    if isinstance(d, dict) and "results" in d:
-                        page = d["results"]
-                    elif isinstance(d, list):
-                        page = d
-                    else:
-                        page = []
-
-                    if not page:
-                        break
-
-                    all_prov.extend(page)
-                    if len(page) < page_size:
-                        break
-                    page_offset += page_size
-                    time.sleep(DUX_RATE_LIMIT_SECONDS)
-
-            if not error_corte and all_prov:
-                # Aplanar campos comunes del proveedor (con fallbacks de nombres)
-                filas = []
-                for p in all_prov:
-                    if not isinstance(p, dict):
-                        continue
-                    filas.append({
-                        "proveedor_id": str(
-                            _dux_get_first(p, ["id", "id_proveedor", "idProveedor"]) or ""
-                        ),
-                        "razon_social": str(
-                            _dux_get_first(p, ["razon_social", "razonSocial", "nombre",
-                                               "apellido_razon_social"]) or ""
-                        ),
-                        "cuit": str(
-                            _dux_get_first(p, ["cuit", "numero_documento", "numeroDocumento",
-                                               "cuit_cuil"]) or ""
-                        ),
-                        "telefono": str(
-                            _dux_get_first(p, ["telefono", "telefono_movil", "tel",
-                                               "telefonoMovil"]) or ""
-                        ),
-                        "email": str(
-                            _dux_get_first(p, ["email", "mail", "correo"]) or ""
-                        ),
-                        "domicilio": str(
-                            _dux_get_first(p, ["domicilio", "direccion", "calle"]) or ""
-                        ),
-                    })
-                df_prov = pd.DataFrame(
-                    filas,
-                    columns=["proveedor_id", "razon_social", "cuit",
-                             "telefono", "email", "domicilio"],
+            df_norm = pd.DataFrame()
+            cols_no_encontradas = []
+            for destino, aliases in ALIAS_PROV.items():
+                col_found = next(
+                    (a for a in aliases if a in df_excel.columns),
+                    None,
                 )
+                if col_found:
+                    df_norm[destino] = df_excel[col_found].astype(str).fillna("")
+                else:
+                    df_norm[destino] = ""
+                    cols_no_encontradas.append(destino)
+
+            if cols_no_encontradas:
+                st.caption(
+                    "ℹ️ Columnas del schema sin equivalente en el Excel "
+                    f"(quedan vacías): {', '.join(cols_no_encontradas)}"
+                )
+
+            st.caption(f"Previa ({len(df_norm)} filas):")
+            st.dataframe(
+                df_norm[["proveedor_id", "proveedor", "cuit_cuil", "telefono",
+                         "celular", "email", "localidad"]].head(20),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            if st.button(
+                f"💾 Guardar {len(df_norm)} proveedores",
+                type="primary",
+                key="confirmar_subir_proveedores",
+            ):
                 try:
-                    db.guardar_proveedores(df_prov)
-                    st.success(f"✅ {len(df_prov)} proveedores guardados en Sheets.")
+                    db.guardar_proveedores(df_norm)
+                    st.success(f"✅ {len(df_norm)} proveedores guardados.")
                 except Exception as e:
                     st.error(msg_error_sheets("guardar proveedores", e))
-
-        st.divider()
-        try:
-            df_prov_csv = db.cargar_proveedores()
-            if not df_prov_csv.empty:
-                buscar_prov = st.text_input(
-                    "🔎 Buscar proveedor",
-                    key="buscar_proveedores",
-                    placeholder="Filtra por razón social, CUIT o teléfono...",
-                )
-                df_prov_show = df_prov_csv.copy()
-                if buscar_prov:
-                    q = buscar_prov.lower()
-                    mask = (
-                        df_prov_show["razon_social"].astype(str).str.lower().str.contains(q, na=False)
-                        | df_prov_show["cuit"].astype(str).str.lower().str.contains(q, na=False)
-                        | df_prov_show["telefono"].astype(str).str.lower().str.contains(q, na=False)
-                    )
-                    df_prov_show = df_prov_show[mask].reset_index(drop=True)
-                st.caption(f"{len(df_prov_show)} de {len(df_prov_csv)} proveedores.")
-                st.dataframe(
-                    df_prov_show[["proveedor_id", "razon_social", "cuit",
-                                  "telefono", "email", "domicilio"]],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "proveedor_id": st.column_config.TextColumn("ID"),
-                        "razon_social": st.column_config.TextColumn("Razón social"),
-                        "cuit": st.column_config.TextColumn("CUIT"),
-                        "telefono": st.column_config.TextColumn("Teléfono"),
-                        "email": st.column_config.TextColumn("Email"),
-                        "domicilio": st.column_config.TextColumn("Domicilio"),
-                    },
-                )
-            else:
-                st.warning("Todavía no hay proveedores. Apretá **Sincronizar**.")
         except Exception as e:
-            st.error(msg_error_sheets("leer proveedores", e))
+            st.error(f"No se pudo leer el archivo: {e}")
+
+    st.divider()
+    try:
+        df_prov_csv = db.cargar_proveedores()
+        if not df_prov_csv.empty:
+            buscar_prov = st.text_input(
+                "🔎 Buscar proveedor",
+                key="buscar_proveedores",
+                placeholder="Filtra por nombre, CUIT, teléfono o localidad...",
+            )
+            df_prov_show = df_prov_csv.copy()
+            for c in SCHEMA_PROV:
+                if c not in df_prov_show.columns:
+                    df_prov_show[c] = ""
+            if buscar_prov:
+                q = buscar_prov.lower()
+                mask = False
+                for c in ["proveedor", "nombre_fantasia", "cuit_cuil",
+                          "telefono", "celular", "localidad", "domicilio",
+                          "persona_contacto"]:
+                    mask = mask | df_prov_show[c].astype(str).str.lower().str.contains(q, na=False)
+                df_prov_show = df_prov_show[mask].reset_index(drop=True)
+            st.caption(f"{len(df_prov_show)} de {len(df_prov_csv)} proveedores.")
+            st.dataframe(
+                df_prov_show[SCHEMA_PROV],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "proveedor_id": st.column_config.TextColumn("ID"),
+                    "proveedor": st.column_config.TextColumn("Proveedor"),
+                    "nombre_fantasia": st.column_config.TextColumn("Nombre Fantasía"),
+                    "categoria_fiscal": st.column_config.TextColumn("Cat. Fiscal"),
+                    "tipo_documento": st.column_config.TextColumn("Tipo Doc"),
+                    "numero_documento": st.column_config.TextColumn("Nº Doc"),
+                    "cuit_cuil": st.column_config.TextColumn("CUIT/CUIL"),
+                    "codigo": st.column_config.TextColumn("Código"),
+                    "email": st.column_config.TextColumn("Email"),
+                    "provincia": st.column_config.TextColumn("Provincia"),
+                    "localidad": st.column_config.TextColumn("Localidad"),
+                    "barrio": st.column_config.TextColumn("Barrio"),
+                    "domicilio": st.column_config.TextColumn("Domicilio"),
+                    "telefono": st.column_config.TextColumn("Teléfono"),
+                    "celular": st.column_config.TextColumn("Celular"),
+                    "condicion_pago": st.column_config.TextColumn("Cond. Pago"),
+                    "fecha_creacion": st.column_config.TextColumn("Creación"),
+                    "persona_contacto": st.column_config.TextColumn("Contacto"),
+                    "lugar_entrega": st.column_config.TextColumn("Lugar Entrega"),
+                    "tipo_comprobante": st.column_config.TextColumn("Tipo Comprob"),
+                    "habilitado": st.column_config.TextColumn("Habilitado"),
+                },
+            )
+        else:
+            st.warning("Todavía no hay proveedores. Subí un Excel arriba.")
+    except Exception as e:
+        st.error(msg_error_sheets("leer proveedores", e))
 
     ts_prov = db.ultima_carga("proveedores")
     ts_prov_ph.caption(f"🕒 Última actualización: **{ts_prov or '?'}**")
