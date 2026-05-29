@@ -2183,7 +2183,7 @@ with tab_wix_productos:
                 buscar_wix_prod = st.text_input(
                     "🔎 Buscar producto",
                     key="buscar_wix_productos",
-                    placeholder="Filtra por nombre o descripción...",
+                    placeholder="Filtra por nombre, descripción o ID...",
                 )
 
                 df_show_wp = df_wix_csv.copy()
@@ -2194,13 +2194,19 @@ with tab_wix_productos:
                     mask = (
                         df_show_wp["producto"].astype(str).str.lower().str.contains(q, na=False)
                         | df_show_wp["descripcion"].astype(str).str.lower().str.contains(q, na=False)
+                        | df_show_wp["wix_id"].astype(str).str.lower().str.contains(q, na=False)
                     )
                     df_show_wp = df_show_wp[mask].reset_index(drop=True)
 
                 st.dataframe(
-                    df_show_wp[["producto", "descripcion"]],
+                    df_show_wp[["wix_id", "producto", "descripcion"]],
                     use_container_width=True,
                     hide_index=True,
+                    column_config={
+                        "wix_id": st.column_config.TextColumn("ID Wix"),
+                        "producto": st.column_config.TextColumn("Producto"),
+                        "descripcion": st.column_config.TextColumn("Descripción"),
+                    },
                 )
             else:
                 st.warning("Todavía no hay productos Wix en Sheets. Apretá **Sincronizar**.")
