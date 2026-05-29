@@ -847,8 +847,17 @@ with tab_comprar:
             f"Estimado: **{ts_est or '?'}**"
         )
     with col_refresh:
-        if st.button("🔄 Actualizar", key="refresh_comprar", use_container_width=True):
+        if st.button(
+            "🔄 Actualizar",
+            key="refresh_comprar",
+            use_container_width=True,
+            help="Refresca datos desde Sheets y resetea los selectores de unidad a KG.",
+        ):
             st.cache_data.clear()
+            # Resetear todos los selectores de unidad a su default (KG)
+            for k in list(st.session_state.keys()):
+                if isinstance(k, str) and k.startswith("unidad_comprar_"):
+                    del st.session_state[k]
             st.rerun()
 
     col_fc1, col_fc2, col_fc3 = st.columns(3)
@@ -1028,11 +1037,14 @@ with tab_comprar:
                         else 0
                     )
                     key_sufijo = "-".join(sorted(comp))
+                    # Incluir las 3 fechas en el key: cuando cambian, el selector
+                    # se "olvida" lo seleccionado y vuelve al default (KG).
+                    fechas_key = f"{fecha_entrega}_{fecha_stock_sel}_{fecha_estimado_sel}"
                     unidad_destino = col_u.selectbox(
                         "Unidad",
                         unidades_comp,
                         index=idx_default,
-                        key=f"unidad_comprar_{base}_{key_sufijo}",
+                        key=f"unidad_comprar_{base}_{key_sufijo}_{fechas_key}",
                         label_visibility="collapsed",
                     )
                     codigo_destino = str(
