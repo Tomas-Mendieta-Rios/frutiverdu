@@ -1122,8 +1122,6 @@ with tab_comprar:
                     filas_dux.append({
                         "Nro": str(nro or ""),
                         "Cliente": extraer_cliente_dux(o),
-                        "Estado": o.get("estado_facturacion") or "",
-                        "Ítems": len(extraer_items_dux(o)),
                     })
                 st.dataframe(
                     pd.DataFrame(filas_dux),
@@ -1143,7 +1141,6 @@ with tab_comprar:
                     filas_wix.append({
                         "Nro": str(nro),
                         "Cliente": nombre_w,
-                        "Ítems": len(o.get("lineItems", [])),
                     })
                 st.dataframe(
                     pd.DataFrame(filas_wix),
