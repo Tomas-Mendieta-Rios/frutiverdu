@@ -891,16 +891,14 @@ with tab_comprar:
 
     # Avisos si la fecha elegida no tiene datos cargados (usa fallback silencioso)
     if str(fecha_stock_sel) not in (fechas_stock_disp or []):
-        ultima_stk = fechas_stock_disp[0] if fechas_stock_disp else "ninguna"
         st.warning(
             f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
-            f"Se está usando la última fecha disponible: **{ultima_stk}**."
+            f"Se va a usar **0 para todos los productos**."
         )
     if str(fecha_estimado_sel) not in (fechas_est_disp or []):
-        ultima_est = fechas_est_disp[0] if fechas_est_disp else "ninguna"
         st.warning(
             f"⚠️ No hay estimado cargado para el {fecha_estimado_sel}. "
-            f"Se está usando la última fecha disponible: **{ultima_est}**."
+            f"Se va a usar **0 para todos los productos**."
         )
 
     pedidos_actual = cargar_pedidos_dux_aggregated(
