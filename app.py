@@ -1,40 +1,17 @@
-import json
 import re
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import requests
 import streamlit as st
 import pandas as pd
-from pathlib import Path
 
 import gsheets_db as db
 
 DUX_RATE_LIMIT_SECONDS = 5.5
 
-# Archivos LOCALES (regenerables via sync) — solo guardan orders crudas, las
-# selecciones viven en Sheets.
-PEDIDOS_DUX_JSON = Path("pedidos_dux.json")
-WIX_PEDIDOS_JSON = Path("wix_pedidos.json")
-
-# Path constants — antes apuntaban a CSVs locales. Ahora son placeholders
-# para que las referencias `XXX_CSV.exists()` o `ultima_sync(XXX_CSV)` no
-# rompan; toda la I/O real va por Sheets.
-PRODUCTOS_CSV = Path("_unused_productos.csv")
-COMPUESTOS_CSV = Path("_unused_compuestos.csv")
-STOCK_CSV = Path("_unused_stock.csv")
-ESTIMADO_CSV = Path("_unused_estimado.csv")
-WIX_PRODUCTOS_CSV = Path("_unused_wix_productos.csv")
-MAPPING_WIX_DUX_CSV = Path("_unused_mapping.csv")
-PACKS_WIX_CSV = Path("_unused_packs.csv")
 
 
-def ultima_sync(path):
-    if not path.exists():
-        return None
-    return datetime.fromtimestamp(path.stat().st_mtime).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
 
 
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
@@ -162,16 +139,7 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
     """Agrega pedidos DUX + Wix (filtrados por fecha_compra vía selecciones)
     + estimado de la fecha indicada (default: última)."""
     cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
-    if not PEDIDOS_DUX_JSON.exists():
-        df_agg = pd.DataFrame(columns=["codigo", "producto", "cantidad"])
-        all_orders = []
-    else:
-        try:
-            with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-        except Exception:
-            saved = {"orders": []}
-        all_orders = saved.get("orders", [])
+    all_orders = db.cargar_pedidos_dux()
 
     selecciones_dux = db.cargar_selecciones("dux")
 
@@ -202,11 +170,9 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
         ].sum()
 
     # Sumar pedidos de Wix con fecha de entrega = fecha_compra
-    if fecha_compra is not None and WIX_PEDIDOS_JSON.exists():
+    if fecha_compra is not None:
+        wix_orders = db.cargar_pedidos_wix()
         try:
-            with open(WIX_PEDIDOS_JSON, "r", encoding="utf-8") as f:
-                wix_saved_full = json.load(f)
-            wix_orders = wix_saved_full.get("orders", [])
             wix_sel = db.cargar_selecciones("wix")
             fecha_str = str(fecha_compra)
             wix_filtrados = [
@@ -817,8 +783,8 @@ with tab_stock:
 with tab_comprar:
     col_ts, col_refresh = st.columns([5, 1])
     with col_ts:
-        ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
-        ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
+        ts_ped = db.ultima_carga("pedidos_dux")
+        ts_wix = db.ultima_carga("pedidos_wix")
         ts_stk = db.ultima_carga("stock")
         ts_est = db.ultima_carga("estimado")
         st.caption(
@@ -1356,13 +1322,10 @@ with tab_dux:
                 fecha_hasta_default = pd.to_datetime(config_app["dux_fecha_hasta"]).date()
             except Exception:
                 pass
-        if PEDIDOS_DUX_JSON.exists():
-            try:
-                with open(PEDIDOS_DUX_JSON, "r", encoding="utf-8") as f:
-                    saved = json.load(f)
-                all_orders_saved = saved.get("orders", [])
-            except Exception as e:
-                st.error(f"No se pudo leer pedidos_dux.json: {e}")
+        try:
+            all_orders_saved = db.cargar_pedidos_dux()
+        except Exception as e:
+            st.error(f"No se pudo leer pedidos DUX desde Sheets: {e}")
 
         col_d1, col_d2 = st.columns(2)
         with col_d1:
@@ -1448,20 +1411,9 @@ with tab_dux:
 
             if not error_corte:
                 try:
-                    with open(PEDIDOS_DUX_JSON, "w", encoding="utf-8") as f:
-                        json.dump(
-                            {
-                                "fecha_desde": str(fecha_desde),
-                                "fecha_hasta": str(fecha_hasta),
-                                "orders": all_orders,
-                                "selecciones": selecciones_dux,
-                            },
-                            f,
-                            ensure_ascii=False,
-                            indent=2,
-                        )
+                    db.guardar_pedidos_dux(all_orders)
                 except Exception as e:
-                    st.error(f"No se pudo guardar pedidos_dux.json: {e}")
+                    st.error(f"No se pudieron guardar los pedidos DUX en Sheets: {e}")
 
                 # Persistir rango en Sheets (config) para que sobreviva reinicios
                 try:
@@ -1485,7 +1437,7 @@ with tab_dux:
         st.divider()
 
         if all_orders_saved:
-            ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
+            ts_ped = db.ultima_carga("pedidos_dux")
             n_asignados = sum(1 for v in selecciones_dux.values() if v)
             st.caption(
                 f"📅 Rango: {fecha_desde_default} → {fecha_hasta_default} · "
@@ -1749,16 +1701,13 @@ with tab_wix:
             "Falta configurar las credenciales de Wix en `.streamlit/secrets.toml`."
         )
     else:
-        wix_saved = {"orders": [], "selecciones": {}, "fecha_desde": None, "fecha_hasta": None}
-        if WIX_PEDIDOS_JSON.exists():
-            try:
-                with open(WIX_PEDIDOS_JSON, "r", encoding="utf-8") as f:
-                    wix_saved = json.load(f)
-            except Exception as e:
-                st.error(f"No se pudo leer wix_pedidos.json: {e}")
+        try:
+            wix_orders_saved = db.cargar_pedidos_wix()
+        except Exception as e:
+            st.error(f"No se pudieron leer pedidos Wix desde Sheets: {e}")
+            wix_orders_saved = []
 
         config_app_wix = db.cargar_config()
-        # Rango: primero Sheets config, después JSON local, después default
         fecha_desde_default = date.today() - timedelta(days=3)
         fecha_hasta_default = date.today()
         if config_app_wix.get("wix_fecha_desde"):
@@ -1766,19 +1715,9 @@ with tab_wix:
                 fecha_desde_default = pd.to_datetime(config_app_wix["wix_fecha_desde"]).date()
             except Exception:
                 pass
-        elif wix_saved.get("fecha_desde"):
-            try:
-                fecha_desde_default = pd.to_datetime(wix_saved["fecha_desde"]).date()
-            except Exception:
-                pass
         if config_app_wix.get("wix_fecha_hasta"):
             try:
                 fecha_hasta_default = pd.to_datetime(config_app_wix["wix_fecha_hasta"]).date()
-            except Exception:
-                pass
-        elif wix_saved.get("fecha_hasta"):
-            try:
-                fecha_hasta_default = pd.to_datetime(wix_saved["fecha_hasta"]).date()
             except Exception:
                 pass
 
@@ -1844,22 +1783,10 @@ with tab_wix:
                     if data is not None:
                         orders = data.get("orders", [])
                         try:
-                            with open(WIX_PEDIDOS_JSON, "w", encoding="utf-8") as f:
-                                json.dump(
-                                    {
-                                        "fecha_desde": str(wix_desde),
-                                        "fecha_hasta": str(wix_hasta),
-                                        "orders": orders,
-                                        "selecciones": wix_saved.get("selecciones", {}),
-                                    },
-                                    f,
-                                    ensure_ascii=False,
-                                    indent=2,
-                                )
+                            db.guardar_pedidos_wix(orders)
                         except Exception as e:
-                            st.error(f"No se pudo guardar wix_pedidos.json: {e}")
+                            st.error(f"No se pudieron guardar pedidos Wix en Sheets: {e}")
 
-                        # Persistir rango en Sheets (config)
                         try:
                             db.guardar_config(
                                 {
@@ -1870,18 +1797,18 @@ with tab_wix:
                         except Exception:
                             pass
 
-                        wix_saved["orders"] = orders
+                        wix_orders_saved = orders
                         st.success(f"✅ {len(orders)} pedidos guardados.")
 
         st.divider()
 
-        orders_saved = wix_saved.get("orders", []) or []
+        orders_saved = wix_orders_saved or []
         selecciones = db.cargar_selecciones("wix")
 
         if not orders_saved:
             st.warning("Todavía no hay pedidos. Apretá **Sincronizar**.")
         else:
-            ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
+            ts_wix = db.ultima_carga("pedidos_wix")
             st.caption(
                 f"{len(orders_saved)} pedidos · 🕒 última sync: **{ts_wix or '?'}** · "
                 f"{len(selecciones)} con entrega asignada."
@@ -2241,11 +2168,9 @@ with tab_mapeo:
                 key="solo_sin_mapear",
             )
 
-        ts_map = ultima_sync(MAPPING_WIX_DUX_CSV)
         mapeados = sum(1 for v in mapping_actual.values() if v)
         st.caption(
-            f"{mapeados} / {len(df_wix_p)} productos mapeados · "
-            f"🕒 última edición: **{ts_map or '?'}**"
+            f"{mapeados} / {len(df_wix_p)} productos mapeados"
         )
 
         with st.form(key="form_mapeo_wix_dux", clear_on_submit=False):

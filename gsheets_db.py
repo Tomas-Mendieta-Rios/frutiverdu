@@ -13,6 +13,8 @@ Tablas (cada una es una pestaña del Sheet):
   - selecciones_wix          : order_id, fecha_entrega
 """
 
+import json as _json
+
 import pandas as pd
 import streamlit as st
 import gspread
@@ -58,6 +60,8 @@ SCHEMA = {
     ],
     "selecciones_dux": ["order_id", "fecha_entrega"],
     "selecciones_wix": ["order_id", "fecha_entrega"],
+    "pedidos_dux": ["order_id", "fecha", "json"],
+    "pedidos_wix": ["order_id", "fecha", "json"],
     "config": ["key", "value"],
 }
 
@@ -365,6 +369,62 @@ def guardar_selecciones(fuente, selecciones):
     ]
     df = pd.DataFrame(rows, columns=SCHEMA[nombre])
     escribir_tabla(nombre, df)
+
+
+# ---------------- PEDIDOS (DUX y WIX) ----------------
+
+def _cargar_pedidos(fuente):
+    """fuente: 'dux' o 'wix'. Devuelve lista de dicts (cada uno es un pedido)."""
+    nombre = f"pedidos_{fuente}"
+    df = leer_tabla(nombre)
+    if df.empty or "json" not in df.columns:
+        return []
+    pedidos = []
+    for raw in df["json"].astype(str):
+        if not raw or raw == "<NA>":
+            continue
+        try:
+            pedidos.append(_json.loads(raw))
+        except Exception:
+            continue
+    return pedidos
+
+
+def _guardar_pedidos(fuente, pedidos, fecha_field_candidates):
+    """fuente: 'dux' o 'wix'. pedidos: lista de dicts. Persiste cada uno como fila."""
+    nombre = f"pedidos_{fuente}"
+    rows = []
+    for p in pedidos:
+        oid = str(p.get("id") or p.get("nro_pedido") or p.get("nroPedido") or "")
+        fecha = ""
+        for k in fecha_field_candidates:
+            if p.get(k):
+                fecha = str(p.get(k))
+                break
+        rows.append({
+            "order_id": oid,
+            "fecha": fecha,
+            "json": _json.dumps(p, ensure_ascii=False),
+        })
+    df = pd.DataFrame(rows, columns=SCHEMA[nombre])
+    escribir_tabla(nombre, df)
+    _marcar_modificacion(f"pedidos_{fuente}")
+
+
+def cargar_pedidos_dux():
+    return _cargar_pedidos("dux")
+
+
+def guardar_pedidos_dux(pedidos):
+    _guardar_pedidos("dux", pedidos, ["fecha", "fecha_pedido", "fechaPedido"])
+
+
+def cargar_pedidos_wix():
+    return _cargar_pedidos("wix")
+
+
+def guardar_pedidos_wix(pedidos):
+    _guardar_pedidos("wix", pedidos, ["createdDate", "created_date"])
 
 
 # ---------------- CONFIG (key/value para preferencias) ----------------
