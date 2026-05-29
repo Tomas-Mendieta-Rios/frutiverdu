@@ -735,6 +735,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
     tab_packs,
     tab_dux_productos,
     tab_wix_productos,
+    tab_proveedores,
     tab_editar,
     tab_probar,
 ) = st.tabs(
@@ -748,6 +749,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
         "🎁 Packs Wix",
         "📡 DUX Productos",
         "🛍️ Wix Productos",
+        "👥 Proveedores",
         "⚙️ Relacionar productos",
         "🧪 Probar conversión",
     ]
@@ -2267,6 +2269,165 @@ with tab_wix_productos:
 
     ts_wix_prod = db.ultima_carga("wix_productos")
     ts_wix_prod_ph.caption(f"🕒 Última actualización: **{ts_wix_prod or '?'}**")
+
+with tab_proveedores:
+    ts_prov_ph = st.empty()
+
+    dux_cfg_p = st.secrets.get("dux", {})
+    token_p = dux_cfg_p.get("token", "")
+    base_url_p = dux_cfg_p.get(
+        "base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services"
+    )
+
+    if not token_p:
+        st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
+    else:
+        sincronizar_prov = st.button(
+            "🔄 Sincronizar proveedores desde DUX",
+            type="primary",
+            key="sync_proveedores",
+        )
+
+        if sincronizar_prov:
+            url_prov = f"{base_url_p}/proveedores"
+            headers_prov = {"accept": "application/json", "authorization": token_p}
+            page_offset = 0
+            page_size = 50
+            all_prov = []
+            error_corte = False
+
+            with st.spinner("Trayendo proveedores desde DUX..."):
+                while True:
+                    params_prov = {
+                        "idEmpresa": int(dux_cfg_p.get("id_empresa", 4245)),
+                        "offset": page_offset,
+                        "limit": page_size,
+                    }
+                    try:
+                        r = requests.get(
+                            url_prov,
+                            params=params_prov,
+                            headers=headers_prov,
+                            timeout=30,
+                        )
+                    except requests.RequestException as e:
+                        st.error(msg_error_red("DUX", e))
+                        error_corte = True
+                        break
+
+                    if r.status_code != 200:
+                        st.error(msg_error_http("DUX", r.status_code, r.text))
+                        error_corte = True
+                        break
+
+                    try:
+                        d = r.json()
+                    except ValueError:
+                        st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
+                        error_corte = True
+                        break
+
+                    if isinstance(d, dict) and "message" in d and "results" not in d:
+                        st.error(f"❌ DUX dice: {d['message']}.")
+                        error_corte = True
+                        break
+
+                    if isinstance(d, dict) and "results" in d:
+                        page = d["results"]
+                    elif isinstance(d, list):
+                        page = d
+                    else:
+                        page = []
+
+                    if not page:
+                        break
+
+                    all_prov.extend(page)
+                    if len(page) < page_size:
+                        break
+                    page_offset += page_size
+                    time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+            if not error_corte and all_prov:
+                # Aplanar campos comunes del proveedor (con fallbacks de nombres)
+                filas = []
+                for p in all_prov:
+                    if not isinstance(p, dict):
+                        continue
+                    filas.append({
+                        "proveedor_id": str(
+                            _dux_get_first(p, ["id", "id_proveedor", "idProveedor"]) or ""
+                        ),
+                        "razon_social": str(
+                            _dux_get_first(p, ["razon_social", "razonSocial", "nombre",
+                                               "apellido_razon_social"]) or ""
+                        ),
+                        "cuit": str(
+                            _dux_get_first(p, ["cuit", "numero_documento", "numeroDocumento",
+                                               "cuit_cuil"]) or ""
+                        ),
+                        "telefono": str(
+                            _dux_get_first(p, ["telefono", "telefono_movil", "tel",
+                                               "telefonoMovil"]) or ""
+                        ),
+                        "email": str(
+                            _dux_get_first(p, ["email", "mail", "correo"]) or ""
+                        ),
+                        "domicilio": str(
+                            _dux_get_first(p, ["domicilio", "direccion", "calle"]) or ""
+                        ),
+                    })
+                df_prov = pd.DataFrame(
+                    filas,
+                    columns=["proveedor_id", "razon_social", "cuit",
+                             "telefono", "email", "domicilio"],
+                )
+                try:
+                    db.guardar_proveedores(df_prov)
+                    st.success(f"✅ {len(df_prov)} proveedores guardados en Sheets.")
+                except Exception as e:
+                    st.error(msg_error_sheets("guardar proveedores", e))
+
+        st.divider()
+        try:
+            df_prov_csv = db.cargar_proveedores()
+            if not df_prov_csv.empty:
+                buscar_prov = st.text_input(
+                    "🔎 Buscar proveedor",
+                    key="buscar_proveedores",
+                    placeholder="Filtra por razón social, CUIT o teléfono...",
+                )
+                df_prov_show = df_prov_csv.copy()
+                if buscar_prov:
+                    q = buscar_prov.lower()
+                    mask = (
+                        df_prov_show["razon_social"].astype(str).str.lower().str.contains(q, na=False)
+                        | df_prov_show["cuit"].astype(str).str.lower().str.contains(q, na=False)
+                        | df_prov_show["telefono"].astype(str).str.lower().str.contains(q, na=False)
+                    )
+                    df_prov_show = df_prov_show[mask].reset_index(drop=True)
+                st.caption(f"{len(df_prov_show)} de {len(df_prov_csv)} proveedores.")
+                st.dataframe(
+                    df_prov_show[["proveedor_id", "razon_social", "cuit",
+                                  "telefono", "email", "domicilio"]],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "proveedor_id": st.column_config.TextColumn("ID"),
+                        "razon_social": st.column_config.TextColumn("Razón social"),
+                        "cuit": st.column_config.TextColumn("CUIT"),
+                        "telefono": st.column_config.TextColumn("Teléfono"),
+                        "email": st.column_config.TextColumn("Email"),
+                        "domicilio": st.column_config.TextColumn("Domicilio"),
+                    },
+                )
+            else:
+                st.warning("Todavía no hay proveedores. Apretá **Sincronizar**.")
+        except Exception as e:
+            st.error(msg_error_sheets("leer proveedores", e))
+
+    ts_prov = db.ultima_carga("proveedores")
+    ts_prov_ph.caption(f"🕒 Última actualización: **{ts_prov or '?'}**")
 
 with tab_mapeo:
     st.info(

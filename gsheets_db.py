@@ -62,6 +62,14 @@ SCHEMA = {
     "selecciones_wix": ["order_id", "fecha_entrega"],
     "pedidos_dux": ["order_id", "fecha", "json"],
     "pedidos_wix": ["order_id", "fecha", "json"],
+    "proveedores": [
+        "proveedor_id",
+        "razon_social",
+        "cuit",
+        "telefono",
+        "email",
+        "domicilio",
+    ],
     "config": ["key", "value"],
 }
 
@@ -432,6 +440,20 @@ def cargar_pedidos_wix():
 
 def guardar_pedidos_wix(pedidos):
     _guardar_pedidos("wix", pedidos, ["createdDate", "created_date"])
+
+
+# ---------------- PROVEEDORES ----------------
+
+def cargar_proveedores():
+    df = leer_tabla("proveedores")
+    if not df.empty and "proveedor_id" in df.columns:
+        df["proveedor_id"] = df["proveedor_id"].astype(str)
+    return df
+
+
+def guardar_proveedores(df):
+    escribir_tabla("proveedores", df)
+    _marcar_modificacion("proveedores")
 
 
 # ---------------- CONFIG (key/value para preferencias) ----------------
