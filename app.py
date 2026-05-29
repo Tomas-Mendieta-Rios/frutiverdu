@@ -973,7 +973,7 @@ with tab_comprar:
     grafo = construir_grafo_conversion(compuestos)
 
     prod_temp = productos.copy()
-    partes_pr = prod_temp["producto"].str.rsplit(" - ", n=1, expand=True)
+    partes_pr = prod_temp["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
     prod_temp["base"] = partes_pr[0].str.strip()
     prod_temp["unidad"] = (
         partes_pr[1].fillna("").str.strip()
@@ -986,14 +986,14 @@ with tab_comprar:
     if "estimado" not in ped.columns:
         ped["estimado"] = 0.0
     ped["estimado"] = ped["estimado"].fillna(0).astype(float)
-    partes_ped = ped["producto"].str.rsplit(" - ", n=1, expand=True)
-    ped["base"] = partes_ped[0].str.strip()
+    partes_ped = ped["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+    ped["base"] = partes_ped[0].str.strip() if not partes_ped.empty else ""
 
     if stock_actual is not None and not stock_actual.empty:
         stk = stock_actual.dropna(subset=["producto"]).copy()
         stk["cantidad"] = stk["cantidad"].fillna(0)
-        partes_stk = stk["producto"].str.rsplit(" - ", n=1, expand=True)
-        stk["base"] = partes_stk[0].str.strip()
+        partes_stk = stk["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+        stk["base"] = partes_stk[0].str.strip() if not partes_stk.empty else ""
     else:
         stk = pd.DataFrame(
             columns=["codigo", "producto", "unidad_medida", "cantidad", "base"]
