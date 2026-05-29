@@ -57,7 +57,7 @@ EXCEPCIONES = {
     ("096", "097"),
 }
 
-st.title("🍎 Frutiverdu ")
+st.title("Frutiverdu")
 
 st.markdown(
     """
