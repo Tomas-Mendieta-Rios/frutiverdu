@@ -85,6 +85,17 @@ SCHEMA = {
         "tipo_comprobante",
         "habilitado",
     ],
+    "compras": [
+        "fecha",
+        "proveedor_id",
+        "proveedor_nombre",
+        "codigo_producto",
+        "producto_nombre",
+        "cantidad",
+        "precio",
+        "comprobante",
+        "tipo_comprobante",
+    ],
     "config": ["key", "value"],
 }
 
@@ -469,6 +480,43 @@ def cargar_proveedores():
 def guardar_proveedores(df):
     escribir_tabla("proveedores", df)
     _marcar_modificacion("proveedores")
+
+
+# ---------------- COMPRAS ----------------
+
+def cargar_compras():
+    df = leer_tabla("compras")
+    if df.empty:
+        return df
+    df["fecha"] = df["fecha"].astype(str)
+    df["proveedor_id"] = df["proveedor_id"].astype(str)
+    df["codigo_producto"] = df["codigo_producto"].astype(str)
+    df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce").fillna(0)
+    df["precio"] = pd.to_numeric(df["precio"], errors="coerce").fillna(0)
+    return df
+
+
+def guardar_compras_fecha(df_fecha, fecha):
+    """Reemplaza las compras de una fecha. df_fecha debe tener las columnas del schema (sin fecha)."""
+    full = cargar_compras()
+    if not full.empty and "fecha" in full.columns:
+        otros = full[full["fecha"] != str(fecha)]
+    else:
+        otros = pd.DataFrame(columns=SCHEMA["compras"])
+    nuevo = df_fecha.copy()
+    nuevo["fecha"] = str(fecha)
+    combinado = pd.concat(
+        [otros, nuevo[SCHEMA["compras"]]], ignore_index=True
+    )
+    escribir_tabla("compras", combinado)
+    _marcar_modificacion("compras")
+
+
+def fechas_compras():
+    df = cargar_compras()
+    if df.empty:
+        return []
+    return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
 
 
 # ---------------- CONFIG (key/value para preferencias) ----------------

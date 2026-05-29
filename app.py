@@ -1,4 +1,5 @@
 import hashlib
+import io
 import re
 import time
 from datetime import date, timedelta
@@ -736,6 +737,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
     tab_dux_productos,
     tab_wix_productos,
     tab_proveedores,
+    tab_compras,
     tab_editar,
     tab_probar,
 ) = st.tabs(
@@ -750,6 +752,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
         "📡 DUX Productos",
         "🛍️ Wix Productos",
         "👥 Proveedores",
+        "💰 Compras",
         "⚙️ Relacionar productos",
         "🧪 Probar conversión",
     ]
@@ -2433,6 +2436,248 @@ with tab_proveedores:
 
     ts_prov = db.ultima_carga("proveedores")
     ts_prov_ph.caption(f"🕒 Última actualización: **{ts_prov or '?'}**")
+
+with tab_compras:
+    ts_compras_ph = st.empty()
+
+    # Defaults DUX para campos no editables
+    DEFAULTS_DUX_COMPRA = {
+        "CONDICION PAGO": "CONTADO",
+        "REALIZA RECEPCION": "S",
+        "DEPOSITO": "",
+        "OBSERVACIONES": "",
+        "TALLE": "",
+        "COLOR": "",
+        "PRECIO INCLUYE IVA": "N",
+        "PORCENTAJE DESCUENTO": 0,
+        "PORCENTAJE IVA": 21,
+        "COMENTARIOS": "",
+        "NUMERO IDENTIFICACION": "",
+        "DESCRIPCION TRAZABILIDAD": "",
+        "PERCEPCIONES": "",
+        "VALORES PERCEPCION": "",
+    }
+    COLUMNAS_DUX = [
+        "COMPROBANTE", "TIPO COMPROBANTE", "ID PROVEEDOR", "FECHA",
+        "FECHA IMPUTACION CC", "FECHA VENCIMIENTO", "CONDICION PAGO",
+        "REALIZA RECEPCION", "DEPOSITO", "OBSERVACIONES", "CÓDIGO PRODUCTO",
+        "TALLE", "COLOR", "CANTIDAD", "PRECIO", "PRECIO INCLUYE IVA",
+        "PORCENTAJE DESCUENTO", "PORCENTAJE IVA", "COMENTARIOS",
+        "NUMERO IDENTIFICACION", "DESCRIPCION TRAZABILIDAD",
+        "PERCEPCIONES", "VALORES PERCEPCION",
+    ]
+
+    df_prov_data = db.cargar_proveedores()
+    df_prods_data = db.cargar_productos()
+
+    if df_prov_data.empty:
+        st.warning("Primero cargá proveedores en 👥 Proveedores.")
+    elif df_prods_data.empty:
+        st.warning("Primero sincronizá productos en 📡 DUX Productos.")
+    else:
+        fechas_comp = db.fechas_compras()
+        fecha_compra_default = (
+            pd.to_datetime(fechas_comp[0]).date() if fechas_comp else date.today()
+        )
+        fecha_compra_sel = st.date_input(
+            "Fecha de compra",
+            value=fecha_compra_default,
+            key="compras_fecha",
+            format="YYYY-MM-DD",
+        )
+
+        # Opciones para los selectbox
+        opciones_prov = [
+            f"{pid} - {nom}"
+            for pid, nom in zip(
+                df_prov_data["proveedor_id"].astype(str),
+                df_prov_data["proveedor"].astype(str),
+            )
+        ]
+        prov_label_to_id = {
+            f"{pid} - {nom}": (pid, nom)
+            for pid, nom in zip(
+                df_prov_data["proveedor_id"].astype(str),
+                df_prov_data["proveedor"].astype(str),
+            )
+        }
+
+        opciones_prod = [
+            f"{cod} - {prod}"
+            for cod, prod in zip(
+                df_prods_data["codigo"].astype(str),
+                df_prods_data["producto"].astype(str),
+            )
+        ]
+        prod_label_to_codigo = {
+            f"{cod} - {prod}": (cod, prod)
+            for cod, prod in zip(
+                df_prods_data["codigo"].astype(str),
+                df_prods_data["producto"].astype(str),
+            )
+        }
+
+        # Cargar compras existentes para esta fecha
+        df_compras_all = db.cargar_compras()
+        if not df_compras_all.empty:
+            df_compras_fecha = df_compras_all[
+                df_compras_all["fecha"] == str(fecha_compra_sel)
+            ].reset_index(drop=True)
+        else:
+            df_compras_fecha = pd.DataFrame(columns=db.SCHEMA["compras"])
+
+        # Armar vista editable (con labels concatenados para los selectbox)
+        if not df_compras_fecha.empty:
+            view_rows = []
+            for _, r in df_compras_fecha.iterrows():
+                prov_label = f"{r['proveedor_id']} - {r.get('proveedor_nombre', '')}"
+                prod_label = f"{r['codigo_producto']} - {r.get('producto_nombre', '')}"
+                view_rows.append({
+                    "Proveedor": prov_label if prov_label in opciones_prov else "",
+                    "Producto": prod_label if prod_label in opciones_prod else "",
+                    "Cantidad": float(r.get("cantidad", 0) or 0),
+                    "Precio Unit.": float(r.get("precio", 0) or 0),
+                    "Comprobante": str(r.get("comprobante", "")),
+                    "Tipo Comprob.": str(r.get("tipo_comprobante", "") or "FACTURA A"),
+                })
+            df_view = pd.DataFrame(view_rows)
+        else:
+            df_view = pd.DataFrame({
+                "Proveedor": pd.Series(dtype=str),
+                "Producto": pd.Series(dtype=str),
+                "Cantidad": pd.Series(dtype=float),
+                "Precio Unit.": pd.Series(dtype=float),
+                "Comprobante": pd.Series(dtype=str),
+                "Tipo Comprob.": pd.Series(dtype=str),
+            })
+
+        with st.form(f"form_compras_{fecha_compra_sel}", clear_on_submit=False, border=False):
+            guardar_c = st.form_submit_button(
+                "💾 Guardar compras del día", type="primary"
+            )
+
+            edited_compras = st.data_editor(
+                df_view,
+                use_container_width=True,
+                num_rows="dynamic",
+                column_config={
+                    "Proveedor": st.column_config.SelectboxColumn(
+                        "Proveedor",
+                        options=opciones_prov,
+                        required=True,
+                    ),
+                    "Producto": st.column_config.SelectboxColumn(
+                        "Producto",
+                        options=opciones_prod,
+                        required=True,
+                    ),
+                    "Cantidad": st.column_config.NumberColumn(
+                        "Cantidad", min_value=0.0, step=1.0, format="%.3f",
+                    ),
+                    "Precio Unit.": st.column_config.NumberColumn(
+                        "Precio Unit.", min_value=0.0, step=0.01, format="%.2f",
+                    ),
+                    "Comprobante": st.column_config.TextColumn(
+                        "Comprobante",
+                        help="Ej: 0001-00000123. Si lo dejás vacío, DUX lo asigna al importar.",
+                    ),
+                    "Tipo Comprob.": st.column_config.SelectboxColumn(
+                        "Tipo Comprob.",
+                        options=["FACTURA A", "FACTURA B", "FACTURA C", "REMITO", "FACTURA M"],
+                    ),
+                },
+                key=f"editor_compras_{fecha_compra_sel}",
+            )
+
+        if guardar_c:
+            # Convertir back al schema
+            rows_save = []
+            for _, r in edited_compras.iterrows():
+                prov_label = r.get("Proveedor")
+                prod_label = r.get("Producto")
+                if not prov_label or not prod_label:
+                    continue
+                if prov_label not in prov_label_to_id or prod_label not in prod_label_to_codigo:
+                    continue
+                pid, pnom = prov_label_to_id[prov_label]
+                pcod, ppnom = prod_label_to_codigo[prod_label]
+                try:
+                    cant = float(r.get("Cantidad") or 0)
+                    precio = float(r.get("Precio Unit.") or 0)
+                except (ValueError, TypeError):
+                    cant, precio = 0.0, 0.0
+                rows_save.append({
+                    "fecha": str(fecha_compra_sel),
+                    "proveedor_id": str(pid),
+                    "proveedor_nombre": str(pnom),
+                    "codigo_producto": str(pcod),
+                    "producto_nombre": str(ppnom),
+                    "cantidad": cant,
+                    "precio": precio,
+                    "comprobante": str(r.get("Comprobante") or ""),
+                    "tipo_comprobante": str(r.get("Tipo Comprob.") or "FACTURA A"),
+                })
+            df_save = pd.DataFrame(rows_save, columns=db.SCHEMA["compras"])
+            try:
+                db.guardar_compras_fecha(df_save, fecha_compra_sel)
+                st.success(f"✅ {len(df_save)} líneas guardadas para el {fecha_compra_sel}.")
+            except Exception as e:
+                st.error(msg_error_sheets("guardar compras", e))
+
+        # Botón de descargar Excel DUX
+        # Releemos lo guardado (post-save) para que la descarga refleje el estado actual
+        df_compras_all_post = db.cargar_compras()
+        if not df_compras_all_post.empty:
+            df_compras_fecha_post = df_compras_all_post[
+                df_compras_all_post["fecha"] == str(fecha_compra_sel)
+            ].reset_index(drop=True)
+        else:
+            df_compras_fecha_post = pd.DataFrame()
+
+        if not df_compras_fecha_post.empty:
+            fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d/%m/%Y")
+            excel_rows = []
+            for _, r in df_compras_fecha_post.iterrows():
+                fila = {
+                    "COMPROBANTE": r.get("comprobante", "") or "",
+                    "TIPO COMPROBANTE": r.get("tipo_comprobante", "FACTURA A") or "FACTURA A",
+                    "ID PROVEEDOR": r.get("proveedor_id", "") or "",
+                    "FECHA": fecha_str_dux,
+                    "FECHA IMPUTACION CC": fecha_str_dux,
+                    "FECHA VENCIMIENTO": fecha_str_dux,
+                    "CÓDIGO PRODUCTO": r.get("codigo_producto", "") or "",
+                    "CANTIDAD": float(r.get("cantidad", 0) or 0),
+                    "PRECIO": float(r.get("precio", 0) or 0),
+                }
+                for k, v in DEFAULTS_DUX_COMPRA.items():
+                    fila[k] = v
+                excel_rows.append(fila)
+
+            df_excel_dux = pd.DataFrame(excel_rows, columns=COLUMNAS_DUX)
+            buf = io.BytesIO()
+            df_excel_dux.to_excel(buf, index=False, engine="openpyxl")
+            buf.seek(0)
+            st.download_button(
+                "📥 Descargar Excel para DUX",
+                data=buf.getvalue(),
+                file_name=f"compras_dux_{fecha_compra_sel}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+            )
+            with st.expander(f"Ver resumen de la compra ({len(df_compras_fecha_post)} líneas)"):
+                st.dataframe(
+                    df_compras_fecha_post[[
+                        "proveedor_nombre", "codigo_producto", "producto_nombre",
+                        "cantidad", "precio", "comprobante", "tipo_comprobante",
+                    ]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        else:
+            st.caption("Cargá líneas y guardá para poder descargar el Excel DUX.")
+
+    ts_compras = db.ultima_carga("compras")
+    ts_compras_ph.caption(f"🕒 Última actualización: **{ts_compras or '?'}**")
 
 with tab_mapeo:
     st.info(
