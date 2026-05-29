@@ -11,6 +11,40 @@ import gsheets_db as db
 DUX_RATE_LIMIT_SECONDS = 5.5
 
 
+def msg_error_http(fuente, status_code, body=""):
+    """Devuelve un mensaje en castellano para mostrar a quien usa la app."""
+    if status_code in (401, 403):
+        return f"🔑 Las credenciales de {fuente} están vencidas o son inválidas. Avisale a Tomás."
+    if status_code == 429:
+        return f"⏳ {fuente} nos está limitando. Esperá 1 minuto y volvé a intentar."
+    if status_code in (500, 502, 503, 504):
+        return f"🔧 {fuente} está caído o lento. Probá en un rato."
+    if status_code == 404:
+        return f"❓ {fuente} no encontró lo que se pidió. Avisale a Tomás."
+    detalle = (body or "")[:200].strip()
+    return f"❌ Error de {fuente} (código {status_code}). {detalle}"
+
+
+def msg_error_red(fuente, exc):
+    nombre = type(exc).__name__
+    if "Timeout" in nombre:
+        return f"🌐 {fuente} no respondió a tiempo. Probá de nuevo en un rato."
+    if "Connection" in nombre or "DNS" in nombre:
+        return "🌐 No hay conexión a internet (o el servidor está caído). Probá de nuevo."
+    return f"❌ Error de red con {fuente}: {exc}"
+
+
+def msg_error_sheets(accion, exc):
+    """accion = 'leer'/'guardar' + descripcion corta. Ej: 'leer pedidos DUX'."""
+    txt = str(exc)
+    if "429" in txt or "quota" in txt.lower() or "rate" in txt.lower():
+        return "⏳ Google Sheets nos está limitando. Esperá 1 minuto y dale 🔄 Actualizar."
+    if "403" in txt or "permission" in txt.lower():
+        return "🔑 La planilla de Google no nos da permiso. Avisale a Tomás."
+    if "404" in txt or "notfound" in txt.lower().replace(" ", ""):
+        return "❓ No se encuentra la planilla. Avisale a Tomás."
+    return f"❌ No se pudo {accion} en Google Sheets. Avisale a Tomás. ({txt[:150]})"
+
 
 
 
@@ -514,8 +548,9 @@ compuestos_orig = cargar_compuestos()
 # (rompe por columnas faltantes). El usuario debera re-sincronizar.
 if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
     st.error(
-        "⚠️ La tabla `compuestos` del Sheet está vacía o corrupta. "
-        "Re-subí los datos corriendo localmente: `python inicializar_sheets.py`."
+        "⚠️ La tabla `compuestos` de Google Sheets está vacía o corrupta. "
+        "Andá a la pestaña ⚙️ Editar valores y volvé a guardar las relaciones, "
+        "o avisale a Tomás."
     )
     compuestos = pd.DataFrame(
         columns=[
@@ -625,7 +660,7 @@ with tab_editar:
         guardar = st.button("💾 Guardar cambios", type="primary")
 
     with col2:
-        st.caption("Los cambios se guardan en compuestos.csv.")
+        st.caption("Los cambios se guardan en Google Sheets.")
 
     if guardar:
         salida = tabla_editada.copy()
@@ -766,11 +801,18 @@ with tab_stock:
             "💾 Guardar stock", type="primary"
         )
 
-    col_s2, col_s3 = st.columns([1, 4])
+    col_s2, col_s3 = st.columns([2, 3])
     with col_s2:
+        confirmar_cero_s = st.checkbox(
+            "Confirmar borrar TODO el stock",
+            key="confirmar_cero_stock",
+            value=False,
+        )
         cero_s = st.button(
             "🧹 Poner stock a cero",
             key="btn_cero_stock",
+            disabled=not confirmar_cero_s,
+            help="Tenés que tildar la confirmación para habilitar el botón.",
         )
     with col_s3:
         st.caption(f"Guarda para la fecha {fecha_stock}.")
@@ -1232,11 +1274,18 @@ with tab_estimado:
             "💾 Guardar estimado", type="primary"
         )
 
-    col_eb2, col_eb3 = st.columns([1, 4])
+    col_eb2, col_eb3 = st.columns([2, 3])
     with col_eb2:
+        confirmar_cero_est = st.checkbox(
+            "Confirmar borrar TODO el estimado",
+            key="confirmar_cero_estimado",
+            value=False,
+        )
         reset_est = st.button(
             "🧹 Resetear a cero",
             key="btn_reset_estimado",
+            disabled=not confirmar_cero_est,
+            help="Tenés que tildar la confirmación para habilitar el botón.",
         )
     with col_eb3:
         st.caption(f"Guarda para la fecha {fecha_estimado}.")
@@ -1300,7 +1349,7 @@ with tab_dux:
         all_orders_saved = []
         selecciones_dux = db.cargar_selecciones("dux")
         config_app = db.cargar_config()
-        # Rango persistido en Sheets (config); fallback al JSON local; fallback a hoy
+        # Rango persistido en Sheets (config); fallback a hoy
         fecha_desde_default = date.today() - timedelta(days=7)
         fecha_hasta_default = date.today()
         if config_app.get("dux_fecha_desde"):
@@ -1316,7 +1365,7 @@ with tab_dux:
         try:
             all_orders_saved = db.cargar_pedidos_dux()
         except Exception as e:
-            st.error(f"No se pudo leer pedidos DUX desde Sheets: {e}")
+            st.error(msg_error_sheets("leer pedidos DUX", e))
 
         col_d1, col_d2 = st.columns(2)
         with col_d1:
@@ -1363,24 +1412,24 @@ with tab_dux:
                             url_p, params=params_p, headers=headers_p, timeout=30
                         )
                     except requests.RequestException as e:
-                        st.error(f"Error de red: {e}")
+                        st.error(msg_error_red("DUX", e))
                         error_corte = True
                         break
 
                     if r.status_code != 200:
-                        st.error(f"HTTP {r.status_code}: {r.text[:500]}")
+                        st.error(msg_error_http("DUX", r.status_code, r.text))
                         error_corte = True
                         break
 
                     try:
                         d = r.json()
                     except ValueError:
-                        st.error("Respuesta no JSON.")
+                        st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
                         error_corte = True
                         break
 
                     if isinstance(d, dict) and "message" in d and "results" not in d:
-                        st.error(f"DUX respondió: {d['message']}")
+                        st.error(f"❌ DUX dice: {d['message']}. Avisale a Tomás si no se arregla.")
                         error_corte = True
                         break
 
@@ -1404,7 +1453,7 @@ with tab_dux:
                 try:
                     db.guardar_pedidos_dux(all_orders)
                 except Exception as e:
-                    st.error(f"No se pudieron guardar los pedidos DUX en Sheets: {e}")
+                    st.error(msg_error_sheets("guardar pedidos DUX", e))
 
                 # Persistir rango en Sheets (config) para que sobreviva reinicios
                 try:
@@ -1525,7 +1574,7 @@ with tab_dux:
                     )
                     selecciones_dux = nuevas_selecciones_dux
                 except Exception as e:
-                    st.error(f"No se pudo guardar: {e}")
+                    st.error(msg_error_sheets("guardar selecciones DUX", e))
 
         else:
             st.warning(
@@ -1564,19 +1613,19 @@ with tab_dux_productos:
                         url_pr, params=params_pr, headers=headers_pr, timeout=30
                     )
                 except requests.RequestException as e:
-                    st.error(f"Error de red: {e}")
+                    st.error(msg_error_red("DUX", e))
                     error_corte = True
                     break
 
                 if r.status_code != 200:
-                    st.error(f"HTTP {r.status_code}: {r.text[:500]}")
+                    st.error(msg_error_http("DUX", r.status_code, r.text))
                     error_corte = True
                     break
 
                 try:
                     d = r.json()
                 except ValueError:
-                    st.error("Respuesta no JSON.")
+                    st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
                     error_corte = True
                     break
 
@@ -1679,7 +1728,7 @@ with tab_dux_productos:
                     "Todavía no hay productos en Sheets. Apretá **Sincronizar**."
                 )
         except Exception as e:
-            st.error(f"No se pudieron leer productos: {e}")
+            st.error(msg_error_sheets("leer productos", e))
 
 with tab_wix:
     wix_cfg = st.secrets.get("wix", {})
@@ -1695,7 +1744,7 @@ with tab_wix:
         try:
             wix_orders_saved = db.cargar_pedidos_wix()
         except Exception as e:
-            st.error(f"No se pudieron leer pedidos Wix desde Sheets: {e}")
+            st.error(msg_error_sheets("leer pedidos Wix", e))
             wix_orders_saved = []
 
         config_app_wix = db.cargar_config()
@@ -1758,17 +1807,17 @@ with tab_wix:
                 with st.spinner("Consultando Wix..."):
                     resp = requests.post(url, json=body, headers=headers, timeout=30)
             except requests.RequestException as e:
-                st.error(f"Error de red: {e}")
+                st.error(msg_error_red("Wix", e))
                 resp = None
 
             if resp is not None:
                 if resp.status_code != 200:
-                    st.error(f"HTTP {resp.status_code}: {resp.text[:500]}")
+                    st.error(msg_error_http("Wix", resp.status_code, resp.text))
                 else:
                     try:
                         data = resp.json()
                     except ValueError:
-                        st.error("Respuesta no JSON.")
+                        st.error("❌ Wix devolvió una respuesta inválida. Probá de nuevo.")
                         data = None
 
                     if data is not None:
@@ -1776,7 +1825,7 @@ with tab_wix:
                         try:
                             db.guardar_pedidos_wix(orders)
                         except Exception as e:
-                            st.error(f"No se pudieron guardar pedidos Wix en Sheets: {e}")
+                            st.error(msg_error_sheets("guardar pedidos Wix", e))
 
                         try:
                             db.guardar_config(
@@ -1953,7 +2002,7 @@ with tab_wix:
                         f"✅ {len(nuevas_selecciones)} entregas guardadas en Sheets."
                     )
                 except Exception as e:
-                    st.error(f"No se pudo guardar: {e}")
+                    st.error(msg_error_sheets("guardar selecciones Wix", e))
 
 with tab_wix_productos:
 
@@ -1998,19 +2047,19 @@ with tab_wix_productos:
                         url_wp, json=body_wp, headers=headers_wp, timeout=30
                     )
                 except requests.RequestException as e:
-                    st.error(f"Error de red: {e}")
+                    st.error(msg_error_red("Wix", e))
                     error_corte = True
                     break
 
                 if r.status_code != 200:
-                    st.error(f"HTTP {r.status_code}: {r.text[:500]}")
+                    st.error(msg_error_http("Wix", r.status_code, r.text))
                     error_corte = True
                     break
 
                 try:
                     d = r.json()
                 except ValueError:
-                    st.error("Respuesta no JSON.")
+                    st.error("❌ Wix devolvió una respuesta inválida. Probá de nuevo.")
                     error_corte = True
                     break
 
@@ -2091,7 +2140,7 @@ with tab_wix_productos:
             else:
                 st.warning("Todavía no hay productos Wix en Sheets. Apretá **Sincronizar**.")
         except Exception as e:
-            st.error(f"No se pudieron leer wix productos: {e}")
+            st.error(msg_error_sheets("leer productos Wix", e))
 
 with tab_mapeo:
     st.info(
