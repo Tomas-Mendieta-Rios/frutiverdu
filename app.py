@@ -1270,73 +1270,23 @@ with tab_dux:
     id_empresa_default = int(dux_cfg.get("id_empresa", 3455))
     id_sucursal_default = int(dux_cfg.get("id_sucursal", 3))
 
-    def _get_first(d, claves):
-        if not isinstance(d, dict):
-            return None
-        for k in claves:
-            if k in d and d[k] not in (None, ""):
-                return d[k]
-        return None
-
     def _extraer_cliente(orden):
         cliente_obj = orden.get("cliente")
         if isinstance(cliente_obj, dict):
-            nombre = _get_first(
+            nombre = _dux_get_first(
                 cliente_obj,
                 ["razon_social", "nombre", "razonSocial", "nombre_completo"],
             )
             if nombre:
                 return str(nombre)
         return str(
-            _get_first(
+            _dux_get_first(
                 orden,
                 ["cliente", "razon_social", "razonSocial", "nombre_cliente",
                  "apellido_razon_social"],
             )
             or "(sin cliente)"
         )
-
-    def _extraer_items_dux(orden):
-        for f in ["detalles", "items", "productos", "lineas", "renglones", "detalle"]:
-            v = orden.get(f)
-            if isinstance(v, list):
-                return v
-        return []
-
-    def _extraer_item(item):
-        codigo = _get_first(
-            item,
-            ["cod_item", "codItem", "codigo", "codigoItem",
-             "codigoProducto", "cod_producto"],
-        )
-        descr = _get_first(
-            item,
-            ["item", "descripcion", "producto", "detalle", "nombre"],
-        )
-        cant = _get_first(
-            item,
-            [
-                "cantidad", "cant", "qty", "quantity",
-                "cantidad_pedida", "cantidadPedida",
-                "cantidad_solicitada", "cantidadSolicitada",
-                "cant_pedida", "cantPedida",
-                "unidades", "ctd",
-            ],
-        )
-        if cant is None:
-            for k, v in item.items():
-                if isinstance(k, str) and "cant" in k.lower() and isinstance(v, (int, float)):
-                    cant = v
-                    break
-        try:
-            cant = float(cant) if cant is not None else 0.0
-        except (ValueError, TypeError):
-            cant = 0.0
-        return {
-            "codigo": str(codigo) if codigo is not None else "",
-            "producto": descr or "",
-            "cantidad": cant,
-        }
 
     if not token:
         st.error(
@@ -1505,11 +1455,11 @@ with tab_dux:
                 nuevas_selecciones_dux = {}
                 for i, orden in enumerate(all_orders_sorted, start=1):
                     cliente_str = _extraer_cliente(orden)
-                    nro = _get_first(
+                    nro = _dux_get_first(
                         orden,
                         ["nro_pedido", "nroPedido", "numero", "id"],
                     )
-                    items = _extraer_items_dux(orden)
+                    items = extraer_items_dux(orden)
 
                     oid = str(orden.get("id") or nro or i)
                     asignado_prev = selecciones_dux.get(oid)
@@ -1560,7 +1510,7 @@ with tab_dux:
 
                         if items:
                             with st.expander("Ver productos"):
-                                filas = [_extraer_item(it) for it in items]
+                                filas = [extraer_item_dux(it) for it in items]
                                 st.dataframe(
                                     pd.DataFrame(filas),
                                     use_container_width=True,
