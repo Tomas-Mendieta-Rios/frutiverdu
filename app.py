@@ -815,16 +815,22 @@ with tab_stock:
         st.rerun()
 
 with tab_comprar:
-    ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
-    ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
-    ts_stk = db.ultima_carga("stock")
-    ts_est = db.ultima_carga("estimado")
-    st.caption(
-        f"🕒 DUX: **{ts_ped or '?'}** · "
-        f"Wix: **{ts_wix or '?'}** · "
-        f"Stock: **{ts_stk or '?'}** · "
-        f"Estimado: **{ts_est or '?'}**"
-    )
+    col_ts, col_refresh = st.columns([5, 1])
+    with col_ts:
+        ts_ped = ultima_sync(PEDIDOS_DUX_JSON)
+        ts_wix = ultima_sync(WIX_PEDIDOS_JSON)
+        ts_stk = db.ultima_carga("stock")
+        ts_est = db.ultima_carga("estimado")
+        st.caption(
+            f"🕒 DUX: **{ts_ped or '?'}** · "
+            f"Wix: **{ts_wix or '?'}** · "
+            f"Stock: **{ts_stk or '?'}** · "
+            f"Estimado: **{ts_est or '?'}**"
+        )
+    with col_refresh:
+        if st.button("🔄 Actualizar", key="refresh_comprar", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
     col_fc1, col_fc2, col_fc3 = st.columns(3)
     with col_fc1:
