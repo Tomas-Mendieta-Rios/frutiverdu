@@ -50,6 +50,36 @@ def msg_error_sheets(accion, exc):
 
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
 
+# CSS para los tabs: inactivas en azul claro con texto azul oscuro,
+# la activa en gris.
+st.markdown(
+    """
+    <style>
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 4px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #dbeafe !important;
+        color: #1e3a5f !important;
+        border-radius: 6px 6px 0 0 !important;
+        padding: 6px 14px !important;
+        font-weight: 500 !important;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #bfdbfe !important;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #6b7280 !important;
+        color: #ffffff !important;
+    }
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: #6b7280 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 EXCEPCIONES = {
     ("061", "062"),
     ("0256", "0205"),
@@ -1305,27 +1335,30 @@ with tab_dux:
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos DUX", e))
 
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            fecha_desde = st.date_input(
-                "Fecha desde",
-                value=fecha_desde_default,
-                key="dux_fecha_desde",
-                format="YYYY-MM-DD",
-            )
-        with col_d2:
-            fecha_hasta = st.date_input(
-                "Fecha hasta",
-                value=fecha_hasta_default,
-                key="dux_fecha_hasta",
-                format="YYYY-MM-DD",
-            )
-
-        consultar = st.button(
-            "🔄 Sincronizar pedidos desde DUX",
-            type="primary",
-            key="dux_consultar",
-        )
+        # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
+        with st.form("form_dux_sync", clear_on_submit=False, border=False):
+            col_d1, col_d2, col_d3 = st.columns([1, 1, 1])
+            with col_d1:
+                fecha_desde = st.date_input(
+                    "Fecha desde",
+                    value=fecha_desde_default,
+                    key="dux_fecha_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_d2:
+                fecha_hasta = st.date_input(
+                    "Fecha hasta",
+                    value=fecha_hasta_default,
+                    key="dux_fecha_hasta",
+                    format="YYYY-MM-DD",
+                )
+            with col_d3:
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                consultar = st.form_submit_button(
+                    "🔄 Sincronizar pedidos desde DUX",
+                    type="primary",
+                    use_container_width=True,
+                )
 
         if consultar:
             url_p = f"{base_url}/pedidos"
@@ -1699,27 +1732,30 @@ with tab_wix:
             except Exception:
                 pass
 
-        col_w1, col_w2 = st.columns(2)
-        with col_w1:
-            wix_desde = st.date_input(
-                "Fecha desde",
-                value=fecha_desde_default,
-                key="wix_fecha_desde",
-                format="YYYY-MM-DD",
-            )
-        with col_w2:
-            wix_hasta = st.date_input(
-                "Fecha hasta",
-                value=fecha_hasta_default,
-                key="wix_fecha_hasta",
-                format="YYYY-MM-DD",
-            )
-
-        consultar_wix = st.button(
-            "🔄 Sincronizar pedidos desde Wix",
-            type="primary",
-            key="wix_consultar",
-        )
+        # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
+        with st.form("form_wix_sync", clear_on_submit=False, border=False):
+            col_w1, col_w2, col_w3 = st.columns([1, 1, 1])
+            with col_w1:
+                wix_desde = st.date_input(
+                    "Fecha desde",
+                    value=fecha_desde_default,
+                    key="wix_fecha_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_w2:
+                wix_hasta = st.date_input(
+                    "Fecha hasta",
+                    value=fecha_hasta_default,
+                    key="wix_fecha_hasta",
+                    format="YYYY-MM-DD",
+                )
+            with col_w3:
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                consultar_wix = st.form_submit_button(
+                    "🔄 Sincronizar pedidos desde Wix",
+                    type="primary",
+                    use_container_width=True,
+                )
 
         if consultar_wix:
             url = "https://www.wixapis.com/ecom/v1/orders/search"
