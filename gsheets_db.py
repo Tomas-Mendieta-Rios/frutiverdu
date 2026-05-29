@@ -471,8 +471,18 @@ def guardar_pedidos_wix(pedidos):
 
 def cargar_proveedores():
     df = leer_tabla("proveedores")
-    if not df.empty and "proveedor_id" in df.columns:
-        df["proveedor_id"] = df["proveedor_id"].astype(str)
+    if df.empty:
+        return df
+    # Migracion suave: schema viejo (razon_social, cuit) -> nuevo (proveedor, cuit_cuil)
+    if "razon_social" in df.columns and "proveedor" not in df.columns:
+        df = df.rename(columns={"razon_social": "proveedor"})
+    if "cuit" in df.columns and "cuit_cuil" not in df.columns:
+        df = df.rename(columns={"cuit": "cuit_cuil"})
+    # Asegurar todas las columnas del schema (vacias si no existen)
+    for c in SCHEMA["proveedores"]:
+        if c not in df.columns:
+            df[c] = ""
+    df["proveedor_id"] = df["proveedor_id"].astype(str)
     return df
 
 
