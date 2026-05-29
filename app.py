@@ -1,3 +1,4 @@
+import hashlib
 import re
 import time
 from datetime import date, timedelta
@@ -90,7 +91,17 @@ EXCEPCIONES = {
 st.title("Frutiverdu")
 
 # Password gate: si en secrets.toml hay [app] password = "...", la pide al entrar.
+# Despues del primer login, se persiste un token en la URL (?t=...) para que
+# recargas y nuevas pestañas no vuelvan a pedir la contraseña.
 _app_password_esperada = st.secrets.get("app", {}).get("password", "")
+_app_token = (
+    hashlib.sha256(_app_password_esperada.encode()).hexdigest()[:24]
+    if _app_password_esperada
+    else ""
+)
+if _app_token and st.query_params.get("t") == _app_token:
+    st.session_state["_authed"] = True
+
 if _app_password_esperada and not st.session_state.get("_authed", False):
     st.markdown("### Ingresá la contraseña para continuar")
     _pw_input = st.text_input(
@@ -102,6 +113,7 @@ if _app_password_esperada and not st.session_state.get("_authed", False):
     if st.button("Entrar", type="primary", key="_pw_entrar"):
         if _pw_input == _app_password_esperada:
             st.session_state["_authed"] = True
+            st.query_params["t"] = _app_token
             st.rerun()
         else:
             st.error("Contraseña incorrecta.")
