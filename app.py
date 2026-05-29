@@ -304,6 +304,8 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
     + estimado de la fecha indicada (default: última)."""
     cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
     st.session_state["_wix_sin_mapear"] = {}
+    st.session_state["_dux_contados"] = []
+    st.session_state["_wix_contados"] = []
     all_orders = db.cargar_pedidos_dux()
 
     selecciones_dux = db.cargar_selecciones("dux")
@@ -315,6 +317,7 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
             for o in all_orders
             if selecciones_dux.get(str(o.get("id") or o.get("nro_pedido") or "")) == fecha_str
         ]
+        st.session_state["_dux_contados"] = all_orders
 
     items_planos = []
     for orden in all_orders:
@@ -343,6 +346,7 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
             wix_filtrados = [
                 o for o in wix_orders if wix_sel.get(str(o.get("id"))) == fecha_str
             ]
+            st.session_state["_wix_contados"] = wix_filtrados
             wix_dux_map, wix_sin_mapear = _convertir_wix_orders_a_dux(wix_filtrados)
             st.session_state["_wix_sin_mapear"] = wix_sin_mapear
             if wix_dux_map:
@@ -407,6 +411,25 @@ def _dux_get_first(d, claves):
         if k in d and d[k] not in (None, ""):
             return d[k]
     return None
+
+
+def extraer_cliente_dux(orden):
+    cliente_obj = orden.get("cliente")
+    if isinstance(cliente_obj, dict):
+        nombre = _dux_get_first(
+            cliente_obj,
+            ["razon_social", "nombre", "razonSocial", "nombre_completo"],
+        )
+        if nombre:
+            return str(nombre)
+    return str(
+        _dux_get_first(
+            orden,
+            ["cliente", "razon_social", "razonSocial", "nombre_cliente",
+             "apellido_razon_social"],
+        )
+        or "(sin cliente)"
+    )
 
 
 def extraer_items_dux(orden):
@@ -1078,6 +1101,56 @@ with tab_comprar:
             "Andá a 🔗 Mapeo Wix↔DUX para asignarlos."
         )
 
+    # Expander con los pedidos que estan siendo contados, para poder verificar
+    _dux_contados = st.session_state.get("_dux_contados", [])
+    _wix_contados = st.session_state.get("_wix_contados", [])
+    _total_pedidos = len(_dux_contados) + len(_wix_contados)
+    with st.expander(
+        f"📋 Ver pedidos que se están contando ({_total_pedidos})",
+        expanded=False,
+    ):
+        if not _total_pedidos:
+            st.caption("No hay pedidos asignados a esta fecha de entrega.")
+        else:
+            if _dux_contados:
+                st.markdown(f"**DUX ({len(_dux_contados)})**")
+                filas_dux = []
+                for o in _dux_contados:
+                    nro = _dux_get_first(
+                        o, ["nro_pedido", "nroPedido", "numero", "id"]
+                    )
+                    filas_dux.append({
+                        "Nro": str(nro or ""),
+                        "Cliente": extraer_cliente_dux(o),
+                        "Estado": o.get("estado_facturacion") or "",
+                        "Ítems": len(extraer_items_dux(o)),
+                    })
+                st.dataframe(
+                    pd.DataFrame(filas_dux),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            if _wix_contados:
+                st.markdown(f"**Wix ({len(_wix_contados)})**")
+                filas_wix = []
+                for o in _wix_contados:
+                    nro = o.get("number") or o.get("id", "")
+                    bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+                    nombre_w = (
+                        f"{bi.get('firstName', '') or ''} {bi.get('lastName', '') or ''}".strip()
+                        or "(sin cliente)"
+                    )
+                    filas_wix.append({
+                        "Nro": str(nro),
+                        "Cliente": nombre_w,
+                        "Ítems": len(o.get("lineItems", [])),
+                    })
+                st.dataframe(
+                    pd.DataFrame(filas_wix),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
     # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
     buscar_comprar = st.text_input(
         "🔎 Buscar producto",
@@ -1373,24 +1446,6 @@ with tab_dux:
     id_empresa_default = int(dux_cfg.get("id_empresa", 3455))
     id_sucursal_default = int(dux_cfg.get("id_sucursal", 3))
 
-    def _extraer_cliente(orden):
-        cliente_obj = orden.get("cliente")
-        if isinstance(cliente_obj, dict):
-            nombre = _dux_get_first(
-                cliente_obj,
-                ["razon_social", "nombre", "razonSocial", "nombre_completo"],
-            )
-            if nombre:
-                return str(nombre)
-        return str(
-            _dux_get_first(
-                orden,
-                ["cliente", "razon_social", "razonSocial", "nombre_cliente",
-                 "apellido_razon_social"],
-            )
-            or "(sin cliente)"
-        )
-
     if not token:
         st.error(
             "Falta configurar el token de DUX en `.streamlit/secrets.toml` "
@@ -1560,7 +1615,7 @@ with tab_dux:
 
                 nuevas_selecciones_dux = {}
                 for i, orden in enumerate(all_orders_sorted, start=1):
-                    cliente_str = _extraer_cliente(orden)
+                    cliente_str = extraer_cliente_dux(orden)
                     nro = _dux_get_first(
                         orden,
                         ["nro_pedido", "nroPedido", "numero", "id"],
