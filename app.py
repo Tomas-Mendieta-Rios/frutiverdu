@@ -852,14 +852,12 @@ with tab_comprar:
             f"Estimado: **{ts_est or '?'}**"
         )
     with col_refresh:
-        if st.button(
+        boton_actualizar = st.button(
             "🔄 Actualizar",
             key="refresh_comprar",
             use_container_width=True,
-            help="Refresca datos desde Sheets.",
-        ):
-            st.cache_data.clear()
-            st.rerun()
+            help="Aplica las fechas elegidas y refresca datos desde Sheets.",
+        )
 
     # Cargar fechas guardadas (si existen). Fallback solo la primera vez.
     cfg_comprar = db.cargar_config()
@@ -891,21 +889,6 @@ with tab_comprar:
         except Exception:
             pass
 
-    def _save_fent():
-        v = st.session_state.get("comprar_fecha_entrega")
-        if v:
-            db.guardar_config({"comprar_fecha_entrega": str(v)})
-
-    def _save_fstk():
-        v = st.session_state.get("comprar_fecha_stock")
-        if v:
-            db.guardar_config({"comprar_fecha_stock": str(v)})
-
-    def _save_fest():
-        v = st.session_state.get("comprar_fecha_estimado")
-        if v:
-            db.guardar_config({"comprar_fecha_estimado": str(v)})
-
     col_fc1, col_fc2, col_fc3 = st.columns(3)
     with col_fc1:
         fecha_entrega = st.date_input(
@@ -914,7 +897,6 @@ with tab_comprar:
             key="comprar_fecha_entrega",
             format="YYYY-MM-DD",
             help="Filtra pedidos DUX y Wix con esa fecha de entrega asignada.",
-            on_change=_save_fent,
         )
     with col_fc2:
         fecha_stock_sel = st.date_input(
@@ -923,7 +905,6 @@ with tab_comprar:
             key="comprar_fecha_stock",
             format="YYYY-MM-DD",
             help="Qué stock usar para el cálculo.",
-            on_change=_save_fstk,
         )
     with col_fc3:
         fecha_estimado_sel = st.date_input(
@@ -932,29 +913,63 @@ with tab_comprar:
             key="comprar_fecha_estimado",
             format="YYYY-MM-DD",
             help="Qué estimado usar para el cálculo.",
-            on_change=_save_fest,
         )
 
-    # Avisos si la fecha elegida no tiene datos cargados (usa fallback silencioso)
-    if str(fecha_stock_sel) not in (fechas_stock_disp or []):
+    # Fechas "aplicadas": las que se usan para calcular. Solo cambian cuando se aprieta Actualizar.
+    # Asi cambiar una fecha NO recalcula automaticamente — el usuario tiene control.
+    if "_aplicado_fent" not in st.session_state:
+        st.session_state["_aplicado_fent"] = fecha_entrega
+        st.session_state["_aplicado_fstk"] = fecha_stock_sel
+        st.session_state["_aplicado_fest"] = fecha_estimado_sel
+
+    if boton_actualizar:
+        st.session_state["_aplicado_fent"] = fecha_entrega
+        st.session_state["_aplicado_fstk"] = fecha_stock_sel
+        st.session_state["_aplicado_fest"] = fecha_estimado_sel
+        # Persistir tambien en config para que sobreviva reinicio
+        try:
+            db.guardar_config({
+                "comprar_fecha_entrega": str(fecha_entrega),
+                "comprar_fecha_stock": str(fecha_stock_sel),
+                "comprar_fecha_estimado": str(fecha_estimado_sel),
+            })
+        except Exception:
+            pass
+        st.cache_data.clear()
+        st.rerun()
+
+    aplicado_fent = st.session_state["_aplicado_fent"]
+    aplicado_fstk = st.session_state["_aplicado_fstk"]
+    aplicado_fest = st.session_state["_aplicado_fest"]
+
+    hay_cambios_pendientes = (
+        fecha_entrega != aplicado_fent
+        or fecha_stock_sel != aplicado_fstk
+        or fecha_estimado_sel != aplicado_fest
+    )
+    if hay_cambios_pendientes:
+        st.info("ℹ️ Cambiaste fechas. Apretá **🔄 Actualizar** para recalcular.")
+
+    # Avisos si la fecha aplicada no tiene datos cargados
+    if str(aplicado_fstk) not in (fechas_stock_disp or []):
         st.warning(
-            f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
+            f"⚠️ No hay stock cargado para el {aplicado_fstk}. "
             f"Se va a usar **0 para todos los productos**."
         )
-    if str(fecha_estimado_sel) not in (fechas_est_disp or []):
+    if str(aplicado_fest) not in (fechas_est_disp or []):
         st.warning(
-            f"⚠️ No hay estimado cargado para el {fecha_estimado_sel}. "
+            f"⚠️ No hay estimado cargado para el {aplicado_fest}. "
             f"Se va a usar **0 para todos los productos**."
         )
 
     pedidos_actual = cargar_pedidos_dux_aggregated(
         productos,
-        estimado_fecha=fecha_estimado_sel,
-        fecha_compra=fecha_entrega,
+        estimado_fecha=aplicado_fest,
+        fecha_compra=aplicado_fent,
     )
-    stock_actual = cargar_stock_fecha(fecha_stock_sel)
+    stock_actual = cargar_stock_fecha(aplicado_fstk)
     # Para mantener compatibilidad con el resto del código de la pestaña
-    fecha_compra = fecha_entrega
+    fecha_compra = aplicado_fent
 
     wix_sin_mapear = st.session_state.get("_wix_sin_mapear", {})
     if wix_sin_mapear:
