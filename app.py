@@ -1031,14 +1031,17 @@ with tab_comprar:
                     col_u.markdown(f"_{unidad_destino}_")
                 else:
                     col_t.markdown(f"**{base}**")
-                    idx_default = (
-                        unidades_comp.index("KG")
-                        if "KG" in unidades_comp
-                        else 0
+                    # Preferencia de unidad default: KG > UNIDAD > ATADO > primera.
+                    # Eso evita que productos con solo UNIDAD/MAPLE arranquen mal.
+                    idx_default = next(
+                        (unidades_comp.index(u)
+                         for u in ("KG", "UNIDAD", "ATADO")
+                         if u in unidades_comp),
+                        0,
                     )
                     key_sufijo = "-".join(sorted(comp))
                     # Incluir las 3 fechas en el key: cuando cambian, el selector
-                    # se "olvida" lo seleccionado y vuelve al default (KG).
+                    # se "olvida" lo seleccionado y vuelve al default.
                     fechas_key = f"{fecha_entrega}_{fecha_stock_sel}_{fecha_estimado_sel}"
                     unidad_destino = col_u.selectbox(
                         "Unidad",
