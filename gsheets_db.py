@@ -91,7 +91,7 @@ def _get_ws(nombre):
         return ws
 
 
-@st.cache_data(ttl=20)
+@st.cache_data(ttl=120)
 def leer_tabla(nombre):
     ws = _get_ws(nombre)
     values = ws.get_all_values()
