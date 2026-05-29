@@ -963,8 +963,12 @@ with tab_comprar:
             columns=["codigo", "producto", "unidad_medida", "cantidad", "base"]
         )
 
+    # Mostrar productos que tengan ALGUN valor: pedido, estimado o stock
     ped_relevante = ped[(ped["cantidad"] > 0) | (ped["estimado"] > 0)]
-    bases = sorted(ped_relevante["base"].unique())
+    bases_set = set(ped_relevante["base"].unique())
+    if not stk.empty:
+        bases_set |= set(stk[stk["cantidad"] > 0]["base"].unique())
+    bases = sorted(bases_set)
     if buscar_comprar:
         bases = [b for b in bases if buscar_comprar.lower() in b.lower()]
 
@@ -989,9 +993,15 @@ with tab_comprar:
                 (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
             ]["codigo"].astype(str)
         )
+        stock_codigos = (
+            set(stk_base[stk_base["cantidad"] > 0]["codigo"].astype(str))
+            if not stk_base.empty
+            else set()
+        )
+        codigos_con_valor = pedido_codigos | stock_codigos
 
         for comp in componentes:
-            if not (comp & pedido_codigos):
+            if not (comp & codigos_con_valor):
                 continue
 
             comp_productos = opciones_grupo[
