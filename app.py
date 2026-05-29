@@ -856,42 +856,78 @@ with tab_comprar:
             st.cache_data.clear()
             st.rerun()
 
+    # Cargar fechas guardadas (si existen). Fallback solo la primera vez.
+    cfg_comprar = db.cargar_config()
+    fechas_stock_disp = db.fechas_stock()
+    fechas_est_disp = db.fechas_estimado()
+
+    def_fent = date.today() + timedelta(days=1)
+    if cfg_comprar.get("comprar_fecha_entrega"):
+        try:
+            def_fent = pd.to_datetime(cfg_comprar["comprar_fecha_entrega"]).date()
+        except Exception:
+            pass
+
+    def_fstk = (
+        pd.to_datetime(fechas_stock_disp[0]).date() if fechas_stock_disp else date.today()
+    )
+    if cfg_comprar.get("comprar_fecha_stock"):
+        try:
+            def_fstk = pd.to_datetime(cfg_comprar["comprar_fecha_stock"]).date()
+        except Exception:
+            pass
+
+    def_fest = (
+        pd.to_datetime(fechas_est_disp[0]).date() if fechas_est_disp else date.today()
+    )
+    if cfg_comprar.get("comprar_fecha_estimado"):
+        try:
+            def_fest = pd.to_datetime(cfg_comprar["comprar_fecha_estimado"]).date()
+        except Exception:
+            pass
+
+    def _save_fent():
+        v = st.session_state.get("comprar_fecha_entrega")
+        if v:
+            db.guardar_config({"comprar_fecha_entrega": str(v)})
+
+    def _save_fstk():
+        v = st.session_state.get("comprar_fecha_stock")
+        if v:
+            db.guardar_config({"comprar_fecha_stock": str(v)})
+
+    def _save_fest():
+        v = st.session_state.get("comprar_fecha_estimado")
+        if v:
+            db.guardar_config({"comprar_fecha_estimado": str(v)})
+
     col_fc1, col_fc2, col_fc3 = st.columns(3)
     with col_fc1:
         fecha_entrega = st.date_input(
             "📦 Fecha de entrega",
-            value=date.today() + timedelta(days=1),
+            value=def_fent,
             key="comprar_fecha_entrega",
             format="YYYY-MM-DD",
             help="Filtra pedidos DUX y Wix con esa fecha de entrega asignada.",
+            on_change=_save_fent,
         )
     with col_fc2:
-        fechas_stock_disp = db.fechas_stock()
-        fecha_stock_default_c = (
-            pd.to_datetime(fechas_stock_disp[0]).date()
-            if fechas_stock_disp
-            else date.today()
-        )
         fecha_stock_sel = st.date_input(
             "📦 Fecha de stock",
-            value=fecha_stock_default_c,
+            value=def_fstk,
             key="comprar_fecha_stock",
             format="YYYY-MM-DD",
             help="Qué stock usar para el cálculo.",
+            on_change=_save_fstk,
         )
     with col_fc3:
-        fechas_est_disp = db.fechas_estimado()
-        fecha_est_default_c = (
-            pd.to_datetime(fechas_est_disp[0]).date()
-            if fechas_est_disp
-            else date.today()
-        )
         fecha_estimado_sel = st.date_input(
             "📈 Fecha de estimado",
-            value=fecha_est_default_c,
+            value=def_fest,
             key="comprar_fecha_estimado",
             format="YYYY-MM-DD",
             help="Qué estimado usar para el cálculo.",
+            on_change=_save_fest,
         )
 
     # Avisos si la fecha elegida no tiene datos cargados (usa fallback silencioso)
