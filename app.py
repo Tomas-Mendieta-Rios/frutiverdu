@@ -1493,12 +1493,6 @@ with tab_dux:
                 f"{n_asignados} con entrega asignada."
             )
 
-            buscar_dux_ped = st.text_input(
-                "🔎 Buscar pedido (cliente / nro)",
-                key="buscar_dux_pedidos",
-                placeholder="Filtra por nombre de cliente o número...",
-            )
-
             # Ordenar: más recientes primero
             def _fecha_dux(o):
                 f = o.get("fecha") or ""
@@ -1522,10 +1516,6 @@ with tab_dux:
                         orden,
                         ["nro_pedido", "nroPedido", "numero", "id"],
                     )
-                    if buscar_dux_ped:
-                        q = buscar_dux_ped.lower()
-                        if q not in cliente_str.lower() and q not in str(nro or "").lower():
-                            continue
                     items = _extraer_items_dux(orden)
 
                     oid = str(orden.get("id") or nro or i)
@@ -1897,12 +1887,6 @@ with tab_wix:
                 f"{len(selecciones)} con entrega asignada."
             )
 
-            buscar_wix = st.text_input(
-                "🔎 Buscar pedido (número o cliente)",
-                key="buscar_wix",
-                placeholder="Filtra...",
-            )
-
             def _wix_contact(o):
                 bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
                 if bi.get("firstName") or bi.get("lastName"):
@@ -1979,11 +1963,6 @@ with tab_wix:
                     )
                     direccion = _fmt_addr(_wix_address(o))
                     email = _wix_email(o)
-
-                    if buscar_wix:
-                        q = buscar_wix.lower()
-                        if q not in nro.lower() and q not in cliente.lower():
-                            continue
 
                     oid = o.get("id") or nro
                     asignado_prev = selecciones.get(oid)
