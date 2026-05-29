@@ -82,8 +82,10 @@ def cargar_stock_fecha(fecha):
 
 def _convertir_wix_orders_a_dux(orders_filtrados):
     """Convierte orders Wix (filtrados) en dict {dux_codigo: cantidad_total}
-    usando mapping_wix_dux y packs_wix (ambos en Sheets)."""
+    usando mapping_wix_dux y packs_wix. Devuelve (resultado, sin_mapear)
+    donde sin_mapear = {wix_id: {"nombre": str, "cantidad": float}}."""
     resultado = {}
+    sin_mapear = {}
 
     df_m = db.cargar_mapping_wix_dux()
     mapping = {}
@@ -131,14 +133,26 @@ def _convertir_wix_orders_a_dux(orders_filtrados):
             elif cat_id in mapping:
                 dcod, factor = mapping[cat_id]
                 resultado[dcod] = resultado.get(dcod, 0.0) + qty * factor
+            else:
+                nombre = (
+                    (item.get("productName") or {}).get("translated")
+                    or (item.get("productName") or {}).get("original")
+                    or item.get("name")
+                    or cat_id
+                    or "(sin nombre)"
+                )
+                if cat_id not in sin_mapear:
+                    sin_mapear[cat_id] = {"nombre": nombre, "cantidad": 0.0}
+                sin_mapear[cat_id]["cantidad"] += qty
 
-    return resultado
+    return resultado, sin_mapear
 
 
 def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compra=None):
     """Agrega pedidos DUX + Wix (filtrados por fecha_compra vía selecciones)
     + estimado de la fecha indicada (default: última)."""
     cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
+    st.session_state["_wix_sin_mapear"] = {}
     all_orders = db.cargar_pedidos_dux()
 
     selecciones_dux = db.cargar_selecciones("dux")
@@ -178,7 +192,8 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
             wix_filtrados = [
                 o for o in wix_orders if wix_sel.get(str(o.get("id"))) == fecha_str
             ]
-            wix_dux_map = _convertir_wix_orders_a_dux(wix_filtrados)
+            wix_dux_map, wix_sin_mapear = _convertir_wix_orders_a_dux(wix_filtrados)
+            st.session_state["_wix_sin_mapear"] = wix_sin_mapear
             if wix_dux_map:
                 map_prod_dux_x = dict(
                     zip(productos_df["codigo"].astype(str), productos_df["producto"])
@@ -836,6 +851,20 @@ with tab_comprar:
             help="Qué estimado usar para el cálculo.",
         )
 
+    # Avisos si la fecha elegida no tiene datos cargados (usa fallback silencioso)
+    if str(fecha_stock_sel) not in (fechas_stock_disp or []):
+        ultima_stk = fechas_stock_disp[0] if fechas_stock_disp else "ninguna"
+        st.warning(
+            f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
+            f"Se está usando la última fecha disponible: **{ultima_stk}**."
+        )
+    if str(fecha_estimado_sel) not in (fechas_est_disp or []):
+        ultima_est = fechas_est_disp[0] if fechas_est_disp else "ninguna"
+        st.warning(
+            f"⚠️ No hay estimado cargado para el {fecha_estimado_sel}. "
+            f"Se está usando la última fecha disponible: **{ultima_est}**."
+        )
+
     pedidos_actual = cargar_pedidos_dux_aggregated(
         productos,
         estimado_fecha=fecha_estimado_sel,
@@ -844,6 +873,18 @@ with tab_comprar:
     stock_actual = cargar_stock_fecha(fecha_stock_sel)
     # Para mantener compatibilidad con el resto del código de la pestaña
     fecha_compra = fecha_entrega
+
+    wix_sin_mapear = st.session_state.get("_wix_sin_mapear", {})
+    if wix_sin_mapear:
+        lineas = "\n".join(
+            f"- **{v['nombre']}** × {v['cantidad']:g}"
+            for v in wix_sin_mapear.values()
+        )
+        st.warning(
+            "⚠️ Hay pedidos Wix con productos **sin mapear** — no se están sumando al total:\n\n"
+            f"{lineas}\n\n"
+            "Andá a 🔗 Mapeo Wix↔DUX para asignarlos."
+        )
 
     if pedidos_actual is None or pedidos_actual.empty:
         st.warning(
