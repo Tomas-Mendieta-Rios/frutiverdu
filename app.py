@@ -2154,20 +2154,6 @@ with tab_mapeo:
         }
         codigo_to_label = {v: k for k, v in label_to_codigo.items()}
 
-        col_h1, col_h2 = st.columns([3, 1])
-        with col_h1:
-            buscar_mapeo = st.text_input(
-                "🔎 Buscar producto Wix",
-                key="buscar_mapeo",
-                placeholder="Filtra por nombre Wix...",
-            )
-        with col_h2:
-            solo_sin_mapear = st.checkbox(
-                "Solo sin mapear",
-                value=False,
-                key="solo_sin_mapear",
-            )
-
         mapeados = sum(1 for v in mapping_actual.values() if v)
         st.caption(
             f"{mapeados} / {len(df_wix_p)} productos mapeados"
@@ -2178,19 +2164,17 @@ with tab_mapeo:
                 "💡 **Factor** = cuántas unidades DUX representa 1 unidad Wix. "
                 "Ej: Wix `VERDEO - 1/4 KG` → DUX `VERDEO - ATADO` con factor `0.25`."
             )
+            guardar_map = st.form_submit_button(
+                "💾 Guardar mapeo", type="primary"
+            )
+
             nuevo_mapping = {}
             nuevo_factor = {}
-            mostradas = 0
             for _, row in df_wix_p.iterrows():
                 wid = str(row["wix_id"])
                 wname = str(row["producto"])
 
-                if buscar_mapeo and buscar_mapeo.lower() not in wname.lower():
-                    continue
-
                 current_codigo = mapping_actual.get(wid, "")
-                if solo_sin_mapear and current_codigo:
-                    continue
 
                 default_idx = 0
                 if current_codigo and current_codigo in codigo_to_label:
@@ -2228,38 +2212,10 @@ with tab_mapeo:
                 if sel != "(sin mapear)":
                     nuevo_mapping[wid] = label_to_codigo[sel]
                     nuevo_factor[wid] = float(factor_val)
-                mostradas += 1
-
-            st.caption(f"Mostrando {mostradas} productos.")
-
-            guardar_map = st.form_submit_button(
-                "💾 Guardar mapeo", type="primary"
-            )
 
         if guardar_map:
-            # Merge: keep existing mappings for products NOT shown (e.g., filtered out)
-            shown_ids = set()
-            for _, row in df_wix_p.iterrows():
-                wid = str(row["wix_id"])
-                wname = str(row["producto"])
-                if buscar_mapeo and buscar_mapeo.lower() not in wname.lower():
-                    continue
-                if solo_sin_mapear and mapping_actual.get(wid, ""):
-                    continue
-                shown_ids.add(wid)
-
-            # Start from existing, override only the shown ones
-            merged_map = {
-                wid: code for wid, code in mapping_actual.items() if wid not in shown_ids
-            }
-            merged_map.update(nuevo_mapping)
-
-            merged_factor = {
-                wid: factor_actual.get(wid, 1.0)
-                for wid in mapping_actual
-                if wid not in shown_ids
-            }
-            merged_factor.update(nuevo_factor)
+            merged_map = nuevo_mapping
+            merged_factor = nuevo_factor
 
             map_prod_dux = dict(
                 zip(df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str))
