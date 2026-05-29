@@ -549,7 +549,7 @@ compuestos_orig = cargar_compuestos()
 if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
     st.error(
         "⚠️ La tabla `compuestos` de Google Sheets está vacía o corrupta. "
-        "Andá a la pestaña ⚙️ Editar valores y volvé a guardar las relaciones, "
+        "Andá a la pestaña ⚙️ Relacionar productos y volvé a guardar las relaciones, "
         "o avisale a Tomás."
     )
     compuestos = pd.DataFrame(
@@ -608,15 +608,18 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
         "🎁 Packs Wix",
         "📡 DUX Productos",
         "🛍️ Wix Productos",
-        "⚙️ Editar valores",
+        "⚙️ Relacionar productos",
         "🧪 Probar conversión",
     ]
 )
 
 with tab_editar:
+    ts_comp = db.ultima_carga("compuestos")
+    st.caption(f"🕒 Última actualización: **{ts_comp or '?'}**")
     st.info(
         "Editá las cantidades de las equivalencias. Ejemplo: "
-        "1 REPOLLO ROJO - CAJA = 15 REPOLLO ROJO - KG."
+        "1 REPOLLO ROJO - CAJA = 15 REPOLLO ROJO - KG. "
+        "**Los cambios se aplican solo al apretar Guardar.**"
     )
 
     tabla_editor = compuestos[
@@ -628,39 +631,35 @@ with tab_editar:
         ]
     ].copy()
 
-    tabla_editada = st.data_editor(
-        tabla_editor,
-        use_container_width=True,
-        num_rows="fixed",
-        disabled=["origen_label", "componente_label"],
-        column_config={
-            "origen_label": st.column_config.TextColumn("Producto origen"),
-            "cantidad_origen": st.column_config.NumberColumn(
-                "Cantidad origen",
-                min_value=0.0,
-                step=1.0,
-                format="%.3f",
-            ),
-            "componente_label": st.column_config.TextColumn(
-                "Producto componente/base"
-            ),
-            "cantidad_componente": st.column_config.NumberColumn(
-                "Cantidad componente/base",
-                min_value=0.0,
-                step=0.5,
-                format="%.3f",
-            ),
-        },
-        key="editor_valores",
-    )
-
-    col1, col2 = st.columns([1, 4])
-
-    with col1:
-        guardar = st.button("💾 Guardar cambios", type="primary")
-
-    with col2:
-        st.caption("Los cambios se guardan en Google Sheets.")
+    with st.form("form_relacionar", clear_on_submit=False, border=False):
+        guardar = st.form_submit_button(
+            "💾 Guardar cambios", type="primary"
+        )
+        tabla_editada = st.data_editor(
+            tabla_editor,
+            use_container_width=True,
+            num_rows="fixed",
+            disabled=["origen_label", "componente_label"],
+            column_config={
+                "origen_label": st.column_config.TextColumn("Producto origen"),
+                "cantidad_origen": st.column_config.NumberColumn(
+                    "Cantidad origen",
+                    min_value=0.0,
+                    step=1.0,
+                    format="%.3f",
+                ),
+                "componente_label": st.column_config.TextColumn(
+                    "Producto componente/base"
+                ),
+                "cantidad_componente": st.column_config.NumberColumn(
+                    "Cantidad componente/base",
+                    min_value=0.0,
+                    step=0.5,
+                    format="%.3f",
+                ),
+            },
+            key="editor_valores",
+        )
 
     if guardar:
         salida = tabla_editada.copy()
@@ -2229,9 +2228,11 @@ with tab_mapeo:
             st.success(f"✅ {len(rows)} mapeos guardados en Sheets.")
 
 with tab_packs:
+    ts_packs = db.ultima_carga("packs")
+    st.caption(f"🕒 Última actualización: **{ts_packs or '?'}**")
     st.info(
         "Configurá la composición de cada PACK de Wix con productos DUX y cantidades. "
-        "Agregá / quitá filas según necesites."
+        "Agregá / quitá filas según necesites. **Los cambios se aplican solo al apretar Guardar.**"
     )
 
     df_wix_p_packs = db.cargar_wix_productos()
@@ -2266,62 +2267,66 @@ with tab_packs:
 
             df_packs_saved = db.cargar_packs_wix()
 
-            editor_outputs = {}
-
-            for _, pack_row in df_packs.iterrows():
-                pack_id = str(pack_row["wix_id"])
-                pack_nombre = str(pack_row["producto"])
-
-                st.markdown(f"### 🎁 {pack_nombre}")
-
-                comp_actual = df_packs_saved[
-                    df_packs_saved["wix_id_pack"].astype(str) == pack_id
-                ]
-                if not comp_actual.empty:
-                    comp_view = pd.DataFrame(
-                        {
-                            "producto": [
-                                f"{c} - {p}"
-                                for c, p in zip(
-                                    comp_actual["dux_codigo"].astype(str),
-                                    comp_actual["dux_producto"].astype(str),
-                                )
-                            ],
-                            "cantidad": comp_actual["cantidad"]
-                            .fillna(0)
-                            .astype(float)
-                            .values,
-                        }
-                    )
-                else:
-                    comp_view = pd.DataFrame(
-                        {"producto": pd.Series(dtype=str), "cantidad": pd.Series(dtype=float)}
-                    )
-
-                edited = st.data_editor(
-                    comp_view,
-                    use_container_width=True,
-                    num_rows="dynamic",
-                    column_config={
-                        "producto": st.column_config.SelectboxColumn(
-                            "Producto DUX",
-                            options=opciones_dux_pack,
-                            required=True,
-                        ),
-                        "cantidad": st.column_config.NumberColumn(
-                            "Cantidad",
-                            min_value=0.0,
-                            step=0.25,
-                            format="%.3f",
-                            required=True,
-                        ),
-                    },
-                    key=f"editor_pack_{pack_id}",
+            with st.form("form_packs", clear_on_submit=False, border=False):
+                guardar_packs = st.form_submit_button(
+                    "💾 Guardar packs", type="primary"
                 )
 
-                editor_outputs[pack_id] = (pack_nombre, edited)
+                editor_outputs = {}
+                for _, pack_row in df_packs.iterrows():
+                    pack_id = str(pack_row["wix_id"])
+                    pack_nombre = str(pack_row["producto"])
 
-            if st.button("💾 Guardar packs", type="primary", key="btn_guardar_packs"):
+                    st.markdown(f"### 🎁 {pack_nombre}")
+
+                    comp_actual = df_packs_saved[
+                        df_packs_saved["wix_id_pack"].astype(str) == pack_id
+                    ]
+                    if not comp_actual.empty:
+                        comp_view = pd.DataFrame(
+                            {
+                                "producto": [
+                                    f"{c} - {p}"
+                                    for c, p in zip(
+                                        comp_actual["dux_codigo"].astype(str),
+                                        comp_actual["dux_producto"].astype(str),
+                                    )
+                                ],
+                                "cantidad": comp_actual["cantidad"]
+                                .fillna(0)
+                                .astype(float)
+                                .values,
+                            }
+                        )
+                    else:
+                        comp_view = pd.DataFrame(
+                            {"producto": pd.Series(dtype=str), "cantidad": pd.Series(dtype=float)}
+                        )
+
+                    edited = st.data_editor(
+                        comp_view,
+                        use_container_width=True,
+                        num_rows="dynamic",
+                        column_config={
+                            "producto": st.column_config.SelectboxColumn(
+                                "Producto DUX",
+                                options=opciones_dux_pack,
+                                required=True,
+                            ),
+                            "cantidad": st.column_config.NumberColumn(
+                                "Cantidad",
+                                min_value=0.0,
+                                step=0.25,
+                                format="%.3f",
+                                required=True,
+                            ),
+                        },
+                        key=f"editor_pack_{pack_id}",
+                    )
+
+                    editor_outputs[pack_id] = (pack_nombre, edited)
+
+            if guardar_packs:
                 rows_save = []
                 for pack_id, (pack_nombre, edited) in editor_outputs.items():
                     if edited is None or edited.empty:

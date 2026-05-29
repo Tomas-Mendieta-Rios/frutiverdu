@@ -188,6 +188,7 @@ def cargar_compuestos():
 
 def guardar_compuestos(df):
     escribir_tabla("compuestos", df)
+    _marcar_modificacion("compuestos")
 
 
 # ---------------- STOCK ----------------
@@ -346,6 +347,7 @@ def cargar_packs_wix():
 
 def guardar_packs_wix(df):
     escribir_tabla("packs_wix", df)
+    _marcar_modificacion("packs")
 
 
 # ---------------- SELECCIONES (DUX y WIX) ----------------
