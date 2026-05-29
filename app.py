@@ -1397,7 +1397,6 @@ with tab_dux:
                         "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
                         "offset": page_offset,
                         "limit": page_size,
-                        "estadoFacturacion": "PENDIENTE",
                     }
                     try:
                         r = requests.get(
@@ -1494,9 +1493,24 @@ with tab_dux:
                 placeholder="Filtra por nombre de cliente o número...",
             )
 
+            # Ordenar: más recientes primero
+            def _fecha_dux(o):
+                f = o.get("fecha") or ""
+                try:
+                    return pd.to_datetime(f)
+                except Exception:
+                    return pd.Timestamp.min
+            all_orders_sorted = sorted(
+                all_orders_saved, key=_fecha_dux, reverse=True
+            )
+
             with st.form(key="form_dux_seleccion", clear_on_submit=False):
+                guardar_sel_dux = st.form_submit_button(
+                    "💾 Guardar selección de entregas", type="primary"
+                )
+
                 nuevas_selecciones_dux = {}
-                for i, orden in enumerate(all_orders_saved, start=1):
+                for i, orden in enumerate(all_orders_sorted, start=1):
                     cliente_str = _extraer_cliente(orden)
                     nro = _get_first(
                         orden,
@@ -1516,12 +1530,26 @@ with tab_dux:
                         else date.today() + timedelta(days=1)
                     )
 
+                    estado_fact = orden.get("estado_facturacion") or ""
+                    estado_badges = {
+                        "PENDIENTE": "🟡 Pendiente",
+                        "FACTURADO": "🟢 Facturado",
+                        "FACTURADO_PARCIAL": "🟠 Fact. parcial",
+                        "CERRADO": "⚫ Cerrado",
+                    }
+                    estado_badge = estado_badges.get(
+                        estado_fact, f"⚪ {estado_fact}" if estado_fact else ""
+                    )
+
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
-                            badge = f" · 📦 {asignado_prev}" if asignado_prev else ""
+                            entrega_badge = (
+                                f" · 📦 {asignado_prev}" if asignado_prev else ""
+                            )
                             st.markdown(
-                                f"**#{nro or i}** — {cliente_str} · {len(items)} ítems{badge}"
+                                f"**#{nro or i}** — {cliente_str} · "
+                                f"{len(items)} ítems · {estado_badge}{entrega_badge}"
                             )
                         with c_chk:
                             asignar = st.checkbox(
@@ -1549,10 +1577,6 @@ with tab_dux:
                                     use_container_width=True,
                                     hide_index=True,
                                 )
-
-                guardar_sel_dux = st.form_submit_button(
-                    "💾 Guardar selección de entregas", type="primary"
-                )
 
             if guardar_sel_dux:
                 try:
@@ -1923,9 +1947,24 @@ with tab_wix:
             def _wix_nro(o):
                 return str(o.get("number") or o.get("id", "?"))
 
+            # Ordenar Wix: más recientes primero (createdDate)
+            def _fecha_wix(o):
+                f = o.get("createdDate") or ""
+                try:
+                    return pd.to_datetime(f)
+                except Exception:
+                    return pd.Timestamp.min
+            orders_saved_sorted = sorted(
+                orders_saved, key=_fecha_wix, reverse=True
+            )
+
             with st.form(key="form_wix_seleccion", clear_on_submit=False):
+                guardar_sel = st.form_submit_button(
+                    "💾 Guardar selección de entregas", type="primary"
+                )
+
                 nuevas_selecciones = {}
-                for o in orders_saved:
+                for o in orders_saved_sorted:
                     nro = _wix_nro(o)
                     cliente = _wix_cliente(o)
                     items = o.get("lineItems", [])
@@ -2002,10 +2041,6 @@ with tab_wix:
                                     use_container_width=True,
                                     hide_index=True,
                                 )
-
-                guardar_sel = st.form_submit_button(
-                    "💾 Guardar selección de entregas", type="primary"
-                )
 
             if guardar_sel:
                 try:
