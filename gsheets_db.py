@@ -169,6 +169,7 @@ def cargar_productos():
 
 def guardar_productos(df):
     escribir_tabla("productos", df)
+    _marcar_modificacion("dux_productos")
 
 
 # ---------------- COMPUESTOS ----------------
@@ -311,6 +312,7 @@ def cargar_wix_productos():
 
 def guardar_wix_productos(df):
     escribir_tabla("wix_productos", df)
+    _marcar_modificacion("wix_productos")
 
 
 # ---------------- MAPPING WIX DUX ----------------
@@ -329,6 +331,7 @@ def cargar_mapping_wix_dux():
 
 def guardar_mapping_wix_dux(df):
     escribir_tabla("mapping_wix_dux", df)
+    _marcar_modificacion("mapping_wix_dux")
 
 
 # ---------------- PACKS WIX ----------------

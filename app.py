@@ -1160,11 +1160,6 @@ with tab_comprar:
                     cols[5].markdown(_badge(r["diff_est"], r["unidad"]), unsafe_allow_html=True)
 
 with tab_estimado:
-    st.info(
-        "Cargá el estimado de compra adicional por producto y fecha. "
-        "Se guarda en Google Sheets (`estimado_historico`) con histórico por fecha."
-    )
-
     fechas_est_disp = db.fechas_estimado()
     fecha_est_default = (
         pd.to_datetime(fechas_est_disp[0]).date()
@@ -1553,6 +1548,8 @@ with tab_dux:
             )
 
 with tab_dux_productos:
+    ts_dux_prod = db.ultima_carga("dux_productos")
+    st.caption(f"🕒 Última actualización: **{ts_dux_prod or '?'}**")
 
     if not token:
         st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
@@ -1979,6 +1976,8 @@ with tab_wix:
                     st.error(msg_error_sheets("guardar selecciones Wix", e))
 
 with tab_wix_productos:
+    ts_wix_prod = db.ultima_carga("wix_productos")
+    st.caption(f"🕒 Última actualización: **{ts_wix_prod or '?'}**")
 
     wix_cfg_p = st.secrets.get("wix", {})
     wix_token_p = wix_cfg_p.get("api_key", "")
