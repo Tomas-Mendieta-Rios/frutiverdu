@@ -922,269 +922,265 @@ with tab_comprar:
             "Andá a 🔗 Mapeo Wix↔DUX para asignarlos."
         )
 
-    if pedidos_actual is None or pedidos_actual.empty:
-        st.warning(
-            "No hay pedidos sincronizados. Andá a 📡 DUX Pedidos y apretá Sincronizar."
+    # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
+    col_mc1, col_mc2 = st.columns([3, 2])
+    with col_mc1:
+        modo = st.radio(
+            "Vista",
+            ["Detallada (agrupada por producto)", "Simple (por código)"],
+            horizontal=True,
+            key="modo_comprar",
         )
+    with col_mc2:
+        buscar_comprar = st.text_input(
+            "🔎 Buscar producto",
+            key="buscar_comprar",
+            placeholder="Filtra por nombre o código...",
+        )
+
+    grafo = construir_grafo_conversion(compuestos)
+
+    prod_temp = productos.copy()
+    partes_pr = prod_temp["producto"].str.rsplit(" - ", n=1, expand=True)
+    prod_temp["base"] = partes_pr[0].str.strip()
+    prod_temp["unidad"] = (
+        partes_pr[1].fillna("").str.strip()
+        if 1 in partes_pr.columns
+        else ""
+    )
+
+    ped = pedidos_actual.dropna(subset=["producto"]).copy()
+    ped["cantidad"] = ped["cantidad"].fillna(0).astype(float)
+    if "estimado" not in ped.columns:
+        ped["estimado"] = 0.0
+    ped["estimado"] = ped["estimado"].fillna(0).astype(float)
+    partes_ped = ped["producto"].str.rsplit(" - ", n=1, expand=True)
+    ped["base"] = partes_ped[0].str.strip()
+
+    if stock_actual is not None and not stock_actual.empty:
+        stk = stock_actual.dropna(subset=["producto"]).copy()
+        stk["cantidad"] = stk["cantidad"].fillna(0)
+        partes_stk = stk["producto"].str.rsplit(" - ", n=1, expand=True)
+        stk["base"] = partes_stk[0].str.strip()
     else:
-        col_mc1, col_mc2 = st.columns([3, 2])
-        with col_mc1:
-            modo = st.radio(
-                "Vista",
-                ["Detallada (agrupada por producto)", "Simple (por código)"],
-                horizontal=True,
-                key="modo_comprar",
-            )
-        with col_mc2:
-            buscar_comprar = st.text_input(
-                "🔎 Buscar producto",
-                key="buscar_comprar",
-                placeholder="Filtra por nombre o código...",
-            )
-
-        grafo = construir_grafo_conversion(compuestos)
-
-        prod_temp = productos.copy()
-        partes_pr = prod_temp["producto"].str.rsplit(" - ", n=1, expand=True)
-        prod_temp["base"] = partes_pr[0].str.strip()
-        prod_temp["unidad"] = (
-            partes_pr[1].fillna("").str.strip()
-            if 1 in partes_pr.columns
-            else ""
+        stk = pd.DataFrame(
+            columns=["codigo", "producto", "unidad_medida", "cantidad", "base"]
         )
 
-        ped = pedidos_actual.dropna(subset=["producto"]).copy()
-        ped["cantidad"] = ped["cantidad"].fillna(0).astype(float)
-        if "estimado" not in ped.columns:
-            ped["estimado"] = 0.0
-        ped["estimado"] = ped["estimado"].fillna(0).astype(float)
-        partes_ped = ped["producto"].str.rsplit(" - ", n=1, expand=True)
-        ped["base"] = partes_ped[0].str.strip()
+    if modo.startswith("Detallada"):
+        ped_relevante = ped[(ped["cantidad"] > 0) | (ped["estimado"] > 0)]
+        bases = sorted(ped_relevante["base"].unique())
+        if buscar_comprar:
+            bases = [b for b in bases if buscar_comprar.lower() in b.lower()]
 
-        if stock_actual is not None and not stock_actual.empty:
-            stk = stock_actual.dropna(subset=["producto"]).copy()
-            stk["cantidad"] = stk["cantidad"].fillna(0)
-            partes_stk = stk["producto"].str.rsplit(" - ", n=1, expand=True)
-            stk["base"] = partes_stk[0].str.strip()
-        else:
-            stk = pd.DataFrame(
-                columns=["codigo", "producto", "unidad_medida", "cantidad", "base"]
+        col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7 = st.columns(
+            [1.8, 1.0, 0.8, 0.9, 0.8, 1.4, 1.4]
+        )
+        col_h1.caption("**Producto**")
+        col_h2.caption("**Unidad**")
+        col_h3.caption("**Pedido**")
+        col_h4.caption("**Estimado**")
+        col_h5.caption("**Stock**")
+        col_h6.caption("**Resultado**")
+        col_h7.caption("**Con estimado**")
+
+        for base in bases:
+            opciones_grupo = prod_temp[prod_temp["base"] == base]
+            if opciones_grupo.empty:
+                continue
+
+            codigos_familia = opciones_grupo["codigo"].astype(str).tolist()
+            componentes = componentes_conectados(codigos_familia, grafo)
+
+            ped_base = ped[ped["base"] == base]
+            stk_base = stk[stk["base"] == base] if not stk.empty else stk
+
+            pedido_codigos = set(
+                ped_base[
+                    (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
+                ]["codigo"].astype(str)
             )
 
-        if modo.startswith("Detallada"):
-            ped_relevante = ped[(ped["cantidad"] > 0) | (ped["estimado"] > 0)]
-            bases = sorted(ped_relevante["base"].unique())
-            if buscar_comprar:
-                bases = [b for b in bases if buscar_comprar.lower() in b.lower()]
-
-            col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7 = st.columns(
-                [1.8, 1.0, 0.8, 0.9, 0.8, 1.4, 1.4]
-            )
-            col_h1.caption("**Producto**")
-            col_h2.caption("**Unidad**")
-            col_h3.caption("**Pedido**")
-            col_h4.caption("**Estimado**")
-            col_h5.caption("**Stock**")
-            col_h6.caption("**Resultado**")
-            col_h7.caption("**Con estimado**")
-
-            for base in bases:
-                opciones_grupo = prod_temp[prod_temp["base"] == base]
-                if opciones_grupo.empty:
+            for comp in componentes:
+                if not (comp & pedido_codigos):
                     continue
 
-                codigos_familia = opciones_grupo["codigo"].astype(str).tolist()
-                componentes = componentes_conectados(codigos_familia, grafo)
+                comp_productos = opciones_grupo[
+                    opciones_grupo["codigo"].astype(str).isin(comp)
+                ]
+                unidades_comp = comp_productos["unidad"].tolist()
 
-                ped_base = ped[ped["base"] == base]
-                stk_base = stk[stk["base"] == base] if not stk.empty else stk
-
-                pedido_codigos = set(
-                    ped_base[
-                        (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
-                    ]["codigo"].astype(str)
+                col_t, col_u, col_p, col_est, col_s, col_r, col_e = st.columns(
+                    [1.8, 1.0, 0.8, 0.9, 0.8, 1.4, 1.4]
                 )
 
-                for comp in componentes:
-                    if not (comp & pedido_codigos):
-                        continue
-
-                    comp_productos = opciones_grupo[
-                        opciones_grupo["codigo"].astype(str).isin(comp)
-                    ]
-                    unidades_comp = comp_productos["unidad"].tolist()
-
-                    col_t, col_u, col_p, col_est, col_s, col_r, col_e = st.columns(
-                        [1.8, 1.0, 0.8, 0.9, 0.8, 1.4, 1.4]
+                if len(comp) == 1:
+                    unica = comp_productos.iloc[0]
+                    col_t.markdown(f"**{unica['producto']}**")
+                    unidad_destino = unica["unidad"]
+                    codigo_destino = str(unica["codigo"])
+                    col_u.markdown(f"_{unidad_destino}_")
+                else:
+                    col_t.markdown(f"**{base}**")
+                    idx_default = (
+                        unidades_comp.index("KG")
+                        if "KG" in unidades_comp
+                        else 0
+                    )
+                    key_sufijo = "-".join(sorted(comp))
+                    unidad_destino = col_u.selectbox(
+                        "Unidad",
+                        unidades_comp,
+                        index=idx_default,
+                        key=f"unidad_comprar_{base}_{key_sufijo}",
+                        label_visibility="collapsed",
+                    )
+                    codigo_destino = str(
+                        comp_productos[
+                            comp_productos["unidad"] == unidad_destino
+                        ].iloc[0]["codigo"]
                     )
 
-                    if len(comp) == 1:
-                        unica = comp_productos.iloc[0]
-                        col_t.markdown(f"**{unica['producto']}**")
-                        unidad_destino = unica["unidad"]
-                        codigo_destino = str(unica["codigo"])
-                        col_u.markdown(f"_{unidad_destino}_")
-                    else:
-                        col_t.markdown(f"**{base}**")
-                        idx_default = (
-                            unidades_comp.index("KG")
-                            if "KG" in unidades_comp
-                            else 0
-                        )
-                        key_sufijo = "-".join(sorted(comp))
-                        unidad_destino = col_u.selectbox(
-                            "Unidad",
-                            unidades_comp,
-                            index=idx_default,
-                            key=f"unidad_comprar_{base}_{key_sufijo}",
-                            label_visibility="collapsed",
-                        )
-                        codigo_destino = str(
-                            comp_productos[
-                                comp_productos["unidad"] == unidad_destino
-                            ].iloc[0]["codigo"]
-                        )
+                total_ped = 0.0
+                total_est = 0.0
+                for _, fila in ped_base.iterrows():
+                    if str(fila["codigo"]) not in comp:
+                        continue
+                    factor = convertir(
+                        grafo, str(fila["codigo"]), codigo_destino
+                    )
+                    if factor is None:
+                        continue
+                    total_ped += float(fila["cantidad"]) * factor
+                    total_est += float(fila["estimado"]) * factor
 
-                    total_ped = 0.0
-                    total_est = 0.0
-                    for _, fila in ped_base.iterrows():
+                total_stk = 0.0
+                if not stk_base.empty:
+                    for _, fila in stk_base.iterrows():
                         if str(fila["codigo"]) not in comp:
+                            continue
+                        cant = float(fila["cantidad"])
+                        if cant == 0:
                             continue
                         factor = convertir(
                             grafo, str(fila["codigo"]), codigo_destino
                         )
                         if factor is None:
                             continue
-                        total_ped += float(fila["cantidad"]) * factor
-                        total_est += float(fila["estimado"]) * factor
+                        total_stk += cant * factor
 
-                    total_stk = 0.0
-                    if not stk_base.empty:
-                        for _, fila in stk_base.iterrows():
-                            if str(fila["codigo"]) not in comp:
-                                continue
-                            cant = float(fila["cantidad"])
-                            if cant == 0:
-                                continue
-                            factor = convertir(
-                                grafo, str(fila["codigo"]), codigo_destino
-                            )
-                            if factor is None:
-                                continue
-                            total_stk += cant * factor
+                diff = total_ped - total_stk
+                diff_est = (total_ped + total_est) - total_stk
 
-                    diff = total_ped - total_stk
-                    diff_est = (total_ped + total_est) - total_stk
+                col_p.markdown(f"{total_ped:,.2f}")
+                col_est.markdown(f"{total_est:,.2f}")
+                col_s.markdown(f"{total_stk:,.2f}")
 
-                    col_p.markdown(f"{total_ped:,.2f}")
-                    col_est.markdown(f"{total_est:,.2f}")
-                    col_s.markdown(f"{total_stk:,.2f}")
+                def render_diff(valor, col, unidad):
+                    if valor > 0:
+                        col.markdown(
+                            f"<span style='color:#d11; font-weight:bold;'>"
+                            f"Falta {valor:,.2f} {unidad}</span>",
+                            unsafe_allow_html=True,
+                        )
+                    elif valor < 0:
+                        col.markdown(
+                            f"<span style='color:#1a8a1a; font-weight:bold;'>"
+                            f"Sobra {-valor:,.2f} {unidad}</span>",
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        col.markdown(f"OK ({unidad})")
 
-                    def render_diff(valor, col, unidad):
-                        if valor > 0:
-                            col.markdown(
-                                f"<span style='color:#d11; font-weight:bold;'>"
-                                f"Falta {valor:,.2f} {unidad}</span>",
-                                unsafe_allow_html=True,
-                            )
-                        elif valor < 0:
-                            col.markdown(
-                                f"<span style='color:#1a8a1a; font-weight:bold;'>"
-                                f"Sobra {-valor:,.2f} {unidad}</span>",
-                                unsafe_allow_html=True,
-                            )
-                        else:
-                            col.markdown(f"OK ({unidad})")
+                render_diff(diff, col_r, unidad_destino)
+                render_diff(diff_est, col_e, unidad_destino)
 
-                    render_diff(diff, col_r, unidad_destino)
-                    render_diff(diff_est, col_e, unidad_destino)
+    else:
+        ped_agg = ped.groupby(["codigo"], as_index=False)[
+            ["cantidad", "estimado"]
+        ].sum()
+        ped_agg.columns = ["codigo", "pedido", "estimado"]
 
+        if not stk.empty:
+            stk_agg = stk.groupby(["codigo"], as_index=False)["cantidad"].sum()
+            stk_agg.columns = ["codigo", "stock"]
         else:
-            ped_agg = ped.groupby(["codigo"], as_index=False)[
-                ["cantidad", "estimado"]
-            ].sum()
-            ped_agg.columns = ["codigo", "pedido", "estimado"]
+            stk_agg = pd.DataFrame(columns=["codigo", "stock"])
 
-            if not stk.empty:
-                stk_agg = stk.groupby(["codigo"], as_index=False)["cantidad"].sum()
-                stk_agg.columns = ["codigo", "stock"]
-            else:
-                stk_agg = pd.DataFrame(columns=["codigo", "stock"])
+        merged = ped_agg.merge(stk_agg, on="codigo", how="outer")
+        merged["pedido"] = merged["pedido"].fillna(0).astype(float)
+        merged["estimado"] = merged["estimado"].fillna(0).astype(float)
+        merged["stock"] = merged["stock"].fillna(0).astype(float)
+        merged["a_comprar"] = merged["pedido"] - merged["stock"]
+        merged["a_comprar_estimado"] = (
+            merged["pedido"] + merged["estimado"] - merged["stock"]
+        )
 
-            merged = ped_agg.merge(stk_agg, on="codigo", how="outer")
-            merged["pedido"] = merged["pedido"].fillna(0).astype(float)
-            merged["estimado"] = merged["estimado"].fillna(0).astype(float)
-            merged["stock"] = merged["stock"].fillna(0).astype(float)
-            merged["a_comprar"] = merged["pedido"] - merged["stock"]
-            merged["a_comprar_estimado"] = (
-                merged["pedido"] + merged["estimado"] - merged["stock"]
-            )
-
-            map_codigo_a_prod = dict(
-                zip(productos["codigo"].astype(str), productos["producto"])
-            )
-            map_codigo_a_un = dict(
-                zip(productos["codigo"].astype(str), productos["unidad_medida"])
-            )
-            merged["producto"] = merged["codigo"].astype(str).map(map_codigo_a_prod)
-            merged["unidad"] = merged["codigo"].astype(str).map(map_codigo_a_un)
-            merged = merged.sort_values("producto").reset_index(drop=True)
-            merged = merged[
-                [
-                    "codigo",
-                    "producto",
-                    "unidad",
-                    "pedido",
-                    "estimado",
-                    "stock",
-                    "a_comprar",
-                    "a_comprar_estimado",
-                ]
+        map_codigo_a_prod = dict(
+            zip(productos["codigo"].astype(str), productos["producto"])
+        )
+        map_codigo_a_un = dict(
+            zip(productos["codigo"].astype(str), productos["unidad_medida"])
+        )
+        merged["producto"] = merged["codigo"].astype(str).map(map_codigo_a_prod)
+        merged["unidad"] = merged["codigo"].astype(str).map(map_codigo_a_un)
+        merged = merged.sort_values("producto").reset_index(drop=True)
+        merged = merged[
+            [
+                "codigo",
+                "producto",
+                "unidad",
+                "pedido",
+                "estimado",
+                "stock",
+                "a_comprar",
+                "a_comprar_estimado",
             ]
+        ]
 
-            if buscar_comprar:
-                mask = merged["producto"].astype(str).str.contains(
-                    buscar_comprar, case=False, na=False
-                ) | merged["codigo"].astype(str).str.contains(
-                    buscar_comprar, case=False, na=False
-                )
-                merged = merged[mask].reset_index(drop=True)
+        if buscar_comprar:
+            mask = merged["producto"].astype(str).str.contains(
+                buscar_comprar, case=False, na=False
+            ) | merged["codigo"].astype(str).str.contains(
+                buscar_comprar, case=False, na=False
+            )
+            merged = merged[mask].reset_index(drop=True)
 
-            def color_a_comprar(v):
-                if pd.isna(v) or v == 0:
-                    return ""
-                if v > 0:
-                    return "color: #d11; font-weight: bold;"
-                return "color: #1a8a1a; font-weight: bold;"
+        def color_a_comprar(v):
+            if pd.isna(v) or v == 0:
+                return ""
+            if v > 0:
+                return "color: #d11; font-weight: bold;"
+            return "color: #1a8a1a; font-weight: bold;"
 
-            try:
-                styled = merged.style.map(
-                    color_a_comprar,
-                    subset=["a_comprar", "a_comprar_estimado"],
-                )
-            except AttributeError:
-                styled = merged.style.applymap(
-                    color_a_comprar,
-                    subset=["a_comprar", "a_comprar_estimado"],
-                )
-
-            styled = styled.format(
-                {
-                    "pedido": "{:.2f}",
-                    "estimado": "{:.2f}",
-                    "stock": "{:.2f}",
-                    "a_comprar": "{:+.2f}",
-                    "a_comprar_estimado": "{:+.2f}",
-                }
+        try:
+            styled = merged.style.map(
+                color_a_comprar,
+                subset=["a_comprar", "a_comprar_estimado"],
+            )
+        except AttributeError:
+            styled = merged.style.applymap(
+                color_a_comprar,
+                subset=["a_comprar", "a_comprar_estimado"],
             )
 
-            st.dataframe(styled, use_container_width=True, hide_index=True)
+        styled = styled.format(
+            {
+                "pedido": "{:.2f}",
+                "estimado": "{:.2f}",
+                "stock": "{:.2f}",
+                "a_comprar": "{:+.2f}",
+                "a_comprar_estimado": "{:+.2f}",
+            }
+        )
 
-            st.caption(
-                "**a_comprar** = `pedido − stock`. "
-                "**a_comprar_estimado** = `(pedido + estimado) − stock`. "
-                "Positivo (rojo) = falta comprar · negativo (verde) = sobra."
-            )
+        st.dataframe(styled, use_container_width=True, hide_index=True)
+
+        st.caption(
+            "**a_comprar** = `pedido − stock`. "
+            "**a_comprar_estimado** = `(pedido + estimado) − stock`. "
+            "Positivo (rojo) = falta comprar · negativo (verde) = sobra."
+        )
 
 with tab_estimado:
     st.info(
