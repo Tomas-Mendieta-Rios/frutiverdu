@@ -2608,6 +2608,7 @@ with tab_compras:
             import xlwt
             # DUX pide fecha con guiones DD-MM-AAAA
             fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d-%m-%Y")
+            fecha_compacta = pd.to_datetime(fecha_compra_sel).strftime("%Y%m%d")
 
             def _num_es(v):
                 try:
@@ -2616,12 +2617,22 @@ with tab_compras:
                     return ""
                 return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
+            # Agrupar por proveedor: todas las lineas del mismo proveedor van con
+            # el MISMO comprobante (asi DUX las junta como una sola factura).
+            proveedor_a_compr = {}
+            for _, r in df_compras_fecha_post.iterrows():
+                pid = str(r.get("proveedor_id", "") or "")
+                if pid and pid not in proveedor_a_compr:
+                    proveedor_a_compr[pid] = f"{fecha_compacta}-{len(proveedor_a_compr) + 1:04d}"
+
             filas_excel = []
             for _, r in df_compras_fecha_post.iterrows():
+                pid = str(r.get("proveedor_id", "") or "")
                 fila = {col: "" for col in COLUMNAS_DUX}
+                fila["COMPROBANTE"] = proveedor_a_compr.get(pid, "")
                 fila["TIPO COMPROBANTE"] = "COMPROBANTE COMPRA"
                 fila["DEPOSITO"] = "DEPOSITO"
-                fila["ID PROVEEDOR"] = r.get("proveedor_id", "") or ""
+                fila["ID PROVEEDOR"] = pid
                 fila["FECHA"] = fecha_str_dux
                 fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
                 fila["FECHA VENCIMIENTO"] = fecha_str_dux
