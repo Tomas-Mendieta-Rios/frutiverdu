@@ -3246,16 +3246,15 @@ with tab_hist_precios:
             por_prod_hp["precio_prom"] = por_prod_hp["gastado"] / por_prod_hp["cantidad"]
             por_prod_hp = por_prod_hp.sort_values("producto_nombre")
 
-            buscar_hp = st.text_input(
-                "🔎 Buscar producto",
-                key="hp_buscar",
-                placeholder="Filtra por nombre o código...",
+            prods_disp_hp = por_prod_hp["producto_nombre"].dropna().unique().tolist()
+            filtro_prod_hp = st.multiselect(
+                "Producto",
+                options=sorted(prods_disp_hp),
+                key="hp_filtro_prod_sel",
             )
-            if buscar_hp:
-                q_hp = buscar_hp.lower()
+            if filtro_prod_hp:
                 por_prod_hp = por_prod_hp[
-                    por_prod_hp["producto_nombre"].astype(str).str.lower().str.contains(q_hp, na=False)
-                    | por_prod_hp["codigo_producto"].astype(str).str.lower().str.contains(q_hp, na=False)
+                    por_prod_hp["producto_nombre"].isin(filtro_prod_hp)
                 ].reset_index(drop=True)
 
             st.caption(
@@ -3387,9 +3386,11 @@ with tab_detalle_compras:
                     "Proveedor", options=provs_disp, key="dc_filtro_prov"
                 )
             with col_f2:
-                buscar_prod_dc = st.text_input(
-                    "Buscar producto", key="dc_filtro_prod",
-                    placeholder="Filtra por nombre o código...",
+                prods_disp_dc = sorted(
+                    df_rango_dc["producto_nombre"].dropna().unique().tolist()
+                )
+                filtro_prod_dc = st.multiselect(
+                    "Producto", options=prods_disp_dc, key="dc_filtro_prod_sel",
                 )
             with col_f3:
                 pagos_disp = sorted(df_rango_dc["condicion_pago"].dropna().unique().tolist())
@@ -3401,13 +3402,10 @@ with tab_detalle_compras:
                 df_rango_dc = df_rango_dc[
                     df_rango_dc["proveedor_nombre"].isin(filtro_prov)
                 ]
-            if buscar_prod_dc:
-                q = buscar_prod_dc.lower()
-                mask_q = (
-                    df_rango_dc["producto_nombre"].astype(str).str.lower().str.contains(q, na=False)
-                    | df_rango_dc["codigo_producto"].astype(str).str.lower().str.contains(q, na=False)
-                )
-                df_rango_dc = df_rango_dc[mask_q]
+            if filtro_prod_dc:
+                df_rango_dc = df_rango_dc[
+                    df_rango_dc["producto_nombre"].isin(filtro_prod_dc)
+                ]
             if filtro_pago:
                 df_rango_dc = df_rango_dc[
                     df_rango_dc["condicion_pago"].isin(filtro_pago)
