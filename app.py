@@ -2776,6 +2776,55 @@ with tab_compras:
                     },
                 )
 
+            # Precio promedio por producto (base + unidad)
+            st.markdown("**Precio promedio por producto y unidad**")
+            df_prom = df_resumen.copy()
+            map_prod_full = dict(
+                zip(productos["codigo"].astype(str), productos["producto"].astype(str))
+            )
+            df_prom["producto_full"] = (
+                df_prom["codigo_producto"].astype(str).map(map_prod_full)
+                .fillna(df_prom["producto_nombre"])
+            )
+            partes_prom = df_prom["producto_full"].str.rsplit(" - ", n=1, expand=True)
+            df_prom["base"] = partes_prom[0].str.strip()
+            df_prom["unidad"] = (
+                partes_prom[1].fillna("").str.strip()
+                if 1 in partes_prom.columns
+                else ""
+            )
+            por_prod_unidad = (
+                df_prom.groupby(["base", "unidad"])
+                .agg(cantidad=("cantidad", "sum"),
+                     gastado=("subtotal", "sum"))
+                .reset_index()
+            )
+            por_prod_unidad["precio_promedio"] = (
+                por_prod_unidad["gastado"] / por_prod_unidad["cantidad"]
+            )
+            por_prod_unidad = por_prod_unidad.sort_values(["base", "unidad"])
+            por_prod_unidad["cantidad"] = por_prod_unidad["cantidad"].apply(
+                lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
+            )
+            por_prod_unidad["gastado"] = por_prod_unidad["gastado"].apply(
+                lambda v: f"$ {v:,.2f}"
+            )
+            por_prod_unidad["precio_promedio"] = por_prod_unidad["precio_promedio"].apply(
+                lambda v: f"$ {v:,.2f}"
+            )
+            st.dataframe(
+                por_prod_unidad,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "base": st.column_config.TextColumn("Producto"),
+                    "unidad": st.column_config.TextColumn("Unidad"),
+                    "cantidad": st.column_config.TextColumn("Cantidad"),
+                    "gastado": st.column_config.TextColumn("Gastado"),
+                    "precio_promedio": st.column_config.TextColumn("Precio prom."),
+                },
+            )
+
             with st.expander(f"Ver detalle línea por línea ({len(df_compras_fecha_post)} líneas)"):
                 df_det = df_compras_fecha_post.copy()
                 df_det["subtotal"] = (
