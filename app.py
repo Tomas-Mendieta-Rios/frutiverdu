@@ -2437,12 +2437,12 @@ with tab_compras:
     COND_PAGO_OPCIONES = ["CONTADO", "EFECTIVO", "CHEQUE", "CUENTA CORRIENTE"]
     COLUMNAS_DUX = [
         "COMPROBANTE", "TIPO COMPROBANTE", "ID PROVEEDOR", "FECHA",
-        "FECHA IMPUTACION CC", "FECHA VENCIMIENTO", "CONDICION PAGO",
+        "FECHA IMPUTACION CONTABLE", "FECHA VENCIMIENTO", "CONDICION PAGO",
         "REALIZA RECEPCION", "DEPOSITO", "OBSERVACIONES", "CÓDIGO PRODUCTO",
         "TALLE", "COLOR", "CANTIDAD", "PRECIO", "PRECIO INCLUYE IVA",
         "PORCENTAJE DESCUENTO", "PORCENTAJE IVA", "COMENTARIOS",
-        "NUMERO IDENTIFICACION", "DESCRIPCION TRAZABILIDAD",
-        "PERCEPCIONES", "VALORES PERCEPCION",
+        "NUMERO IDENTIFICACION TRAZABLE", "DESCRIPCION TRAZABLE",
+        "PERCEPCIONES", "VALORES PERCEPCIONES",
     ]
 
     df_prov_data = db.cargar_proveedores()
@@ -2613,7 +2613,7 @@ with tab_compras:
                 fila["DEPOSITO"] = "DEPOSITO"
                 fila["ID PROVEEDOR"] = r.get("proveedor_id", "") or ""
                 fila["FECHA"] = fecha_str_dux
-                fila["FECHA IMPUTACION CC"] = fecha_str_dux
+                fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
                 fila["FECHA VENCIMIENTO"] = fecha_str_dux
                 fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
                 fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
