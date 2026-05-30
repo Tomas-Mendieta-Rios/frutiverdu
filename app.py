@@ -2622,8 +2622,12 @@ with tab_compras:
                 excel_rows.append(fila)
 
             df_excel_dux = pd.DataFrame(excel_rows, columns=COLUMNAS_DUX)
+            # Convertir strings vacios en NaN para que queden celdas verdaderamente vacias
+            df_excel_dux = df_excel_dux.replace({"": pd.NA})
             buf = io.BytesIO()
-            df_excel_dux.to_excel(buf, index=False, engine="openpyxl")
+            # Sheet name "Hoja1" (default español, comun para apps argentinas)
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                df_excel_dux.to_excel(writer, sheet_name="Hoja1", index=False)
             buf.seek(0)
             st.download_button(
                 "📥 Descargar Excel para DUX",
