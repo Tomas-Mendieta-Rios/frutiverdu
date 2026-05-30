@@ -180,22 +180,24 @@ st.caption(f"👤 Sesión: **{_usuario_actual}**")
 st.markdown(
     """
 <style>
-/* Operativas (1-5) - verde */
-.stTabs [data-baseweb="tab-list"] button:nth-child(-n+5) {
-    background-color: #e8f5e9;
-    border-top: 3px solid #2E7D32;
+/* Operativas (1-6: Total, Compras, DUX, Wix, Stock, Estimado) - verde */
+.stTabs [data-baseweb="tab-list"] button:nth-child(-n+6) {
+    background-color: #e8f5e9 !important;
+    color: #1b5e20 !important;
+    border-top: 3px solid #2E7D32 !important;
 }
-.stTabs [data-baseweb="tab-list"] button:nth-child(-n+5):hover {
-    background-color: #c8e6c9;
+.stTabs [data-baseweb="tab-list"] button:nth-child(-n+6):hover {
+    background-color: #c8e6c9 !important;
 }
 
-/* Configuración (6-10) - naranja */
-.stTabs [data-baseweb="tab-list"] button:nth-child(n+6) {
-    background-color: #fff3e0;
-    border-top: 3px solid #ef6c00;
+/* Configuración (7+: Mapeo, Packs, Productos, Proveedores, Relacionar, Probar) - rojo */
+.stTabs [data-baseweb="tab-list"] button:nth-child(n+7) {
+    background-color: #ffebee !important;
+    color: #b71c1c !important;
+    border-top: 3px solid #c62828 !important;
 }
-.stTabs [data-baseweb="tab-list"] button:nth-child(n+6):hover {
-    background-color: #ffe0b2;
+.stTabs [data-baseweb="tab-list"] button:nth-child(n+7):hover {
+    background-color: #ffcdd2 !important;
 }
 </style>
 """,
@@ -781,6 +783,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 
 (
     tab_comprar,
+    tab_compras,
     tab_dux,
     tab_wix,
     tab_stock,
@@ -790,12 +793,12 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
     tab_dux_productos,
     tab_wix_productos,
     tab_proveedores,
-    tab_compras,
     tab_editar,
     tab_probar,
 ) = st.tabs(
     [
         "🛒 Total a comprar",
+        "💰 Compras",
         "📡 DUX Pedidos",
         "🛍️ Wix Pedidos",
         "📦 Stock",
@@ -805,7 +808,6 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
         "📡 DUX Productos",
         "🛍️ Wix Productos",
         "👥 Proveedores",
-        "💰 Compras",
         "⚙️ Relacionar productos",
         "🧪 Probar conversión",
     ]
@@ -2719,11 +2721,73 @@ with tab_compras:
                 mime="application/vnd.ms-excel",
                 type="primary",
             )
-            with st.expander(f"Ver resumen ({len(df_compras_fecha_post)} líneas)"):
+
+            # ---------- Resumen del día ----------
+            df_resumen = df_compras_fecha_post.copy()
+            df_resumen["subtotal"] = (
+                df_resumen["cantidad"].astype(float) * df_resumen["precio"].astype(float)
+            )
+            total_gastado = float(df_resumen["subtotal"].sum())
+
+            st.markdown("### 📊 Resumen del día")
+            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+            col_m1.metric("💰 Total gastado", f"$ {total_gastado:,.2f}")
+            col_m2.metric("📦 Líneas", len(df_resumen))
+            col_m3.metric("🏪 Proveedores", df_resumen["proveedor_id"].nunique())
+            col_m4.metric("🧾 Facturas", df_resumen["comprobante"].nunique())
+
+            col_r1, col_r2 = st.columns(2)
+            with col_r1:
+                st.markdown("**Por proveedor**")
+                por_prov = (
+                    df_resumen.groupby("proveedor_nombre")
+                    .agg(items=("codigo_producto", "count"),
+                         total=("subtotal", "sum"))
+                    .reset_index()
+                    .sort_values("total", ascending=False)
+                )
+                por_prov["total"] = por_prov["total"].apply(lambda v: f"$ {v:,.2f}")
                 st.dataframe(
-                    df_compras_fecha_post[[
+                    por_prov,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
+                        "items": st.column_config.NumberColumn("Items"),
+                        "total": st.column_config.TextColumn("Total"),
+                    },
+                )
+            with col_r2:
+                st.markdown("**Por forma de pago**")
+                por_pago = (
+                    df_resumen.groupby("condicion_pago")
+                    .agg(items=("codigo_producto", "count"),
+                         total=("subtotal", "sum"))
+                    .reset_index()
+                    .sort_values("total", ascending=False)
+                )
+                por_pago["total"] = por_pago["total"].apply(lambda v: f"$ {v:,.2f}")
+                st.dataframe(
+                    por_pago,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "condicion_pago": st.column_config.TextColumn("Forma de pago"),
+                        "items": st.column_config.NumberColumn("Items"),
+                        "total": st.column_config.TextColumn("Total"),
+                    },
+                )
+
+            with st.expander(f"Ver detalle línea por línea ({len(df_compras_fecha_post)} líneas)"):
+                df_det = df_compras_fecha_post.copy()
+                df_det["subtotal"] = (
+                    df_det["cantidad"].astype(float) * df_det["precio"].astype(float)
+                )
+                st.dataframe(
+                    df_det[[
                         "comprobante", "proveedor_nombre", "codigo_producto",
-                        "producto_nombre", "cantidad", "precio", "condicion_pago",
+                        "producto_nombre", "cantidad", "precio", "subtotal",
+                        "condicion_pago",
                     ]],
                     use_container_width=True,
                     hide_index=True,
