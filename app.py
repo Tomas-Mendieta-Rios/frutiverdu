@@ -2776,54 +2776,115 @@ with tab_compras:
                     },
                 )
 
-            # Precio promedio por producto (base + unidad)
+            # Precio promedio por producto y unidad — usa grafo de compuestos
+            # para mostrar el precio equivalente en TODAS las unidades de la familia.
             st.markdown("**Precio promedio por producto y unidad**")
-            df_prom = df_resumen.copy()
+            grafo_compras = construir_grafo_conversion(compuestos)
+
+            prod_temp_c = productos.copy()
+            partes_pr_c = (
+                prod_temp_c["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+            )
+            prod_temp_c["base"] = partes_pr_c[0].str.strip()
+            prod_temp_c["unidad"] = (
+                partes_pr_c[1].fillna("").str.strip()
+                if 1 in partes_pr_c.columns
+                else ""
+            )
+
+            df_prom_src = df_resumen.copy()
             map_prod_full = dict(
                 zip(productos["codigo"].astype(str), productos["producto"].astype(str))
             )
-            df_prom["producto_full"] = (
-                df_prom["codigo_producto"].astype(str).map(map_prod_full)
-                .fillna(df_prom["producto_nombre"])
+            df_prom_src["producto_full"] = (
+                df_prom_src["codigo_producto"].astype(str).map(map_prod_full)
+                .fillna(df_prom_src["producto_nombre"])
             )
-            partes_prom = df_prom["producto_full"].str.rsplit(" - ", n=1, expand=True)
-            df_prom["base"] = partes_prom[0].str.strip()
-            df_prom["unidad"] = (
-                partes_prom[1].fillna("").str.strip()
-                if 1 in partes_prom.columns
-                else ""
+            partes_pr_src = (
+                df_prom_src["producto_full"].str.rsplit(" - ", n=1, expand=True)
             )
-            por_prod_unidad = (
-                df_prom.groupby(["base", "unidad"])
-                .agg(cantidad=("cantidad", "sum"),
-                     gastado=("subtotal", "sum"))
-                .reset_index()
-            )
-            por_prod_unidad["precio_promedio"] = (
-                por_prod_unidad["gastado"] / por_prod_unidad["cantidad"]
-            )
-            por_prod_unidad = por_prod_unidad.sort_values(["base", "unidad"])
-            por_prod_unidad["cantidad"] = por_prod_unidad["cantidad"].apply(
-                lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
-            )
-            por_prod_unidad["gastado"] = por_prod_unidad["gastado"].apply(
-                lambda v: f"$ {v:,.2f}"
-            )
-            por_prod_unidad["precio_promedio"] = por_prod_unidad["precio_promedio"].apply(
-                lambda v: f"$ {v:,.2f}"
-            )
-            st.dataframe(
-                por_prod_unidad,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "base": st.column_config.TextColumn("Producto"),
-                    "unidad": st.column_config.TextColumn("Unidad"),
-                    "cantidad": st.column_config.TextColumn("Cantidad"),
-                    "gastado": st.column_config.TextColumn("Gastado"),
-                    "precio_promedio": st.column_config.TextColumn("Precio prom."),
-                },
-            )
+            df_prom_src["base"] = partes_pr_src[0].str.strip()
+
+            filas_prom = []
+            for base in df_prom_src["base"].dropna().unique():
+                lineas_base = df_prom_src[df_prom_src["base"] == base]
+                if lineas_base.empty:
+                    continue
+                gastado_total = float(lineas_base["subtotal"].sum())
+
+                familia = prod_temp_c[prod_temp_c["base"] == base]
+                if familia.empty:
+                    continue
+
+                codigos_familia = familia["codigo"].astype(str).tolist()
+                componentes = componentes_conectados(codigos_familia, grafo_compras)
+                codigos_comprados = set(lineas_base["codigo_producto"].astype(str))
+
+                comp_relevante = None
+                for comp in componentes:
+                    if comp & codigos_comprados:
+                        comp_relevante = comp
+                        break
+                if not comp_relevante:
+                    continue
+
+                productos_comp = familia[
+                    familia["codigo"].astype(str).isin(comp_relevante)
+                ]
+                unidades_unicas = list(
+                    dict.fromkeys(productos_comp["unidad"].tolist())
+                )
+
+                for unidad in unidades_unicas:
+                    if not unidad:
+                        continue
+                    codigo_destino = str(
+                        productos_comp[productos_comp["unidad"] == unidad]
+                        .iloc[0]["codigo"]
+                    )
+                    cantidad_total = 0.0
+                    for _, linea in lineas_base.iterrows():
+                        cod_origen = str(linea["codigo_producto"])
+                        factor = convertir(grafo_compras, cod_origen, codigo_destino)
+                        if factor is None:
+                            continue
+                        cantidad_total += float(linea["cantidad"]) * factor
+                    if cantidad_total <= 0:
+                        continue
+                    filas_prom.append({
+                        "base": base,
+                        "unidad": unidad,
+                        "cantidad": cantidad_total,
+                        "gastado": gastado_total,
+                        "precio_promedio": gastado_total / cantidad_total,
+                    })
+
+            if filas_prom:
+                por_prod_unidad = pd.DataFrame(filas_prom)
+                por_prod_unidad = por_prod_unidad.sort_values(["base", "unidad"])
+                por_prod_unidad["cantidad"] = por_prod_unidad["cantidad"].apply(
+                    lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
+                )
+                por_prod_unidad["gastado"] = por_prod_unidad["gastado"].apply(
+                    lambda v: f"$ {v:,.2f}"
+                )
+                por_prod_unidad["precio_promedio"] = por_prod_unidad[
+                    "precio_promedio"
+                ].apply(lambda v: f"$ {v:,.2f}")
+                st.dataframe(
+                    por_prod_unidad,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "base": st.column_config.TextColumn("Producto"),
+                        "unidad": st.column_config.TextColumn("Unidad"),
+                        "cantidad": st.column_config.TextColumn("Cantidad"),
+                        "gastado": st.column_config.TextColumn("Gastado"),
+                        "precio_promedio": st.column_config.TextColumn("Precio prom."),
+                    },
+                )
+            else:
+                st.caption("Sin datos para calcular precios promedio.")
 
             with st.expander(f"Ver detalle línea por línea ({len(df_compras_fecha_post)} líneas)"):
                 df_det = df_compras_fecha_post.copy()
