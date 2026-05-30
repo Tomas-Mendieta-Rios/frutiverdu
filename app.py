@@ -2877,29 +2877,27 @@ with tab_compras:
                     })
 
             if filas_prom:
-                por_prod_unidad = pd.DataFrame(filas_prom)
-                por_prod_unidad = por_prod_unidad.sort_values(["base", "unidad"])
-                por_prod_unidad["cantidad"] = por_prod_unidad["cantidad"].apply(
-                    lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
-                )
-                por_prod_unidad["gastado"] = por_prod_unidad["gastado"].apply(
-                    lambda v: f"$ {v:,.2f}"
-                )
-                por_prod_unidad["precio_promedio"] = por_prod_unidad[
-                    "precio_promedio"
-                ].apply(lambda v: f"$ {v:,.2f}")
-                st.dataframe(
-                    por_prod_unidad,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "base": st.column_config.TextColumn("Producto"),
-                        "unidad": st.column_config.TextColumn("Unidad"),
-                        "cantidad": st.column_config.TextColumn("Cantidad"),
-                        "gastado": st.column_config.TextColumn("Gastado"),
-                        "precio_promedio": st.column_config.TextColumn("Precio prom."),
-                    },
-                )
+                # Agrupar por base — expander por producto (estilo Total a comprar)
+                bases_orden = sorted(set(f["base"] for f in filas_prom))
+                for base in bases_orden:
+                    filas_base = [f for f in filas_prom if f["base"] == base]
+                    gastado_base = filas_base[0]["gastado"]
+                    with st.expander(
+                        f"**{base}** — $ {gastado_base:,.2f}",
+                        expanded=False,
+                    ):
+                        cols_h = st.columns([1, 1.2, 1.2])
+                        cols_h[0].markdown("**Unidad**")
+                        cols_h[1].markdown("**Cantidad**")
+                        cols_h[2].markdown("**Precio prom.**")
+                        for f in filas_base:
+                            cols = st.columns([1, 1.2, 1.2])
+                            cols[0].markdown(f"**{f['unidad']}**")
+                            cant_str = (
+                                f"{f['cantidad']:,.3f}".rstrip("0").rstrip(".")
+                            )
+                            cols[1].markdown(cant_str)
+                            cols[2].markdown(f"$ {f['precio_promedio']:,.2f}")
             else:
                 st.caption("Sin datos para calcular precios promedio.")
 
@@ -3037,28 +3035,33 @@ with tab_hist_precios:
                 f"{por_prod_hp['base'].nunique()} productos"
             )
 
-            disp = por_prod_hp.copy()
-            disp["cantidad"] = disp["cantidad"].apply(lambda v: f"{v:,.2f}")
-            disp["gastado"] = disp["gastado"].apply(lambda v: f"$ {v:,.2f}")
-            disp["precio_min"] = disp["precio_min"].apply(lambda v: f"$ {v:,.2f}")
-            disp["precio_max"] = disp["precio_max"].apply(lambda v: f"$ {v:,.2f}")
-            disp["precio_prom"] = disp["precio_prom"].apply(lambda v: f"$ {v:,.2f}")
-            st.dataframe(
-                disp[["base", "unidad", "compras", "cantidad", "precio_min",
-                       "precio_prom", "precio_max", "gastado"]],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "base": st.column_config.TextColumn("Producto"),
-                    "unidad": st.column_config.TextColumn("Unidad"),
-                    "compras": st.column_config.NumberColumn("# compras"),
-                    "cantidad": st.column_config.TextColumn("Cantidad"),
-                    "precio_min": st.column_config.TextColumn("Mín"),
-                    "precio_prom": st.column_config.TextColumn("Promedio"),
-                    "precio_max": st.column_config.TextColumn("Máx"),
-                    "gastado": st.column_config.TextColumn("Gastado"),
-                },
-            )
+            # Expander por producto (estilo Total a comprar)
+            bases_hp = sorted(por_prod_hp["base"].dropna().unique().tolist())
+            for base_hp in bases_hp:
+                rows_b = por_prod_hp[por_prod_hp["base"] == base_hp]
+                gastado_b = float(rows_b["gastado"].sum())
+                compras_b = int(rows_b["compras"].sum())
+                with st.expander(
+                    f"**{base_hp}** — $ {gastado_b:,.2f} · {compras_b} compras",
+                    expanded=False,
+                ):
+                    cols_h = st.columns([1, 0.8, 1, 1, 1, 1, 1])
+                    cols_h[0].markdown("**Unidad**")
+                    cols_h[1].markdown("**Compras**")
+                    cols_h[2].markdown("**Cantidad**")
+                    cols_h[3].markdown("**Mín**")
+                    cols_h[4].markdown("**Promedio**")
+                    cols_h[5].markdown("**Máx**")
+                    cols_h[6].markdown("**Gastado**")
+                    for _, r_b in rows_b.iterrows():
+                        cols_r = st.columns([1, 0.8, 1, 1, 1, 1, 1])
+                        cols_r[0].markdown(f"**{r_b['unidad']}**")
+                        cols_r[1].markdown(f"{int(r_b['compras'])}")
+                        cols_r[2].markdown(f"{r_b['cantidad']:,.2f}")
+                        cols_r[3].markdown(f"$ {r_b['precio_min']:,.2f}")
+                        cols_r[4].markdown(f"$ {r_b['precio_prom']:,.2f}")
+                        cols_r[5].markdown(f"$ {r_b['precio_max']:,.2f}")
+                        cols_r[6].markdown(f"$ {r_b['gastado']:,.2f}")
 
             # Evolucion diaria de un producto especifico
             productos_disp_hp = sorted(por_prod_hp["base"].unique().tolist())
