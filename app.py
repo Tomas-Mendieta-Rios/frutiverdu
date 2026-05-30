@@ -2605,7 +2605,17 @@ with tab_compras:
             df_compras_fecha_post = pd.DataFrame()
 
         if not df_compras_fecha_post.empty:
-            fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d/%m/%Y")
+            # DUX pide fecha con guiones DD-MM-AAAA
+            fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d-%m-%Y")
+
+            def _num_es(v):
+                # Decimales con coma (formato espanol) como STRING para que DUX lo parsee.
+                try:
+                    n = float(v)
+                except (ValueError, TypeError):
+                    return ""
+                return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
+
             excel_rows = []
             for _, r in df_compras_fecha_post.iterrows():
                 fila = {col: "" for col in COLUMNAS_DUX}
@@ -2617,17 +2627,20 @@ with tab_compras:
                 fila["FECHA VENCIMIENTO"] = fecha_str_dux
                 fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
                 fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
-                fila["CANTIDAD"] = float(r.get("cantidad", 0) or 0)
-                fila["PRECIO"] = float(r.get("precio", 0) or 0)
+                fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
+                fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
                 excel_rows.append(fila)
 
             df_excel_dux = pd.DataFrame(excel_rows, columns=COLUMNAS_DUX)
             # Convertir strings vacios en NaN para que queden celdas verdaderamente vacias
             df_excel_dux = df_excel_dux.replace({"": pd.NA})
             buf = io.BytesIO()
-            # Sheet name "Hoja1" (default español, comun para apps argentinas)
+            # startrow=1 deja la primera fila VACIA, headers en fila 2.
+            # Sheet name "Hoja1" (default español, comun para apps argentinas).
             with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                df_excel_dux.to_excel(writer, sheet_name="Hoja1", index=False)
+                df_excel_dux.to_excel(
+                    writer, sheet_name="Hoja1", index=False, startrow=1
+                )
             buf.seek(0)
             st.download_button(
                 "📥 Descargar Excel para DUX",
