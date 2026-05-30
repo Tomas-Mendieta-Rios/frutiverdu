@@ -2730,11 +2730,9 @@ with tab_compras:
             total_gastado = float(df_resumen["subtotal"].sum())
 
             st.markdown("### 📊 Resumen del día")
-            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+            col_m1, col_m2 = st.columns(2)
             col_m1.metric("💰 Total gastado", f"$ {total_gastado:,.2f}")
-            col_m2.metric("📦 Líneas", len(df_resumen))
-            col_m3.metric("🏪 Proveedores", df_resumen["proveedor_id"].nunique())
-            col_m4.metric("🧾 Facturas", df_resumen["comprobante"].nunique())
+            col_m2.metric("🧾 Facturas", df_resumen["comprobante"].nunique())
 
             col_r1, col_r2 = st.columns(2)
             with col_r1:
