@@ -3038,108 +3038,38 @@ with tab_resumen_rango:
                     },
                 )
 
-            # Precio promedio por producto + unidad usando grafo de compuestos
-            st.markdown("**Precio promedio por producto y unidad**")
-            grafo_rr = construir_grafo_conversion(compuestos)
-            prod_temp_rr = productos.copy()
-            partes_pr_rr = (
-                prod_temp_rr["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+            # Precio promedio por producto (cada codigo/unidad por si mismo, sin conversiones)
+            st.markdown("**Precio promedio por producto**")
+            por_prod_rr = (
+                df_rng.groupby(["codigo_producto", "producto_nombre"])
+                .agg(cantidad=("cantidad", "sum"), gastado=("subtotal", "sum"))
+                .reset_index()
             )
-            prod_temp_rr["base"] = partes_pr_rr[0].str.strip()
-            prod_temp_rr["unidad"] = (
-                partes_pr_rr[1].fillna("").str.strip()
-                if 1 in partes_pr_rr.columns
-                else ""
+            por_prod_rr["precio_prom"] = (
+                por_prod_rr["gastado"] / por_prod_rr["cantidad"]
             )
-
-            df_prom_rr = df_rng.copy()
-            map_prod_full_rr = dict(
-                zip(productos["codigo"].astype(str), productos["producto"].astype(str))
+            por_prod_rr = por_prod_rr.sort_values("producto_nombre")
+            disp_rr = por_prod_rr.copy()
+            disp_rr["cantidad"] = disp_rr["cantidad"].apply(
+                lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
             )
-            df_prom_rr["producto_full"] = (
-                df_prom_rr["codigo_producto"].astype(str).map(map_prod_full_rr)
-                .fillna(df_prom_rr["producto_nombre"])
+            disp_rr["gastado"] = disp_rr["gastado"].apply(lambda v: f"$ {v:,.2f}")
+            disp_rr["precio_prom"] = disp_rr["precio_prom"].apply(
+                lambda v: f"$ {v:,.2f}"
             )
-            partes_pr_src_rr = (
-                df_prom_rr["producto_full"].str.rsplit(" - ", n=1, expand=True)
+            st.dataframe(
+                disp_rr[["codigo_producto", "producto_nombre", "cantidad",
+                          "precio_prom", "gastado"]],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "codigo_producto": st.column_config.TextColumn("Código"),
+                    "producto_nombre": st.column_config.TextColumn("Producto"),
+                    "cantidad": st.column_config.TextColumn("Cantidad"),
+                    "precio_prom": st.column_config.TextColumn("Precio prom."),
+                    "gastado": st.column_config.TextColumn("Gastado"),
+                },
             )
-            df_prom_rr["base"] = partes_pr_src_rr[0].str.strip()
-
-            filas_prom_rr = []
-            for base in df_prom_rr["base"].dropna().unique():
-                lineas_base = df_prom_rr[df_prom_rr["base"] == base]
-                if lineas_base.empty:
-                    continue
-                gastado_total = float(lineas_base["subtotal"].sum())
-
-                familia = prod_temp_rr[prod_temp_rr["base"] == base]
-                if familia.empty:
-                    continue
-
-                codigos_familia = familia["codigo"].astype(str).tolist()
-                componentes = componentes_conectados(codigos_familia, grafo_rr)
-                codigos_comprados = set(lineas_base["codigo_producto"].astype(str))
-
-                comp_relevante = None
-                for comp in componentes:
-                    if comp & codigos_comprados:
-                        comp_relevante = comp
-                        break
-                if not comp_relevante:
-                    continue
-
-                productos_comp = familia[
-                    familia["codigo"].astype(str).isin(comp_relevante)
-                ]
-                unidades_unicas = list(
-                    dict.fromkeys(productos_comp["unidad"].tolist())
-                )
-
-                for unidad in unidades_unicas:
-                    if not unidad:
-                        continue
-                    codigo_destino = str(
-                        productos_comp[productos_comp["unidad"] == unidad]
-                        .iloc[0]["codigo"]
-                    )
-                    cantidad_total = 0.0
-                    for _, linea in lineas_base.iterrows():
-                        cod_origen = str(linea["codigo_producto"])
-                        factor = convertir(grafo_rr, cod_origen, codigo_destino)
-                        if factor is None:
-                            continue
-                        cantidad_total += float(linea["cantidad"]) * factor
-                    if cantidad_total <= 0:
-                        continue
-                    filas_prom_rr.append({
-                        "base": base,
-                        "unidad": unidad,
-                        "cantidad": cantidad_total,
-                        "gastado": gastado_total,
-                        "precio_promedio": gastado_total / cantidad_total,
-                    })
-
-            if filas_prom_rr:
-                bases_orden_rr = sorted(set(f["base"] for f in filas_prom_rr))
-                for base in bases_orden_rr:
-                    filas_base_rr = [f for f in filas_prom_rr if f["base"] == base]
-                    gastado_base_rr = filas_base_rr[0]["gastado"]
-                    with st.expander(
-                        f"**{base}** — $ {gastado_base_rr:,.2f}",
-                        expanded=False,
-                    ):
-                        cols_h = st.columns([1, 1.2, 1.2])
-                        cols_h[0].markdown("**Unidad**")
-                        cols_h[1].markdown("**Cantidad**")
-                        cols_h[2].markdown("**Precio prom.**")
-                        for f in filas_base_rr:
-                            cols = st.columns([1, 1.2, 1.2])
-                            cols[0].markdown(f"**{f['unidad']}**")
-                            cant_str = (
-                                f"{f['cantidad']:,.3f}".rstrip("0").rstrip(".")
-                            )
-                            cols[1].markdown(cant_str)
-                            cols[2].markdown(f"$ {f['precio_promedio']:,.2f}")
 
             st.caption(
                 f"📅 Rango: {fecha_desde_rr} → {fecha_hasta_rr} · "
@@ -3215,78 +3145,66 @@ with tab_hist_precios:
             df_rango_hp["subtotal"] = (
                 df_rango_hp["cantidad"].astype(float) * df_rango_hp["precio"].astype(float)
             )
-            map_prod_hp = dict(
-                zip(productos["codigo"].astype(str), productos["producto"].astype(str))
-            )
-            df_rango_hp["producto_full"] = (
-                df_rango_hp["codigo_producto"].astype(str).map(map_prod_hp)
-                .fillna(df_rango_hp["producto_nombre"])
-            )
-            partes_hp = df_rango_hp["producto_full"].str.rsplit(" - ", n=1, expand=True)
-            df_rango_hp["base"] = partes_hp[0].str.strip()
-            df_rango_hp["unidad"] = (
-                partes_hp[1].fillna("").str.strip()
-                if 1 in partes_hp.columns
-                else ""
-            )
 
+            # Agrupar por (codigo, producto_nombre) sin conversiones — cada
+            # producto/unidad por si mismo.
             por_prod_hp = (
-                df_rango_hp.groupby(["base", "unidad"])
+                df_rango_hp.groupby(["codigo_producto", "producto_nombre"])
                 .agg(
                     cantidad=("cantidad", "sum"),
                     gastado=("subtotal", "sum"),
                     precio_min=("precio", "min"),
                     precio_max=("precio", "max"),
-                    compras=("codigo_producto", "count"),
                 )
                 .reset_index()
             )
             por_prod_hp["precio_prom"] = por_prod_hp["gastado"] / por_prod_hp["cantidad"]
-            por_prod_hp = por_prod_hp.sort_values(["base", "unidad"])
+            por_prod_hp = por_prod_hp.sort_values("producto_nombre")
 
             buscar_hp = st.text_input(
                 "🔎 Buscar producto",
                 key="hp_buscar",
-                placeholder="Filtra por nombre...",
+                placeholder="Filtra por nombre o código...",
             )
             if buscar_hp:
+                q_hp = buscar_hp.lower()
                 por_prod_hp = por_prod_hp[
-                    por_prod_hp["base"].str.contains(buscar_hp, case=False, na=False)
+                    por_prod_hp["producto_nombre"].astype(str).str.lower().str.contains(q_hp, na=False)
+                    | por_prod_hp["codigo_producto"].astype(str).str.lower().str.contains(q_hp, na=False)
                 ].reset_index(drop=True)
 
             st.caption(
                 f"📅 Rango: {fecha_desde_hp} → {fecha_hasta_hp} · "
                 f"{len(df_rango_hp)} compras · "
-                f"{por_prod_hp['base'].nunique()} productos"
+                f"{len(por_prod_hp)} productos"
             )
 
-            # Expander por producto (estilo Total a comprar)
-            bases_hp = sorted(por_prod_hp["base"].dropna().unique().tolist())
-            for base_hp in bases_hp:
-                rows_b = por_prod_hp[por_prod_hp["base"] == base_hp]
-                gastado_b = float(rows_b["gastado"].sum())
-                with st.expander(
-                    f"**{base_hp}** — $ {gastado_b:,.2f}",
-                    expanded=False,
-                ):
-                    cols_h = st.columns([1, 1, 1, 1, 1, 1])
-                    cols_h[0].markdown("**Unidad**")
-                    cols_h[1].markdown("**Cantidad**")
-                    cols_h[2].markdown("**Mín**")
-                    cols_h[3].markdown("**Promedio**")
-                    cols_h[4].markdown("**Máx**")
-                    cols_h[5].markdown("**Gastado**")
-                    for _, r_b in rows_b.iterrows():
-                        cols_r = st.columns([1, 1, 1, 1, 1, 1])
-                        cols_r[0].markdown(f"**{r_b['unidad']}**")
-                        cols_r[1].markdown(f"{r_b['cantidad']:,.2f}")
-                        cols_r[2].markdown(f"$ {r_b['precio_min']:,.2f}")
-                        cols_r[3].markdown(f"$ {r_b['precio_prom']:,.2f}")
-                        cols_r[4].markdown(f"$ {r_b['precio_max']:,.2f}")
-                        cols_r[5].markdown(f"$ {r_b['gastado']:,.2f}")
+            disp_hp = por_prod_hp.copy()
+            disp_hp["cantidad"] = disp_hp["cantidad"].apply(
+                lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
+            )
+            disp_hp["gastado"] = disp_hp["gastado"].apply(lambda v: f"$ {v:,.2f}")
+            disp_hp["precio_min"] = disp_hp["precio_min"].apply(lambda v: f"$ {v:,.2f}")
+            disp_hp["precio_max"] = disp_hp["precio_max"].apply(lambda v: f"$ {v:,.2f}")
+            disp_hp["precio_prom"] = disp_hp["precio_prom"].apply(lambda v: f"$ {v:,.2f}")
+            st.dataframe(
+                disp_hp[["codigo_producto", "producto_nombre", "cantidad",
+                          "precio_min", "precio_prom", "precio_max", "gastado"]],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "codigo_producto": st.column_config.TextColumn("Código"),
+                    "producto_nombre": st.column_config.TextColumn("Producto"),
+                    "cantidad": st.column_config.TextColumn("Cantidad"),
+                    "precio_min": st.column_config.TextColumn("Mín"),
+                    "precio_prom": st.column_config.TextColumn("Promedio"),
+                    "precio_max": st.column_config.TextColumn("Máx"),
+                    "gastado": st.column_config.TextColumn("Gastado"),
+                },
+            )
 
             # Evolucion diaria de un producto especifico
-            productos_disp_hp = sorted(por_prod_hp["base"].unique().tolist())
+            productos_disp_hp = sorted(por_prod_hp["producto_nombre"].unique().tolist())
             if productos_disp_hp:
                 sel_hp = st.selectbox(
                     "📈 Ver evolución diaria de:",
@@ -3294,17 +3212,15 @@ with tab_hist_precios:
                     key="hp_evol_sel",
                 )
                 if sel_hp != "(elegir)":
-                    df_evol = df_rango_hp[df_rango_hp["base"] == sel_hp].copy()
+                    df_evol = df_rango_hp[df_rango_hp["producto_nombre"] == sel_hp].copy()
                     df_evol_agg = (
-                        df_evol.groupby([df_evol["fecha_dt"].dt.date, "unidad"])
+                        df_evol.groupby(df_evol["fecha_dt"].dt.date)
                         .apply(lambda g: g["subtotal"].sum() / g["cantidad"].sum())
                         .reset_index(name="precio_prom")
                     )
-                    df_evol_agg.columns = ["fecha", "unidad", "precio_prom"]
-                    pivot = df_evol_agg.pivot(
-                        index="fecha", columns="unidad", values="precio_prom"
-                    )
-                    st.line_chart(pivot)
+                    df_evol_agg.columns = ["fecha", "precio_prom"]
+                    df_evol_agg = df_evol_agg.set_index("fecha")
+                    st.line_chart(df_evol_agg)
 
 with tab_detalle_compras:
     st.markdown("### 📋 Detalle compras")
