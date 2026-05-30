@@ -954,16 +954,16 @@ with tab_stock:
     with col_btn_s2:
         st.caption(f"Guarda para la fecha **{fecha_stock}**.")
 
-    buscar_stk = st.text_input(
-        "🔎 Buscar producto",
-        key="buscar_stock",
-        placeholder="Filtra por nombre o código...",
+    prods_disp_stk = sorted(base_stk["producto"].dropna().astype(str).unique().tolist())
+    filtro_prod_stk = st.multiselect(
+        "Producto",
+        options=prods_disp_stk,
+        key="stk_filtro_prod_sel",
     )
-    if buscar_stk:
-        mask = base_stk["producto"].str.contains(buscar_stk, case=False, na=False) | base_stk[
-            "codigo"
-        ].astype(str).str.contains(buscar_stk, case=False, na=False)
-        base_stk_view = base_stk[mask].reset_index(drop=True)
+    if filtro_prod_stk:
+        base_stk_view = base_stk[
+            base_stk["producto"].astype(str).isin(filtro_prod_stk)
+        ].reset_index(drop=True)
     else:
         base_stk_view = base_stk
 
@@ -1184,11 +1184,6 @@ with tab_comprar:
                 )
 
     # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
-    buscar_comprar = st.text_input(
-        "🔎 Buscar producto",
-        key="buscar_comprar",
-        placeholder="Filtra por nombre o código...",
-    )
 
     grafo = construir_grafo_conversion(compuestos)
 
@@ -1225,8 +1220,6 @@ with tab_comprar:
     if not stk.empty:
         bases_set |= set(stk[stk["cantidad"] > 0]["base"].unique())
     bases = sorted(bases_set)
-    if buscar_comprar:
-        bases = [b for b in bases if buscar_comprar.lower() in b.lower()]
 
 
     for base in bases:
@@ -1410,16 +1403,16 @@ with tab_estimado:
     with col_btn_e2:
         st.caption(f"Guarda para el día **{DIAS_DISPLAY[dia_estimado]}** (fijo, se aplica a todos los {DIAS_DISPLAY[dia_estimado].lower()}).")
 
-    buscar_est = st.text_input(
-        "🔎 Buscar producto",
-        key="buscar_estimado",
-        placeholder="Filtra por nombre o código...",
+    prods_disp_est = sorted(base_est["producto"].dropna().astype(str).unique().tolist())
+    filtro_prod_est = st.multiselect(
+        "Producto",
+        options=prods_disp_est,
+        key="est_filtro_prod_sel",
     )
-    if buscar_est:
-        mask = base_est["producto"].str.contains(buscar_est, case=False, na=False) | base_est[
-            "codigo"
-        ].astype(str).str.contains(buscar_est, case=False, na=False)
-        base_est_view = base_est[mask].reset_index(drop=True)
+    if filtro_prod_est:
+        base_est_view = base_est[
+            base_est["producto"].astype(str).isin(filtro_prod_est)
+        ].reset_index(drop=True)
     else:
         base_est_view = base_est
 
@@ -1856,19 +1849,17 @@ with tab_dux_productos:
                 ]
                 st.caption(f"{len(df_csv_actual)} productos en Sheets.")
 
-                buscar_prod = st.text_input(
-                    "🔎 Buscar producto",
-                    key="buscar_dux_productos",
-                    placeholder="Filtra por nombre o código...",
-                )
                 df_show = df_csv_actual[cols_mostrar].sort_values("producto").reset_index(drop=True)
-                if buscar_prod:
-                    mask = df_show["producto"].astype(str).str.contains(
-                        buscar_prod, case=False, na=False
-                    ) | df_show["codigo"].astype(str).str.contains(
-                        buscar_prod, case=False, na=False
-                    )
-                    df_show = df_show[mask].reset_index(drop=True)
+                opciones_dxp = df_show["producto"].astype(str).tolist()
+                filtro_prod_dxp = st.multiselect(
+                    "Producto",
+                    options=opciones_dxp,
+                    key="dxp_filtro_prod_sel",
+                )
+                if filtro_prod_dxp:
+                    df_show = df_show[
+                        df_show["producto"].astype(str).isin(filtro_prod_dxp)
+                    ].reset_index(drop=True)
 
                 st.dataframe(
                     df_show,
@@ -2276,23 +2267,19 @@ with tab_wix_productos:
             if not df_wix_csv.empty:
                 st.caption(f"{len(df_wix_csv)} productos en Sheets.")
 
-                buscar_wix_prod = st.text_input(
-                    "🔎 Buscar producto",
-                    key="buscar_wix_productos",
-                    placeholder="Filtra por nombre, descripción o ID...",
-                )
-
                 df_show_wp = df_wix_csv.copy()
                 if "descripcion" not in df_show_wp.columns:
                     df_show_wp["descripcion"] = ""
-                if buscar_wix_prod:
-                    q = buscar_wix_prod.lower()
-                    mask = (
-                        df_show_wp["producto"].astype(str).str.lower().str.contains(q, na=False)
-                        | df_show_wp["descripcion"].astype(str).str.lower().str.contains(q, na=False)
-                        | df_show_wp["wix_id"].astype(str).str.lower().str.contains(q, na=False)
-                    )
-                    df_show_wp = df_show_wp[mask].reset_index(drop=True)
+                opciones_wxp = sorted(df_show_wp["producto"].dropna().astype(str).unique().tolist())
+                filtro_prod_wxp = st.multiselect(
+                    "Producto",
+                    options=opciones_wxp,
+                    key="wxp_filtro_prod_sel",
+                )
+                if filtro_prod_wxp:
+                    df_show_wp = df_show_wp[
+                        df_show_wp["producto"].astype(str).isin(filtro_prod_wxp)
+                    ].reset_index(drop=True)
 
                 st.dataframe(
                     df_show_wp[["wix_id", "producto", "descripcion"]],
@@ -2422,23 +2409,22 @@ with tab_proveedores:
     try:
         df_prov_csv = db.cargar_proveedores()
         if not df_prov_csv.empty:
-            buscar_prov = st.text_input(
-                "🔎 Buscar proveedor",
-                key="buscar_proveedores",
-                placeholder="Filtra por nombre, CUIT, teléfono o localidad...",
-            )
             df_prov_show = df_prov_csv.copy()
             for c in SCHEMA_PROV:
                 if c not in df_prov_show.columns:
                     df_prov_show[c] = ""
-            if buscar_prov:
-                q = buscar_prov.lower()
-                mask = False
-                for c in ["proveedor", "nombre_fantasia", "cuit_cuil",
-                          "telefono", "celular", "localidad", "domicilio",
-                          "persona_contacto"]:
-                    mask = mask | df_prov_show[c].astype(str).str.lower().str.contains(q, na=False)
-                df_prov_show = df_prov_show[mask].reset_index(drop=True)
+            opciones_prv = sorted(
+                df_prov_show["proveedor"].dropna().astype(str).unique().tolist()
+            )
+            filtro_prov_sel = st.multiselect(
+                "Proveedor",
+                options=opciones_prv,
+                key="prv_filtro_sel",
+            )
+            if filtro_prov_sel:
+                df_prov_show = df_prov_show[
+                    df_prov_show["proveedor"].astype(str).isin(filtro_prov_sel)
+                ].reset_index(drop=True)
             st.caption(f"{len(df_prov_show)} de {len(df_prov_csv)} proveedores.")
             st.dataframe(
                 df_prov_show[SCHEMA_PROV],
