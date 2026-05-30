@@ -935,11 +935,25 @@ with tab_stock:
     df_stock_full = db.cargar_stock_completo()
 
     fechas_stock_disp = db.fechas_stock()
+    cfg_stk_tab = db.cargar_config()
     fecha_stock_default = (
         pd.to_datetime(fechas_stock_disp[0]).date()
         if fechas_stock_disp
         else date.today()
     )
+    if cfg_stk_tab.get("stock_fecha"):
+        try:
+            fecha_stock_default = pd.to_datetime(cfg_stk_tab["stock_fecha"]).date()
+        except Exception:
+            pass
+
+    def _save_fecha_stock():
+        v = st.session_state.get("fecha_stock_local")
+        if v:
+            try:
+                db.guardar_config({"stock_fecha": str(v)})
+            except Exception:
+                pass
 
     col_st1, col_st2 = st.columns([1, 3])
     with col_st1:
@@ -948,6 +962,7 @@ with tab_stock:
             value=fecha_stock_default,
             key="fecha_stock_local",
             format="YYYY-MM-DD",
+            on_change=_save_fecha_stock,
         )
     ts_stk_ph = col_st2.empty()
 
@@ -1393,6 +1408,18 @@ with tab_estimado:
         "domingo": "Domingo",
     }
     dia_actual = DIAS_LBL[date.today().weekday()]
+    cfg_est_tab = db.cargar_config()
+    dia_default_idx = DIAS_LBL.index(dia_actual)
+    if cfg_est_tab.get("estimado_dia") in DIAS_LBL:
+        dia_default_idx = DIAS_LBL.index(cfg_est_tab["estimado_dia"])
+
+    def _save_dia_estimado():
+        v = st.session_state.get("dia_estimado")
+        if v in DIAS_LBL:
+            try:
+                db.guardar_config({"estimado_dia": str(v)})
+            except Exception:
+                pass
 
     col_es1, col_es2 = st.columns([1, 3])
     with col_es1:
@@ -1400,8 +1427,9 @@ with tab_estimado:
             "Día de la semana",
             options=DIAS_LBL,
             format_func=lambda d: DIAS_DISPLAY[d],
-            index=DIAS_LBL.index(dia_actual),
+            index=dia_default_idx,
             key="dia_estimado",
+            on_change=_save_dia_estimado,
         )
     ts_est_ph = col_es2.empty()
 
@@ -2525,14 +2553,32 @@ with tab_compras:
         st.warning("Primero sincronizá productos en 📡 DUX Productos.")
     else:
         fechas_comp = db.fechas_compras()
+        cfg_comp_tab = db.cargar_config()
         fecha_compra_default = (
             pd.to_datetime(fechas_comp[0]).date() if fechas_comp else date.today()
         )
+        if cfg_comp_tab.get("compras_fecha"):
+            try:
+                fecha_compra_default = pd.to_datetime(
+                    cfg_comp_tab["compras_fecha"]
+                ).date()
+            except Exception:
+                pass
+
+        def _save_fecha_compras():
+            v = st.session_state.get("compras_fecha")
+            if v:
+                try:
+                    db.guardar_config({"compras_fecha": str(v)})
+                except Exception:
+                    pass
+
         fecha_compra_sel = st.date_input(
             "Fecha de compra",
             value=fecha_compra_default,
             key="compras_fecha",
             format="YYYY-MM-DD",
+            on_change=_save_fecha_compras,
         )
 
         # Opciones para los selectbox
@@ -2923,27 +2969,50 @@ with tab_hist_precios:
     if df_compras_hp.empty:
         st.info("Todavía no hay compras cargadas.")
     else:
+        cfg_hp = db.cargar_config()
+        def_desde_hp = date.today() - timedelta(days=30)
+        def_hasta_hp = date.today()
+        if cfg_hp.get("hp_fecha_desde"):
+            try:
+                def_desde_hp = pd.to_datetime(cfg_hp["hp_fecha_desde"]).date()
+            except Exception:
+                pass
+        if cfg_hp.get("hp_fecha_hasta"):
+            try:
+                def_hasta_hp = pd.to_datetime(cfg_hp["hp_fecha_hasta"]).date()
+            except Exception:
+                pass
+
         with st.form("form_hist_precios", border=False):
             col_hp1, col_hp2, col_hp3 = st.columns([1, 1, 1])
             with col_hp1:
                 fecha_desde_hp = st.date_input(
                     "Desde",
-                    value=date.today() - timedelta(days=30),
+                    value=def_desde_hp,
                     key="hp_desde",
                     format="YYYY-MM-DD",
                 )
             with col_hp2:
                 fecha_hasta_hp = st.date_input(
                     "Hasta",
-                    value=date.today(),
+                    value=def_hasta_hp,
                     key="hp_hasta",
                     format="YYYY-MM-DD",
                 )
             with col_hp3:
                 st.markdown("&nbsp;", unsafe_allow_html=True)
-                st.form_submit_button(
+                aplicar_hp = st.form_submit_button(
                     "🔄 Aplicar", type="primary", use_container_width=True
                 )
+
+        if aplicar_hp:
+            try:
+                db.guardar_config({
+                    "hp_fecha_desde": str(fecha_desde_hp),
+                    "hp_fecha_hasta": str(fecha_hasta_hp),
+                })
+            except Exception:
+                pass
 
         df_compras_hp["fecha_dt"] = pd.to_datetime(df_compras_hp["fecha"], errors="coerce")
         mask_hp = (
@@ -3058,27 +3127,50 @@ with tab_comparar_prov:
     if df_compras_cp.empty:
         st.info("Todavía no hay compras cargadas.")
     else:
+        cfg_cp = db.cargar_config()
+        def_desde_cp = date.today() - timedelta(days=30)
+        def_hasta_cp = date.today()
+        if cfg_cp.get("cp_fecha_desde"):
+            try:
+                def_desde_cp = pd.to_datetime(cfg_cp["cp_fecha_desde"]).date()
+            except Exception:
+                pass
+        if cfg_cp.get("cp_fecha_hasta"):
+            try:
+                def_hasta_cp = pd.to_datetime(cfg_cp["cp_fecha_hasta"]).date()
+            except Exception:
+                pass
+
         with st.form("form_comparar_prov", border=False):
             col_cp1, col_cp2, col_cp3 = st.columns([1, 1, 1])
             with col_cp1:
                 fecha_desde_cp = st.date_input(
                     "Desde",
-                    value=date.today() - timedelta(days=30),
+                    value=def_desde_cp,
                     key="cp_desde",
                     format="YYYY-MM-DD",
                 )
             with col_cp2:
                 fecha_hasta_cp = st.date_input(
                     "Hasta",
-                    value=date.today(),
+                    value=def_hasta_cp,
                     key="cp_hasta",
                     format="YYYY-MM-DD",
                 )
             with col_cp3:
                 st.markdown("&nbsp;", unsafe_allow_html=True)
-                st.form_submit_button(
+                aplicar_cp = st.form_submit_button(
                     "🔄 Aplicar", type="primary", use_container_width=True
                 )
+
+        if aplicar_cp:
+            try:
+                db.guardar_config({
+                    "cp_fecha_desde": str(fecha_desde_cp),
+                    "cp_fecha_hasta": str(fecha_hasta_cp),
+                })
+            except Exception:
+                pass
 
         df_compras_cp["fecha_dt"] = pd.to_datetime(df_compras_cp["fecha"], errors="coerce")
         mask_cp = (
@@ -3180,27 +3272,50 @@ with tab_detalle_compras:
     if df_compras_dc.empty:
         st.info("Todavía no hay compras cargadas.")
     else:
+        cfg_dc = db.cargar_config()
+        def_desde_dc = date.today() - timedelta(days=30)
+        def_hasta_dc = date.today()
+        if cfg_dc.get("dc_fecha_desde"):
+            try:
+                def_desde_dc = pd.to_datetime(cfg_dc["dc_fecha_desde"]).date()
+            except Exception:
+                pass
+        if cfg_dc.get("dc_fecha_hasta"):
+            try:
+                def_hasta_dc = pd.to_datetime(cfg_dc["dc_fecha_hasta"]).date()
+            except Exception:
+                pass
+
         with st.form("form_detalle_compras", border=False):
             col_dc1, col_dc2, col_dc3 = st.columns([1, 1, 1])
             with col_dc1:
                 fecha_desde_dc = st.date_input(
                     "Desde",
-                    value=date.today() - timedelta(days=30),
+                    value=def_desde_dc,
                     key="dc_desde",
                     format="YYYY-MM-DD",
                 )
             with col_dc2:
                 fecha_hasta_dc = st.date_input(
                     "Hasta",
-                    value=date.today(),
+                    value=def_hasta_dc,
                     key="dc_hasta",
                     format="YYYY-MM-DD",
                 )
             with col_dc3:
                 st.markdown("&nbsp;", unsafe_allow_html=True)
-                st.form_submit_button(
+                aplicar_dc = st.form_submit_button(
                     "🔄 Aplicar", type="primary", use_container_width=True
                 )
+
+        if aplicar_dc:
+            try:
+                db.guardar_config({
+                    "dc_fecha_desde": str(fecha_desde_dc),
+                    "dc_fecha_hasta": str(fecha_hasta_dc),
+                })
+            except Exception:
+                pass
 
         df_compras_dc["fecha_dt"] = pd.to_datetime(
             df_compras_dc["fecha"], errors="coerce"
