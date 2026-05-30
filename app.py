@@ -752,13 +752,13 @@ with tab_grupo_diario:
 
 with tab_grupo_analitica:
     (
+        tab_resumen_rango,
         tab_hist_precios,
-        tab_comparar_prov,
         tab_detalle_compras,
     ) = st.tabs(
         [
-            "📊 Histórico precios",
-            "🏆 Comparar proveedores",
+            "📊 Resumen por rango",
+            "📈 Histórico precios",
             "📋 Detalle compras",
         ]
     )
@@ -2921,6 +2921,231 @@ with tab_compras:
     ts_compras = db.ultima_carga("compras")
     ts_compras_ph.caption(f"🕒 Última actualización: **{ts_compras or '?'}**")
 
+with tab_resumen_rango:
+    st.markdown("### 📊 Resumen de compras por rango de fechas")
+
+    df_rr = db.cargar_compras()
+    if df_rr.empty:
+        st.info("Todavía no hay compras cargadas.")
+    else:
+        cfg_rr = db.cargar_config()
+        def_desde_rr = date.today() - timedelta(days=30)
+        def_hasta_rr = date.today()
+        if cfg_rr.get("rr_fecha_desde"):
+            try:
+                def_desde_rr = pd.to_datetime(cfg_rr["rr_fecha_desde"]).date()
+            except Exception:
+                pass
+        if cfg_rr.get("rr_fecha_hasta"):
+            try:
+                def_hasta_rr = pd.to_datetime(cfg_rr["rr_fecha_hasta"]).date()
+            except Exception:
+                pass
+
+        with st.form("form_resumen_rango", border=False):
+            col_rr1, col_rr2, col_rr3 = st.columns([1, 1, 1])
+            with col_rr1:
+                fecha_desde_rr = st.date_input(
+                    "Desde",
+                    value=def_desde_rr,
+                    key="rr_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_rr2:
+                fecha_hasta_rr = st.date_input(
+                    "Hasta",
+                    value=def_hasta_rr,
+                    key="rr_hasta",
+                    format="YYYY-MM-DD",
+                )
+            with col_rr3:
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                aplicar_rr = st.form_submit_button(
+                    "🔄 Aplicar", type="primary", use_container_width=True
+                )
+
+        if aplicar_rr:
+            try:
+                db.guardar_config({
+                    "rr_fecha_desde": str(fecha_desde_rr),
+                    "rr_fecha_hasta": str(fecha_hasta_rr),
+                })
+            except Exception:
+                pass
+
+        df_rr["fecha_dt"] = pd.to_datetime(df_rr["fecha"], errors="coerce")
+        mask_rr = (
+            (df_rr["fecha_dt"] >= pd.to_datetime(fecha_desde_rr))
+            & (df_rr["fecha_dt"] <= pd.to_datetime(fecha_hasta_rr))
+        )
+        df_rng = df_rr[mask_rr].copy()
+
+        if df_rng.empty:
+            st.warning("No hay compras en el rango seleccionado.")
+        else:
+            df_rng["subtotal"] = (
+                df_rng["cantidad"].astype(float) * df_rng["precio"].astype(float)
+            )
+            total_gastado_rr = float(df_rng["subtotal"].sum())
+
+            col_mrr1, col_mrr2 = st.columns(2)
+            col_mrr1.metric("💰 Total gastado", f"$ {total_gastado_rr:,.2f}")
+            col_mrr2.metric("🧾 Facturas", df_rng["comprobante"].nunique())
+
+            col_brr1, col_brr2 = st.columns(2)
+            with col_brr1:
+                st.markdown("**Por proveedor**")
+                por_prov_rr = (
+                    df_rng.groupby("proveedor_nombre")
+                    .agg(items=("codigo_producto", "count"),
+                         total=("subtotal", "sum"))
+                    .reset_index()
+                    .sort_values("total", ascending=False)
+                )
+                por_prov_rr["total"] = por_prov_rr["total"].apply(
+                    lambda v: f"$ {v:,.2f}"
+                )
+                st.dataframe(
+                    por_prov_rr,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
+                        "items": st.column_config.NumberColumn("Items"),
+                        "total": st.column_config.TextColumn("Total"),
+                    },
+                )
+            with col_brr2:
+                st.markdown("**Por forma de pago**")
+                por_pago_rr = (
+                    df_rng.groupby("condicion_pago")
+                    .agg(items=("codigo_producto", "count"),
+                         total=("subtotal", "sum"))
+                    .reset_index()
+                    .sort_values("total", ascending=False)
+                )
+                por_pago_rr["total"] = por_pago_rr["total"].apply(
+                    lambda v: f"$ {v:,.2f}"
+                )
+                st.dataframe(
+                    por_pago_rr,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "condicion_pago": st.column_config.TextColumn("Forma de pago"),
+                        "items": st.column_config.NumberColumn("Items"),
+                        "total": st.column_config.TextColumn("Total"),
+                    },
+                )
+
+            # Precio promedio por producto + unidad usando grafo de compuestos
+            st.markdown("**Precio promedio por producto y unidad**")
+            grafo_rr = construir_grafo_conversion(compuestos)
+            prod_temp_rr = productos.copy()
+            partes_pr_rr = (
+                prod_temp_rr["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+            )
+            prod_temp_rr["base"] = partes_pr_rr[0].str.strip()
+            prod_temp_rr["unidad"] = (
+                partes_pr_rr[1].fillna("").str.strip()
+                if 1 in partes_pr_rr.columns
+                else ""
+            )
+
+            df_prom_rr = df_rng.copy()
+            map_prod_full_rr = dict(
+                zip(productos["codigo"].astype(str), productos["producto"].astype(str))
+            )
+            df_prom_rr["producto_full"] = (
+                df_prom_rr["codigo_producto"].astype(str).map(map_prod_full_rr)
+                .fillna(df_prom_rr["producto_nombre"])
+            )
+            partes_pr_src_rr = (
+                df_prom_rr["producto_full"].str.rsplit(" - ", n=1, expand=True)
+            )
+            df_prom_rr["base"] = partes_pr_src_rr[0].str.strip()
+
+            filas_prom_rr = []
+            for base in df_prom_rr["base"].dropna().unique():
+                lineas_base = df_prom_rr[df_prom_rr["base"] == base]
+                if lineas_base.empty:
+                    continue
+                gastado_total = float(lineas_base["subtotal"].sum())
+
+                familia = prod_temp_rr[prod_temp_rr["base"] == base]
+                if familia.empty:
+                    continue
+
+                codigos_familia = familia["codigo"].astype(str).tolist()
+                componentes = componentes_conectados(codigos_familia, grafo_rr)
+                codigos_comprados = set(lineas_base["codigo_producto"].astype(str))
+
+                comp_relevante = None
+                for comp in componentes:
+                    if comp & codigos_comprados:
+                        comp_relevante = comp
+                        break
+                if not comp_relevante:
+                    continue
+
+                productos_comp = familia[
+                    familia["codigo"].astype(str).isin(comp_relevante)
+                ]
+                unidades_unicas = list(
+                    dict.fromkeys(productos_comp["unidad"].tolist())
+                )
+
+                for unidad in unidades_unicas:
+                    if not unidad:
+                        continue
+                    codigo_destino = str(
+                        productos_comp[productos_comp["unidad"] == unidad]
+                        .iloc[0]["codigo"]
+                    )
+                    cantidad_total = 0.0
+                    for _, linea in lineas_base.iterrows():
+                        cod_origen = str(linea["codigo_producto"])
+                        factor = convertir(grafo_rr, cod_origen, codigo_destino)
+                        if factor is None:
+                            continue
+                        cantidad_total += float(linea["cantidad"]) * factor
+                    if cantidad_total <= 0:
+                        continue
+                    filas_prom_rr.append({
+                        "base": base,
+                        "unidad": unidad,
+                        "cantidad": cantidad_total,
+                        "gastado": gastado_total,
+                        "precio_promedio": gastado_total / cantidad_total,
+                    })
+
+            if filas_prom_rr:
+                bases_orden_rr = sorted(set(f["base"] for f in filas_prom_rr))
+                for base in bases_orden_rr:
+                    filas_base_rr = [f for f in filas_prom_rr if f["base"] == base]
+                    gastado_base_rr = filas_base_rr[0]["gastado"]
+                    with st.expander(
+                        f"**{base}** — $ {gastado_base_rr:,.2f}",
+                        expanded=False,
+                    ):
+                        cols_h = st.columns([1, 1.2, 1.2])
+                        cols_h[0].markdown("**Unidad**")
+                        cols_h[1].markdown("**Cantidad**")
+                        cols_h[2].markdown("**Precio prom.**")
+                        for f in filas_base_rr:
+                            cols = st.columns([1, 1.2, 1.2])
+                            cols[0].markdown(f"**{f['unidad']}**")
+                            cant_str = (
+                                f"{f['cantidad']:,.3f}".rstrip("0").rstrip(".")
+                            )
+                            cols[1].markdown(cant_str)
+                            cols[2].markdown(f"$ {f['precio_promedio']:,.2f}")
+
+            st.caption(
+                f"📅 Rango: {fecha_desde_rr} → {fecha_hasta_rr} · "
+                f"{len(df_rng)} líneas"
+            )
+
 with tab_hist_precios:
     st.markdown("### 📊 Histórico de precios promedio")
     st.caption(
@@ -3080,152 +3305,6 @@ with tab_hist_precios:
                         index="fecha", columns="unidad", values="precio_prom"
                     )
                     st.line_chart(pivot)
-
-with tab_comparar_prov:
-    st.markdown("### 🏆 Comparar proveedores")
-    st.caption(
-        "Para cada producto, ver qué proveedor te lo vendió más barato (en promedio) "
-        "en el rango elegido."
-    )
-
-    df_compras_cp = db.cargar_compras()
-    if df_compras_cp.empty:
-        st.info("Todavía no hay compras cargadas.")
-    else:
-        cfg_cp = db.cargar_config()
-        def_desde_cp = date.today() - timedelta(days=30)
-        def_hasta_cp = date.today()
-        if cfg_cp.get("cp_fecha_desde"):
-            try:
-                def_desde_cp = pd.to_datetime(cfg_cp["cp_fecha_desde"]).date()
-            except Exception:
-                pass
-        if cfg_cp.get("cp_fecha_hasta"):
-            try:
-                def_hasta_cp = pd.to_datetime(cfg_cp["cp_fecha_hasta"]).date()
-            except Exception:
-                pass
-
-        with st.form("form_comparar_prov", border=False):
-            col_cp1, col_cp2, col_cp3 = st.columns([1, 1, 1])
-            with col_cp1:
-                fecha_desde_cp = st.date_input(
-                    "Desde",
-                    value=def_desde_cp,
-                    key="cp_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_cp2:
-                fecha_hasta_cp = st.date_input(
-                    "Hasta",
-                    value=def_hasta_cp,
-                    key="cp_hasta",
-                    format="YYYY-MM-DD",
-                )
-            with col_cp3:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                aplicar_cp = st.form_submit_button(
-                    "🔄 Aplicar", type="primary", use_container_width=True
-                )
-
-        if aplicar_cp:
-            try:
-                db.guardar_config({
-                    "cp_fecha_desde": str(fecha_desde_cp),
-                    "cp_fecha_hasta": str(fecha_hasta_cp),
-                })
-            except Exception:
-                pass
-
-        df_compras_cp["fecha_dt"] = pd.to_datetime(df_compras_cp["fecha"], errors="coerce")
-        mask_cp = (
-            (df_compras_cp["fecha_dt"] >= pd.to_datetime(fecha_desde_cp)) &
-            (df_compras_cp["fecha_dt"] <= pd.to_datetime(fecha_hasta_cp))
-        )
-        df_rango_cp = df_compras_cp[mask_cp].copy()
-
-        if df_rango_cp.empty:
-            st.warning("No hay compras en el rango seleccionado.")
-        else:
-            df_rango_cp["subtotal"] = (
-                df_rango_cp["cantidad"].astype(float) * df_rango_cp["precio"].astype(float)
-            )
-            map_prod_cp = dict(
-                zip(productos["codigo"].astype(str), productos["producto"].astype(str))
-            )
-            df_rango_cp["producto_full"] = (
-                df_rango_cp["codigo_producto"].astype(str).map(map_prod_cp)
-                .fillna(df_rango_cp["producto_nombre"])
-            )
-            partes_cp = df_rango_cp["producto_full"].str.rsplit(" - ", n=1, expand=True)
-            df_rango_cp["base"] = partes_cp[0].str.strip()
-            df_rango_cp["unidad"] = (
-                partes_cp[1].fillna("").str.strip()
-                if 1 in partes_cp.columns
-                else ""
-            )
-
-            por_prov_prod = (
-                df_rango_cp.groupby(["base", "unidad", "proveedor_nombre"])
-                .agg(
-                    cantidad=("cantidad", "sum"),
-                    gastado=("subtotal", "sum"),
-                    compras=("codigo_producto", "count"),
-                )
-                .reset_index()
-            )
-            por_prov_prod["precio_prom"] = (
-                por_prov_prod["gastado"] / por_prov_prod["cantidad"]
-            )
-
-            # Marcar el mas barato de cada producto
-            por_prov_prod["es_min"] = por_prov_prod.groupby(
-                ["base", "unidad"]
-            )["precio_prom"].transform("min") == por_prov_prod["precio_prom"]
-            por_prov_prod["marca"] = por_prov_prod["es_min"].map(
-                {True: "🏆", False: ""}
-            )
-
-            por_prov_prod = por_prov_prod.sort_values(
-                ["base", "unidad", "precio_prom"]
-            )
-
-            buscar_cp = st.text_input(
-                "🔎 Buscar producto",
-                key="cp_buscar",
-                placeholder="Filtra por nombre...",
-            )
-            if buscar_cp:
-                por_prov_prod = por_prov_prod[
-                    por_prov_prod["base"].str.contains(buscar_cp, case=False, na=False)
-                ].reset_index(drop=True)
-
-            st.caption(
-                f"📅 Rango: {fecha_desde_cp} → {fecha_hasta_cp} · "
-                f"{por_prov_prod['base'].nunique()} productos · "
-                f"{por_prov_prod['proveedor_nombre'].nunique()} proveedores"
-            )
-
-            disp_cp = por_prov_prod.copy()
-            disp_cp["cantidad"] = disp_cp["cantidad"].apply(lambda v: f"{v:,.2f}")
-            disp_cp["gastado"] = disp_cp["gastado"].apply(lambda v: f"$ {v:,.2f}")
-            disp_cp["precio_prom"] = disp_cp["precio_prom"].apply(lambda v: f"$ {v:,.2f}")
-            st.dataframe(
-                disp_cp[["marca", "base", "unidad", "proveedor_nombre",
-                          "compras", "cantidad", "precio_prom", "gastado"]],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "marca": st.column_config.TextColumn(" "),
-                    "base": st.column_config.TextColumn("Producto"),
-                    "unidad": st.column_config.TextColumn("Unidad"),
-                    "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
-                    "compras": st.column_config.NumberColumn("# compras"),
-                    "cantidad": st.column_config.TextColumn("Cantidad"),
-                    "precio_prom": st.column_config.TextColumn("Precio prom."),
-                    "gastado": st.column_config.TextColumn("Gastado"),
-                },
-            )
 
 with tab_detalle_compras:
     st.markdown("### 📋 Detalle compras")
