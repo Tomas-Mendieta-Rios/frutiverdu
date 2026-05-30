@@ -2605,18 +2605,18 @@ with tab_compras:
             df_compras_fecha_post = pd.DataFrame()
 
         if not df_compras_fecha_post.empty:
+            import xlwt
             # DUX pide fecha con guiones DD-MM-AAAA
             fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d-%m-%Y")
 
             def _num_es(v):
-                # Decimales con coma (formato espanol) como STRING para que DUX lo parsee.
                 try:
                     n = float(v)
                 except (ValueError, TypeError):
                     return ""
                 return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
-            excel_rows = []
+            filas_excel = []
             for _, r in df_compras_fecha_post.iterrows():
                 fila = {col: "" for col in COLUMNAS_DUX}
                 fila["TIPO COMPROBANTE"] = "COMPROBANTE COMPRA"
@@ -2629,24 +2629,28 @@ with tab_compras:
                 fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
                 fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
                 fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
-                excel_rows.append(fila)
+                filas_excel.append(fila)
 
-            df_excel_dux = pd.DataFrame(excel_rows, columns=COLUMNAS_DUX)
-            # Convertir strings vacios en NaN para que queden celdas verdaderamente vacias
-            df_excel_dux = df_excel_dux.replace({"": pd.NA})
+            # Escribir como .xls (Excel 97-2003) con sheet "Hoja Principal"
+            # tal cual el template oficial de DUX.
+            wb = xlwt.Workbook(encoding="utf-8")
+            sheet = wb.add_sheet("Hoja Principal")
+            for col_idx, col_name in enumerate(COLUMNAS_DUX):
+                sheet.write(0, col_idx, col_name)
+            for row_idx, fila in enumerate(filas_excel, start=1):
+                for col_idx, col_name in enumerate(COLUMNAS_DUX):
+                    val = fila.get(col_name, "")
+                    if val == "" or val is None:
+                        continue  # celda vacia
+                    sheet.write(row_idx, col_idx, val)
             buf = io.BytesIO()
-            # startrow=1 deja la primera fila VACIA, headers en fila 2.
-            # Sheet name "Hoja1" (default español, comun para apps argentinas).
-            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                df_excel_dux.to_excel(
-                    writer, sheet_name="Hoja1", index=False, startrow=1
-                )
+            wb.save(buf)
             buf.seek(0)
             st.download_button(
                 "📥 Descargar Excel para DUX",
                 data=buf.getvalue(),
-                file_name=f"compras_dux_{fecha_compra_sel}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                file_name=f"compras_dux_{fecha_compra_sel}.xls",
+                mime="application/vnd.ms-excel",
                 type="primary",
             )
             with st.expander(f"Ver resumen ({len(df_compras_fecha_post)} líneas)"):
