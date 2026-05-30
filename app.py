@@ -3040,28 +3040,25 @@ with tab_hist_precios:
             for base_hp in bases_hp:
                 rows_b = por_prod_hp[por_prod_hp["base"] == base_hp]
                 gastado_b = float(rows_b["gastado"].sum())
-                compras_b = int(rows_b["compras"].sum())
                 with st.expander(
-                    f"**{base_hp}** — $ {gastado_b:,.2f} · {compras_b} compras",
+                    f"**{base_hp}** — $ {gastado_b:,.2f}",
                     expanded=False,
                 ):
-                    cols_h = st.columns([1, 0.8, 1, 1, 1, 1, 1])
+                    cols_h = st.columns([1, 1, 1, 1, 1, 1])
                     cols_h[0].markdown("**Unidad**")
-                    cols_h[1].markdown("**Compras**")
-                    cols_h[2].markdown("**Cantidad**")
-                    cols_h[3].markdown("**Mín**")
-                    cols_h[4].markdown("**Promedio**")
-                    cols_h[5].markdown("**Máx**")
-                    cols_h[6].markdown("**Gastado**")
+                    cols_h[1].markdown("**Cantidad**")
+                    cols_h[2].markdown("**Mín**")
+                    cols_h[3].markdown("**Promedio**")
+                    cols_h[4].markdown("**Máx**")
+                    cols_h[5].markdown("**Gastado**")
                     for _, r_b in rows_b.iterrows():
-                        cols_r = st.columns([1, 0.8, 1, 1, 1, 1, 1])
+                        cols_r = st.columns([1, 1, 1, 1, 1, 1])
                         cols_r[0].markdown(f"**{r_b['unidad']}**")
-                        cols_r[1].markdown(f"{int(r_b['compras'])}")
-                        cols_r[2].markdown(f"{r_b['cantidad']:,.2f}")
-                        cols_r[3].markdown(f"$ {r_b['precio_min']:,.2f}")
-                        cols_r[4].markdown(f"$ {r_b['precio_prom']:,.2f}")
-                        cols_r[5].markdown(f"$ {r_b['precio_max']:,.2f}")
-                        cols_r[6].markdown(f"$ {r_b['gastado']:,.2f}")
+                        cols_r[1].markdown(f"{r_b['cantidad']:,.2f}")
+                        cols_r[2].markdown(f"$ {r_b['precio_min']:,.2f}")
+                        cols_r[3].markdown(f"$ {r_b['precio_prom']:,.2f}")
+                        cols_r[4].markdown(f"$ {r_b['precio_max']:,.2f}")
+                        cols_r[5].markdown(f"$ {r_b['gastado']:,.2f}")
 
             # Evolucion diaria de un producto especifico
             productos_disp_hp = sorted(por_prod_hp["base"].unique().tolist())
