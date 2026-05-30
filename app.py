@@ -52,35 +52,6 @@ def msg_error_sheets(accion, exc):
 
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
 
-# CSS para los tabs: inactivas en azul claro con texto azul oscuro,
-# la activa en gris.
-st.markdown(
-    """
-    <style>
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 4px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #dbeafe !important;
-        color: #1e3a5f !important;
-        border-radius: 6px 6px 0 0 !important;
-        padding: 6px 14px !important;
-        font-weight: 500 !important;
-    }
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #bfdbfe !important;
-    }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background-color: #6b7280 !important;
-        color: #ffffff !important;
-    }
-    .stTabs [data-baseweb="tab-highlight"] {
-        background-color: #6b7280 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 EXCEPCIONES = {
     ("061", "062"),
@@ -176,33 +147,6 @@ except Exception:
 
 # Pequeño chip arriba mostrando quien sos
 st.caption(f"👤 Sesión: **{_usuario_actual}**")
-
-st.markdown(
-    """
-<style>
-/* Operativas (1-9) - verde */
-.stTabs [data-baseweb="tab-list"] button:nth-child(-n+9) {
-    background-color: #e8f5e9 !important;
-    color: #1b5e20 !important;
-    border-top: 3px solid #2E7D32 !important;
-}
-.stTabs [data-baseweb="tab-list"] button:nth-child(-n+9):hover {
-    background-color: #c8e6c9 !important;
-}
-
-/* Configuración (10+) - rojo */
-.stTabs [data-baseweb="tab-list"] button:nth-child(n+10) {
-    background-color: #ffebee !important;
-    color: #b71c1c !important;
-    border-top: 3px solid #c62828 !important;
-}
-.stTabs [data-baseweb="tab-list"] button:nth-child(n+10):hover {
-    background-color: #ffcdd2 !important;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
 
 
 def cargar_productos():
@@ -781,43 +725,64 @@ compuestos["componente_label"] = (
 
 map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 
+# Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
 (
     tab_comprar,
     tab_compras,
-    tab_hist_precios,
-    tab_comparar_prov,
-    tab_detalle_compras,
-    tab_dux,
-    tab_wix,
-    tab_stock,
-    tab_estimado,
-    tab_mapeo,
-    tab_packs,
-    tab_dux_productos,
-    tab_wix_productos,
-    tab_proveedores,
-    tab_editar,
-    tab_probar,
+    tab_grupo_pedidos,
+    tab_grupo_diario,
+    tab_grupo_analitica,
+    tab_grupo_config,
 ) = st.tabs(
     [
         "🛒 Total a comprar",
         "💰 Compras",
-        "📊 Histórico precios",
-        "🏆 Comparar proveedores",
-        "📋 Detalle compras",
-        "📡 DUX Pedidos",
-        "🛍️ Wix Pedidos",
-        "📦 Stock",
-        "📈 Estimado",
-        "🔗 Mapeo Wix↔DUX",
-        "🎁 Packs Wix",
-        "📡 DUX Productos",
-        "🛍️ Wix Productos",
-        "👥 Proveedores",
-        "⚙️ Relacionar productos",
-        "🧪 Probar conversión",
+        "📋 Pedidos",
+        "📦 Diario",
+        "📊 Analítica",
+        "⚙️ Configuración",
     ]
 )
+
+with tab_grupo_pedidos:
+    tab_dux, tab_wix = st.tabs(["📡 DUX", "🛍️ Wix"])
+
+with tab_grupo_diario:
+    tab_stock, tab_estimado = st.tabs(["📦 Stock", "📈 Estimado"])
+
+with tab_grupo_analitica:
+    (
+        tab_hist_precios,
+        tab_comparar_prov,
+        tab_detalle_compras,
+    ) = st.tabs(
+        [
+            "📊 Histórico precios",
+            "🏆 Comparar proveedores",
+            "📋 Detalle compras",
+        ]
+    )
+
+with tab_grupo_config:
+    (
+        tab_mapeo,
+        tab_packs,
+        tab_dux_productos,
+        tab_wix_productos,
+        tab_proveedores,
+        tab_editar,
+        tab_probar,
+    ) = st.tabs(
+        [
+            "🔗 Mapeo Wix↔DUX",
+            "🎁 Packs Wix",
+            "📡 DUX Productos",
+            "🛍️ Wix Productos",
+            "👥 Proveedores",
+            "⚙️ Relacionar productos",
+            "🧪 Probar conversión",
+        ]
+    )
 
 with tab_editar:
     ts_comp_ph = st.empty()
