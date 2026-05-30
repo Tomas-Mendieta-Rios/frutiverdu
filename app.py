@@ -180,23 +180,23 @@ st.caption(f"👤 Sesión: **{_usuario_actual}**")
 st.markdown(
     """
 <style>
-/* Operativas (1-8) - verde */
-.stTabs [data-baseweb="tab-list"] button:nth-child(-n+8) {
+/* Operativas (1-9) - verde */
+.stTabs [data-baseweb="tab-list"] button:nth-child(-n+9) {
     background-color: #e8f5e9 !important;
     color: #1b5e20 !important;
     border-top: 3px solid #2E7D32 !important;
 }
-.stTabs [data-baseweb="tab-list"] button:nth-child(-n+8):hover {
+.stTabs [data-baseweb="tab-list"] button:nth-child(-n+9):hover {
     background-color: #c8e6c9 !important;
 }
 
-/* Configuración (9+) - rojo */
-.stTabs [data-baseweb="tab-list"] button:nth-child(n+9) {
+/* Configuración (10+) - rojo */
+.stTabs [data-baseweb="tab-list"] button:nth-child(n+10) {
     background-color: #ffebee !important;
     color: #b71c1c !important;
     border-top: 3px solid #c62828 !important;
 }
-.stTabs [data-baseweb="tab-list"] button:nth-child(n+9):hover {
+.stTabs [data-baseweb="tab-list"] button:nth-child(n+10):hover {
     background-color: #ffcdd2 !important;
 }
 </style>
@@ -786,6 +786,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
     tab_compras,
     tab_hist_precios,
     tab_comparar_prov,
+    tab_detalle_compras,
     tab_dux,
     tab_wix,
     tab_stock,
@@ -803,6 +804,7 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
         "💰 Compras",
         "📊 Histórico precios",
         "🏆 Comparar proveedores",
+        "📋 Detalle compras",
         "📡 DUX Pedidos",
         "🛍️ Wix Pedidos",
         "📦 Stock",
@@ -3165,6 +3167,127 @@ with tab_comparar_prov:
                     "cantidad": st.column_config.TextColumn("Cantidad"),
                     "precio_prom": st.column_config.TextColumn("Precio prom."),
                     "gastado": st.column_config.TextColumn("Gastado"),
+                },
+            )
+
+with tab_detalle_compras:
+    st.markdown("### 📋 Detalle compras")
+    st.caption(
+        "Listado completo de compras: qué día, qué producto, qué proveedor, cuánto te cobró."
+    )
+
+    df_compras_dc = db.cargar_compras()
+    if df_compras_dc.empty:
+        st.info("Todavía no hay compras cargadas.")
+    else:
+        with st.form("form_detalle_compras", border=False):
+            col_dc1, col_dc2, col_dc3 = st.columns([1, 1, 1])
+            with col_dc1:
+                fecha_desde_dc = st.date_input(
+                    "Desde",
+                    value=date.today() - timedelta(days=30),
+                    key="dc_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_dc2:
+                fecha_hasta_dc = st.date_input(
+                    "Hasta",
+                    value=date.today(),
+                    key="dc_hasta",
+                    format="YYYY-MM-DD",
+                )
+            with col_dc3:
+                st.markdown("&nbsp;", unsafe_allow_html=True)
+                st.form_submit_button(
+                    "🔄 Aplicar", type="primary", use_container_width=True
+                )
+
+        df_compras_dc["fecha_dt"] = pd.to_datetime(
+            df_compras_dc["fecha"], errors="coerce"
+        )
+        mask_dc = (
+            (df_compras_dc["fecha_dt"] >= pd.to_datetime(fecha_desde_dc))
+            & (df_compras_dc["fecha_dt"] <= pd.to_datetime(fecha_hasta_dc))
+        )
+        df_rango_dc = df_compras_dc[mask_dc].copy()
+
+        if df_rango_dc.empty:
+            st.warning("No hay compras en el rango seleccionado.")
+        else:
+            df_rango_dc["subtotal"] = (
+                df_rango_dc["cantidad"].astype(float)
+                * df_rango_dc["precio"].astype(float)
+            )
+
+            # Filtros opcionales
+            col_f1, col_f2, col_f3 = st.columns(3)
+            with col_f1:
+                provs_disp = sorted(df_rango_dc["proveedor_nombre"].dropna().unique().tolist())
+                filtro_prov = st.multiselect(
+                    "Proveedor", options=provs_disp, key="dc_filtro_prov"
+                )
+            with col_f2:
+                buscar_prod_dc = st.text_input(
+                    "Buscar producto", key="dc_filtro_prod",
+                    placeholder="Filtra por nombre o código...",
+                )
+            with col_f3:
+                pagos_disp = sorted(df_rango_dc["condicion_pago"].dropna().unique().tolist())
+                filtro_pago = st.multiselect(
+                    "Forma de pago", options=pagos_disp, key="dc_filtro_pago"
+                )
+
+            if filtro_prov:
+                df_rango_dc = df_rango_dc[
+                    df_rango_dc["proveedor_nombre"].isin(filtro_prov)
+                ]
+            if buscar_prod_dc:
+                q = buscar_prod_dc.lower()
+                mask_q = (
+                    df_rango_dc["producto_nombre"].astype(str).str.lower().str.contains(q, na=False)
+                    | df_rango_dc["codigo_producto"].astype(str).str.lower().str.contains(q, na=False)
+                )
+                df_rango_dc = df_rango_dc[mask_q]
+            if filtro_pago:
+                df_rango_dc = df_rango_dc[
+                    df_rango_dc["condicion_pago"].isin(filtro_pago)
+                ]
+
+            # Ordenar por fecha desc, luego proveedor
+            df_rango_dc = df_rango_dc.sort_values(
+                ["fecha", "proveedor_nombre", "producto_nombre"],
+                ascending=[False, True, True],
+            )
+
+            total_filtrado = float(df_rango_dc["subtotal"].sum())
+            st.caption(
+                f"📅 Rango: {fecha_desde_dc} → {fecha_hasta_dc} · "
+                f"{len(df_rango_dc)} líneas · "
+                f"**Total filtrado: $ {total_filtrado:,.2f}**"
+            )
+
+            disp_dc = df_rango_dc.copy()
+            disp_dc["cantidad"] = disp_dc["cantidad"].apply(lambda v: f"{v:,.2f}")
+            disp_dc["precio"] = disp_dc["precio"].apply(lambda v: f"$ {v:,.2f}")
+            disp_dc["subtotal"] = disp_dc["subtotal"].apply(lambda v: f"$ {v:,.2f}")
+            st.dataframe(
+                disp_dc[[
+                    "fecha", "proveedor_nombre", "codigo_producto",
+                    "producto_nombre", "cantidad", "precio", "subtotal",
+                    "condicion_pago", "comprobante",
+                ]],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "fecha": st.column_config.TextColumn("Fecha"),
+                    "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
+                    "codigo_producto": st.column_config.TextColumn("Código"),
+                    "producto_nombre": st.column_config.TextColumn("Producto"),
+                    "cantidad": st.column_config.TextColumn("Cantidad"),
+                    "precio": st.column_config.TextColumn("Precio unit."),
+                    "subtotal": st.column_config.TextColumn("Subtotal"),
+                    "condicion_pago": st.column_config.TextColumn("Cond. pago"),
+                    "comprobante": st.column_config.TextColumn("Comprobante"),
                 },
             )
 
