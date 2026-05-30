@@ -464,6 +464,7 @@ def extraer_item_dux(item):
     }
 
 
+@st.cache_data(ttl=120)
 def construir_grafo_conversion(compuestos_df):
     grafo = {}
     for _, row in compuestos_df.iterrows():
