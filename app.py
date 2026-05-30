@@ -1242,6 +1242,35 @@ with tab_comprar:
                 hide_index=True,
             )
 
+    # Expander resumen crudo por codigo (sin conversiones): pedido + estimado + stock
+    _raw = pedidos_actual.copy()
+    _raw["codigo"] = _raw["codigo"].astype(str)
+    if stock_actual is not None and not stock_actual.empty:
+        _stk_map = dict(
+            zip(stock_actual["codigo"].astype(str), stock_actual["cantidad"].astype(float))
+        )
+        _raw["stock"] = _raw["codigo"].map(_stk_map).fillna(0.0).astype(float)
+    else:
+        _raw["stock"] = 0.0
+    _raw_view = _raw[
+        (_raw["cantidad"].astype(float) > 0)
+        | (_raw["estimado"].astype(float) > 0)
+        | (_raw["stock"].astype(float) > 0)
+    ].copy()
+    with st.expander(
+        f"🔍 Ver resumen por código sin conversiones ({len(_raw_view)})",
+        expanded=False,
+    ):
+        if _raw_view.empty:
+            st.caption("Sin datos.")
+        else:
+            _raw_view = _raw_view.rename(columns={"cantidad": "pedido"}).sort_values("producto")
+            st.dataframe(
+                _raw_view[["codigo", "producto", "unidad_medida", "pedido", "estimado", "stock"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
     # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
 
     grafo = construir_grafo_conversion(compuestos)
