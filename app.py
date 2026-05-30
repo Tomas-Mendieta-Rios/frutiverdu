@@ -224,6 +224,67 @@ def cargar_stock_fecha(fecha):
     return db.cargar_stock(fecha=fecha)
 
 
+def _slim_wix_order(o):
+    """Devuelve una version reducida del pedido Wix con SOLO los campos que
+    usa la app. Wix manda mucho metadata extra que puede exceder los 50k
+    caracteres por celda de Google Sheets."""
+    if not isinstance(o, dict):
+        return o
+    bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+    si_logistics = ((o.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
+    si_dest = si_logistics.get("shippingDestination", {}) or {}
+    bu = (o.get("buyerInfo", {}) or {}).get("contactDetails", {}) or {}
+    return {
+        "id": o.get("id"),
+        "number": o.get("number"),
+        "createdDate": o.get("createdDate"),
+        "lineItems": [
+            {
+                "quantity": (li or {}).get("quantity"),
+                "catalogReference": {
+                    "catalogItemId": ((li or {}).get("catalogReference") or {}).get("catalogItemId"),
+                },
+                "productId": (li or {}).get("productId"),
+                "productName": {
+                    "translated": ((li or {}).get("productName") or {}).get("translated"),
+                    "original": ((li or {}).get("productName") or {}).get("original"),
+                },
+            }
+            for li in (o.get("lineItems") or [])
+        ],
+        "billingInfo": {
+            "contactDetails": {
+                "firstName": bi.get("firstName"),
+                "lastName": bi.get("lastName"),
+                "phone": bi.get("phone"),
+                "email": bi.get("email"),
+            },
+        },
+        "shippingInfo": {
+            "logistics": {
+                "shippingDestination": {
+                    "contactDetails": {
+                        "firstName": (si_dest.get("contactDetails") or {}).get("firstName"),
+                        "lastName": (si_dest.get("contactDetails") or {}).get("lastName"),
+                        "phone": (si_dest.get("contactDetails") or {}).get("phone"),
+                    },
+                    "address": si_dest.get("address") or {},
+                },
+            },
+        },
+        "buyerInfo": {
+            "contactDetails": {
+                "email": bu.get("email"),
+            },
+        },
+        "priceSummary": {
+            "total": {
+                "formattedAmount": ((o.get("priceSummary", {}) or {}).get("total", {}) or {}).get("formattedAmount"),
+            },
+        },
+    }
+
+
 def _convertir_wix_orders_a_dux(orders_filtrados):
     """Convierte orders Wix (filtrados) en dict {dux_codigo: cantidad_total}
     usando mapping_wix_dux y packs_wix. Devuelve (resultado, sin_mapear)
@@ -1937,8 +1998,10 @@ with tab_wix:
 
                     if data is not None:
                         orders = data.get("orders", [])
+                        # Recortar campos no usados para no superar el limite de 50k chars/celda de Sheets
+                        orders_slim = [_slim_wix_order(o) for o in orders]
                         try:
-                            db.guardar_pedidos_wix(orders)
+                            db.guardar_pedidos_wix(orders_slim)
                         except Exception as e:
                             st.error(msg_error_sheets("guardar pedidos Wix", e))
 
@@ -1952,7 +2015,7 @@ with tab_wix:
                         except Exception:
                             pass
 
-                        wix_orders_saved = orders
+                        wix_orders_saved = orders_slim
                         st.success(f"✅ {len(orders)} pedidos guardados.")
 
         st.divider()

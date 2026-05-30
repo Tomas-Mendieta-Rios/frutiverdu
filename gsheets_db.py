@@ -480,9 +480,12 @@ def _cargar_pedidos(fuente):
 
 
 def _guardar_pedidos(fuente, pedidos, fecha_field_candidates):
-    """fuente: 'dux' o 'wix'. pedidos: lista de dicts. Persiste cada uno como fila."""
+    """fuente: 'dux' o 'wix'. pedidos: lista de dicts. Persiste cada uno como fila.
+    Defensa: si el JSON serializado de un pedido supera los 49000 chars (limite
+    de Google Sheets = 50000 por celda), se omite ese pedido."""
     nombre = f"pedidos_{fuente}"
     rows = []
+    omitidos = 0
     for p in pedidos:
         oid = str(p.get("id") or p.get("nro_pedido") or p.get("nroPedido") or "")
         fecha = ""
@@ -490,14 +493,19 @@ def _guardar_pedidos(fuente, pedidos, fecha_field_candidates):
             if p.get(k):
                 fecha = str(p.get(k))
                 break
+        js = _json.dumps(p, ensure_ascii=False)
+        if len(js) > 49000:
+            omitidos += 1
+            continue
         rows.append({
             "order_id": oid,
             "fecha": fecha,
-            "json": _json.dumps(p, ensure_ascii=False),
+            "json": js,
         })
     df = pd.DataFrame(rows, columns=SCHEMA[nombre])
     escribir_tabla(nombre, df)
     _marcar_modificacion(f"pedidos_{fuente}")
+    return omitidos
 
 
 def cargar_pedidos_dux():
