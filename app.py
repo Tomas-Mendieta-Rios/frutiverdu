@@ -1149,23 +1149,28 @@ with tab_comprar:
         else:
             if _dux_contados:
                 st.markdown(f"**DUX ({len(_dux_contados)})**")
-                filas_dux = []
                 for o in _dux_contados:
                     nro = _dux_get_first(
                         o, ["nro_pedido", "nroPedido", "numero", "id"]
                     )
-                    filas_dux.append({
-                        "Nro": str(nro or ""),
-                        "Cliente": extraer_cliente_dux(o),
-                    })
-                st.dataframe(
-                    pd.DataFrame(filas_dux),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                    cliente = extraer_cliente_dux(o)
+                    items = extraer_items_dux(o)
+                    with st.expander(
+                        f"#{nro or '-'} · {cliente} · {len(items)} ítems",
+                        expanded=False,
+                    ):
+                        if items:
+                            filas_it = [extraer_item_dux(it) for it in items]
+                            st.dataframe(
+                                pd.DataFrame(filas_it)[["codigo", "producto", "cantidad"]],
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        else:
+                            st.caption("Sin items en este pedido.")
+
             if _wix_contados:
                 st.markdown(f"**Wix ({len(_wix_contados)})**")
-                filas_wix = []
                 for o in _wix_contados:
                     nro = o.get("number") or o.get("id", "")
                     bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
@@ -1173,15 +1178,35 @@ with tab_comprar:
                         f"{bi.get('firstName', '') or ''} {bi.get('lastName', '') or ''}".strip()
                         or "(sin cliente)"
                     )
-                    filas_wix.append({
-                        "Nro": str(nro),
-                        "Cliente": nombre_w,
-                    })
-                st.dataframe(
-                    pd.DataFrame(filas_wix),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                    items_w = o.get("lineItems") or []
+                    with st.expander(
+                        f"#{nro} · {nombre_w} · {len(items_w)} ítems",
+                        expanded=False,
+                    ):
+                        if items_w:
+                            filas_iw = []
+                            for li in items_w:
+                                nombre_prod = (
+                                    (li.get("productName") or {}).get("translated")
+                                    or (li.get("productName") or {}).get("original")
+                                    or ""
+                                )
+                                wix_id_prod = (
+                                    (li.get("catalogReference") or {}).get("catalogItemId")
+                                    or li.get("productId") or ""
+                                )
+                                filas_iw.append({
+                                    "wix_id": str(wix_id_prod),
+                                    "producto": nombre_prod,
+                                    "cantidad": li.get("quantity") or 0,
+                                })
+                            st.dataframe(
+                                pd.DataFrame(filas_iw),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        else:
+                            st.caption("Sin items en este pedido.")
 
     # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
 
