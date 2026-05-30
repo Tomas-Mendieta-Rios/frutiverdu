@@ -3607,6 +3607,7 @@ with tab_mapeo:
                 col_a, col_b, col_c = st.columns([2, 2, 1])
                 with col_a:
                     st.markdown(f"**{wname}**")
+                    st.caption(f"Wix ID: `{wid}`")
                 with col_b:
                     sel = st.selectbox(
                         "DUX equivalente",
