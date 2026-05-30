@@ -165,23 +165,6 @@ def escribir_tabla(nombre, df):
     leer_tabla.clear()
 
 
-def fecha_modificacion(nombre):
-    """Devuelve el timestamp YYYY-MM-DD HH:MM:SS de la última modificación
-    de una pestaña del Sheet (vía Drive API). None si no se puede."""
-    try:
-        ws = _get_ws(nombre)
-        sheet = _spreadsheet()
-        info = sheet.fetch_sheet_metadata(params={"fields": "properties.modifiedTime"})
-        ts = info.get("properties", {}).get("modifiedTime")
-        if not ts:
-            return None
-        return pd.to_datetime(ts).tz_convert("America/Argentina/Buenos_Aires").strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
-    except Exception:
-        return None
-
-
 def _marcar_modificacion(clave):
     """Persiste timestamp 'YYYY-MM-DD HH:MM:SS' en config con key=ultima_carga_<clave>."""
     ts = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").strftime(

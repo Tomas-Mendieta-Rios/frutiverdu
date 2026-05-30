@@ -12,6 +12,15 @@ import gsheets_db as db
 
 DUX_RATE_LIMIT_SECONDS = 5.5
 
+# Dias de la semana (en castellano, sin acentos). Definicion unica reusada
+# en Estimado y Total a comprar.
+DIAS_SEMANA = db.DIAS_SEMANA
+DIAS_DISPLAY = {
+    "lunes": "Lunes", "martes": "Martes", "miercoles": "Miércoles",
+    "jueves": "Jueves", "viernes": "Viernes", "sabado": "Sábado",
+    "domingo": "Domingo",
+}
+
 
 def msg_error_http(fuente, status_code, body=""):
     """Devuelve un mensaje en castellano para mostrar a quien usa la app."""
@@ -147,27 +156,6 @@ except Exception:
 
 # Pequeño chip arriba mostrando quien sos
 st.caption(f"👤 Sesión: **{_usuario_actual}**")
-
-
-def cargar_productos():
-    return db.cargar_productos()
-
-
-def cargar_compuestos():
-    return db.cargar_compuestos()
-
-
-def guardar_compuestos(df):
-    db.guardar_compuestos(df)
-
-
-def cargar_stock():
-    """Stock de la última fecha guardada (para Total a comprar fallback)."""
-    return db.cargar_stock()
-
-
-def cargar_stock_fecha(fecha):
-    return db.cargar_stock(fecha=fecha)
 
 
 def _slim_wix_order(o):
@@ -682,8 +670,8 @@ def completar_relaciones(compuestos_df, productos_df, excepciones=None):
     return merged.sort_values("producto_origen").reset_index(drop=True)
 
 
-productos = cargar_productos()
-compuestos_orig = cargar_compuestos()
+productos = db.cargar_productos()
+compuestos_orig = db.cargar_compuestos()
 # Si compuestos esta vacio (Sheet corrupto), no llamamos completar_relaciones
 # (rompe por columnas faltantes). El usuario debera re-sincronizar.
 if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
@@ -700,9 +688,11 @@ if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
     )
 else:
     compuestos = completar_relaciones(compuestos_orig, productos, EXCEPCIONES)
-    # Solo guardar si tiene contenido (defensivo: no pisar Sheet con vacío)
-    if len(compuestos) != len(compuestos_orig) and not compuestos.empty:
-        guardar_compuestos(compuestos)
+    # NOTA: ya no guardamos automaticamente compuestos generados. Si hay relaciones
+    # nuevas se computan en memoria para esta sesion pero NO se escriben a Sheets
+    # (antes hacia un write en cada arranque -> gastaba quota).
+    # Para persistir cambios al Sheet, ir a la pestania Relacionar productos y
+    # apretar Guardar.
 
 productos["label"] = productos["codigo"] + " - " + productos["producto"]
 
@@ -853,7 +843,7 @@ with tab_editar:
             ]
         ]
 
-        guardar_compuestos(salida)
+        db.guardar_compuestos(salida)
         st.success("Compuestos guardados correctamente.")
 
     ts_comp = db.ultima_carga("compuestos")
@@ -1042,12 +1032,6 @@ with tab_comprar:
         f"Estimado: **{ts_est or '?'}**"
     )
 
-    DIAS_LBL_TC = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
-    DIAS_DISPLAY_TC = {
-        "lunes": "Lunes", "martes": "Martes", "miercoles": "Miércoles",
-        "jueves": "Jueves", "viernes": "Viernes", "sabado": "Sábado",
-        "domingo": "Domingo",
-    }
 
     # Cargar fechas guardadas (si existen). Fallback solo la primera vez.
     cfg_comprar = db.cargar_config()
@@ -1071,8 +1055,8 @@ with tab_comprar:
             pass
 
     # Default dia estimado: el dia de la semana de fecha_entrega
-    def_dia_est = DIAS_LBL_TC[def_fent.weekday()]
-    if cfg_comprar.get("comprar_dia_estimado") in DIAS_LBL_TC:
+    def_dia_est = DIAS_SEMANA[def_fent.weekday()]
+    if cfg_comprar.get("comprar_dia_estimado") in DIAS_SEMANA:
         def_dia_est = cfg_comprar["comprar_dia_estimado"]
 
     # st.form: los cambios NO disparan rerun hasta apretar el boton.
@@ -1095,9 +1079,9 @@ with tab_comprar:
         with col_fc3:
             dia_estimado_sel = st.selectbox(
                 "📈 Día de estimado",
-                options=DIAS_LBL_TC,
-                format_func=lambda d: DIAS_DISPLAY_TC[d],
-                index=DIAS_LBL_TC.index(def_dia_est),
+                options=DIAS_SEMANA,
+                format_func=lambda d: DIAS_DISPLAY[d],
+                index=DIAS_SEMANA.index(def_dia_est),
                 key="comprar_dia_estimado",
             )
         with col_fc4:
@@ -1126,7 +1110,7 @@ with tab_comprar:
         )
     if dia_estimado_sel not in (dias_est_disp or []):
         st.warning(
-            f"⚠️ No hay estimado cargado para {DIAS_DISPLAY_TC[dia_estimado_sel]}. "
+            f"⚠️ No hay estimado cargado para {DIAS_DISPLAY[dia_estimado_sel]}. "
             f"Se va a usar **0 para todos los productos**."
         )
 
@@ -1135,7 +1119,7 @@ with tab_comprar:
         dia_estimado=dia_estimado_sel,
         fecha_compra=fecha_entrega,
     )
-    stock_actual = cargar_stock_fecha(fecha_stock_sel)
+    stock_actual = db.cargar_stock(fecha=fecha_stock_sel)
     # Para mantener compatibilidad con el resto del código de la pestaña
     fecha_compra = fecha_entrega
 
@@ -1368,21 +1352,15 @@ with tab_comprar:
                     cols[5].markdown(_badge(r["diff_est"], r["unidad"]), unsafe_allow_html=True)
 
 with tab_estimado:
-    DIAS_LBL = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
-    DIAS_DISPLAY = {
-        "lunes": "Lunes", "martes": "Martes", "miercoles": "Miércoles",
-        "jueves": "Jueves", "viernes": "Viernes", "sabado": "Sábado",
-        "domingo": "Domingo",
-    }
-    dia_actual = DIAS_LBL[date.today().weekday()]
+    dia_actual = DIAS_SEMANA[date.today().weekday()]
     cfg_est_tab = db.cargar_config()
-    dia_default_idx = DIAS_LBL.index(dia_actual)
-    if cfg_est_tab.get("estimado_dia") in DIAS_LBL:
-        dia_default_idx = DIAS_LBL.index(cfg_est_tab["estimado_dia"])
+    dia_default_idx = DIAS_SEMANA.index(dia_actual)
+    if cfg_est_tab.get("estimado_dia") in DIAS_SEMANA:
+        dia_default_idx = DIAS_SEMANA.index(cfg_est_tab["estimado_dia"])
 
     def _save_dia_estimado():
         v = st.session_state.get("dia_estimado")
-        if v in DIAS_LBL:
+        if v in DIAS_SEMANA:
             try:
                 db.guardar_config({"estimado_dia": str(v)})
             except Exception:
@@ -1392,7 +1370,7 @@ with tab_estimado:
     with col_es1:
         dia_estimado = st.selectbox(
             "Día de la semana",
-            options=DIAS_LBL,
+            options=DIAS_SEMANA,
             format_func=lambda d: DIAS_DISPLAY[d],
             index=dia_default_idx,
             key="dia_estimado",
@@ -1749,7 +1727,7 @@ with tab_dux:
                     st.error(msg_error_sheets("guardar selecciones DUX", e))
 
         else:
-            st.warning(
+            st.info(
                 "Todavía no hay pedidos guardados. Apretá **Sincronizar** para traerlos."
             )
 
@@ -1897,7 +1875,7 @@ with tab_dux_productos:
                     hide_index=True,
                 )
             else:
-                st.warning(
+                st.info(
                     "Todavía no hay productos en Sheets. Apretá **Sincronizar**."
                 )
         except Exception as e:
@@ -2027,7 +2005,7 @@ with tab_wix:
         selecciones = db.cargar_selecciones("wix")
 
         if not orders_saved:
-            st.warning("Todavía no hay pedidos. Apretá **Sincronizar**.")
+            st.info("Todavía no hay pedidos. Apretá **Sincronizar**.")
         else:
             ts_wix = db.ultima_carga("pedidos_wix")
             st.caption(
@@ -2326,7 +2304,7 @@ with tab_wix_productos:
                     },
                 )
             else:
-                st.warning("Todavía no hay productos Wix en Sheets. Apretá **Sincronizar**.")
+                st.info("Todavía no hay productos Wix en Sheets. Apretá **Sincronizar**.")
         except Exception as e:
             st.error(msg_error_sheets("leer productos Wix", e))
 
@@ -2490,7 +2468,7 @@ with tab_proveedores:
                 },
             )
         else:
-            st.warning("Todavía no hay proveedores. Subí un Excel arriba.")
+            st.info("Todavía no hay proveedores. Subí un Excel arriba.")
     except Exception as e:
         st.error(msg_error_sheets("leer proveedores", e))
 
