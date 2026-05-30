@@ -43,6 +43,13 @@ SCHEMA = {
         "unidad_medida",
         "estimado",
     ],
+    "estimado_semanal": [
+        "dia_semana",
+        "codigo",
+        "producto",
+        "unidad_medida",
+        "estimado",
+    ],
     "wix_productos": ["wix_id", "producto", "descripcion"],
     "mapping_wix_dux": [
         "wix_id",
@@ -332,6 +339,47 @@ def fechas_estimado():
     if df.empty:
         return []
     return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
+
+
+# ---------------- ESTIMADO SEMANAL (por dia de la semana, fijo) ----------------
+
+DIAS_SEMANA = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+
+
+def cargar_estimado_semanal(dia=None):
+    """Si dia=None devuelve TODO el estimado semanal. Si dia='lunes' filtra."""
+    df = leer_tabla("estimado_semanal")
+    if df.empty:
+        return df
+    df["codigo"] = df["codigo"].astype(str)
+    df["dia_semana"] = df["dia_semana"].astype(str)
+    df["estimado"] = pd.to_numeric(df["estimado"], errors="coerce").fillna(0)
+    if dia is not None:
+        df = df[df["dia_semana"] == str(dia)].reset_index(drop=True)
+    return df
+
+
+def guardar_estimado_semanal_dia(df_dia, dia):
+    """Reemplaza el estimado del dia indicado."""
+    full = leer_tabla("estimado_semanal")
+    if not full.empty and "dia_semana" in full.columns:
+        otros = full[full["dia_semana"] != str(dia)]
+    else:
+        otros = pd.DataFrame(columns=SCHEMA["estimado_semanal"])
+    nuevo = df_dia.copy()
+    nuevo["dia_semana"] = str(dia)
+    combinado = pd.concat(
+        [otros, nuevo[SCHEMA["estimado_semanal"]]], ignore_index=True
+    )
+    escribir_tabla("estimado_semanal", combinado)
+    _marcar_modificacion("estimado_semanal")
+
+
+def dias_semana_con_estimado():
+    df = leer_tabla("estimado_semanal")
+    if df.empty:
+        return []
+    return sorted(df["dia_semana"].dropna().unique().tolist())
 
 
 # ---------------- WIX PRODUCTOS ----------------

@@ -220,14 +220,6 @@ def cargar_stock():
     return db.cargar_stock()
 
 
-def cargar_estimado_ultimo():
-    return db.cargar_estimado()
-
-
-def cargar_estimado_fecha(fecha):
-    return db.cargar_estimado(fecha=fecha)
-
-
 def cargar_stock_fecha(fecha):
     return db.cargar_stock(fecha=fecha)
 
@@ -300,9 +292,9 @@ def _convertir_wix_orders_a_dux(orders_filtrados):
     return resultado, sin_mapear
 
 
-def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compra=None):
+def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=None):
     """Agrega pedidos DUX + Wix (filtrados por fecha_compra vía selecciones)
-    + estimado de la fecha indicada (default: última)."""
+    + estimado semanal del dia indicado (default: ninguno)."""
     cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
     st.session_state["_wix_sin_mapear"] = {}
     st.session_state["_dux_contados"] = []
@@ -375,10 +367,10 @@ def cargar_pedidos_dux_aggregated(productos_df, estimado_fecha=None, fecha_compr
         except Exception:
             pass
 
-    if estimado_fecha is None:
-        df_est = cargar_estimado_ultimo()
+    if dia_estimado is None:
+        df_est = pd.DataFrame(columns=["codigo", "estimado"])
     else:
-        df_est = cargar_estimado_fecha(estimado_fecha)
+        df_est = db.cargar_estimado_semanal(dia=dia_estimado)
 
     # Outer merge so items con solo estimado también aparecen
     if not df_est.empty:
@@ -991,7 +983,7 @@ with tab_comprar:
     ts_ped = db.ultima_carga("pedidos_dux")
     ts_wix = db.ultima_carga("pedidos_wix")
     ts_stk = db.ultima_carga("stock")
-    ts_est = db.ultima_carga("estimado")
+    ts_est = db.ultima_carga("estimado_semanal")
     st.caption(
         f"🕒 DUX: **{ts_ped or '?'}** · "
         f"Wix: **{ts_wix or '?'}** · "
@@ -999,10 +991,17 @@ with tab_comprar:
         f"Estimado: **{ts_est or '?'}**"
     )
 
+    DIAS_LBL_TC = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+    DIAS_DISPLAY_TC = {
+        "lunes": "Lunes", "martes": "Martes", "miercoles": "Miércoles",
+        "jueves": "Jueves", "viernes": "Viernes", "sabado": "Sábado",
+        "domingo": "Domingo",
+    }
+
     # Cargar fechas guardadas (si existen). Fallback solo la primera vez.
     cfg_comprar = db.cargar_config()
     fechas_stock_disp = db.fechas_stock()
-    fechas_est_disp = db.fechas_estimado()
+    dias_est_disp = db.dias_semana_con_estimado()
 
     def_fent = date.today() + timedelta(days=1)
     if cfg_comprar.get("comprar_fecha_entrega"):
@@ -1020,16 +1019,12 @@ with tab_comprar:
         except Exception:
             pass
 
-    def_fest = (
-        pd.to_datetime(fechas_est_disp[0]).date() if fechas_est_disp else date.today()
-    )
-    if cfg_comprar.get("comprar_fecha_estimado"):
-        try:
-            def_fest = pd.to_datetime(cfg_comprar["comprar_fecha_estimado"]).date()
-        except Exception:
-            pass
+    # Default dia estimado: el dia de la semana de fecha_entrega
+    def_dia_est = DIAS_LBL_TC[def_fent.weekday()]
+    if cfg_comprar.get("comprar_dia_estimado") in DIAS_LBL_TC:
+        def_dia_est = cfg_comprar["comprar_dia_estimado"]
 
-    # st.form: los cambios de fecha NO disparan rerun hasta apretar el boton.
+    # st.form: los cambios NO disparan rerun hasta apretar el boton.
     with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
         col_fc1, col_fc2, col_fc3, col_fc4 = st.columns([1.2, 1.2, 1.2, 1])
         with col_fc1:
@@ -1047,14 +1042,15 @@ with tab_comprar:
                 format="YYYY-MM-DD",
             )
         with col_fc3:
-            fecha_estimado_sel = st.date_input(
-                "📈 Fecha de estimado",
-                value=def_fest,
-                key="comprar_fecha_estimado",
-                format="YYYY-MM-DD",
+            dia_estimado_sel = st.selectbox(
+                "📈 Día de estimado",
+                options=DIAS_LBL_TC,
+                format_func=lambda d: DIAS_DISPLAY_TC[d],
+                index=DIAS_LBL_TC.index(def_dia_est),
+                key="comprar_dia_estimado",
             )
         with col_fc4:
-            st.markdown("&nbsp;", unsafe_allow_html=True)  # spacer para alinear
+            st.markdown("&nbsp;", unsafe_allow_html=True)
             boton_actualizar = st.form_submit_button(
                 "🔄 Actualizar",
                 type="primary",
@@ -1062,32 +1058,30 @@ with tab_comprar:
             )
 
     if boton_actualizar:
-        # Persistir las 3 fechas en una sola escritura
         try:
             db.guardar_config({
                 "comprar_fecha_entrega": str(fecha_entrega),
                 "comprar_fecha_stock": str(fecha_stock_sel),
-                "comprar_fecha_estimado": str(fecha_estimado_sel),
+                "comprar_dia_estimado": str(dia_estimado_sel),
             })
         except Exception:
             pass
         st.cache_data.clear()
 
-    # Avisos si la fecha elegida no tiene datos cargados
     if str(fecha_stock_sel) not in (fechas_stock_disp or []):
         st.warning(
             f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
             f"Se va a usar **0 para todos los productos**."
         )
-    if str(fecha_estimado_sel) not in (fechas_est_disp or []):
+    if dia_estimado_sel not in (dias_est_disp or []):
         st.warning(
-            f"⚠️ No hay estimado cargado para el {fecha_estimado_sel}. "
+            f"⚠️ No hay estimado cargado para {DIAS_DISPLAY_TC[dia_estimado_sel]}. "
             f"Se va a usar **0 para todos los productos**."
         )
 
     pedidos_actual = cargar_pedidos_dux_aggregated(
         productos,
-        estimado_fecha=fecha_estimado_sel,
+        dia_estimado=dia_estimado_sel,
         fecha_compra=fecha_entrega,
     )
     stock_actual = cargar_stock_fecha(fecha_stock_sel)
@@ -1323,24 +1317,26 @@ with tab_comprar:
                     cols[5].markdown(_badge(r["diff_est"], r["unidad"]), unsafe_allow_html=True)
 
 with tab_estimado:
-    fechas_est_disp = db.fechas_estimado()
-    fecha_est_default = (
-        pd.to_datetime(fechas_est_disp[0]).date()
-        if fechas_est_disp
-        else date.today()
-    )
+    DIAS_LBL = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+    DIAS_DISPLAY = {
+        "lunes": "Lunes", "martes": "Martes", "miercoles": "Miércoles",
+        "jueves": "Jueves", "viernes": "Viernes", "sabado": "Sábado",
+        "domingo": "Domingo",
+    }
+    dia_actual = DIAS_LBL[date.today().weekday()]
 
     col_es1, col_es2 = st.columns([1, 3])
     with col_es1:
-        fecha_estimado = st.date_input(
-            "Fecha",
-            value=fecha_est_default,
-            key="fecha_estimado",
-            format="YYYY-MM-DD",
+        dia_estimado = st.selectbox(
+            "Día de la semana",
+            options=DIAS_LBL,
+            format_func=lambda d: DIAS_DISPLAY[d],
+            index=DIAS_LBL.index(dia_actual),
+            key="dia_estimado",
         )
     ts_est_ph = col_es2.empty()
 
-    df_dia_est = db.cargar_estimado(fecha=fecha_estimado)
+    df_dia_est = db.cargar_estimado_semanal(dia=dia_estimado)
     map_est_dia = (
         dict(zip(df_dia_est["codigo"].astype(str), df_dia_est["estimado"]))
         if not df_dia_est.empty
@@ -1357,8 +1353,7 @@ with tab_estimado:
     )
 
     # "Poner a cero" llena el editor con ceros (sin guardar).
-    # El usuario despues presiona Guardar para persistir.
-    if st.session_state.get(f"_est_zero_{fecha_estimado}"):
+    if st.session_state.get(f"_est_zero_{dia_estimado}"):
         base_est["estimado"] = 0.0
 
     # Botones arriba: Cero (fuera de form) + caption
@@ -1370,7 +1365,7 @@ with tab_estimado:
             help="Llena todo el estimado con 0. No se guarda hasta apretar 💾 Guardar estimado.",
         )
     with col_btn_e2:
-        st.caption(f"Guarda para la fecha **{fecha_estimado}**.")
+        st.caption(f"Guarda para el día **{DIAS_DISPLAY[dia_estimado]}** (fijo, se aplica a todos los {DIAS_DISPLAY[dia_estimado].lower()}).")
 
     buscar_est = st.text_input(
         "🔎 Buscar producto",
@@ -1385,7 +1380,7 @@ with tab_estimado:
     else:
         base_est_view = base_est
 
-    with st.form(key=f"form_estimado_{fecha_estimado}", clear_on_submit=False):
+    with st.form(key=f"form_estimado_{dia_estimado}", clear_on_submit=False):
         guardar_est = st.form_submit_button(
             "💾 Guardar estimado", type="primary"
         )
@@ -1405,7 +1400,7 @@ with tab_estimado:
                     format="%.3f",
                 ),
             },
-            key=f"editor_estimado_{fecha_estimado}",
+            key=f"editor_estimado_{dia_estimado}",
         )
 
     if guardar_est:
@@ -1421,21 +1416,20 @@ with tab_estimado:
             for c, v in zip(salida["codigo"], salida["estimado"])
         ]
         salida["estimado"] = salida["estimado"].fillna(0).astype(float)
-        db.guardar_estimado(salida, fecha_estimado)
-        st.session_state.pop(f"_est_zero_{fecha_estimado}", None)
-        st.success(f"Estimado del {fecha_estimado} guardado en Sheets.")
+        db.guardar_estimado_semanal_dia(salida, dia_estimado)
+        st.session_state.pop(f"_est_zero_{dia_estimado}", None)
+        st.success(f"Estimado para {DIAS_DISPLAY[dia_estimado]} guardado en Sheets.")
 
     if reset_est:
-        st.session_state[f"_est_zero_{fecha_estimado}"] = True
-        editor_key = f"editor_estimado_{fecha_estimado}"
+        st.session_state[f"_est_zero_{dia_estimado}"] = True
+        editor_key = f"editor_estimado_{dia_estimado}"
         st.session_state.pop(editor_key, None)
         st.rerun()
 
-    # Refrescar fechas y timestamp despues del posible save
-    fechas_est_disp_post = db.fechas_estimado()
-    ts_est_ultimo = db.ultima_carga("estimado")
+    dias_con_est_post = db.dias_semana_con_estimado()
+    ts_est_ultimo = db.ultima_carga("estimado_semanal")
     ts_est_ph.caption(
-        f"📅 Fechas guardadas: {len(fechas_est_disp_post)} · "
+        f"📅 Días configurados: {len(dias_con_est_post)} / 7 · "
         f"🕒 Última actualización: **{ts_est_ultimo or '?'}**"
     )
 
