@@ -101,6 +101,7 @@ SCHEMA = {
         "cantidad",
         "precio",
         "condicion_pago",
+        "comprobante",
     ],
     "config": ["key", "value"],
 }
@@ -550,20 +551,66 @@ def cargar_compras():
     df["codigo_producto"] = df["codigo_producto"].astype(str)
     df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce").fillna(0)
     df["precio"] = pd.to_numeric(df["precio"], errors="coerce").fillna(0)
+    if "comprobante" not in df.columns:
+        df["comprobante"] = ""
+    df["comprobante"] = df["comprobante"].astype(str)
     return df
 
 
+def _proximo_comprobante_id():
+    """Devuelve el siguiente comprobante 'APP-NNNNN' y actualiza el contador en config."""
+    cfg = cargar_config()
+    try:
+        n = int(cfg.get("next_comprobante_id", "1"))
+    except (ValueError, TypeError):
+        n = 1
+    nuevo = f"APP-{n:05d}"
+    guardar_config({"next_comprobante_id": str(n + 1)})
+    return nuevo
+
+
 def guardar_compras_fecha(df_fecha, fecha):
-    """Reemplaza las compras de una fecha. df_fecha debe tener las columnas del schema (sin fecha)."""
+    """Reemplaza las compras de una fecha. Asigna comprobante por proveedor:
+    si ya existe un comprobante para (fecha, proveedor) lo reutiliza, sino
+    saca uno nuevo del contador global APP-NNNNN."""
     full = cargar_compras()
+
+    # Mapeo proveedor -> comprobante existente para esta fecha
+    prov_a_compr = {}
+    if not full.empty and "fecha" in full.columns:
+        existente = full[full["fecha"] == str(fecha)]
+        for _, r in existente.iterrows():
+            pid = str(r.get("proveedor_id", ""))
+            c = str(r.get("comprobante", "") or "")
+            if pid and c and pid not in prov_a_compr:
+                prov_a_compr[pid] = c
+
+    # Asignar comprobante a cada linea del nuevo df
+    df_fecha = df_fecha.copy()
+    nuevos_compr = {}
+    comprobantes = []
+    for _, r in df_fecha.iterrows():
+        pid = str(r.get("proveedor_id", "") or "")
+        if not pid:
+            comprobantes.append("")
+        elif pid in prov_a_compr:
+            comprobantes.append(prov_a_compr[pid])
+        elif pid in nuevos_compr:
+            comprobantes.append(nuevos_compr[pid])
+        else:
+            nuevo = _proximo_comprobante_id()
+            nuevos_compr[pid] = nuevo
+            comprobantes.append(nuevo)
+    df_fecha["comprobante"] = comprobantes
+
     if not full.empty and "fecha" in full.columns:
         otros = full[full["fecha"] != str(fecha)]
     else:
         otros = pd.DataFrame(columns=SCHEMA["compras"])
-    nuevo = df_fecha.copy()
-    nuevo["fecha"] = str(fecha)
+    nuevo_df = df_fecha.copy()
+    nuevo_df["fecha"] = str(fecha)
     combinado = pd.concat(
-        [otros, nuevo[SCHEMA["compras"]]], ignore_index=True
+        [otros, nuevo_df[SCHEMA["compras"]]], ignore_index=True
     )
     escribir_tabla("compras", combinado)
     _marcar_modificacion("compras")
