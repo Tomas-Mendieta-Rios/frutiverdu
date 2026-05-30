@@ -1208,6 +1208,40 @@ with tab_comprar:
                         else:
                             st.caption("Sin items en este pedido.")
 
+    # Expander para ver el stock crudo de la fecha elegida
+    _stk_view = stock_actual[stock_actual["cantidad"].astype(float) > 0] if (
+        stock_actual is not None and not stock_actual.empty
+    ) else pd.DataFrame()
+    with st.expander(
+        f"📦 Ver stock cargado del {fecha_stock_sel} ({len(_stk_view)} con cantidad > 0)",
+        expanded=False,
+    ):
+        if _stk_view.empty:
+            st.caption("Sin stock cargado para esta fecha.")
+        else:
+            st.dataframe(
+                _stk_view[["codigo", "producto", "unidad_medida", "cantidad"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    # Expander para ver el estimado del dia elegido
+    _est_view = db.cargar_estimado_semanal(dia=dia_estimado_sel)
+    if not _est_view.empty:
+        _est_view = _est_view[_est_view["estimado"].astype(float) > 0]
+    with st.expander(
+        f"📈 Ver estimado de {DIAS_DISPLAY.get(dia_estimado_sel, dia_estimado_sel)} ({len(_est_view)} con estimado > 0)",
+        expanded=False,
+    ):
+        if _est_view.empty:
+            st.caption("Sin estimado cargado para este día.")
+        else:
+            st.dataframe(
+                _est_view[["codigo", "producto", "unidad_medida", "estimado"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
     # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
 
     grafo = construir_grafo_conversion(compuestos)
