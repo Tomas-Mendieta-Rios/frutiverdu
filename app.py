@@ -959,18 +959,7 @@ with tab_stock:
     with col_btn_s2:
         st.caption(f"Guarda para la fecha **{fecha_stock}**.")
 
-    prods_disp_stk = sorted(base_stk["producto"].dropna().astype(str).unique().tolist())
-    filtro_prod_stk = st.multiselect(
-        "Producto",
-        options=prods_disp_stk,
-        key="stk_filtro_prod_sel",
-    )
-    if filtro_prod_stk:
-        base_stk_view = base_stk[
-            base_stk["producto"].astype(str).isin(filtro_prod_stk)
-        ].reset_index(drop=True)
-    else:
-        base_stk_view = base_stk
+    base_stk_view = base_stk
 
     with st.form(key=f"form_stock_{fecha_stock}", clear_on_submit=False):
         guardar_s = st.form_submit_button(
@@ -1500,18 +1489,7 @@ with tab_estimado:
     with col_btn_e2:
         st.caption(f"Guarda para el día **{DIAS_DISPLAY[dia_estimado]}** (fijo, se aplica a todos los {DIAS_DISPLAY[dia_estimado].lower()}).")
 
-    prods_disp_est = sorted(base_est["producto"].dropna().astype(str).unique().tolist())
-    filtro_prod_est = st.multiselect(
-        "Producto",
-        options=prods_disp_est,
-        key="est_filtro_prod_sel",
-    )
-    if filtro_prod_est:
-        base_est_view = base_est[
-            base_est["producto"].astype(str).isin(filtro_prod_est)
-        ].reset_index(drop=True)
-    else:
-        base_est_view = base_est
+    base_est_view = base_est
 
     with st.form(key=f"form_estimado_{dia_estimado}", clear_on_submit=False):
         guardar_est = st.form_submit_button(
