@@ -1263,10 +1263,38 @@ with tab_comprar:
             st.caption("Sin datos.")
         else:
             _raw_view = _raw_view.rename(columns={"cantidad": "pedido"}).sort_values("producto")
+            _raw_view["a_comprar"] = (
+                _raw_view["pedido"].astype(float)
+                + _raw_view["estimado"].astype(float)
+                - _raw_view["stock"].astype(float)
+            )
+
+            def _color_ac(v):
+                if v > 0.001:
+                    return "color: #d11; font-weight: bold;"
+                if v < -0.001:
+                    return "color: #1a8a1a; font-weight: bold;"
+                return "color: #666;"
+
+            styled_raw = (
+                _raw_view[["codigo", "producto", "unidad_medida",
+                            "pedido", "estimado", "stock", "a_comprar"]]
+                .style.map(_color_ac, subset=["a_comprar"])
+                .format({
+                    "pedido": "{:.2f}",
+                    "estimado": "{:.2f}",
+                    "stock": "{:.2f}",
+                    "a_comprar": "{:+.2f}",
+                })
+            )
             st.dataframe(
-                _raw_view[["codigo", "producto", "unidad_medida", "pedido", "estimado", "stock"]],
+                styled_raw,
                 use_container_width=True,
                 hide_index=True,
+            )
+            st.caption(
+                "**a_comprar** = `pedido + estimado − stock` (por código, sin conversiones). "
+                "🔴 Positivo (rojo) = falta · 🟢 Negativo (verde) = sobra"
             )
 
     # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
