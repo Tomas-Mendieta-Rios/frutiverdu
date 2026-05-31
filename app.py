@@ -289,7 +289,10 @@ def _convertir_wix_orders_a_dux(orders_filtrados):
 
 def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=None):
     """Agrega pedidos DUX + Wix (filtrados por fecha_compra vía selecciones)
-    + estimado semanal del dia indicado (default: ninguno)."""
+    + estimado semanal del dia indicado (default: ninguno).
+
+    fecha_compra puede ser: None, un valor unico (str/date) o una lista/set
+    de fechas (en cuyo caso se incluyen pedidos asignados a CUALQUIERA de ellas)."""
     cols = ["codigo", "producto", "unidad_medida", "cantidad", "estimado"]
     st.session_state["_wix_sin_mapear"] = {}
     st.session_state["_dux_contados"] = []
@@ -299,11 +302,14 @@ def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=
     selecciones_dux = db.cargar_selecciones("dux")
 
     if fecha_compra is not None:
-        fecha_str = str(fecha_compra)
+        if isinstance(fecha_compra, (list, tuple, set)):
+            fechas_str = {str(f) for f in fecha_compra if f}
+        else:
+            fechas_str = {str(fecha_compra)}
         all_orders = [
             o
             for o in all_orders
-            if selecciones_dux.get(str(o.get("id") or o.get("nro_pedido") or "")) == fecha_str
+            if selecciones_dux.get(str(o.get("id") or o.get("nro_pedido") or "")) in fechas_str
         ]
         st.session_state["_dux_contados"] = all_orders
 
@@ -330,9 +336,8 @@ def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=
         wix_orders = db.cargar_pedidos_wix()
         try:
             wix_sel = db.cargar_selecciones("wix")
-            fecha_str = str(fecha_compra)
             wix_filtrados = [
-                o for o in wix_orders if wix_sel.get(str(o.get("id"))) == fecha_str
+                o for o in wix_orders if wix_sel.get(str(o.get("id"))) in fechas_str
             ]
             st.session_state["_wix_contados"] = wix_filtrados
             wix_dux_map, wix_sin_mapear = _convertir_wix_orders_a_dux(wix_filtrados)
@@ -1039,12 +1044,25 @@ with tab_comprar:
     fechas_stock_disp = db.fechas_stock()
     dias_est_disp = db.dias_semana_con_estimado()
 
-    def_fent = date.today() + timedelta(days=1)
-    if cfg_comprar.get("comprar_fecha_entrega"):
+    # Fechas disponibles con pedidos asignados (union DUX + Wix)
+    _sels_dux = db.cargar_selecciones("dux")
+    _sels_wix = db.cargar_selecciones("wix")
+    fechas_entrega_disp = sorted(
+        set(_sels_dux.values()) | set(_sels_wix.values()),
+        reverse=False,
+    )
+
+    def_fent_list = []
+    if cfg_comprar.get("comprar_fechas_entrega"):
         try:
-            def_fent = pd.to_datetime(cfg_comprar["comprar_fecha_entrega"]).date()
+            guardadas = cfg_comprar["comprar_fechas_entrega"].split(",")
+            def_fent_list = [f.strip() for f in guardadas if f.strip() in fechas_entrega_disp]
         except Exception:
             pass
+    if not def_fent_list:
+        manana = str(date.today() + timedelta(days=1))
+        if manana in fechas_entrega_disp:
+            def_fent_list = [manana]
 
     def_fstk = (
         pd.to_datetime(fechas_stock_disp[0]).date() if fechas_stock_disp else date.today()
@@ -1055,20 +1073,21 @@ with tab_comprar:
         except Exception:
             pass
 
-    # Default dia estimado: el dia de la semana de fecha_entrega
-    def_dia_est = DIAS_SEMANA[def_fent.weekday()]
+    # Default dia estimado
+    def_dia_est = DIAS_SEMANA[date.today().weekday()]
     if cfg_comprar.get("comprar_dia_estimado") in DIAS_SEMANA:
         def_dia_est = cfg_comprar["comprar_dia_estimado"]
 
     # st.form: los cambios NO disparan rerun hasta apretar el boton.
     with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
-        col_fc1, col_fc2, col_fc3, col_fc4 = st.columns([1.2, 1.2, 1.2, 1])
+        col_fc1, col_fc2, col_fc3, col_fc4 = st.columns([1.5, 1.2, 1.2, 1])
         with col_fc1:
-            fecha_entrega = st.date_input(
-                "📦 Fecha de entrega",
-                value=def_fent,
-                key="comprar_fecha_entrega",
-                format="YYYY-MM-DD",
+            fechas_entrega = st.multiselect(
+                "📦 Fechas de entrega",
+                options=fechas_entrega_disp,
+                default=def_fent_list,
+                key="comprar_fechas_entrega",
+                help="Elegí una o más fechas. Los pedidos de todas ellas se suman.",
             )
         with col_fc2:
             fecha_stock_sel = st.date_input(
@@ -1096,7 +1115,7 @@ with tab_comprar:
     if boton_actualizar:
         try:
             db.guardar_config({
-                "comprar_fecha_entrega": str(fecha_entrega),
+                "comprar_fechas_entrega": ",".join(fechas_entrega) if fechas_entrega else "",
                 "comprar_fecha_stock": str(fecha_stock_sel),
                 "comprar_dia_estimado": str(dia_estimado_sel),
             })
@@ -1118,11 +1137,11 @@ with tab_comprar:
     pedidos_actual = cargar_pedidos_dux_aggregated(
         productos,
         dia_estimado=dia_estimado_sel,
-        fecha_compra=fecha_entrega,
+        fecha_compra=fechas_entrega if fechas_entrega else None,
     )
     stock_actual = db.cargar_stock(fecha=fecha_stock_sel)
     # Para mantener compatibilidad con el resto del código de la pestaña
-    fecha_compra = fecha_entrega
+    fecha_compra = fechas_entrega
 
     wix_sin_mapear = st.session_state.get("_wix_sin_mapear", {})
     if wix_sin_mapear:
