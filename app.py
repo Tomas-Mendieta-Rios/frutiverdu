@@ -3561,6 +3561,10 @@ with tab_mapeo:
     else:
         df_wix_p["wix_id"] = df_wix_p["wix_id"].astype(str)
         df_wix_p["producto"] = df_wix_p["producto"].astype(str)
+        # Excluir packs (gestionados en pestaña 🎁 Packs Wix). Detectados por prefijo "PACK".
+        df_wix_p = df_wix_p[
+            ~df_wix_p["producto"].str.upper().str.startswith("PACK")
+        ]
         df_wix_p = df_wix_p.sort_values("producto").reset_index(drop=True)
 
         mapping_actual = {}
