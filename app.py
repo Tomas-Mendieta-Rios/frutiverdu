@@ -1027,16 +1027,6 @@ with tab_stock:
     )
 
 with tab_comprar:
-    ts_ped = db.ultima_carga("pedidos_dux")
-    ts_wix = db.ultima_carga("pedidos_wix")
-    ts_stk = db.ultima_carga("stock")
-    ts_est = db.ultima_carga("estimado_semanal")
-    st.caption(
-        f"🕒 DUX: **{ts_ped or '?'}** · "
-        f"Wix: **{ts_wix or '?'}** · "
-        f"Stock: **{ts_stk or '?'}** · "
-        f"Estimado: **{ts_est or '?'}**"
-    )
 
 
     # Cargar fechas guardadas (si existen). Fallback solo la primera vez.
