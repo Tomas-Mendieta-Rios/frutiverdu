@@ -1284,7 +1284,7 @@ with tab_comprar:
                     "pedido": "{:.2f}",
                     "estimado": "{:.2f}",
                     "stock": "{:.2f}",
-                    "a_comprar": "{:+.2f}",
+                    "a_comprar": lambda v: f"{abs(v):.2f}",
                 })
             )
             st.dataframe(
