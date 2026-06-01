@@ -2770,7 +2770,7 @@ with tab_compras:
         if not df_compras_fecha_post.empty:
             import xlwt
             # DUX pide fecha con guiones DD-MM-AAAA
-            fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d/%m/%Y")
+            fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d-%m-%Y")
 
             def _num_es(v):
                 try:
