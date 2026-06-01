@@ -2968,25 +2968,42 @@ with tab_compras:
                         g: str(ultimo_dux_fresh + i + 1)
                         for i, g in enumerate(grupos_unicos)
                     }
+                    def _try_int(v):
+                        try:
+                            return int(str(v).strip())
+                        except (ValueError, TypeError, AttributeError):
+                            return None
+
+                    def _try_float(v):
+                        try:
+                            return float(v)
+                        except (ValueError, TypeError):
+                            return None
+
                     filas_excel = []
                     for _, r in df_compras_fecha_post.iterrows():
-                        pid = str(r.get("proveedor_id", "") or "")
+                        pid = r.get("proveedor_id", "")
                         grupo = str(r.get("comprobante", "") or "")
                         comp_final = grupo_a_dux_fresh.get(grupo, "")
                         fila = {col: "" for col in COLUMNAS_DUX}
-                        fila["COMPROBANTE"] = comp_final
+                        # Numericos (DUX requiere number, no text)
+                        fila["COMPROBANTE"] = _try_int(comp_final) or comp_final
+                        fila["ID PROVEEDOR"] = _try_int(pid) or pid
+                        fila["CANTIDAD"] = _try_float(r.get("cantidad", 0)) or 0
+                        fila["PRECIO"] = _try_float(r.get("precio", 0)) or 0
+                        # Textos
                         fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
                         fila["DEPOSITO"] = "DEPOSITO"
-                        fila["ID PROVEEDOR"] = pid
                         fila["FECHA"] = fecha_str_dux
                         fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
                         fila["FECHA VENCIMIENTO"] = fecha_str_dux
                         fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
-                        fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
-                        fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
-                        fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
+                        # CODIGO PRODUCTO se queda como string para preservar ceros adelante (0145, 003)
+                        fila["CÓDIGO PRODUCTO"] = str(r.get("codigo_producto", "") or "")
+                        # REALIZA RECEPCION = "S" -> sin esto DUX crea el comprobante pero
+                        # no lo procesa (queda en 0 procesados / 0 errores). CRITICO.
+                        fila["REALIZA RECEPCION"] = "S"
                         fila["PRECIO INCLUYE IVA"] = "S"
-                        fila["PORCENTAJE IVA"] = 0
                         filas_excel.append(fila)
 
                     wb = xlwt.Workbook(encoding="utf-8")
