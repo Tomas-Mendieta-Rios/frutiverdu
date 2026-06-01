@@ -1102,6 +1102,8 @@ with tab_comprar:
                 "comprar_dia_estimado": str(dia_estimado_sel),
                 "comprar_ultima_actualizacion": ts_actualizar,
             })
+            # Actualizar el dict en memoria para que el caption muestre el valor nuevo YA
+            cfg_comprar["comprar_ultima_actualizacion"] = ts_actualizar
         except Exception:
             pass
         st.cache_data.clear()
