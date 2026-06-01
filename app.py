@@ -12,6 +12,60 @@ import gsheets_db as db
 
 DUX_RATE_LIMIT_SECONDS = 5.5
 
+
+@st.cache_data(ttl=60)
+def obtener_ultimo_comprobante_dux():
+    """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
+    de los ultimos 60 dias. None si falla o no hay datos numericos."""
+    dux_cfg = st.secrets.get("dux", {})
+    token = dux_cfg.get("token", "")
+    base_url = dux_cfg.get(
+        "base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services"
+    )
+    id_empresa = int(dux_cfg.get("id_empresa", 4245))
+    id_sucursal = int(dux_cfg.get("id_sucursal", 1))
+
+    if not token:
+        return None
+
+    fecha_desde = (date.today() - timedelta(days=60)).strftime("%d/%m/%Y")
+    fecha_hasta = date.today().strftime("%d/%m/%Y")
+
+    url = f"{base_url}/compras"
+    headers = {"accept": "application/json", "authorization": token}
+    params = {
+        "fechaDesde": fecha_desde,
+        "fechaHasta": fecha_hasta,
+        "idEmpresa": id_empresa,
+        "idSucursal": id_sucursal,
+        "tipoComp": "COMPRA",
+        "limit": 50,
+        "offset": 0,
+    }
+
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=15)
+        if r.status_code != 200:
+            return None
+        d = r.json()
+    except Exception:
+        return None
+
+    results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
+    comprobantes = []
+    for c in results:
+        if not isinstance(c, dict):
+            continue
+        comp = c.get("comprobante", "")
+        try:
+            n = int(str(comp).strip())
+            comprobantes.append(n)
+        except (ValueError, TypeError):
+            continue
+    if not comprobantes:
+        return None
+    return max(comprobantes)
+
 # Dias de la semana (en castellano, sin acentos). Definicion unica reusada
 # en Estimado y Total a comprar.
 DIAS_SEMANA = db.DIAS_SEMANA
@@ -2864,12 +2918,32 @@ with tab_compras:
                     return ""
                 return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
+            # Consultar a DUX el ultimo comprobante e ir asignando consecutivos.
+            # Si falla la API, fallback al codigo APP-NNNNN local.
+            ultimo_dux = obtener_ultimo_comprobante_dux()
+            app_codes_unicos = list(
+                dict.fromkeys(
+                    str(c) for c in df_compras_fecha_post["comprobante"]
+                    if str(c).strip()
+                )
+            )
+            if ultimo_dux is not None:
+                app_to_dux = {
+                    app_code: str(ultimo_dux + i + 1)
+                    for i, app_code in enumerate(app_codes_unicos)
+                }
+                st.session_state["_compras_app_to_dux"] = app_to_dux
+            else:
+                app_to_dux = {}
+                st.session_state["_compras_app_to_dux"] = {}
+
             filas_excel = []
             for _, r in df_compras_fecha_post.iterrows():
                 pid = str(r.get("proveedor_id", "") or "")
+                app_comp = str(r.get("comprobante", "") or "")
+                comp_final = app_to_dux.get(app_comp, app_comp)
                 fila = {col: "" for col in COLUMNAS_DUX}
-                # El comprobante ya viene asignado por proveedor desde guardar_compras_fecha
-                fila["COMPROBANTE"] = str(r.get("comprobante", "") or "")
+                fila["COMPROBANTE"] = comp_final
                 fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
                 fila["DEPOSITO"] = "DEPOSITO"
                 fila["ID PROVEEDOR"] = pid
@@ -2880,6 +2954,7 @@ with tab_compras:
                 fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
                 fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
                 fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
+                fila["PORCENTAJE IVA"] = 0
                 filas_excel.append(fila)
 
             # Escribir como .xls (Excel 97-2003) con sheet "Hoja Principal"
@@ -2904,6 +2979,21 @@ with tab_compras:
                 mime="application/vnd.ms-excel",
                 type="primary",
             )
+
+            if app_to_dux:
+                lineas_map = "\n".join(
+                    f"- `{a}` → DUX **{d}**"
+                    for a, d in app_to_dux.items()
+                )
+                st.caption(
+                    f"Numeros DUX asignados (último DUX: **{ultimo_dux}**, "
+                    f"consecutivos a partir de **{ultimo_dux + 1}**):\n\n{lineas_map}"
+                )
+            else:
+                st.caption(
+                    "⚠️ No se pudo consultar el último comprobante de DUX. "
+                    "El Excel sale con códigos internos APP-NNNNN."
+                )
 
             # ---------- Resumen del día ----------
             df_resumen = df_compras_fecha_post.copy()
