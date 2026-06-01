@@ -2774,7 +2774,7 @@ with tab_compras:
                 fila = {col: "" for col in COLUMNAS_DUX}
                 # El comprobante ya viene asignado por proveedor desde guardar_compras_fecha
                 fila["COMPROBANTE"] = str(r.get("comprobante", "") or "")
-                fila["TIPO COMPROBANTE"] = "COMPROBANTE COMPRA"
+                fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
                 fila["DEPOSITO"] = "DEPOSITO"
                 fila["ID PROVEEDOR"] = pid
                 fila["FECHA"] = fecha_str_dux
