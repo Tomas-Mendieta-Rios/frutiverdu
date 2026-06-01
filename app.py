@@ -2985,6 +2985,7 @@ with tab_compras:
                         fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
                         fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
                         fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
+                        fila["PRECIO INCLUYE IVA"] = "S"
                         fila["PORCENTAJE IVA"] = 0
                         filas_excel.append(fila)
 
