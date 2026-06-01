@@ -16,7 +16,8 @@ DUX_RATE_LIMIT_SECONDS = 5.5
 @st.cache_data(ttl=60)
 def obtener_ultimo_comprobante_dux():
     """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
-    de los ultimos 60 dias. None si falla o no hay datos numericos."""
+    de los ultimos 5 dias. Pagina hasta agotar resultados.
+    None si falla o no hay datos numericos."""
     dux_cfg = st.secrets.get("dux", {})
     token = dux_cfg.get("token", "")
     base_url = dux_cfg.get(
@@ -28,40 +29,64 @@ def obtener_ultimo_comprobante_dux():
     if not token:
         return None
 
-    fecha_desde = (date.today() - timedelta(days=60)).strftime("%d/%m/%Y")
+    fecha_desde = (date.today() - timedelta(days=5)).strftime("%d/%m/%Y")
     fecha_hasta = date.today().strftime("%d/%m/%Y")
 
     url = f"{base_url}/compras"
     headers = {"accept": "application/json", "authorization": token}
-    params = {
-        "fechaDesde": fecha_desde,
-        "fechaHasta": fecha_hasta,
-        "idEmpresa": id_empresa,
-        "idSucursal": id_sucursal,
-        "tipoComp": "COMPRA",
-        "limit": 50,
-        "offset": 0,
-    }
 
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=15)
-        if r.status_code != 200:
-            return None
-        d = r.json()
-    except Exception:
-        return None
-
-    results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
+    page_size = 50
+    offset = 0
     comprobantes = []
-    for c in results:
-        if not isinstance(c, dict):
-            continue
-        comp = c.get("comprobante", "")
+    max_pages = 20  # tope de seguridad: 1000 compras en 5 dias seria absurdo
+
+    for _ in range(max_pages):
+        params = {
+            "fechaDesde": fecha_desde,
+            "fechaHasta": fecha_hasta,
+            "idEmpresa": id_empresa,
+            "idSucursal": id_sucursal,
+            "tipoComp": "COMPRA",
+            "limit": page_size,
+            "offset": offset,
+        }
         try:
-            n = int(str(comp).strip())
-            comprobantes.append(n)
-        except (ValueError, TypeError):
-            continue
+            r = requests.get(url, params=params, headers=headers, timeout=15)
+            if r.status_code != 200:
+                # Si ya juntamos algunos en paginas anteriores, devolvemos el max parcial.
+                # Si no hay nada, cae al fallback APP-NNNNN.
+                break
+            d = r.json()
+        except Exception:
+            break
+
+        if isinstance(d, dict):
+            results = d.get("results", [])
+        elif isinstance(d, list):
+            results = d
+        else:
+            results = []
+
+        if not results:
+            break
+
+        for c in results:
+            if not isinstance(c, dict):
+                continue
+            comp = c.get("comprobante", "")
+            try:
+                n = int(str(comp).strip())
+                comprobantes.append(n)
+            except (ValueError, TypeError):
+                continue
+
+        # Si la pagina trajo menos que el limite, ya no hay mas
+        if len(results) < page_size:
+            break
+        offset += page_size
+        # Respeto rate limit de DUX entre paginas
+        time.sleep(2)
+
     if not comprobantes:
         return None
     return max(comprobantes)
