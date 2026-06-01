@@ -103,6 +103,10 @@ SCHEMA = {
         "condicion_pago",
         "comprobante",
     ],
+    "mixes_dux": [
+        "mix_base",
+        "componente_base",
+    ],
     "config": ["key", "value"],
 }
 
@@ -643,6 +647,35 @@ def fechas_compras():
     if df.empty:
         return []
     return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
+
+
+# ---------------- MIXES DUX ----------------
+
+def cargar_mixes_dux():
+    """Devuelve dict {mix_base: [componente_base, ...]}."""
+    df = leer_tabla("mixes_dux")
+    if df.empty:
+        return {}
+    df["mix_base"] = df["mix_base"].astype(str)
+    df["componente_base"] = df["componente_base"].astype(str)
+    out = {}
+    for _, r in df.iterrows():
+        mb = r["mix_base"].strip()
+        cb = r["componente_base"].strip()
+        if mb and cb:
+            out.setdefault(mb, []).append(cb)
+    return out
+
+
+def guardar_mixes_dux(mixes_dict):
+    """mixes_dict: {mix_base: [componente_base, ...]}. Persiste a Sheets."""
+    rows = []
+    for mb, comps in mixes_dict.items():
+        for cb in comps:
+            rows.append({"mix_base": str(mb), "componente_base": str(cb)})
+    df = pd.DataFrame(rows, columns=SCHEMA["mixes_dux"])
+    escribir_tabla("mixes_dux", df)
+    _marcar_modificacion("mixes_dux")
 
 
 # ---------------- CONFIG (key/value para preferencias) ----------------

@@ -367,6 +367,80 @@ def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=
         except Exception:
             pass
 
+    # Desglose de MIX: si un codigo aggreado corresponde a un MIX configurado,
+    # se desglosa en sus componentes (en partes iguales) y el MIX se quita.
+    # Si la tabla mixes_dux esta vacia o un MIX no esta configurado, no se hace nada.
+    st.session_state["_mixes_sin_config"] = []
+    try:
+        mixes_dict = db.cargar_mixes_dux()
+        if mixes_dict and not df_agg.empty:
+            # Mapeo (base, unidad) -> codigo desde productos
+            prod_temp_mix = productos_df.copy()
+            partes_mix = (
+                prod_temp_mix["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+            )
+            prod_temp_mix["_base"] = partes_mix[0].str.strip()
+            prod_temp_mix["_unidad"] = (
+                partes_mix[1].fillna("").str.strip()
+                if 1 in partes_mix.columns
+                else ""
+            )
+            base_unit_to_cod = {
+                (b, u): str(c)
+                for c, b, u in zip(
+                    prod_temp_mix["codigo"].astype(str),
+                    prod_temp_mix["_base"],
+                    prod_temp_mix["_unidad"],
+                )
+            }
+
+            filas_nuevas = []
+            indices_remover = []
+            mixes_sin_config_visto = set()
+            for idx, row in df_agg.iterrows():
+                producto = str(row.get("producto", "") or "")
+                partes_p = producto.rsplit(" - ", 1)
+                base = partes_p[0].strip()
+                unidad = partes_p[1].strip() if len(partes_p) > 1 else ""
+
+                # Detectar si la base es un MIX (con o sin configuracion)
+                es_mix = "MIX" in base.upper()
+
+                if base in mixes_dict and mixes_dict[base]:
+                    componentes = mixes_dict[base]
+                    cantidad_total = float(row["cantidad"])
+                    por_comp = cantidad_total / len(componentes)
+                    for comp_base in componentes:
+                        comp_codigo = base_unit_to_cod.get((comp_base, unidad))
+                        if comp_codigo:
+                            comp_producto = (
+                                f"{comp_base} - {unidad}" if unidad else comp_base
+                            )
+                            filas_nuevas.append({
+                                "codigo": comp_codigo,
+                                "producto": comp_producto,
+                                "cantidad": por_comp,
+                            })
+                    indices_remover.append(idx)
+                elif es_mix:
+                    # Es un MIX por nombre pero no esta en mixes_dict (o sin componentes)
+                    if base not in mixes_sin_config_visto:
+                        mixes_sin_config_visto.add(base)
+
+            st.session_state["_mixes_sin_config"] = sorted(mixes_sin_config_visto)
+
+            if indices_remover:
+                df_agg = df_agg.drop(indices_remover).reset_index(drop=True)
+            if filas_nuevas:
+                df_nuevas = pd.DataFrame(filas_nuevas)
+                df_agg = (
+                    pd.concat([df_agg, df_nuevas], ignore_index=True)
+                    .groupby(["codigo", "producto"], as_index=False)["cantidad"].sum()
+                )
+    except Exception:
+        # Defensivo: si falla algo del desglose, seguimos con df_agg sin modificar
+        pass
+
     if dia_estimado is None:
         df_est = pd.DataFrame(columns=["codigo", "estimado"])
     else:
@@ -765,6 +839,7 @@ with tab_grupo_config:
     (
         tab_mapeo,
         tab_packs,
+        tab_mixes,
         tab_dux_productos,
         tab_wix_productos,
         tab_proveedores,
@@ -774,6 +849,7 @@ with tab_grupo_config:
         [
             "Mapeo Wix↔DUX",
             "Packs Wix",
+            "Mixes DUX",
             "DUX Productos",
             "Wix Productos",
             "Proveedores",
@@ -1143,6 +1219,15 @@ with tab_comprar:
             "⚠️ Hay pedidos Wix con productos **sin mapear** — no se están sumando al total:\n\n"
             f"{lineas}\n\n"
             "Andá a 🔗 Mapeo Wix↔DUX para asignarlos."
+        )
+
+    mixes_sin_config = st.session_state.get("_mixes_sin_config", [])
+    if mixes_sin_config:
+        lineas_mix = "\n".join(f"- **{m}**" for m in mixes_sin_config)
+        st.warning(
+            "⚠️ Hay pedidos de productos **MIX sin configurar** — entran al total como MIX en vez de desglozarse en componentes:\n\n"
+            f"{lineas_mix}\n\n"
+            "Andá a ⚙️ Mixes DUX para configurar sus componentes."
         )
 
     # Expander con los pedidos que estan siendo contados, para poder verificar
@@ -3834,6 +3919,81 @@ with tab_packs:
 
     ts_packs = db.ultima_carga("packs")
     ts_packs_ph.caption(f"🕒 Última actualización: **{ts_packs or '?'}**")
+
+with tab_mixes:
+    ts_mixes_ph = st.empty()
+    st.markdown(
+        "Configurá los productos MIX como combinación de otros productos DUX. "
+        "Las cantidades se dividen automáticamente en partes iguales. "
+        "Funciona en todas las unidades (KG, CAJA, etc.) gracias a la tabla de Compuestos."
+    )
+
+    df_prods_mix = db.cargar_productos()
+
+    if df_prods_mix.empty:
+        st.info("Primero sincronizá productos en 📡 DUX Productos.")
+    else:
+        # Identificar productos MIX por nombre (contiene 'MIX' case-insensitive)
+        df_p_mix = df_prods_mix.copy()
+        partes_m = df_p_mix["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+        df_p_mix["base"] = partes_m[0].str.strip()
+        df_p_mix["unidad"] = (
+            partes_m[1].fillna("").str.strip()
+            if 1 in partes_m.columns
+            else ""
+        )
+
+        bases_mix = sorted(
+            df_p_mix[df_p_mix["base"].str.upper().str.contains("MIX", na=False)]
+            ["base"].unique().tolist()
+        )
+        # Todos los bases NO-MIX para seleccionar como componentes
+        bases_no_mix = sorted(
+            df_p_mix[~df_p_mix["base"].str.upper().str.contains("MIX", na=False)]
+            ["base"].unique().tolist()
+        )
+
+        if not bases_mix:
+            st.info("No se encontraron productos cuyo nombre contenga 'MIX'.")
+        else:
+            mixes_guardados = db.cargar_mixes_dux()  # {mix_base: [componente_base, ...]}
+
+            with st.form("form_mixes", clear_on_submit=False, border=False):
+                guardar_mixes_btn = st.form_submit_button(
+                    "💾 Guardar mixes", type="primary"
+                )
+
+                nuevos_mixes = {}
+                for mix_base in bases_mix:
+                    st.markdown(f"### {mix_base}")
+                    componentes_default = mixes_guardados.get(mix_base, [])
+                    componentes_default = [
+                        c for c in componentes_default if c in bases_no_mix
+                    ]
+                    sel = st.multiselect(
+                        "Componentes (se dividen en partes iguales)",
+                        options=bases_no_mix,
+                        default=componentes_default,
+                        key=f"mix_{mix_base}",
+                    )
+                    if sel:
+                        nuevos_mixes[mix_base] = sel
+                        st.caption(
+                            f"→ Cada componente recibirá **{1/len(sel):.4f}** del MIX "
+                            f"(1 / {len(sel)})"
+                        )
+                    else:
+                        st.caption("→ Sin componentes. Este MIX no se desglosará.")
+
+            if guardar_mixes_btn:
+                try:
+                    db.guardar_mixes_dux(nuevos_mixes)
+                    st.success(f"✅ {len(nuevos_mixes)} mixes guardados.")
+                except Exception as e:
+                    st.error(msg_error_sheets("guardar mixes", e))
+
+    ts_mixes = db.ultima_carga("mixes_dux")
+    ts_mixes_ph.caption(f"🕒 Última actualización: **{ts_mixes or '?'}**")
 
 
 #python -m streamlit run app.py
