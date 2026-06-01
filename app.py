@@ -13,11 +13,11 @@ import gsheets_db as db
 DUX_RATE_LIMIT_SECONDS = 5.5
 
 
-@st.cache_data(ttl=60)
 def obtener_ultimo_comprobante_dux():
     """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
     de los ultimos 5 dias. Pagina hasta agotar resultados.
-    None si falla o no hay datos numericos."""
+    None si falla o no hay datos numericos.
+    Sin cache: DUX tiene su propio lag, no queremos sumarle el de Streamlit."""
     dux_cfg = st.secrets.get("dux", {})
     token = dux_cfg.get("token", "")
     base_url = dux_cfg.get(
@@ -38,7 +38,7 @@ def obtener_ultimo_comprobante_dux():
     page_size = 50
     offset = 0
     comprobantes = []
-    max_pages = 20  # tope de seguridad: 1000 compras en 5 dias seria absurdo
+    max_pages = 20
 
     for _ in range(max_pages):
         params = {
@@ -53,8 +53,6 @@ def obtener_ultimo_comprobante_dux():
         try:
             r = requests.get(url, params=params, headers=headers, timeout=15)
             if r.status_code != 200:
-                # Si ya juntamos algunos en paginas anteriores, devolvemos el max parcial.
-                # Si no hay nada, cae al fallback APP-NNNNN.
                 break
             d = r.json()
         except Exception:
@@ -80,11 +78,9 @@ def obtener_ultimo_comprobante_dux():
             except (ValueError, TypeError):
                 continue
 
-        # Si la pagina trajo menos que el limite, ya no hay mas
         if len(results) < page_size:
             break
         offset += page_size
-        # Respeto rate limit de DUX entre paginas
         time.sleep(2)
 
     if not comprobantes:
@@ -2943,81 +2939,74 @@ with tab_compras:
                     return ""
                 return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
-            # Consultar a DUX el ultimo comprobante e ir asignando consecutivos.
-            # Si falla la API, fallback al codigo APP-NNNNN local.
+            # Consultar a DUX el ultimo comprobante y asignar consecutivos.
+            # Si falla la API, NO se genera Excel (esperar al lag de DUX).
             ultimo_dux = obtener_ultimo_comprobante_dux()
-            app_codes_unicos = list(
-                dict.fromkeys(
-                    str(c) for c in df_compras_fecha_post["comprobante"]
-                    if str(c).strip()
-                )
-            )
-            if ultimo_dux is not None:
-                app_to_dux = {
-                    app_code: str(ultimo_dux + i + 1)
-                    for i, app_code in enumerate(app_codes_unicos)
-                }
-                st.session_state["_compras_app_to_dux"] = app_to_dux
-            else:
-                app_to_dux = {}
-                st.session_state["_compras_app_to_dux"] = {}
 
-            filas_excel = []
-            for _, r in df_compras_fecha_post.iterrows():
-                pid = str(r.get("proveedor_id", "") or "")
-                app_comp = str(r.get("comprobante", "") or "")
-                comp_final = app_to_dux.get(app_comp, app_comp)
-                fila = {col: "" for col in COLUMNAS_DUX}
-                fila["COMPROBANTE"] = comp_final
-                fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
-                fila["DEPOSITO"] = "DEPOSITO"
-                fila["ID PROVEEDOR"] = pid
-                fila["FECHA"] = fecha_str_dux
-                fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
-                fila["FECHA VENCIMIENTO"] = fecha_str_dux
-                fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
-                fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
-                fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
-                fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
-                fila["PORCENTAJE IVA"] = 0
-                filas_excel.append(fila)
-
-            # Escribir como .xls (Excel 97-2003) con sheet "Hoja Principal"
-            # tal cual el template oficial de DUX.
-            wb = xlwt.Workbook(encoding="utf-8")
-            sheet = wb.add_sheet("Hoja Principal")
-            for col_idx, col_name in enumerate(COLUMNAS_DUX):
-                sheet.write(0, col_idx, col_name)
-            for row_idx, fila in enumerate(filas_excel, start=1):
-                for col_idx, col_name in enumerate(COLUMNAS_DUX):
-                    val = fila.get(col_name, "")
-                    if val == "" or val is None:
-                        continue  # celda vacia
-                    sheet.write(row_idx, col_idx, val)
-            buf = io.BytesIO()
-            wb.save(buf)
-            buf.seek(0)
-            st.download_button(
-                "📥 Descargar Excel para DUX",
-                data=buf.getvalue(),
-                file_name=f"compras_dux_{fecha_compra_sel}.xls",
-                mime="application/vnd.ms-excel",
-                type="primary",
-            )
-
-            if app_to_dux:
-                lineas_map = "\n".join(
-                    f"- `{a}` → DUX **{d}**"
-                    for a, d in app_to_dux.items()
-                )
-                st.caption(
-                    f"Numeros DUX asignados (último DUX: **{ultimo_dux}**, "
-                    f"consecutivos a partir de **{ultimo_dux + 1}**):\n\n{lineas_map}"
-                )
-            else:
-                st.caption(
+            if ultimo_dux is None:
+                st.error(
                     "⚠️ No se pudo consultar el último comprobante de DUX. "
-                    "El Excel sale con códigos internos APP-NNNNN."
+                    "Puede ser un lag de la API: esperá unos minutos e intentá de nuevo."
+                )
+            else:
+                grupos_unicos = list(
+                    dict.fromkeys(
+                        str(c) for c in df_compras_fecha_post["comprobante"]
+                        if str(c).strip()
+                    )
+                )
+                grupo_a_dux = {
+                    g: str(ultimo_dux + i + 1)
+                    for i, g in enumerate(grupos_unicos)
+                }
+                ultimo_asignado = ultimo_dux + len(grupos_unicos)
+
+                filas_excel = []
+                for _, r in df_compras_fecha_post.iterrows():
+                    pid = str(r.get("proveedor_id", "") or "")
+                    grupo = str(r.get("comprobante", "") or "")
+                    comp_final = grupo_a_dux.get(grupo, "")
+                    fila = {col: "" for col in COLUMNAS_DUX}
+                    fila["COMPROBANTE"] = comp_final
+                    fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
+                    fila["DEPOSITO"] = "DEPOSITO"
+                    fila["ID PROVEEDOR"] = pid
+                    fila["FECHA"] = fecha_str_dux
+                    fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
+                    fila["FECHA VENCIMIENTO"] = fecha_str_dux
+                    fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
+                    fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
+                    fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
+                    fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
+                    fila["PORCENTAJE IVA"] = 0
+                    filas_excel.append(fila)
+
+                # Escribir como .xls (Excel 97-2003) con sheet "Hoja Principal"
+                # tal cual el template oficial de DUX.
+                wb = xlwt.Workbook(encoding="utf-8")
+                sheet = wb.add_sheet("Hoja Principal")
+                for col_idx, col_name in enumerate(COLUMNAS_DUX):
+                    sheet.write(0, col_idx, col_name)
+                for row_idx, fila in enumerate(filas_excel, start=1):
+                    for col_idx, col_name in enumerate(COLUMNAS_DUX):
+                        val = fila.get(col_name, "")
+                        if val == "" or val is None:
+                            continue
+                        sheet.write(row_idx, col_idx, val)
+                buf = io.BytesIO()
+                wb.save(buf)
+                buf.seek(0)
+                st.download_button(
+                    "📥 Descargar Excel para DUX",
+                    data=buf.getvalue(),
+                    file_name=f"compras_dux_{fecha_compra_sel}.xls",
+                    mime="application/vnd.ms-excel",
+                    type="primary",
+                )
+
+                st.success(
+                    f"✅ Último DUX tomado: **{ultimo_asignado}** "
+                    f"(detectado en API: {ultimo_dux}, asignados {len(grupos_unicos)} consecutivos)"
                 )
 
             # ---------- Resumen del día ----------
