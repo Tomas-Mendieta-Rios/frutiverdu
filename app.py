@@ -2939,75 +2939,99 @@ with tab_compras:
                     return ""
                 return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
-            # Consultar a DUX el ultimo comprobante y asignar consecutivos.
-            # Si falla la API, NO se genera Excel (esperar al lag de DUX).
-            ultimo_dux = obtener_ultimo_comprobante_dux()
+            grupos_unicos = list(
+                dict.fromkeys(
+                    str(c) for c in df_compras_fecha_post["comprobante"]
+                    if str(c).strip()
+                )
+            )
 
-            if ultimo_dux is None:
+            # Boton "Preparar": cada click consulta DUX fresco y arma el Excel.
+            # Streamlit fija los bytes del download_button al renderizar; por eso
+            # forzamos un rerun explicito antes de cada descarga para evitar
+            # numeros DUX stale si el usuario carga la pagina y descarga horas despues.
+            prep_key = f"_compras_excel_{fecha_compra_sel}"
+            prep_dux_key = f"_compras_ultimo_dux_{fecha_compra_sel}"
+            prep_map_key = f"_compras_grupo_a_dux_{fecha_compra_sel}"
+            prep_err_key = f"_compras_dux_err_{fecha_compra_sel}"
+
+            if st.button("🔄 Preparar Excel para DUX", type="primary",
+                         key=f"btn_prep_excel_{fecha_compra_sel}"):
+                ultimo_dux_fresh = obtener_ultimo_comprobante_dux()
+                if ultimo_dux_fresh is None:
+                    st.session_state[prep_err_key] = True
+                    st.session_state.pop(prep_key, None)
+                    st.session_state.pop(prep_dux_key, None)
+                    st.session_state.pop(prep_map_key, None)
+                else:
+                    grupo_a_dux_fresh = {
+                        g: str(ultimo_dux_fresh + i + 1)
+                        for i, g in enumerate(grupos_unicos)
+                    }
+                    filas_excel = []
+                    for _, r in df_compras_fecha_post.iterrows():
+                        pid = str(r.get("proveedor_id", "") or "")
+                        grupo = str(r.get("comprobante", "") or "")
+                        comp_final = grupo_a_dux_fresh.get(grupo, "")
+                        fila = {col: "" for col in COLUMNAS_DUX}
+                        fila["COMPROBANTE"] = comp_final
+                        fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
+                        fila["DEPOSITO"] = "DEPOSITO"
+                        fila["ID PROVEEDOR"] = pid
+                        fila["FECHA"] = fecha_str_dux
+                        fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
+                        fila["FECHA VENCIMIENTO"] = fecha_str_dux
+                        fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
+                        fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
+                        fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
+                        fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
+                        fila["PORCENTAJE IVA"] = 0
+                        filas_excel.append(fila)
+
+                    wb = xlwt.Workbook(encoding="utf-8")
+                    sheet = wb.add_sheet("Hoja Principal")
+                    for col_idx, col_name in enumerate(COLUMNAS_DUX):
+                        sheet.write(0, col_idx, col_name)
+                    for row_idx, fila in enumerate(filas_excel, start=1):
+                        for col_idx, col_name in enumerate(COLUMNAS_DUX):
+                            val = fila.get(col_name, "")
+                            if val == "" or val is None:
+                                continue
+                            sheet.write(row_idx, col_idx, val)
+                    buf = io.BytesIO()
+                    wb.save(buf)
+                    buf.seek(0)
+                    st.session_state[prep_key] = buf.getvalue()
+                    st.session_state[prep_dux_key] = ultimo_dux_fresh
+                    st.session_state[prep_map_key] = grupo_a_dux_fresh
+                    st.session_state.pop(prep_err_key, None)
+
+            # Mostrar resultado de la preparacion (si hay)
+            grupo_a_dux = st.session_state.get(prep_map_key, {})
+            ultimo_dux_prep = st.session_state.get(prep_dux_key)
+
+            if st.session_state.get(prep_err_key):
                 st.error(
                     "⚠️ No se pudo consultar el último comprobante de DUX. "
                     "Puede ser un lag de la API: esperá unos minutos e intentá de nuevo."
                 )
-            else:
-                grupos_unicos = list(
-                    dict.fromkeys(
-                        str(c) for c in df_compras_fecha_post["comprobante"]
-                        if str(c).strip()
-                    )
-                )
-                grupo_a_dux = {
-                    g: str(ultimo_dux + i + 1)
-                    for i, g in enumerate(grupos_unicos)
-                }
-                ultimo_asignado = ultimo_dux + len(grupos_unicos)
-
-                filas_excel = []
-                for _, r in df_compras_fecha_post.iterrows():
-                    pid = str(r.get("proveedor_id", "") or "")
-                    grupo = str(r.get("comprobante", "") or "")
-                    comp_final = grupo_a_dux.get(grupo, "")
-                    fila = {col: "" for col in COLUMNAS_DUX}
-                    fila["COMPROBANTE"] = comp_final
-                    fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
-                    fila["DEPOSITO"] = "DEPOSITO"
-                    fila["ID PROVEEDOR"] = pid
-                    fila["FECHA"] = fecha_str_dux
-                    fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
-                    fila["FECHA VENCIMIENTO"] = fecha_str_dux
-                    fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
-                    fila["CÓDIGO PRODUCTO"] = r.get("codigo_producto", "") or ""
-                    fila["CANTIDAD"] = _num_es(r.get("cantidad", 0) or 0)
-                    fila["PRECIO"] = _num_es(r.get("precio", 0) or 0)
-                    fila["PORCENTAJE IVA"] = 0
-                    filas_excel.append(fila)
-
-                # Escribir como .xls (Excel 97-2003) con sheet "Hoja Principal"
-                # tal cual el template oficial de DUX.
-                wb = xlwt.Workbook(encoding="utf-8")
-                sheet = wb.add_sheet("Hoja Principal")
-                for col_idx, col_name in enumerate(COLUMNAS_DUX):
-                    sheet.write(0, col_idx, col_name)
-                for row_idx, fila in enumerate(filas_excel, start=1):
-                    for col_idx, col_name in enumerate(COLUMNAS_DUX):
-                        val = fila.get(col_name, "")
-                        if val == "" or val is None:
-                            continue
-                        sheet.write(row_idx, col_idx, val)
-                buf = io.BytesIO()
-                wb.save(buf)
-                buf.seek(0)
+            elif st.session_state.get(prep_key):
+                ultimo_asignado = ultimo_dux_prep + len(grupos_unicos)
                 st.download_button(
                     "📥 Descargar Excel para DUX",
-                    data=buf.getvalue(),
+                    data=st.session_state[prep_key],
                     file_name=f"compras_dux_{fecha_compra_sel}.xls",
                     mime="application/vnd.ms-excel",
                     type="primary",
+                    key=f"dl_excel_{fecha_compra_sel}",
                 )
-
                 st.success(
                     f"✅ Último DUX tomado: **{ultimo_asignado}** "
-                    f"(detectado en API: {ultimo_dux}, asignados {len(grupos_unicos)} consecutivos)"
+                    f"(detectado en API: {ultimo_dux_prep}, "
+                    f"asignados {len(grupos_unicos)} consecutivos)"
                 )
+            else:
+                st.caption("Hacé click en **Preparar Excel** para consultar DUX y generar el archivo.")
 
             # ---------- Resumen del día ----------
             df_resumen = df_compras_fecha_post.copy()
@@ -3101,14 +3125,29 @@ with tab_compras:
                 df_det["subtotal"] = (
                     df_det["cantidad"].astype(float) * df_det["precio"].astype(float)
                 )
+                # Si ya se preparo el Excel, mostrar el numero DUX asignado a cada linea.
+                # Si no, mostrar "—" en la columna DUX (no hay numero todavia).
+                df_det["dux_asignado"] = df_det["comprobante"].astype(str).map(
+                    lambda g: grupo_a_dux.get(g, "—") if grupo_a_dux else "—"
+                )
                 st.dataframe(
                     df_det[[
-                        "comprobante", "proveedor_nombre", "codigo_producto",
+                        "dux_asignado", "proveedor_nombre", "codigo_producto",
                         "producto_nombre", "cantidad", "precio", "subtotal",
                         "condicion_pago",
                     ]],
                     use_container_width=True,
                     hide_index=True,
+                    column_config={
+                        "dux_asignado": st.column_config.TextColumn("DUX"),
+                        "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
+                        "codigo_producto": st.column_config.TextColumn("Código"),
+                        "producto_nombre": st.column_config.TextColumn("Producto"),
+                        "cantidad": st.column_config.NumberColumn("Cantidad"),
+                        "precio": st.column_config.NumberColumn("Precio"),
+                        "subtotal": st.column_config.NumberColumn("Subtotal"),
+                        "condicion_pago": st.column_config.TextColumn("Pago"),
+                    },
                 )
         else:
             st.caption("Cargá líneas y guardá para poder descargar el Excel DUX.")
