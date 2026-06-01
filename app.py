@@ -1093,14 +1093,23 @@ with tab_comprar:
 
     if boton_actualizar:
         try:
+            ts_actualizar = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             db.guardar_config({
                 "comprar_fechas_entrega": ",".join(fechas_entrega) if fechas_entrega else "",
                 "comprar_fecha_stock": str(fecha_stock_sel),
                 "comprar_dia_estimado": str(dia_estimado_sel),
+                "comprar_ultima_actualizacion": ts_actualizar,
             })
         except Exception:
             pass
         st.cache_data.clear()
+
+    ts_actualizar_ultimo = cfg_comprar.get("comprar_ultima_actualizacion")
+    st.caption(
+        f"🕒 Última actualización: **{ts_actualizar_ultimo or '?'}**"
+    )
 
     if str(fecha_stock_sel) not in (fechas_stock_disp or []):
         st.warning(
