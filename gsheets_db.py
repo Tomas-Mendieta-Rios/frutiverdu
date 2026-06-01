@@ -146,6 +146,22 @@ def leer_tabla(nombre):
     return df
 
 
+def _leer_tabla_fresh(nombre):
+    """Lee directo de Sheets, bypass del cache. Usar en saves de funciones
+    que mergean datos existentes (config, stock, estimado_semanal, compras)
+    para evitar race condition entre usuarios."""
+    ws = _get_ws(nombre)
+    values = ws.get_all_values()
+    if not values:
+        return pd.DataFrame(columns=SCHEMA[nombre])
+    header, *rows = values
+    if not rows:
+        return pd.DataFrame(columns=header)
+    df = pd.DataFrame(rows, columns=header)
+    df = df.replace("", pd.NA)
+    return df
+
+
 def escribir_tabla(nombre, df):
     df = df.copy()
     cols = SCHEMA[nombre]
@@ -249,7 +265,8 @@ def cargar_stock(fecha=None):
 
 
 def guardar_stock(df_fecha, fecha):
-    full = cargar_stock_completo()
+    # Lee fresh (sin cache) para evitar race condition entre usuarios
+    full = _normalizar_stock(_leer_tabla_fresh("stock_historico"))
     if not full.empty and "fecha" in full.columns:
         otros = full[full["fecha"] != str(fecha)]
     else:
@@ -344,8 +361,9 @@ def cargar_estimado_semanal(dia=None):
 
 
 def guardar_estimado_semanal_dia(df_dia, dia):
-    """Reemplaza el estimado del dia indicado."""
-    full = leer_tabla("estimado_semanal")
+    """Reemplaza el estimado del dia indicado.
+    Lee fresh (sin cache) para evitar race condition entre usuarios."""
+    full = _leer_tabla_fresh("estimado_semanal")
     if not full.empty and "dia_semana" in full.columns:
         otros = full[full["dia_semana"] != str(dia)]
     else:
@@ -563,8 +581,21 @@ def _proximo_comprobante_id():
 def guardar_compras_fecha(df_fecha, fecha):
     """Reemplaza las compras de una fecha. Asigna comprobante por proveedor:
     si ya existe un comprobante para (fecha, proveedor) lo reutiliza, sino
-    saca uno nuevo del contador global APP-NNNNN."""
-    full = cargar_compras()
+    saca uno nuevo del contador global APP-NNNNN.
+    Lee fresh (sin cache) para evitar race condition entre usuarios."""
+    df_full_raw = _leer_tabla_fresh("compras")
+    if df_full_raw.empty:
+        full = df_full_raw
+    else:
+        full = df_full_raw.copy()
+        full["fecha"] = full["fecha"].astype(str)
+        full["proveedor_id"] = full["proveedor_id"].astype(str)
+        full["codigo_producto"] = full["codigo_producto"].astype(str)
+        full["cantidad"] = pd.to_numeric(full["cantidad"], errors="coerce").fillna(0)
+        full["precio"] = pd.to_numeric(full["precio"], errors="coerce").fillna(0)
+        if "comprobante" not in full.columns:
+            full["comprobante"] = ""
+        full["comprobante"] = full["comprobante"].astype(str)
 
     # Mapeo proveedor -> comprobante existente para esta fecha
     prov_a_compr = {}
@@ -625,8 +656,13 @@ def cargar_config():
 
 
 def guardar_config(updates):
-    """Merge dict updates con la config existente y persiste a Sheets."""
-    actual = cargar_config()
+    """Merge dict updates con la config existente y persiste a Sheets.
+    Lee fresh (sin cache) para evitar race condition entre usuarios."""
+    df_fresh = _leer_tabla_fresh("config")
+    if df_fresh.empty or "key" not in df_fresh.columns:
+        actual = {}
+    else:
+        actual = dict(zip(df_fresh["key"].astype(str), df_fresh["value"].astype(str)))
     actual.update({k: str(v) for k, v in updates.items() if v is not None})
     rows = [{"key": k, "value": v} for k, v in actual.items()]
     df = pd.DataFrame(rows, columns=SCHEMA["config"])
