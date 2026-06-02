@@ -14,11 +14,37 @@ Tablas (cada una es una pestaña del Sheet):
 """
 
 import json as _json
+import time as _time
 
 import pandas as pd
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
+
+
+def _get_values_con_reintento(ws):
+    """Llama ws.get_all_values() con hasta 3 reintentos (1s, 3s, 5s) para
+    sobrevivir a errores transitorios de la API (rate limit, 500, etc).
+    Si todos los reintentos fallan, muestra mensaje amigable y detiene la app."""
+    delays = [1, 3, 5]
+    last_err = None
+    for intento, espera in enumerate(delays):
+        try:
+            return ws.get_all_values()
+        except gspread.exceptions.APIError as e:
+            last_err = e
+            if intento < len(delays) - 1:
+                _time.sleep(espera)
+        except Exception as e:
+            last_err = e
+            if intento < len(delays) - 1:
+                _time.sleep(espera)
+    # Todos los reintentos fallaron: mensaje amigable y stop
+    st.error(
+        "⚠️ Ups, no pudimos cargar los datos en este momento. "
+        "Por favor recargá la página y volvé a intentar."
+    )
+    st.stop()
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -139,7 +165,7 @@ def _get_ws(nombre):
 @st.cache_data(ttl=120)
 def leer_tabla(nombre):
     ws = _get_ws(nombre)
-    values = ws.get_all_values()
+    values = _get_values_con_reintento(ws)
     if not values:
         return pd.DataFrame(columns=SCHEMA[nombre])
     header, *rows = values
@@ -155,7 +181,7 @@ def _leer_tabla_fresh(nombre):
     que mergean datos existentes (config, stock, estimado_semanal, compras)
     para evitar race condition entre usuarios."""
     ws = _get_ws(nombre)
-    values = ws.get_all_values()
+    values = _get_values_con_reintento(ws)
     if not values:
         return pd.DataFrame(columns=SCHEMA[nombre])
     header, *rows = values
