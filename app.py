@@ -907,15 +907,18 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 # Util cuando la app esta instalada como PWA en el celular y queda viva
 # en background: sin esto, el usuario sigue viendo datos viejos hasta
 # que cierre y abra la PWA.
-_col_ref1, _col_ref2 = st.columns([2, 5])
+_col_ref1, _col_ref2 = st.columns([3, 4])
 with _col_ref1:
-    if st.button("👥 Ver cambios de otros usuarios", key="btn_refresh_global"):
+    if st.button(
+        "🔄 Recargar app para ver cambios de otros usuarios",
+        key="btn_refresh_global",
+    ):
         st.cache_data.clear()
         st.toast("Datos actualizados", icon="✅")
         st.rerun()
 with _col_ref2:
     st.caption(
-        "Cargá lo último que modificó Carlos o Ariel desde el celular o la compu."
+        "Cargá lo último que modificó otro usuario desde el celular o la compu."
     )
 
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
