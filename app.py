@@ -1852,7 +1852,12 @@ with tab_dux:
 
         # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
         with st.form("form_dux_sync", clear_on_submit=False, border=False):
-            col_d1, col_d2, col_d3 = st.columns([1, 1, 1])
+            consultar = st.form_submit_button(
+                "🔄 Sincronizar pedidos desde DUX",
+                type="primary",
+                use_container_width=True,
+            )
+            col_d1, col_d2 = st.columns([1, 1])
             with col_d1:
                 fecha_desde = st.date_input(
                     "Fecha desde",
@@ -1866,13 +1871,6 @@ with tab_dux:
                     value=fecha_hasta_default,
                     key="dux_fecha_hasta",
                     format="YYYY-MM-DD",
-                )
-            with col_d3:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                consultar = st.form_submit_button(
-                    "🔄 Sincronizar pedidos desde DUX",
-                    type="primary",
-                    use_container_width=True,
                 )
 
         if consultar:
@@ -2077,6 +2075,7 @@ with tab_dux_productos:
             "🔄 Sincronizar productos desde DUX",
             type="primary",
             key="dux_sincronizar_productos",
+            use_container_width=True,
         )
 
         if sincronizar:
@@ -2251,7 +2250,12 @@ with tab_wix:
 
         # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
         with st.form("form_wix_sync", clear_on_submit=False, border=False):
-            col_w1, col_w2, col_w3 = st.columns([1, 1, 1])
+            consultar_wix = st.form_submit_button(
+                "🔄 Sincronizar pedidos desde Wix",
+                type="primary",
+                use_container_width=True,
+            )
+            col_w1, col_w2 = st.columns([1, 1])
             with col_w1:
                 wix_desde = st.date_input(
                     "Fecha desde",
@@ -2265,13 +2269,6 @@ with tab_wix:
                     value=fecha_hasta_default,
                     key="wix_fecha_hasta",
                     format="YYYY-MM-DD",
-                )
-            with col_w3:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                consultar_wix = st.form_submit_button(
-                    "🔄 Sincronizar pedidos desde Wix",
-                    type="primary",
-                    use_container_width=True,
                 )
 
         if consultar_wix:
@@ -2512,6 +2509,7 @@ with tab_wix_productos:
             "🔄 Sincronizar productos desde Wix",
             type="primary",
             key="wix_sincronizar_productos",
+            use_container_width=True,
         )
 
         if sincronizar_wix_p:
