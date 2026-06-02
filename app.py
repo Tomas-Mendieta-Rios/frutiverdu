@@ -1848,6 +1848,10 @@ with tab_dux:
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos DUX", e))
 
+        # Timestamp arriba del boton Sincronizar
+        ts_ped = db.ultima_carga("pedidos_dux")
+        st.caption(f"🕒 Última sync: **{ts_ped or '?'}**")
+
         # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
         with st.form("form_dux_sync", clear_on_submit=False, border=False):
             consultar = st.form_submit_button(
@@ -1956,16 +1960,8 @@ with tab_dux:
                 else:
                     st.warning("No hay pedidos pendientes en ese rango.")
 
-        st.divider()
-
         if all_orders_saved:
-            ts_ped = db.ultima_carga("pedidos_dux")
             n_asignados = sum(1 for v in selecciones_dux.values() if v)
-            st.caption(
-                f"📅 Rango: {fecha_desde_default} → {fecha_hasta_default} · "
-                f"🕒 Última sync: **{ts_ped or '?'}** · "
-                f"{n_asignados} con entrega asignada."
-            )
 
             # Ordenar: más recientes primero
             def _fecha_dux(o):
@@ -1977,6 +1973,8 @@ with tab_dux:
             all_orders_sorted = sorted(
                 all_orders_saved, key=_fecha_dux, reverse=True
             )
+
+            st.caption(f"{n_asignados} con entrega asignada.")
 
             with st.form(key="form_dux_seleccion", clear_on_submit=False):
                 guardar_sel_dux = st.form_submit_button(
@@ -2246,6 +2244,10 @@ with tab_wix:
             except Exception:
                 pass
 
+        # Timestamp arriba del boton Sincronizar
+        ts_wix = db.ultima_carga("pedidos_wix")
+        st.caption(f"🕒 Última sync: **{ts_wix or '?'}**")
+
         # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
         with st.form("form_wix_sync", clear_on_submit=False, border=False):
             consultar_wix = st.form_submit_button(
@@ -2328,19 +2330,13 @@ with tab_wix:
                         wix_orders_saved = orders_slim
                         st.success(f"✅ {len(orders)} pedidos guardados.")
 
-        st.divider()
-
         orders_saved = wix_orders_saved or []
         selecciones = db.cargar_selecciones("wix")
 
         if not orders_saved:
             st.info("Todavía no hay pedidos. Apretá **Sincronizar**.")
         else:
-            ts_wix = db.ultima_carga("pedidos_wix")
-            st.caption(
-                f"{len(orders_saved)} pedidos · 🕒 última sync: **{ts_wix or '?'}** · "
-                f"{len(selecciones)} con entrega asignada."
-            )
+            pass
 
             def _wix_contact(o):
                 bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
@@ -2402,6 +2398,8 @@ with tab_wix:
             orders_saved_sorted = sorted(
                 orders_saved, key=_fecha_wix, reverse=True
             )
+
+            st.caption(f"{len(selecciones)} con entrega asignada.")
 
             with st.form(key="form_wix_seleccion", clear_on_submit=False):
                 guardar_sel = st.form_submit_button(
