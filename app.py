@@ -2955,6 +2955,11 @@ with tab_compras:
             prep_map_key = f"_compras_grupo_a_dux_{fecha_compra_sel}"
             prep_err_key = f"_compras_dux_err_{fecha_compra_sel}"
 
+            st.warning(
+                "⚠️ **APRETAR PREPARAR ANTES DE DESCARGAR EXCEL** — "
+                "sin tocar Preparar, los números DUX pueden quedar viejos."
+            )
+
             if st.button("🔄 Preparar Excel para DUX", type="primary",
                          key=f"btn_prep_excel_{fecha_compra_sel}"):
                 ultimo_dux_fresh = obtener_ultimo_comprobante_dux()
