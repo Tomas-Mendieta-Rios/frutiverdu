@@ -1114,16 +1114,16 @@ with tab_stock:
             except Exception:
                 pass
 
-    col_st1, col_st2 = st.columns([1, 3])
-    with col_st1:
-        fecha_stock = st.date_input(
-            "Fecha",
-            value=fecha_stock_default,
-            key="fecha_stock_local",
-            format="YYYY-MM-DD",
-            on_change=_save_fecha_stock,
-        )
-    ts_stk_ph = col_st2.empty()
+    # Timestamp arriba de todo (debajo de las pestañas)
+    ts_stk_ph = st.empty()
+
+    fecha_stock = st.date_input(
+        "Fecha",
+        value=fecha_stock_default,
+        key="fecha_stock_local",
+        format="YYYY-MM-DD",
+        on_change=_save_fecha_stock,
+    )
 
     df_dia_stk_full = db.cargar_stock(fecha=fecha_stock)
     map_stock_dia = dict(
@@ -1144,16 +1144,12 @@ with tab_stock:
     if st.session_state.get(f"_stk_zero_{fecha_stock}"):
         base_stk["cantidad"] = 0.0
 
-    # Botones arriba: Cero (fuera de form) + caption
-    col_btn_s1, col_btn_s2 = st.columns([1, 4])
-    with col_btn_s1:
-        cero_s = st.button(
-            "🧹 Poner stock a cero",
-            key="btn_cero_stock",
-            help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
-        )
-    with col_btn_s2:
-        st.caption(f"Guarda para la fecha **{fecha_stock}**.")
+    # Boton "Poner a cero" (fuera de form)
+    cero_s = st.button(
+        "🧹 Poner stock a cero",
+        key="btn_cero_stock",
+        help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
+    )
 
     base_stk_view = base_stk.copy()
     # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
@@ -1211,13 +1207,9 @@ with tab_stock:
         st.session_state[stk_counter_key] = stk_counter + 1  # editor fresco post-cero
         st.rerun()
 
-    # Refrescar fechas y timestamp despues del posible save
-    fechas_stock_disp_post = db.fechas_stock()
+    # Refrescar timestamp despues del posible save (placeholder esta arriba)
     ts_stk_ultimo = db.ultima_carga("stock")
-    ts_stk_ph.caption(
-        f"📅 Fechas guardadas: {len(fechas_stock_disp_post)} · "
-        f"🕒 Última actualización: **{ts_stk_ultimo or '?'}**"
-    )
+    ts_stk_ph.caption(f"🕒 Última actualización: **{ts_stk_ultimo or '?'}**")
 
 with tab_comprar:
 
@@ -1711,17 +1703,17 @@ with tab_estimado:
             except Exception:
                 pass
 
-    col_es1, col_es2 = st.columns([1, 3])
-    with col_es1:
-        dia_estimado = st.selectbox(
-            "Día de la semana",
-            options=DIAS_SEMANA,
-            format_func=lambda d: DIAS_DISPLAY[d],
-            index=dia_default_idx,
-            key="dia_estimado",
-            on_change=_save_dia_estimado,
-        )
-    ts_est_ph = col_es2.empty()
+    # Timestamp arriba de todo (debajo de las pestañas)
+    ts_est_ph = st.empty()
+
+    dia_estimado = st.selectbox(
+        "Día de la semana",
+        options=DIAS_SEMANA,
+        format_func=lambda d: DIAS_DISPLAY[d],
+        index=dia_default_idx,
+        key="dia_estimado",
+        on_change=_save_dia_estimado,
+    )
 
     df_dia_est = db.cargar_estimado_semanal(dia=dia_estimado)
     map_est_dia = (
@@ -1743,16 +1735,12 @@ with tab_estimado:
     if st.session_state.get(f"_est_zero_{dia_estimado}"):
         base_est["estimado"] = 0.0
 
-    # Botones arriba: Cero (fuera de form) + caption
-    col_btn_e1, col_btn_e2 = st.columns([1, 4])
-    with col_btn_e1:
-        reset_est = st.button(
-            "🧹 Resetear a cero",
-            key="btn_reset_estimado",
-            help="Llena todo el estimado con 0. No se guarda hasta apretar 💾 Guardar estimado.",
-        )
-    with col_btn_e2:
-        st.caption(f"Guarda para el día **{DIAS_DISPLAY[dia_estimado]}** (fijo, se aplica a todos los {DIAS_DISPLAY[dia_estimado].lower()}).")
+    # Boton "Resetear a cero" (fuera de form)
+    reset_est = st.button(
+        "🧹 Resetear a cero",
+        key="btn_reset_estimado",
+        help="Llena todo el estimado con 0. No se guarda hasta apretar 💾 Guardar estimado.",
+    )
 
     base_est_view = base_est.copy()
     # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
@@ -1802,12 +1790,9 @@ with tab_estimado:
         st.session_state.pop(editor_key, None)
         st.rerun()
 
-    dias_con_est_post = db.dias_semana_con_estimado()
+    # Refrescar timestamp despues del posible save (placeholder esta arriba)
     ts_est_ultimo = db.ultima_carga("estimado_semanal")
-    ts_est_ph.caption(
-        f"📅 Días configurados: {len(dias_con_est_post)} / 7 · "
-        f"🕒 Última actualización: **{ts_est_ultimo or '?'}**"
-    )
+    ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
 
 with tab_dux:
     dux_cfg = st.secrets.get("dux", {})
