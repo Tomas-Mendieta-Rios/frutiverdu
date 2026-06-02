@@ -1269,7 +1269,13 @@ with tab_comprar:
 
     # st.form: los cambios NO disparan rerun hasta apretar el boton.
     with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
-        col_fc1, col_fc2, col_fc3, col_fc4 = st.columns([1.5, 1.2, 1.2, 1])
+        # Boton 'Actualizar' arriba en su propio renglon
+        boton_actualizar = st.form_submit_button(
+            "🔄 Actualizar",
+            type="primary",
+            use_container_width=True,
+        )
+        col_fc1, col_fc2, col_fc3 = st.columns([1.5, 1.2, 1.2])
         with col_fc1:
             fechas_entrega = st.multiselect(
                 "📦 Fechas de entrega",
@@ -1292,13 +1298,6 @@ with tab_comprar:
                 format_func=lambda d: DIAS_DISPLAY[d],
                 index=DIAS_SEMANA.index(def_dia_est),
                 key="comprar_dia_estimado",
-            )
-        with col_fc4:
-            st.markdown("&nbsp;", unsafe_allow_html=True)
-            boton_actualizar = st.form_submit_button(
-                "🔄 Actualizar",
-                type="primary",
-                use_container_width=True,
             )
 
     if boton_actualizar:
