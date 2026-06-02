@@ -1662,8 +1662,8 @@ with tab_comprar:
                         "Pedido": "{:,.2f}",
                         "Stock": "{:,.2f}",
                         "Estimado": "{:,.2f}",
-                        "Resultado": "{:,.2f}",
-                        "Con estimado": "{:,.2f}",
+                        "Resultado": lambda v: f"{abs(float(v)):,.2f}",
+                        "Con estimado": lambda v: f"{abs(float(v)):,.2f}",
                     })
                     .map(_color_diff, subset=["Resultado", "Con estimado"])
                 )
