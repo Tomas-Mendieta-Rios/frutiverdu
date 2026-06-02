@@ -1267,6 +1267,10 @@ with tab_comprar:
     if cfg_comprar.get("comprar_dia_estimado") in DIAS_SEMANA:
         def_dia_est = cfg_comprar["comprar_dia_estimado"]
 
+    # Placeholder para el timestamp arriba del boton.
+    # Se rellena al final, despues de procesar el form (asi muestra el valor actualizado).
+    ts_comprar_ph = st.empty()
+
     # st.form: los cambios NO disparan rerun hasta apretar el boton.
     with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
         # Boton 'Actualizar' arriba en su propio renglon
@@ -1318,7 +1322,7 @@ with tab_comprar:
         st.cache_data.clear()
 
     ts_actualizar_ultimo = cfg_comprar.get("comprar_ultima_actualizacion")
-    st.caption(
+    ts_comprar_ph.caption(
         f"🕒 Última actualización: **{ts_actualizar_ultimo or '?'}**"
     )
 
