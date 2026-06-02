@@ -1118,77 +1118,124 @@ with tab_stock:
         zip(df_dia_stk_full["codigo"].astype(str), df_dia_stk_full["cantidad"])
     ) if not df_dia_stk_full.empty else {}
 
+    # --- Pending edits: sobreviven cambios de filtro hasta apretar Guardar ---
+    pending_key = f"_stk_pending_{fecha_stock}"
+    if pending_key not in st.session_state:
+        st.session_state[pending_key] = {}
+    pending = st.session_state[pending_key]
+
+    zero_flag = bool(st.session_state.get(f"_stk_zero_{fecha_stock}"))
+
+    def _saved_val(codigo):
+        """Valor 'baseline': 0 si Cero esta activo, sino el de Sheets."""
+        if zero_flag:
+            return 0.0
+        try:
+            return float(map_stock_dia.get(codigo, 0.0))
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Base: productos + cantidad (pending sobre saved)
     base_stk = productos[["codigo", "producto", "unidad_medida"]].copy()
-    base_stk["cantidad"] = (
-        base_stk["codigo"]
-        .astype(str)
-        .map(map_stock_dia)
-        .fillna(0.0)
-        .astype(float)
+    base_stk["cantidad"] = base_stk["codigo"].astype(str).map(
+        lambda c: pending.get(c, _saved_val(c))
     )
 
-    # "Poner a cero" llena el editor con ceros (sin guardar).
-    # El usuario despues presiona Guardar para persistir.
-    if st.session_state.get(f"_stk_zero_{fecha_stock}"):
-        base_stk["cantidad"] = 0.0
-
-    # Botones arriba: Cero (fuera de form) + caption
-    col_btn_s1, col_btn_s2 = st.columns([1, 4])
+    # Botones: Cero + Guardar + caption
+    col_btn_s1, col_btn_s2, col_btn_s3 = st.columns([1.3, 1.1, 3])
     with col_btn_s1:
         cero_s = st.button(
             "🧹 Poner stock a cero",
             key="btn_cero_stock",
-            help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
+            help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar.",
         )
     with col_btn_s2:
+        guardar_s = st.button(
+            "💾 Guardar stock",
+            key="btn_guardar_stock",
+            type="primary",
+        )
+    with col_btn_s3:
         st.caption(f"Guarda para la fecha **{fecha_stock}**.")
 
+    # Filtro de busqueda (fuera del editor, dispara rerun al escribir)
+    busqueda = st.text_input(
+        "🔍 Buscar producto",
+        key=f"stk_busqueda_{fecha_stock}",
+        placeholder="Filtrar por nombre o código...",
+    ).strip().lower()
+
+    # Aviso de pendientes
+    if pending:
+        st.warning(
+            f"⚠️ **{len(pending)} cambio(s) sin guardar**. "
+            f"No cierres la pestaña ni refresques antes de apretar 💾 Guardar."
+        )
+
+    # Vista filtrada
     base_stk_view = base_stk.copy()
-    # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
+    if busqueda:
+        base_stk_view = base_stk_view[
+            base_stk_view["producto"].str.lower().str.contains(busqueda, na=False)
+            | base_stk_view["codigo"].astype(str).str.lower().str.contains(busqueda, na=False)
+        ]
+    base_stk_view = base_stk_view.reset_index(drop=True)
+    # TextColumn requires strings; AR comma format
     base_stk_view["cantidad"] = base_stk_view["cantidad"].apply(_fmt_num_es)
 
-    with st.form(key=f"form_stock_{fecha_stock}", clear_on_submit=False):
-        guardar_s = st.form_submit_button(
-            "💾 Guardar stock", type="primary"
-        )
-        stock_editado = st.data_editor(
-            base_stk_view,
-            use_container_width=True,
-            num_rows="fixed",
-            disabled=["codigo", "producto", "unidad_medida"],
-            column_config={
-                "codigo": st.column_config.TextColumn("Código"),
-                "producto": st.column_config.TextColumn("Producto"),
-                "unidad_medida": st.column_config.TextColumn("Unidad"),
-                "cantidad": st.column_config.TextColumn(
-                    "Cantidad",
-                    help="Podés usar coma (1,5) o punto (1.5)",
-                ),
-            },
-            key=f"editor_stock_{fecha_stock}",
-        )
+    # Editor key incluye filtro -> al cambiarlo el widget se reinicia limpio,
+    # pero los pending sobreviven en session_state.
+    stock_editado = st.data_editor(
+        base_stk_view,
+        use_container_width=True,
+        num_rows="fixed",
+        disabled=["codigo", "producto", "unidad_medida"],
+        column_config={
+            "codigo": st.column_config.TextColumn("Código"),
+            "producto": st.column_config.TextColumn("Producto"),
+            "unidad_medida": st.column_config.TextColumn("Unidad"),
+            "cantidad": st.column_config.TextColumn(
+                "Cantidad",
+                help="Podés usar coma (1,5) o punto (1.5)",
+            ),
+        },
+        key=f"editor_stock_{fecha_stock}_{busqueda}",
+    )
+
+    # Capturar ediciones en pending: si el valor difiere del saved, va a pending;
+    # si igualan al saved, se saca de pending (el usuario "deshizo" el cambio).
+    for i in range(len(stock_editado)):
+        codigo = str(stock_editado.iloc[i]["codigo"])
+        new_val = _parse_num_es(stock_editado.iloc[i]["cantidad"])
+        saved = _saved_val(codigo)
+        if abs(new_val - saved) > 1e-6:
+            pending[codigo] = new_val
+        else:
+            pending.pop(codigo, None)
+    st.session_state[pending_key] = pending
 
     if guardar_s:
-        edits_map = dict(
-            zip(
-                stock_editado["codigo"].astype(str),
-                stock_editado["cantidad"].apply(_parse_num_es),
+        if pending or zero_flag:
+            # Construir salida desde productos completos + saved + pending
+            salida_s = productos[["codigo", "producto", "unidad_medida"]].copy()
+            salida_s["cantidad"] = salida_s["codigo"].astype(str).map(
+                lambda c: pending.get(c, _saved_val(c))
+            ).astype(float)
+            db.guardar_stock(salida_s, fecha_stock)
+            n = len(pending)
+            st.session_state.pop(f"_stk_zero_{fecha_stock}", None)
+            st.session_state[pending_key] = {}
+            st.success(
+                f"Stock del {fecha_stock} guardado en Sheets "
+                f"({n} cambio(s) aplicado(s))."
             )
-        )
-        salida_s = base_stk.copy()
-        salida_s["cantidad"] = [
-            edits_map.get(str(c), v)
-            for c, v in zip(salida_s["codigo"], salida_s["cantidad"])
-        ]
-        salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
-        db.guardar_stock(salida_s, fecha_stock)
-        st.session_state.pop(f"_stk_zero_{fecha_stock}", None)
-        st.success(f"Stock del {fecha_stock} guardado en Sheets.")
+            st.rerun()
+        else:
+            st.info("No hay cambios para guardar.")
 
     if cero_s:
         st.session_state[f"_stk_zero_{fecha_stock}"] = True
-        editor_key = f"editor_stock_{fecha_stock}"
-        st.session_state.pop(editor_key, None)
+        st.session_state[pending_key] = {}  # Cero descarta los pending
         st.rerun()
 
     # Refrescar fechas y timestamp despues del posible save
