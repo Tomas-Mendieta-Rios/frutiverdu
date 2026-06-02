@@ -3269,7 +3269,10 @@ with tab_resumen_rango:
                 pass
 
         with st.form("form_resumen_rango", border=False):
-            col_rr1, col_rr2, col_rr3 = st.columns([1, 1, 1])
+            aplicar_rr = st.form_submit_button(
+                "🔄 Aplicar", type="primary", use_container_width=True
+            )
+            col_rr1, col_rr2 = st.columns([1, 1])
             with col_rr1:
                 fecha_desde_rr = st.date_input(
                     "Desde",
@@ -3283,11 +3286,6 @@ with tab_resumen_rango:
                     value=def_hasta_rr,
                     key="rr_hasta",
                     format="YYYY-MM-DD",
-                )
-            with col_rr3:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                aplicar_rr = st.form_submit_button(
-                    "🔄 Aplicar", type="primary", use_container_width=True
                 )
 
         if aplicar_rr:
@@ -3429,7 +3427,10 @@ with tab_desglose_rango:
                 pass
 
         with st.form("form_desglose_rango", border=False):
-            col_dr1, col_dr2, col_dr3 = st.columns([1, 1, 1])
+            aplicar_dr = st.form_submit_button(
+                "🔄 Aplicar", type="primary", use_container_width=True
+            )
+            col_dr1, col_dr2 = st.columns([1, 1])
             with col_dr1:
                 fecha_desde_dr = st.date_input(
                     "Desde",
@@ -3443,11 +3444,6 @@ with tab_desglose_rango:
                     value=def_hasta_dr,
                     key="dr_hasta",
                     format="YYYY-MM-DD",
-                )
-            with col_dr3:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                aplicar_dr = st.form_submit_button(
-                    "🔄 Aplicar", type="primary", use_container_width=True
                 )
 
         if aplicar_dr:
@@ -3607,7 +3603,10 @@ with tab_hist_precios:
                 pass
 
         with st.form("form_hist_precios", border=False):
-            col_hp1, col_hp2, col_hp3 = st.columns([1, 1, 1])
+            aplicar_hp = st.form_submit_button(
+                "🔄 Aplicar", type="primary", use_container_width=True
+            )
+            col_hp1, col_hp2 = st.columns([1, 1])
             with col_hp1:
                 fecha_desde_hp = st.date_input(
                     "Desde",
@@ -3621,11 +3620,6 @@ with tab_hist_precios:
                     value=def_hasta_hp,
                     key="hp_hasta",
                     format="YYYY-MM-DD",
-                )
-            with col_hp3:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                aplicar_hp = st.form_submit_button(
-                    "🔄 Aplicar", type="primary", use_container_width=True
                 )
 
         if aplicar_hp:
@@ -3751,7 +3745,10 @@ with tab_detalle_compras:
                 pass
 
         with st.form("form_detalle_compras", border=False):
-            col_dc1, col_dc2, col_dc3 = st.columns([1, 1, 1])
+            aplicar_dc = st.form_submit_button(
+                "🔄 Aplicar", type="primary", use_container_width=True
+            )
+            col_dc1, col_dc2 = st.columns([1, 1])
             with col_dc1:
                 fecha_desde_dc = st.date_input(
                     "Desde",
@@ -3765,11 +3762,6 @@ with tab_detalle_compras:
                     value=def_hasta_dc,
                     key="dc_hasta",
                     format="YYYY-MM-DD",
-                )
-            with col_dc3:
-                st.markdown("&nbsp;", unsafe_allow_html=True)
-                aplicar_dc = st.form_submit_button(
-                    "🔄 Aplicar", type="primary", use_container_width=True
                 )
 
         if aplicar_dc:
