@@ -1619,49 +1619,56 @@ with tab_comprar:
             primer = resultados[0]["diff_est"]
             if primer > 0.001:
                 icono = "🔴"
-                estado_label = "Falta"
             elif primer < -0.001:
                 icono = "🟢"
-                estado_label = "Sobra"
             else:
                 icono = "⚪"
-                estado_label = "OK"
 
             # Nombre: si la familia tiene un solo producto, usar su nombre completo
             nombre = (
                 comp_productos.iloc[0]["producto"] if len(comp) == 1 else base
             )
 
-            with st.expander(f"{icono} **{nombre}** — {estado_label}", expanded=False):
-                cols_h = st.columns([1, 1, 1, 1, 1.5, 1.5])
-                cols_h[0].markdown("**Unidad**")
-                cols_h[1].markdown("**Pedido**")
-                cols_h[2].markdown("**Estimado**")
-                cols_h[3].markdown("**Stock**")
-                cols_h[4].markdown("**Resultado**")
-                cols_h[5].markdown("**Con estimado**")
+            with st.expander(f"{icono} **{nombre}**", expanded=False):
+                df_show = pd.DataFrame([
+                    {
+                        "Unidad": r["unidad"],
+                        "Pedido": r["pedido"],
+                        "Stock": r["stock"],
+                        "Estimado": r["estimado"],
+                        "Resultado": r["diff"],
+                        "Con estimado": r["diff_est"],
+                    }
+                    for r in resultados
+                ])
 
-                def _badge(valor, unidad):
-                    if valor > 0.001:
-                        return (
-                            f"<span style='color:#d11; font-weight:bold;'>"
-                            f"Falta {valor:,.2f} {unidad}</span>"
-                        )
-                    if valor < -0.001:
-                        return (
-                            f"<span style='color:#1a8a1a; font-weight:bold;'>"
-                            f"Sobra {-valor:,.2f} {unidad}</span>"
-                        )
-                    return f"OK"
+                def _color_diff(v):
+                    try:
+                        n = float(v)
+                    except (ValueError, TypeError):
+                        return ""
+                    if n > 0.001:
+                        return "color: #d11; font-weight: bold"
+                    if n < -0.001:
+                        return "color: #1a8a1a; font-weight: bold"
+                    return ""
 
-                for r in resultados:
-                    cols = st.columns([1, 1, 1, 1, 1.5, 1.5])
-                    cols[0].markdown(f"**{r['unidad']}**")
-                    cols[1].markdown(f"{r['pedido']:,.2f}")
-                    cols[2].markdown(f"{r['estimado']:,.2f}")
-                    cols[3].markdown(f"{r['stock']:,.2f}")
-                    cols[4].markdown(_badge(r["diff"], r["unidad"]), unsafe_allow_html=True)
-                    cols[5].markdown(_badge(r["diff_est"], r["unidad"]), unsafe_allow_html=True)
+                styled_grupo = (
+                    df_show.style
+                    .format({
+                        "Pedido": "{:,.2f}",
+                        "Stock": "{:,.2f}",
+                        "Estimado": "{:,.2f}",
+                        "Resultado": "{:,.2f}",
+                        "Con estimado": "{:,.2f}",
+                    })
+                    .map(_color_diff, subset=["Resultado", "Con estimado"])
+                )
+                st.dataframe(
+                    styled_grupo,
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
 with tab_estimado:
     dia_actual = DIAS_SEMANA[date.today().weekday()]
