@@ -1118,109 +1118,78 @@ with tab_stock:
         zip(df_dia_stk_full["codigo"].astype(str), df_dia_stk_full["cantidad"])
     ) if not df_dia_stk_full.empty else {}
 
-    def _saved_val(codigo):
-        try:
-            return float(map_stock_dia.get(codigo, 0.0))
-        except (ValueError, TypeError):
-            return 0.0
-
     base_stk = productos[["codigo", "producto", "unidad_medida"]].copy()
-    base_stk["cantidad"] = base_stk["codigo"].astype(str).map(_saved_val)
-
-    # Confirmacion de "Poner a cero" (UI inline en 2 pasos)
-    cero_confirm_key = f"_stk_cero_confirm_{fecha_stock}"
-    if st.session_state.get(cero_confirm_key):
-        st.warning(
-            "¿Seguro que querés poner TODO el stock a cero? "
-            "Se guarda inmediatamente y no se puede deshacer."
-        )
-        col_si, col_no, _ = st.columns([1.3, 1.3, 4])
-        with col_si:
-            if st.button("✅ Sí, poner a cero", key="btn_cero_si", type="primary"):
-                salida_cero = productos[["codigo", "producto", "unidad_medida"]].copy()
-                salida_cero["cantidad"] = 0.0
-                db.guardar_stock(salida_cero, fecha_stock)
-                st.session_state.pop(cero_confirm_key, None)
-                st.toast("Stock puesto a cero", icon="🧹")
-                st.rerun()
-        with col_no:
-            if st.button("❌ Cancelar", key="btn_cero_no"):
-                st.session_state.pop(cero_confirm_key, None)
-                st.rerun()
-    else:
-        col_btn_s1, col_btn_s2 = st.columns([1.3, 4])
-        with col_btn_s1:
-            if st.button(
-                "🧹 Poner stock a cero",
-                key="btn_cero_stock",
-                help="Pone TODO el stock a 0 (con confirmación).",
-            ):
-                st.session_state[cero_confirm_key] = True
-                st.rerun()
-        with col_btn_s2:
-            st.caption(
-                f"Guarda para la fecha **{fecha_stock}**. "
-                f"💡 Los cambios se guardan automáticamente al editar cada celda."
-            )
-
-    # Filtro (cosmetico: solo cambia que se ve, no toca el guardado)
-    busqueda = st.text_input(
-        "🔍 Buscar producto",
-        key=f"stk_busqueda_{fecha_stock}",
-        placeholder="Filtrar por nombre o código...",
-    ).strip().lower()
-
-    base_stk_view = base_stk.copy()
-    if busqueda:
-        base_stk_view = base_stk_view[
-            base_stk_view["producto"].str.lower().str.contains(busqueda, na=False)
-            | base_stk_view["codigo"].astype(str).str.lower().str.contains(busqueda, na=False)
-        ]
-    base_stk_view = base_stk_view.reset_index(drop=True)
-    base_stk_view["cantidad"] = base_stk_view["cantidad"].apply(_fmt_num_es)
-
-    # data_editor sin form: cada edicion dispara rerun, detectamos diff y auto-save.
-    # Key incluye busqueda para que el widget se reinicie al cambiar filtro
-    # (asi no se aplican ediciones por indice a las nuevas filas).
-    stock_editado = st.data_editor(
-        base_stk_view,
-        use_container_width=True,
-        num_rows="fixed",
-        disabled=["codigo", "producto", "unidad_medida"],
-        column_config={
-            "codigo": st.column_config.TextColumn("Código"),
-            "producto": st.column_config.TextColumn("Producto"),
-            "unidad_medida": st.column_config.TextColumn("Unidad"),
-            "cantidad": st.column_config.TextColumn(
-                "Cantidad",
-                help="Podés usar coma (1,5) o punto (1.5). Se guarda automáticamente.",
-            ),
-        },
-        key=f"editor_stock_{fecha_stock}_{busqueda}",
+    base_stk["cantidad"] = (
+        base_stk["codigo"]
+        .astype(str)
+        .map(map_stock_dia)
+        .fillna(0.0)
+        .astype(float)
     )
 
-    # Auto-save: detectar diffs vs saved y persistir a Sheets
-    nuevos_valores = {}
-    for i in range(len(stock_editado)):
-        codigo = str(stock_editado.iloc[i]["codigo"])
-        new_val = _parse_num_es(stock_editado.iloc[i]["cantidad"])
-        saved = _saved_val(codigo)
-        if abs(new_val - saved) > 1e-6:
-            nuevos_valores[codigo] = new_val
+    # "Poner a cero" llena el editor con ceros (sin guardar).
+    # El usuario despues presiona Guardar para persistir.
+    if st.session_state.get(f"_stk_zero_{fecha_stock}"):
+        base_stk["cantidad"] = 0.0
 
-    if nuevos_valores:
-        salida_s = productos[["codigo", "producto", "unidad_medida"]].copy()
-        salida_s["cantidad"] = salida_s["codigo"].astype(str).map(
-            lambda c: nuevos_valores.get(c, _saved_val(c))
-        ).astype(float)
-        db.guardar_stock(salida_s, fecha_stock)
-        # Actualizar el map en memoria para evitar re-deteccion en el mismo rerun
-        for c, v in nuevos_valores.items():
-            map_stock_dia[c] = v
-        st.toast(
-            f"💾 Guardado: {len(nuevos_valores)} cambio(s)",
-            icon="✅",
+    # Botones arriba: Cero (fuera de form) + caption
+    col_btn_s1, col_btn_s2 = st.columns([1, 4])
+    with col_btn_s1:
+        cero_s = st.button(
+            "🧹 Poner stock a cero",
+            key="btn_cero_stock",
+            help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
         )
+    with col_btn_s2:
+        st.caption(f"Guarda para la fecha **{fecha_stock}**.")
+
+    base_stk_view = base_stk.copy()
+    # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
+    base_stk_view["cantidad"] = base_stk_view["cantidad"].apply(_fmt_num_es)
+
+    with st.form(key=f"form_stock_{fecha_stock}", clear_on_submit=False):
+        guardar_s = st.form_submit_button(
+            "💾 Guardar stock", type="primary"
+        )
+        stock_editado = st.data_editor(
+            base_stk_view,
+            use_container_width=True,
+            num_rows="fixed",
+            disabled=["codigo", "producto", "unidad_medida"],
+            column_config={
+                "codigo": st.column_config.TextColumn("Código"),
+                "producto": st.column_config.TextColumn("Producto"),
+                "unidad_medida": st.column_config.TextColumn("Unidad"),
+                "cantidad": st.column_config.TextColumn(
+                    "Cantidad",
+                    help="Podés usar coma (1,5) o punto (1.5)",
+                ),
+            },
+            key=f"editor_stock_{fecha_stock}",
+        )
+
+    if guardar_s:
+        edits_map = dict(
+            zip(
+                stock_editado["codigo"].astype(str),
+                stock_editado["cantidad"].apply(_parse_num_es),
+            )
+        )
+        salida_s = base_stk.copy()
+        salida_s["cantidad"] = [
+            edits_map.get(str(c), v)
+            for c, v in zip(salida_s["codigo"], salida_s["cantidad"])
+        ]
+        salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
+        db.guardar_stock(salida_s, fecha_stock)
+        st.session_state.pop(f"_stk_zero_{fecha_stock}", None)
+        st.success(f"Stock del {fecha_stock} guardado en Sheets.")
+
+    if cero_s:
+        st.session_state[f"_stk_zero_{fecha_stock}"] = True
+        editor_key = f"editor_stock_{fecha_stock}"
+        st.session_state.pop(editor_key, None)
+        st.rerun()
 
     # Refrescar fechas y timestamp despues del posible save
     fechas_stock_disp_post = db.fechas_stock()
