@@ -1147,7 +1147,14 @@ with tab_stock:
     # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
     base_stk_view["cantidad"] = base_stk_view["cantidad"].apply(_fmt_num_es)
 
-    with st.form(key=f"form_stock_{fecha_stock}", clear_on_submit=False):
+    # Editor key con contador: bump del contador = widget fresco (sin estado viejo).
+    # Esto es bulletproof para reset post-Cero y post-Guardar.
+    stk_counter_key = f"_stk_editor_counter_{fecha_stock}"
+    if stk_counter_key not in st.session_state:
+        st.session_state[stk_counter_key] = 0
+    stk_counter = st.session_state[stk_counter_key]
+
+    with st.form(key=f"form_stock_{fecha_stock}_{stk_counter}", clear_on_submit=False):
         guardar_s = st.form_submit_button(
             "💾 Guardar stock", type="primary"
         )
@@ -1165,7 +1172,7 @@ with tab_stock:
                     help="Podés usar coma (1,5) o punto (1.5)",
                 ),
             },
-            key=f"editor_stock_{fecha_stock}",
+            key=f"editor_stock_{fecha_stock}_{stk_counter}",
         )
 
     if guardar_s:
@@ -1183,12 +1190,13 @@ with tab_stock:
         salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
         db.guardar_stock(salida_s, fecha_stock)
         st.session_state.pop(f"_stk_zero_{fecha_stock}", None)
+        st.session_state[stk_counter_key] = stk_counter + 1  # editor fresco post-save
         st.success(f"Stock del {fecha_stock} guardado en Sheets.")
+        st.rerun()
 
     if cero_s:
         st.session_state[f"_stk_zero_{fecha_stock}"] = True
-        editor_key = f"editor_stock_{fecha_stock}"
-        st.session_state.pop(editor_key, None)
+        st.session_state[stk_counter_key] = stk_counter + 1  # editor fresco post-cero
         st.rerun()
 
     # Refrescar fechas y timestamp despues del posible save
