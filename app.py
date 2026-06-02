@@ -13,6 +13,39 @@ import gsheets_db as db
 DUX_RATE_LIMIT_SECONDS = 5.5
 
 
+def _parse_num_es(v):
+    """Parsea un numero aceptando coma o punto como decimal.
+    Acepta '1,5' (AR), '1.5' (EN), '1.500,75' (AR con miles), 1500 (numerico)."""
+    if v is None:
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if not s:
+        return 0.0
+    # Si tiene tanto coma como punto, asumimos formato AR: punto=miles, coma=decimal
+    if "," in s and "." in s:
+        s = s.replace(".", "").replace(",", ".")
+    else:
+        s = s.replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def _fmt_num_es(v):
+    """Float -> string en formato AR (coma decimal, sin ceros sobrantes).
+    Para mostrar en TextColumn editable."""
+    try:
+        n = float(v)
+    except (ValueError, TypeError):
+        return "0"
+    if n == 0:
+        return "0"
+    return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
 def obtener_ultimo_comprobante_dux():
     """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
     de los ultimos 5 dias. Pagina hasta agotar resultados.
@@ -1110,7 +1143,9 @@ with tab_stock:
     with col_btn_s2:
         st.caption(f"Guarda para la fecha **{fecha_stock}**.")
 
-    base_stk_view = base_stk
+    base_stk_view = base_stk.copy()
+    # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
+    base_stk_view["cantidad"] = base_stk_view["cantidad"].apply(_fmt_num_es)
 
     with st.form(key=f"form_stock_{fecha_stock}", clear_on_submit=False):
         guardar_s = st.form_submit_button(
@@ -1125,11 +1160,9 @@ with tab_stock:
                 "codigo": st.column_config.TextColumn("Código"),
                 "producto": st.column_config.TextColumn("Producto"),
                 "unidad_medida": st.column_config.TextColumn("Unidad"),
-                "cantidad": st.column_config.NumberColumn(
+                "cantidad": st.column_config.TextColumn(
                     "Cantidad",
-                    min_value=0.0,
-                    step=1.0,
-                    format="%.3f",
+                    help="Podés usar coma (1,5) o punto (1.5)",
                 ),
             },
             key=f"editor_stock_{fecha_stock}",
@@ -1139,7 +1172,7 @@ with tab_stock:
         edits_map = dict(
             zip(
                 stock_editado["codigo"].astype(str),
-                stock_editado["cantidad"].fillna(0).astype(float),
+                stock_editado["cantidad"].apply(_parse_num_es),
             )
         )
         salida_s = base_stk.copy()
@@ -1688,7 +1721,9 @@ with tab_estimado:
     with col_btn_e2:
         st.caption(f"Guarda para el día **{DIAS_DISPLAY[dia_estimado]}** (fijo, se aplica a todos los {DIAS_DISPLAY[dia_estimado].lower()}).")
 
-    base_est_view = base_est
+    base_est_view = base_est.copy()
+    # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
+    base_est_view["estimado"] = base_est_view["estimado"].apply(_fmt_num_es)
 
     with st.form(key=f"form_estimado_{dia_estimado}", clear_on_submit=False):
         guardar_est = st.form_submit_button(
@@ -1703,11 +1738,9 @@ with tab_estimado:
                 "codigo": st.column_config.TextColumn("Código"),
                 "producto": st.column_config.TextColumn("Producto"),
                 "unidad_medida": st.column_config.TextColumn("Unidad"),
-                "estimado": st.column_config.NumberColumn(
+                "estimado": st.column_config.TextColumn(
                     "Estimado",
-                    min_value=0.0,
-                    step=1.0,
-                    format="%.3f",
+                    help="Podés usar coma (1,5) o punto (1.5)",
                 ),
             },
             key=f"editor_estimado_{dia_estimado}",
@@ -1717,7 +1750,7 @@ with tab_estimado:
         edits_map_e = dict(
             zip(
                 editor_estimado["codigo"].astype(str),
-                editor_estimado["estimado"].fillna(0).astype(float),
+                editor_estimado["estimado"].apply(_parse_num_es),
             )
         )
         salida = base_est.copy()
@@ -3055,10 +3088,38 @@ with tab_compras:
                 else:
                     st.caption("Hacé click en **Preparar Excel** para consultar DUX y generar el archivo.")
 
-            _render_preparar_descargar_dux()
+                # Detalle linea por linea (dentro del fragment para que se actualice
+                # con los numeros DUX apenas se preparan, sin esperar a otro rerun).
+                grupo_a_dux_now = st.session_state.get(prep_map_key, {})
+                with st.expander(f"Ver detalle línea por línea ({len(df_compras_fecha_post)} líneas)"):
+                    df_det = df_compras_fecha_post.copy()
+                    df_det["subtotal"] = (
+                        df_det["cantidad"].astype(float) * df_det["precio"].astype(float)
+                    )
+                    df_det["dux_asignado"] = df_det["comprobante"].astype(str).map(
+                        lambda g: grupo_a_dux_now.get(g, "—") if grupo_a_dux_now else "—"
+                    )
+                    st.dataframe(
+                        df_det[[
+                            "dux_asignado", "proveedor_nombre", "codigo_producto",
+                            "producto_nombre", "cantidad", "precio", "subtotal",
+                            "condicion_pago",
+                        ]],
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "dux_asignado": st.column_config.TextColumn("DUX"),
+                            "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
+                            "codigo_producto": st.column_config.TextColumn("Código"),
+                            "producto_nombre": st.column_config.TextColumn("Producto"),
+                            "cantidad": st.column_config.NumberColumn("Cantidad"),
+                            "precio": st.column_config.NumberColumn("Precio"),
+                            "subtotal": st.column_config.NumberColumn("Subtotal"),
+                            "condicion_pago": st.column_config.TextColumn("Pago"),
+                        },
+                    )
 
-            # Para que el detalle linea por linea (fuera del fragment) muestre los DUX
-            grupo_a_dux = st.session_state.get(prep_map_key, {})
+            _render_preparar_descargar_dux()
 
             # ---------- Resumen del día ----------
             df_resumen = df_compras_fecha_post.copy()
@@ -3147,35 +3208,6 @@ with tab_compras:
                 },
             )
 
-            with st.expander(f"Ver detalle línea por línea ({len(df_compras_fecha_post)} líneas)"):
-                df_det = df_compras_fecha_post.copy()
-                df_det["subtotal"] = (
-                    df_det["cantidad"].astype(float) * df_det["precio"].astype(float)
-                )
-                # Si ya se preparo el Excel, mostrar el numero DUX asignado a cada linea.
-                # Si no, mostrar "—" en la columna DUX (no hay numero todavia).
-                df_det["dux_asignado"] = df_det["comprobante"].astype(str).map(
-                    lambda g: grupo_a_dux.get(g, "—") if grupo_a_dux else "—"
-                )
-                st.dataframe(
-                    df_det[[
-                        "dux_asignado", "proveedor_nombre", "codigo_producto",
-                        "producto_nombre", "cantidad", "precio", "subtotal",
-                        "condicion_pago",
-                    ]],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "dux_asignado": st.column_config.TextColumn("DUX"),
-                        "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
-                        "codigo_producto": st.column_config.TextColumn("Código"),
-                        "producto_nombre": st.column_config.TextColumn("Producto"),
-                        "cantidad": st.column_config.NumberColumn("Cantidad"),
-                        "precio": st.column_config.NumberColumn("Precio"),
-                        "subtotal": st.column_config.NumberColumn("Subtotal"),
-                        "condicion_pago": st.column_config.TextColumn("Pago"),
-                    },
-                )
         else:
             st.caption("Cargá líneas y guardá para poder descargar el Excel DUX.")
 
