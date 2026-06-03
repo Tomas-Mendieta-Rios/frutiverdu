@@ -2206,11 +2206,6 @@ with tab_dux:
                 if _fecha_dux(o) >= hace_7
             ]
 
-            st.caption(
-                f"Mostrando {len(all_orders_sorted)} pedidos de los últimos 7 días · "
-                f"{n_asignados} con entrega asignada en total."
-            )
-
             if not all_orders_sorted:
                 st.info("No hay pedidos en los últimos 7 días.")
 
@@ -2255,12 +2250,16 @@ with tab_dux:
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
-                            entrega_badge = (
-                                f" · 📦 {asignado_prev}" if asignado_prev else ""
-                            )
+                            # Fecha de registro del pedido en DUX
+                            f_reg_dux = _fecha_dux(orden)
+                            registro_badge = ""
+                            if f_reg_dux and f_reg_dux != pd.Timestamp.min:
+                                registro_badge = (
+                                    f" · 📅 registrado {f_reg_dux.date()}"
+                                )
                             st.markdown(
                                 f"**#{nro or i}** — {cliente_str} · "
-                                f"{len(items)} ítems · {estado_badge}{entrega_badge}"
+                                f"{len(items)} ítems · {estado_badge}{registro_badge}"
                             )
                         with c_chk:
                             asignar = st.checkbox(
@@ -2650,11 +2649,6 @@ with tab_wix:
                 if _fecha_wix(o) >= hace_7_wix
             ]
 
-            st.caption(
-                f"Mostrando {len(orders_saved_sorted)} pedidos de los últimos 7 días · "
-                f"{len(selecciones)} con entrega asignada en total."
-            )
-
             if not orders_saved_sorted:
                 st.info("No hay pedidos en los últimos 7 días.")
 
@@ -2690,10 +2684,16 @@ with tab_wix:
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
-                            badge = f" · 📦 {asignado_prev}" if asignado_prev else ""
+                            # Fecha de registro del pedido en Wix
+                            f_reg_wix = _fecha_wix(o)
+                            registro_badge = ""
+                            if f_reg_wix and f_reg_wix != pd.Timestamp.min:
+                                registro_badge = (
+                                    f" · 📅 registrado {f_reg_wix.date()}"
+                                )
                             st.markdown(
                                 f"**#{nro}** — {cliente} · {len(items)} ítems · "
-                                f"**{total}**{badge}"
+                                f"**{total}**{registro_badge}"
                             )
                             detalles = []
                             if direccion:
