@@ -474,6 +474,13 @@ def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=
     st.session_state["_wix_contados"] = []
     all_orders = db.cargar_pedidos_dux()
 
+    # Filtrar pedidos anulados (anulado="S") para que no cuenten en
+    # ningun agregado (stock teorico, total a comprar, etc).
+    all_orders = [
+        o for o in all_orders
+        if str(o.get("anulado", "N")).upper() != "S"
+    ]
+
     selecciones_dux = db.cargar_selecciones("dux")
 
     if fecha_compra is not None:
@@ -2266,8 +2273,15 @@ with tab_dux:
                 except (ValueError, TypeError):
                     return -1
 
+            # Filtrar anulados ANTES de cortar a 50 (asi no perdemos visibles
+            # por anulados que estan en el top).
+            all_orders_filtered = [
+                o for o in all_orders_saved
+                if str(o.get("anulado", "N")).upper() != "S"
+            ]
+
             all_orders_sorted = sorted(
-                all_orders_saved, key=_nro_dux_sort, reverse=True
+                all_orders_filtered, key=_nro_dux_sort, reverse=True
             )
 
             # Mostrar los ultimos 50 por nro_pedido (independiente de fecha).
