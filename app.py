@@ -1899,10 +1899,10 @@ with tab_stock_teorico:
         "− Pedidos entregados del día."
     )
 
-    col_t1, col_t2, col_t3 = st.columns([1, 1, 1])
+    col_t1, col_t2, col_t3, col_t4 = st.columns([1, 1, 1, 1])
     with col_t1:
         f0 = st.date_input(
-            "📦 Fecha del stock inicial",
+            "📦 Stock inicial",
             value=f0_default,
             key="st_teorico_f0",
             format="YYYY-MM-DD",
@@ -1910,19 +1910,27 @@ with tab_stock_teorico:
         )
     with col_t2:
         fc = st.date_input(
-            "🛒 Fecha de compras",
+            "🛒 Compras",
             value=fc_default,
             key="st_teorico_fc",
             format="YYYY-MM-DD",
-            help="Día de la compra a sumar (filtra DUX por fecha_compra).",
+            help="Día de la compra a sumar.",
         )
     with col_t3:
         fp = st.date_input(
-            "📋 Fecha de pedidos",
+            "📋 Pedidos",
             value=fp_default,
             key="st_teorico_fp",
             format="YYYY-MM-DD",
-            help="Día de entrega del pedido a restar (filtra por fecha_entrega).",
+            help="Día de entrega del pedido a restar.",
+        )
+    with col_t4:
+        fecha_conteo = st.date_input(
+            "📅 Conteo",
+            value=date.today(),
+            key="fecha_conteo_real",
+            format="YYYY-MM-DD",
+            help="Día con el que se guardará el Stock al apretar Guardar.",
         )
 
     TEO_RESULT_KEY = "_st_teorico_result"
@@ -1957,7 +1965,7 @@ with tab_stock_teorico:
     @st.fragment
     def _fragment_stock_teorico():
         if st.button(
-            "🧮 Calcular stock teórico",
+            "🔄 Actualizar",
             type="primary",
             key="btn_calc_teorico",
             use_container_width=True,
@@ -2077,21 +2085,10 @@ with tab_stock_teorico:
         df_editor = df_teorico_r.copy()
         df_editor["Real"] = ""
 
-        # Fecha del conteo afuera del form (date_input dentro de form
-        # tiene comportamiento raro y no actualiza visualmente).
-        col_fc, col_info = st.columns([1, 2])
-        with col_fc:
-            fecha_conteo = st.date_input(
-                "📅 Fecha del conteo",
-                value=date.today(),
-                key="fecha_conteo_real",
-                format="YYYY-MM-DD",
-            )
-        with col_info:
-            st.caption(
-                "💡 Vacío en Real = se guarda el Teórico. "
-                "Si la fecha ya tenía Stock cargado, se reemplaza."
-            )
+        st.caption(
+            "💡 Vacío en Real = se guarda el Teórico. "
+            "Si la fecha del conteo ya tenía Stock cargado, se reemplaza."
+        )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
             edited_real = st.data_editor(
