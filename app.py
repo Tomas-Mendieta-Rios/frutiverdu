@@ -2322,9 +2322,11 @@ with tab_dux:
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos DUX", e))
 
-        # Timestamp arriba del boton Sincronizar
-        ts_ped = db.ultima_carga("pedidos_dux")
-        st.caption(f"🕒 Última sync: **{ts_ped or '?'}**")
+        # Timestamp arriba (placeholder para actualizar tras el sync sin refresh)
+        ts_ped_ph = st.empty()
+        ts_ped_ph.caption(
+            f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**"
+        )
 
         # Sync por rango manual (con date pickers). Permite incluir fechas
         # futuras si tu papa carga pedidos por adelantado. El merge en
@@ -2414,6 +2416,13 @@ with tab_dux:
             if not error_corte:
                 try:
                     db.guardar_pedidos_dux(all_orders)
+                    # Actualizar el caption "Ultima sync" al toque (sin refresh)
+                    try:
+                        ts_ped_ph.caption(
+                            f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**"
+                        )
+                    except Exception:
+                        pass
                 except Exception as e:
                     st.error(msg_error_sheets("guardar pedidos DUX", e))
 
@@ -2754,8 +2763,10 @@ with tab_wix:
                 pass
 
         # Timestamp arriba del boton Sincronizar
-        ts_wix = db.ultima_carga("pedidos_wix")
-        st.caption(f"🕒 Última sync: **{ts_wix or '?'}**")
+        ts_wix_ph = st.empty()
+        ts_wix_ph.caption(
+            f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**"
+        )
 
         # Sync por rango manual (con date pickers). Permite incluir fechas
         # futuras. El merge en _guardar_pedidos asegura que los pedidos
@@ -2825,6 +2836,13 @@ with tab_wix:
                         orders_slim = [_slim_wix_order(o) for o in orders]
                         try:
                             db.guardar_pedidos_wix(orders_slim)
+                            # Actualizar el caption "Ultima sync" al toque
+                            try:
+                                ts_wix_ph.caption(
+                                    f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**"
+                                )
+                            except Exception:
+                                pass
                         except Exception as e:
                             st.error(msg_error_sheets("guardar pedidos Wix", e))
 
