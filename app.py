@@ -1810,7 +1810,7 @@ with tab_stock:
             )
         with col_t4:
             fecha_conteo = st.date_input(
-                "📅 Conteo",
+                "📅 Stock",
                 value=fecha_conteo_default,
                 key="fecha_conteo_real",
                 format="YYYY-MM-DD",
@@ -1990,12 +1990,12 @@ with tab_stock:
         )
 
         df_editor = df_teorico_r.copy()
-        df_editor["Real"] = df_editor["Código"].astype(str).map(
+        df_editor["Stock"] = df_editor["Código"].astype(str).map(
             lambda c: _fmt_num_es(map_stk_conteo.get(c, 0.0))
         )
 
         st.caption(
-            "💡 Real muestra el Stock guardado para la fecha del conteo "
+            "💡 Stock muestra el valor guardado para esa fecha "
             "(0 si nunca cargaste nada). Al guardar reemplaza todo."
         )
 
@@ -2023,10 +2023,9 @@ with tab_stock:
                     "= Teórico": st.column_config.NumberColumn(
                         "= Teórico", format="%.2f"
                     ),
-                    "Real": st.column_config.TextColumn(
-                        "Real",
-                        help="Cargá el conteo físico. Coma o punto. "
-                             "Vacío = usar Teórico. '0' = cero real.",
+                    "Stock": st.column_config.TextColumn(
+                        "Stock",
+                        help="Cargá el stock real medido. Coma o punto. Vacío = 0.",
                     ),
                 },
                 # Key incluye ts del calculo Y fecha_conteo. Asi:
@@ -2036,23 +2035,23 @@ with tab_stock:
                 key=f"editor_real_{resultado.get('ts') or 'init'}_{fecha_conteo}",
             )
             guardar_conteo = st.form_submit_button(
-                "💾 Guardar Stock para esta fecha", type="primary"
+                "💾 Guardar Stock", type="primary"
             )
 
         if guardar_conteo:
-            # Save simple, igual que Stock tab: parsear todas las Real
-            # y reemplazar el stock_historico para fecha_conteo.
-            valores_real = {}
+            # Save simple: parsear la columna Stock y reemplazar el
+            # stock_historico para fecha_conteo.
+            valores_stock = {}
             for _, row in edited_real.iterrows():
                 cod = str(row["Código"])
-                real_str = str(row.get("Real", "") or "").strip()
-                valores_real[cod] = (
-                    _parse_num_es(real_str) if real_str else 0.0
+                v_str = str(row.get("Stock", "") or "").strip()
+                valores_stock[cod] = (
+                    _parse_num_es(v_str) if v_str else 0.0
                 )
 
             salida = productos[["codigo", "producto", "unidad_medida"]].copy()
             salida["cantidad"] = salida["codigo"].astype(str).map(
-                lambda c: valores_real.get(c, 0.0)
+                lambda c: valores_stock.get(c, 0.0)
             ).astype(float)
 
             try:
