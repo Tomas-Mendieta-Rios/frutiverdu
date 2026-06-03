@@ -2197,55 +2197,89 @@ with tab_stock:
             lambda c: _fmt_num_es(map_stk_conteo.get(c, 0.0))
         )
 
+        # Enriquecer cada fila con Rubro (desde catalogo productos) y
+        # producto base / variante (split por ' - ').
+        cod_to_rubro = dict(zip(
+            productos["codigo"].astype(str),
+            productos.get("rubro", pd.Series([""] * len(productos))).fillna("").astype(str),
+        ))
+
+        def _split_producto(prod_str):
+            s = str(prod_str)
+            if " - " in s:
+                base, variante = s.rsplit(" - ", 1)
+                return base.strip(), variante.strip()
+            return s, ""
+
+        df_editor["Rubro"] = df_editor["Código"].astype(str).map(
+            lambda c: cod_to_rubro.get(c, "") or "Sin rubro"
+        )
+        _split_series = df_editor["Producto"].apply(_split_producto)
+        df_editor["Base"] = _split_series.apply(lambda t: t[0])
+        df_editor["Variante"] = _split_series.apply(lambda t: t[1])
+
+        # Vista agrupada: rubro -> producto base (expander) -> mini-tabla con
+        # variantes. UN solo Guardar al tope, captura todos los editors.
+        edited_por_base = {}  # base_name -> edited_df
+
         with st.form("form_conteo_fisico", clear_on_submit=False):
             guardar_conteo = st.form_submit_button(
                 "💾 Guardar Stock", type="primary", use_container_width=True,
             )
-            edited_real = st.data_editor(
-                df_editor,
-                use_container_width=True,
-                hide_index=True,
-                disabled=[
-                    "Código", "Producto",
-                    "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
-                ],
-                column_config={
-                    "Código": st.column_config.TextColumn("Código"),
-                    "Producto": st.column_config.TextColumn("Producto"),
-                    "Stock inicial": st.column_config.NumberColumn(
-                        "Stock inicial", format="%.2f"
-                    ),
-                    "+ Compras": st.column_config.NumberColumn(
-                        "+ Compras", format="%.2f"
-                    ),
-                    "− Pedidos": st.column_config.NumberColumn(
-                        "− Pedidos", format="%.2f"
-                    ),
-                    "= Teórico": st.column_config.NumberColumn(
-                        "= Teórico", format="%.2f"
-                    ),
-                    "Stock": st.column_config.TextColumn(
-                        "Stock",
-                        help="Cargá el stock real medido. Coma o punto. Vacío = 0.",
-                    ),
-                },
-                # Key incluye ts del calculo Y fecha_conteo. Asi:
-                # - Cada Actualizar resetea el editor
-                # - Cambiar fecha_conteo tambien resetea (carga el stock
-                #   guardado para la nueva fecha)
-                key=f"editor_real_{resultado.get('ts') or 'init'}_{fecha_conteo}",
-            )
+
+            for rubro_name, df_rubro in df_editor.groupby("Rubro", sort=True):
+                st.markdown(f"### 📁 {rubro_name}")
+                for base_name, df_base in df_rubro.groupby("Base", sort=True):
+                    n_var = len(df_base)
+                    label = f"📦 {base_name} ({n_var} variante{'s' if n_var != 1 else ''})"
+                    with st.expander(label, expanded=False):
+                        edited = st.data_editor(
+                            df_base[[
+                                "Código", "Variante",
+                                "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
+                                "Stock",
+                            ]].reset_index(drop=True),
+                            use_container_width=True,
+                            hide_index=True,
+                            disabled=[
+                                "Código", "Variante",
+                                "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
+                            ],
+                            column_config={
+                                "Código": st.column_config.TextColumn("Código"),
+                                "Variante": st.column_config.TextColumn("Variante"),
+                                "Stock inicial": st.column_config.NumberColumn(
+                                    "Stock inicial", format="%.2f"
+                                ),
+                                "+ Compras": st.column_config.NumberColumn(
+                                    "+ Compras", format="%.2f"
+                                ),
+                                "− Pedidos": st.column_config.NumberColumn(
+                                    "− Pedidos", format="%.2f"
+                                ),
+                                "= Teórico": st.column_config.NumberColumn(
+                                    "= Teórico", format="%.2f"
+                                ),
+                                "Stock": st.column_config.TextColumn(
+                                    "Stock",
+                                    help="Cargá el stock real. Coma o punto. Vacío = 0.",
+                                ),
+                            },
+                            key=f"editor_stock_{base_name}_{fecha_conteo}",
+                        )
+                        edited_por_base[base_name] = edited
 
         if guardar_conteo:
-            # Save simple: parsear la columna Stock y reemplazar el
-            # stock_historico para fecha_conteo.
+            # Save: recorrer TODOS los editors (uno por producto base) y
+            # juntar los valores de Stock en un solo dict {codigo: cantidad}.
             valores_stock = {}
-            for _, row in edited_real.iterrows():
-                cod = str(row["Código"])
-                v_str = str(row.get("Stock", "") or "").strip()
-                valores_stock[cod] = (
-                    _parse_num_es(v_str) if v_str else 0.0
-                )
+            for base_name, edited in edited_por_base.items():
+                for _, row in edited.iterrows():
+                    cod = str(row["Código"])
+                    v_str = str(row.get("Stock", "") or "").strip()
+                    valores_stock[cod] = (
+                        _parse_num_es(v_str) if v_str else 0.0
+                    )
 
             salida = productos[["codigo", "producto", "unidad_medida"]].copy()
             salida["cantidad"] = salida["codigo"].astype(str).map(
