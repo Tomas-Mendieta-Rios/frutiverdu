@@ -1864,22 +1864,60 @@ with tab_estimado:
     ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
 
 with tab_stock_teorico:
-    # MVP de stock teorico (single-day):
-    # Stock(F0) + Compras(Fc) - Pedidos(Fp)
-    # F0 = fecha del stock inicial (un dia)
-    # Fc = fecha de compras (un dia, filtra fecha_compra == Fc)
-    # Fp = fecha de pedidos (un dia, filtra fecha_entrega == Fp)
+    # Stock teorico (single-day): Stock(F0) + Compras(Fc) - Pedidos(Fp)
+    # Las fechas se persisten en gsheets config y el resultado vive en
+    # session_state (no se pierde al cambiar fechas, solo se recalcula
+    # cuando se aprieta el boton).
 
     fechas_stk_disp_t = db.fechas_stock()
-    # Default F0 = fecha mas reciente con stock cargado, sino hoy-7
-    f0_default = (
+    cfg_teorico = db.cargar_config()
+
+    def _default_or_saved(key_cfg, fallback):
+        v = cfg_teorico.get(key_cfg)
+        if v:
+            try:
+                return pd.to_datetime(v).date()
+            except Exception:
+                pass
+        return fallback
+
+    f0_fallback = (
         pd.to_datetime(fechas_stk_disp_t[0]).date()
         if fechas_stk_disp_t else date.today() - timedelta(days=7)
     )
 
+    f0_default = _default_or_saved("st_teorico_f0", f0_fallback)
+    fc_default = _default_or_saved("st_teorico_fc", date.today())
+    fp_default = _default_or_saved("st_teorico_fp", date.today())
+
+    # Callbacks: persisten fechas en gsheets para que sobrevivan entre sesiones
+    def _save_teorico_f0():
+        v = st.session_state.get("st_teorico_f0")
+        if v:
+            try:
+                db.guardar_config({"st_teorico_f0": str(v)})
+            except Exception:
+                pass
+
+    def _save_teorico_fc():
+        v = st.session_state.get("st_teorico_fc")
+        if v:
+            try:
+                db.guardar_config({"st_teorico_fc": str(v)})
+            except Exception:
+                pass
+
+    def _save_teorico_fp():
+        v = st.session_state.get("st_teorico_fp")
+        if v:
+            try:
+                db.guardar_config({"st_teorico_fp": str(v)})
+            except Exception:
+                pass
+
     st.caption(
         "Stock teórico de un día puntual = Stock inicial + Compras del día "
-        "+ menos − Pedidos entregados del día."
+        "− Pedidos entregados del día."
     )
 
     col_t1, col_t2, col_t3 = st.columns([1, 1, 1])
@@ -1890,23 +1928,28 @@ with tab_stock_teorico:
             key="st_teorico_f0",
             format="YYYY-MM-DD",
             help="Día con conteo físico cargado en Stock.",
+            on_change=_save_teorico_f0,
         )
     with col_t2:
         fc = st.date_input(
             "🛒 Fecha de compras",
-            value=date.today(),
+            value=fc_default,
             key="st_teorico_fc",
             format="YYYY-MM-DD",
             help="Día de la compra a sumar (filtra DUX por fecha_compra).",
+            on_change=_save_teorico_fc,
         )
     with col_t3:
         fp = st.date_input(
             "📋 Fecha de pedidos",
-            value=date.today(),
+            value=fp_default,
             key="st_teorico_fp",
             format="YYYY-MM-DD",
             help="Día de entrega del pedido a restar (filtra por fecha_entrega).",
+            on_change=_save_teorico_fp,
         )
+
+    TEO_RESULT_KEY = "_st_teorico_result"
 
     if st.button(
         "🧮 Calcular stock teórico",
@@ -1921,7 +1964,7 @@ with tab_stock_teorico:
             )
         else:
             with st.spinner("Calculando stock teórico..."):
-                # 1) Stock inicial (un dia)
+                # 1) Stock inicial
                 stk_ini_df = db.cargar_stock(fecha=f0)
                 map_stock_ini = {}
                 if not stk_ini_df.empty:
@@ -1932,7 +1975,7 @@ with tab_stock_teorico:
                         )
                     )
 
-                # 2) Compras DUX (un dia, fecha_desde == fecha_hasta == Fc)
+                # 2) Compras DUX (un dia)
                 map_compras = cargar_compras_dux_v2(fc, fc)
                 if map_compras is None:
                     st.error(
@@ -1941,7 +1984,7 @@ with tab_stock_teorico:
                     )
                     st.stop()
 
-                # 3) Pedidos entregados (un dia, fecha_entrega == Fp)
+                # 3) Pedidos entregados (un dia)
                 df_ped_agg = cargar_pedidos_dux_aggregated(
                     productos, dia_estimado=None, fecha_compra=[str(fp)]
                 )
@@ -1953,13 +1996,11 @@ with tab_stock_teorico:
                         if cod and ctd > 0:
                             map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
 
-                # 4) Combinar: codigos que aparezcan en alguno
                 codigos_set = (
                     set(map_stock_ini.keys())
                     | set(map_compras.keys())
                     | set(map_pedidos.keys())
                 )
-
                 prod_map = {
                     str(c): (str(p), str(u))
                     for c, p, u in zip(
@@ -1988,49 +2029,66 @@ with tab_stock_teorico:
                         "= Teórico": t,
                     })
 
-                if not rows:
-                    st.info("No hay movimientos en las fechas seleccionadas.")
-                else:
-                    df_teorico = (
-                        pd.DataFrame(rows).sort_values("Producto").reset_index(drop=True)
-                    )
+                # Guardar resultado en session_state para que sobreviva
+                # los reruns provocados por cambiar fechas.
+                st.session_state[TEO_RESULT_KEY] = {
+                    "rows": rows,
+                    "f0": f0,
+                    "fc": fc,
+                    "fp": fp,
+                    "n_compras": len(map_compras),
+                    "n_pedidos": len(map_pedidos),
+                }
 
-                    st.success(
-                        f"✅ {len(df_teorico)} productos con movimientos. "
-                        f"Compras del {fc}: {len(map_compras)} códigos. "
-                        f"Pedidos entregados el {fp}: {len(map_pedidos)} códigos."
-                    )
+    # Render del resultado (si hay) — vive afuera del if del boton para
+    # que se siga viendo aunque el usuario cambie las fechas.
+    resultado = st.session_state.get(TEO_RESULT_KEY)
+    if resultado:
+        rows_r = resultado["rows"]
+        if not rows_r:
+            st.info("No hay movimientos en las fechas seleccionadas.")
+        else:
+            df_teorico_r = (
+                pd.DataFrame(rows_r).sort_values("Producto").reset_index(drop=True)
+            )
 
-                    def _color_teorico(v):
-                        try:
-                            n = float(v)
-                        except (ValueError, TypeError):
-                            return ""
-                        if n < -0.001:
-                            return "color: #d11; font-weight: bold"
-                        if n > 0.001:
-                            return "color: #1a8a1a; font-weight: bold"
-                        return ""
+            st.success(
+                f"✅ {len(df_teorico_r)} productos con movimientos. "
+                f"Compras del {resultado['fc']}: {resultado['n_compras']} códigos. "
+                f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
+            )
 
-                    styled_teo = (
-                        df_teorico.style
-                        .format({
-                            "Stock inicial": "{:,.2f}",
-                            "+ Compras": "{:,.2f}",
-                            "− Pedidos": "{:,.2f}",
-                            "= Teórico": "{:,.2f}",
-                        })
-                        .map(_color_teorico, subset=["= Teórico"])
-                    )
-                    st.dataframe(
-                        styled_teo,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+            def _color_teorico(v):
+                try:
+                    n = float(v)
+                except (ValueError, TypeError):
+                    return ""
+                if n < -0.001:
+                    return "color: #d11; font-weight: bold"
+                if n > 0.001:
+                    return "color: #1a8a1a; font-weight: bold"
+                return ""
 
-                    st.caption(
-                        f"Fórmula: Stock({f0}) + Compras({fc}) − Pedidos({fp}) = Teórico"
-                    )
+            styled_teo = (
+                df_teorico_r.style
+                .format({
+                    "Stock inicial": "{:,.2f}",
+                    "+ Compras": "{:,.2f}",
+                    "− Pedidos": "{:,.2f}",
+                    "= Teórico": "{:,.2f}",
+                })
+                .map(_color_teorico, subset=["= Teórico"])
+            )
+            st.dataframe(
+                styled_teo,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.caption(
+                f"Fórmula: Stock({resultado['f0']}) + Compras({resultado['fc']}) "
+                f"− Pedidos({resultado['fp']}) = Teórico"
+            )
 
 with tab_dux:
     dux_cfg = st.secrets.get("dux", {})
