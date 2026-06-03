@@ -120,6 +120,73 @@ def obtener_ultimo_comprobante_dux():
         return None
     return max(comprobantes)
 
+
+def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
+    """Lee las compras de DUX en un rango y devuelve dict {cod_item: cantidad_recepcionada_total}.
+    Usa el endpoint v2/compras con incluir_detalle=true, pagina automaticamente.
+    Si la API falla, devuelve None (para distinguir de '0 compras')."""
+    dux_cfg = st.secrets.get("dux", {})
+    token = dux_cfg.get("token", "")
+    base_url = dux_cfg.get(
+        "base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services"
+    )
+    id_empresa = int(dux_cfg.get("id_empresa", 4245))
+
+    if not token:
+        return None
+
+    headers = {
+        "accept": "application/json",
+        "authorization": f"Bearer {token}",
+    }
+    url = f"{base_url}/v2/compras"
+
+    cantidades = {}
+    offset = 0
+    page_size = 50
+    max_pages = 50  # tope: 2500 compras absurdo en cualquier rango razonable
+
+    for _ in range(max_pages):
+        params = {
+            "id_empresa": id_empresa,
+            "fecha_desde": pd.to_datetime(fecha_desde).strftime("%Y-%m-%d"),
+            "fecha_hasta": pd.to_datetime(fecha_hasta).strftime("%Y-%m-%d"),
+            "incluir_detalle": "true",
+            "limit": page_size,
+            "offset": offset,
+        }
+        try:
+            r = requests.get(url, params=params, headers=headers, timeout=20)
+            if r.status_code != 200:
+                break
+            d = r.json()
+        except Exception:
+            break
+
+        datos = d.get("datos", []) or []
+        if not datos:
+            break
+
+        for compra in datos:
+            for item in (compra.get("items", []) or []):
+                cod = str(item.get("cod_item", "") or "").strip()
+                if not cod:
+                    continue
+                try:
+                    ctd = float(item.get("ctd_recepcionada", 0) or 0)
+                except (ValueError, TypeError):
+                    continue
+                cantidades[cod] = cantidades.get(cod, 0.0) + ctd
+
+        paging = d.get("paginacion", {}) or {}
+        if not paging.get("hay_mas"):
+            break
+        offset += page_size
+        time.sleep(2)  # respetar rate limit DUX entre paginas
+
+    return cantidades
+
+
 # Dias de la semana (en castellano, sin acentos). Definicion unica reusada
 # en Estimado y Total a comprar.
 DIAS_SEMANA = db.DIAS_SEMANA
@@ -938,7 +1005,9 @@ with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
 
 with tab_grupo_diario:
-    tab_stock, tab_estimado = st.tabs(["Stock", "Estimado"])
+    tab_stock, tab_estimado, tab_stock_teorico = st.tabs(
+        ["Stock", "Estimado", "📊 Stock teórico"]
+    )
 
 with tab_grupo_analitica:
     (
@@ -1793,6 +1862,195 @@ with tab_estimado:
     # Refrescar timestamp despues del posible save (placeholder esta arriba)
     ts_est_ultimo = db.ultima_carga("estimado_semanal")
     ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
+
+with tab_stock_teorico:
+    # MVP de stock teorico:
+    # stock(F0) + compras_recepcionadas(F0+1..Fc) - pedidos_entregados(F0+1..Fp)
+    # F0  = fecha del ultimo conteo fisico (= fecha del stock inicial)
+    # Fc  = hasta cuando considerar compras (default hoy)
+    # Fp  = hasta cuando considerar pedidos (default hoy)
+
+    fechas_stk_disp_t = db.fechas_stock()
+    # Default F0 = fecha mas reciente con stock cargado, sino hoy
+    f0_default = (
+        pd.to_datetime(fechas_stk_disp_t[0]).date()
+        if fechas_stk_disp_t else date.today() - timedelta(days=7)
+    )
+
+    st.caption(
+        "Calculá el stock estimado al día. Toma stock inicial (de un conteo "
+        "físico) + compras recepcionadas en DUX − pedidos entregados (Wix y DUX)."
+    )
+
+    col_t1, col_t2, col_t3 = st.columns([1, 1, 1])
+    with col_t1:
+        f0 = st.date_input(
+            "📦 Fecha del stock inicial",
+            value=f0_default,
+            key="st_teorico_f0",
+            format="YYYY-MM-DD",
+            help="La fecha del último conteo físico de stock. "
+                 "Debe existir Stock guardado para esa fecha.",
+        )
+    with col_t2:
+        fc = st.date_input(
+            "🛒 Hasta fecha compras",
+            value=date.today(),
+            key="st_teorico_fc",
+            format="YYYY-MM-DD",
+            help="Hasta qué fecha considerar las compras recepcionadas.",
+        )
+    with col_t3:
+        fp = st.date_input(
+            "📋 Hasta fecha pedidos",
+            value=date.today(),
+            key="st_teorico_fp",
+            format="YYYY-MM-DD",
+            help="Hasta qué fecha considerar los pedidos entregados.",
+        )
+
+    if st.button(
+        "🧮 Calcular stock teórico",
+        type="primary",
+        key="btn_calc_teorico",
+        use_container_width=True,
+    ):
+        # Validaciones basicas
+        if str(f0) not in (fechas_stk_disp_t or []):
+            st.error(
+                f"⚠️ No hay Stock guardado para la fecha {f0}. "
+                "Elegí una fecha que tenga conteo físico cargado."
+            )
+        else:
+            with st.spinner("Calculando stock teórico..."):
+                # 1) Stock inicial
+                stk_ini_df = db.cargar_stock(fecha=f0)
+                map_stock_ini = {}
+                if not stk_ini_df.empty:
+                    map_stock_ini = dict(
+                        zip(
+                            stk_ini_df["codigo"].astype(str),
+                            stk_ini_df["cantidad"].astype(float),
+                        )
+                    )
+
+                # 2) Compras DUX (con items) desde F0+1 hasta Fc
+                fecha_compras_desde = f0 + timedelta(days=1)
+                if fecha_compras_desde > fc:
+                    map_compras = {}
+                else:
+                    map_compras = cargar_compras_dux_v2(fecha_compras_desde, fc)
+
+                if map_compras is None:
+                    st.error(
+                        "⚠️ No se pudieron leer las compras de DUX. "
+                        "Probá recargar en un momento."
+                    )
+                    st.stop()
+
+                # 3) Pedidos entregados (Wix + DUX) desde F0+1 hasta Fp
+                fechas_pedidos = []
+                cur = f0 + timedelta(days=1)
+                while cur <= fp:
+                    fechas_pedidos.append(str(cur))
+                    cur += timedelta(days=1)
+
+                if fechas_pedidos:
+                    df_ped_agg = cargar_pedidos_dux_aggregated(
+                        productos, dia_estimado=None, fecha_compra=fechas_pedidos
+                    )
+                    map_pedidos = {}
+                    if not df_ped_agg.empty:
+                        for _, r in df_ped_agg.iterrows():
+                            cod = str(r.get("codigo", ""))
+                            ctd = float(r.get("cantidad", 0) or 0)
+                            if cod and ctd > 0:
+                                map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
+                else:
+                    map_pedidos = {}
+
+                # 4) Combinar: para cada codigo que aparezca en alguno de los tres
+                codigos_set = (
+                    set(map_stock_ini.keys())
+                    | set(map_compras.keys())
+                    | set(map_pedidos.keys())
+                )
+
+                # Mapeo codigo -> nombre / unidad desde el catalogo
+                prod_map = {
+                    str(c): (str(p), str(u))
+                    for c, p, u in zip(
+                        productos["codigo"],
+                        productos["producto"],
+                        productos["unidad_medida"],
+                    )
+                }
+
+                rows = []
+                for cod in codigos_set:
+                    nombre, unidad = prod_map.get(cod, ("(desconocido)", ""))
+                    s = float(map_stock_ini.get(cod, 0.0))
+                    c = float(map_compras.get(cod, 0.0))
+                    p = float(map_pedidos.get(cod, 0.0))
+                    t = s + c - p
+                    # Solo filas con algun movimiento
+                    if abs(s) < 1e-6 and abs(c) < 1e-6 and abs(p) < 1e-6:
+                        continue
+                    rows.append({
+                        "Código": cod,
+                        "Producto": nombre,
+                        "Unidad": unidad,
+                        "Stock inicial": s,
+                        "+ Compras": c,
+                        "− Pedidos": p,
+                        "= Teórico": t,
+                    })
+
+                if not rows:
+                    st.info("No hay movimientos en el rango seleccionado.")
+                else:
+                    df_teorico = (
+                        pd.DataFrame(rows).sort_values("Producto").reset_index(drop=True)
+                    )
+
+                    # Resumen arriba
+                    st.success(
+                        f"✅ {len(df_teorico)} productos con movimientos. "
+                        f"Compras: {len(map_compras)} códigos, "
+                        f"Pedidos: {len(map_pedidos)} códigos."
+                    )
+
+                    def _color_teorico(v):
+                        try:
+                            n = float(v)
+                        except (ValueError, TypeError):
+                            return ""
+                        if n < -0.001:
+                            return "color: #d11; font-weight: bold"
+                        if n > 0.001:
+                            return "color: #1a8a1a; font-weight: bold"
+                        return ""
+
+                    styled_teo = (
+                        df_teorico.style
+                        .format({
+                            "Stock inicial": "{:,.2f}",
+                            "+ Compras": "{:,.2f}",
+                            "− Pedidos": "{:,.2f}",
+                            "= Teórico": "{:,.2f}",
+                        })
+                        .map(_color_teorico, subset=["= Teórico"])
+                    )
+                    st.dataframe(
+                        styled_teo,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    st.caption(
+                        f"Fórmula: Stock({f0}) + Compras({fecha_compras_desde}→{fc}) "
+                        f"− Pedidos({fecha_compras_desde}→{fp}) = Teórico"
+                    )
 
 with tab_dux:
     dux_cfg = st.secrets.get("dux", {})
