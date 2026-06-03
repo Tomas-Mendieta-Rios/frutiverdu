@@ -1864,22 +1864,22 @@ with tab_estimado:
     ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
 
 with tab_stock_teorico:
-    # MVP de stock teorico:
-    # stock(F0) + compras_recepcionadas(F0+1..Fc) - pedidos_entregados(F0+1..Fp)
-    # F0  = fecha del ultimo conteo fisico (= fecha del stock inicial)
-    # Fc  = hasta cuando considerar compras (default hoy)
-    # Fp  = hasta cuando considerar pedidos (default hoy)
+    # MVP de stock teorico (single-day):
+    # Stock(F0) + Compras(Fc) - Pedidos(Fp)
+    # F0 = fecha del stock inicial (un dia)
+    # Fc = fecha de compras (un dia, filtra fecha_compra == Fc)
+    # Fp = fecha de pedidos (un dia, filtra fecha_entrega == Fp)
 
     fechas_stk_disp_t = db.fechas_stock()
-    # Default F0 = fecha mas reciente con stock cargado, sino hoy
+    # Default F0 = fecha mas reciente con stock cargado, sino hoy-7
     f0_default = (
         pd.to_datetime(fechas_stk_disp_t[0]).date()
         if fechas_stk_disp_t else date.today() - timedelta(days=7)
     )
 
     st.caption(
-        "Calculá el stock estimado al día. Toma stock inicial (de un conteo "
-        "físico) + compras recepcionadas en DUX − pedidos entregados (Wix y DUX)."
+        "Stock teórico de un día puntual = Stock inicial + Compras del día "
+        "+ menos − Pedidos entregados del día."
     )
 
     col_t1, col_t2, col_t3 = st.columns([1, 1, 1])
@@ -1889,24 +1889,23 @@ with tab_stock_teorico:
             value=f0_default,
             key="st_teorico_f0",
             format="YYYY-MM-DD",
-            help="La fecha del último conteo físico de stock. "
-                 "Debe existir Stock guardado para esa fecha.",
+            help="Día con conteo físico cargado en Stock.",
         )
     with col_t2:
         fc = st.date_input(
-            "🛒 Hasta fecha compras",
+            "🛒 Fecha de compras",
             value=date.today(),
             key="st_teorico_fc",
             format="YYYY-MM-DD",
-            help="Hasta qué fecha considerar las compras recepcionadas.",
+            help="Día de la compra a sumar (filtra DUX por fecha_compra).",
         )
     with col_t3:
         fp = st.date_input(
-            "📋 Hasta fecha pedidos",
+            "📋 Fecha de pedidos",
             value=date.today(),
             key="st_teorico_fp",
             format="YYYY-MM-DD",
-            help="Hasta qué fecha considerar los pedidos entregados.",
+            help="Día de entrega del pedido a restar (filtra por fecha_entrega).",
         )
 
     if st.button(
@@ -1915,7 +1914,6 @@ with tab_stock_teorico:
         key="btn_calc_teorico",
         use_container_width=True,
     ):
-        # Validaciones basicas
         if str(f0) not in (fechas_stk_disp_t or []):
             st.error(
                 f"⚠️ No hay Stock guardado para la fecha {f0}. "
@@ -1923,7 +1921,7 @@ with tab_stock_teorico:
             )
         else:
             with st.spinner("Calculando stock teórico..."):
-                # 1) Stock inicial
+                # 1) Stock inicial (un dia)
                 stk_ini_df = db.cargar_stock(fecha=f0)
                 map_stock_ini = {}
                 if not stk_ini_df.empty:
@@ -1934,13 +1932,8 @@ with tab_stock_teorico:
                         )
                     )
 
-                # 2) Compras DUX (con items) desde F0+1 hasta Fc
-                fecha_compras_desde = f0 + timedelta(days=1)
-                if fecha_compras_desde > fc:
-                    map_compras = {}
-                else:
-                    map_compras = cargar_compras_dux_v2(fecha_compras_desde, fc)
-
+                # 2) Compras DUX (un dia, fecha_desde == fecha_hasta == Fc)
+                map_compras = cargar_compras_dux_v2(fc, fc)
                 if map_compras is None:
                     st.error(
                         "⚠️ No se pudieron leer las compras de DUX. "
@@ -1948,35 +1941,25 @@ with tab_stock_teorico:
                     )
                     st.stop()
 
-                # 3) Pedidos entregados (Wix + DUX) desde F0+1 hasta Fp
-                fechas_pedidos = []
-                cur = f0 + timedelta(days=1)
-                while cur <= fp:
-                    fechas_pedidos.append(str(cur))
-                    cur += timedelta(days=1)
+                # 3) Pedidos entregados (un dia, fecha_entrega == Fp)
+                df_ped_agg = cargar_pedidos_dux_aggregated(
+                    productos, dia_estimado=None, fecha_compra=[str(fp)]
+                )
+                map_pedidos = {}
+                if not df_ped_agg.empty:
+                    for _, r in df_ped_agg.iterrows():
+                        cod = str(r.get("codigo", ""))
+                        ctd = float(r.get("cantidad", 0) or 0)
+                        if cod and ctd > 0:
+                            map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
 
-                if fechas_pedidos:
-                    df_ped_agg = cargar_pedidos_dux_aggregated(
-                        productos, dia_estimado=None, fecha_compra=fechas_pedidos
-                    )
-                    map_pedidos = {}
-                    if not df_ped_agg.empty:
-                        for _, r in df_ped_agg.iterrows():
-                            cod = str(r.get("codigo", ""))
-                            ctd = float(r.get("cantidad", 0) or 0)
-                            if cod and ctd > 0:
-                                map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
-                else:
-                    map_pedidos = {}
-
-                # 4) Combinar: para cada codigo que aparezca en alguno de los tres
+                # 4) Combinar: codigos que aparezcan en alguno
                 codigos_set = (
                     set(map_stock_ini.keys())
                     | set(map_compras.keys())
                     | set(map_pedidos.keys())
                 )
 
-                # Mapeo codigo -> nombre / unidad desde el catalogo
                 prod_map = {
                     str(c): (str(p), str(u))
                     for c, p, u in zip(
@@ -1993,7 +1976,6 @@ with tab_stock_teorico:
                     c = float(map_compras.get(cod, 0.0))
                     p = float(map_pedidos.get(cod, 0.0))
                     t = s + c - p
-                    # Solo filas con algun movimiento
                     if abs(s) < 1e-6 and abs(c) < 1e-6 and abs(p) < 1e-6:
                         continue
                     rows.append({
@@ -2007,17 +1989,16 @@ with tab_stock_teorico:
                     })
 
                 if not rows:
-                    st.info("No hay movimientos en el rango seleccionado.")
+                    st.info("No hay movimientos en las fechas seleccionadas.")
                 else:
                     df_teorico = (
                         pd.DataFrame(rows).sort_values("Producto").reset_index(drop=True)
                     )
 
-                    # Resumen arriba
                     st.success(
                         f"✅ {len(df_teorico)} productos con movimientos. "
-                        f"Compras: {len(map_compras)} códigos, "
-                        f"Pedidos: {len(map_pedidos)} códigos."
+                        f"Compras del {fc}: {len(map_compras)} códigos. "
+                        f"Pedidos entregados el {fp}: {len(map_pedidos)} códigos."
                     )
 
                     def _color_teorico(v):
@@ -2048,8 +2029,7 @@ with tab_stock_teorico:
                     )
 
                     st.caption(
-                        f"Fórmula: Stock({f0}) + Compras({fecha_compras_desde}→{fc}) "
-                        f"− Pedidos({fecha_compras_desde}→{fp}) = Teórico"
+                        f"Fórmula: Stock({f0}) + Compras({fc}) − Pedidos({fp}) = Teórico"
                     )
 
 with tab_dux:
