@@ -1890,6 +1890,9 @@ with tab_stock_teorico:
     f0_default = _default_or_saved("st_teorico_ultimo_f0", f0_fallback)
     fc_default = _default_or_saved("st_teorico_ultimo_fc", date.today())
     fp_default = _default_or_saved("st_teorico_ultimo_fp", date.today())
+    # fecha_conteo se persiste al apretar 'Guardar Stock', defaults a la
+    # ultima guardada o a hoy si nunca se guardo.
+    fecha_conteo_default = _default_or_saved("st_teorico_fecha_conteo", date.today())
 
     # Sin on_change: cambiar fechas no escribe nada. Las fechas se persisten
     # solo cuando se aprieta Calcular (junto con el resultado).
@@ -1931,7 +1934,7 @@ with tab_stock_teorico:
         with col_t4:
             fecha_conteo = st.date_input(
                 "📅 Conteo",
-                value=date.today(),
+                value=fecha_conteo_default,
                 key="fecha_conteo_real",
                 format="YYYY-MM-DD",
                 help="Día con el que se guardará el Stock al apretar Guardar.",
@@ -2076,21 +2079,19 @@ with tab_stock_teorico:
             st.info("No hay movimientos en las fechas seleccionadas.")
             return
 
-        df_teorico_r = pd.DataFrame(rows_r).reset_index(drop=True)
+        # Sort fijo alfabetico A-Z por Producto.
+        df_teorico_r = (
+            pd.DataFrame(rows_r)
+            .sort_values("Producto", ascending=True)
+            .reset_index(drop=True)
+        )
 
-        # Sort: primero productos con movimientos, despues por nombre.
         def _tiene_mov(row):
             return (
                 abs(float(row.get("Stock inicial", 0))) > 1e-6
                 or abs(float(row.get("+ Compras", 0))) > 1e-6
                 or abs(float(row.get("− Pedidos", 0))) > 1e-6
             )
-        df_teorico_r = df_teorico_r.assign(
-            _mov=df_teorico_r.apply(_tiene_mov, axis=1).astype(int)
-        ).sort_values(
-            ["_mov", "Producto"], ascending=[False, True]
-        ).drop(columns=["_mov"]).reset_index(drop=True)
-
         n_con_mov = sum(1 for _, r in df_teorico_r.iterrows() if _tiene_mov(r))
         st.success(
             f"✅ {n_con_mov} productos con movimientos · "
@@ -2179,6 +2180,14 @@ with tab_stock_teorico:
 
             try:
                 db.guardar_stock(salida, fecha_conteo)
+                # Persistir fecha_conteo para que aparezca como default
+                # la proxima vez que se abra la app.
+                try:
+                    db.guardar_config(
+                        {"st_teorico_fecha_conteo": str(fecha_conteo)}
+                    )
+                except Exception:
+                    pass
                 st.success(f"✅ Stock del {fecha_conteo} guardado en Sheets.")
             except Exception as e:
                 st.error(f"⚠️ Error al guardar: {e}")
