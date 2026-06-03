@@ -1746,12 +1746,13 @@ with tab_stock:
     # session_state (no se pierde al cambiar fechas, solo se recalcula
     # cuando se aprieta el boton).
 
-    # Placeholder para "🕒 Ultima actualizacion". Se rellena ahora y se
-    # actualiza despues de cada Guardar (desde adentro del fragment).
+    # Placeholders: dos timestamps arriba (guardado + ultimo calculo).
+    # Se actualizan desde adentro del fragment cuando corresponde.
     ts_stk_save_ph = st.empty()
     ts_stk_save_ph.caption(
-        f"🕒 Última actualización: **{db.ultima_carga('stock') or '?'}**"
+        f"🕒 Último guardado de stock: **{db.ultima_carga('stock') or '?'}**"
     )
+    ts_stk_calc_ph = st.empty()
 
     fechas_stk_disp_t = db.fechas_stock()
     cfg_teorico = db.cargar_config()
@@ -1997,6 +1998,9 @@ with tab_stock:
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
+            guardar_conteo = st.form_submit_button(
+                "💾 Guardar Stock", type="primary", use_container_width=True,
+            )
             edited_real = st.data_editor(
                 df_editor,
                 use_container_width=True,
@@ -2031,9 +2035,6 @@ with tab_stock:
                 #   guardado para la nueva fecha)
                 key=f"editor_real_{resultado.get('ts') or 'init'}_{fecha_conteo}",
             )
-            guardar_conteo = st.form_submit_button(
-                "💾 Guardar Stock", type="primary"
-            )
 
         if guardar_conteo:
             # Save simple: parsear la columna Stock y reemplazar el
@@ -2061,11 +2062,10 @@ with tab_stock:
                     )
                 except Exception:
                     pass
-                # Actualizar el caption de "Ultima actualizacion" arriba
-                # (placeholder esta en outer scope, accesible por closure)
+                # Actualizar el caption arriba (placeholder en outer scope)
                 try:
                     ts_stk_save_ph.caption(
-                        f"🕒 Última actualización: **{db.ultima_carga('stock') or '?'}**"
+                        f"🕒 Último guardado de stock: **{db.ultima_carga('stock') or '?'}**"
                     )
                 except Exception:
                     pass
@@ -2073,14 +2073,13 @@ with tab_stock:
             except Exception as e:
                 st.error(f"⚠️ Error al guardar: {e}")
 
-        ts_txt = (
-            f" · 🕒 calculado {resultado.get('ts')}"
-            if resultado.get("ts") else ""
-        )
-        st.caption(
-            f"Fórmula: Stock({resultado['f0']}) + Compras({resultado['fc']}) "
-            f"− Pedidos({resultado['fp']}) = Teórico{ts_txt}"
-        )
+        # Actualizar el caption "Ultimo calculo" arriba (placeholder en outer)
+        try:
+            ts_stk_calc_ph.caption(
+                f"🕒 Último cálculo: **{resultado.get('ts') or '?'}**"
+            )
+        except Exception:
+            pass
 
     _fragment_stock_teorico()
 
