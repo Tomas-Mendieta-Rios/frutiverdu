@@ -2186,49 +2186,22 @@ with tab_dux:
                 all_orders_saved, key=_fecha_dux, reverse=True
             )
 
-            # Filtro de vista (no afecta gsheets, solo lo que se renderea)
-            n_total_dux = len(all_orders_saved)
-            n_pendientes_dux = sum(
-                1 for o in all_orders_saved
-                if not selecciones_dux.get(
-                    str(o.get("id") or o.get("nro_pedido") or "")
-                )
-            )
-            vista_dux = st.radio(
-                "Vista:",
-                options=["Solo pendientes", "Últimos 7 días", "Todos"],
-                index=0,
-                horizontal=True,
-                key="radio_vista_dux",
-                captions=[
-                    f"{n_pendientes_dux} sin fecha",
-                    "creados últimos 7 días",
-                    f"{n_total_dux} en total",
-                ],
-            )
-
-            if vista_dux == "Solo pendientes":
-                all_orders_sorted = [
-                    o for o in all_orders_sorted
-                    if not selecciones_dux.get(
-                        str(o.get("id") or o.get("nro_pedido") or "")
-                    )
-                ]
-            elif vista_dux == "Últimos 7 días":
-                hace_7 = pd.Timestamp(date.today() - timedelta(days=7))
-                all_orders_sorted = [
-                    o for o in all_orders_sorted
-                    if _fecha_dux(o) >= hace_7
-                ]
-            # "Todos" no filtra
+            # Solo mostrar pedidos creados en los ultimos 7 dias.
+            # Los viejos quedan en gsheets pero no se renderean aca
+            # (stock teorico los sigue usando).
+            hace_7 = pd.Timestamp(date.today() - timedelta(days=7))
+            all_orders_sorted = [
+                o for o in all_orders_sorted
+                if _fecha_dux(o) >= hace_7
+            ]
 
             st.caption(
-                f"Mostrando {len(all_orders_sorted)} pedidos · "
+                f"Mostrando {len(all_orders_sorted)} pedidos de los últimos 7 días · "
                 f"{n_asignados} con entrega asignada en total."
             )
 
             if not all_orders_sorted:
-                st.info("No hay pedidos en esta vista.")
+                st.info("No hay pedidos en los últimos 7 días.")
 
             with st.form(key="form_dux_seleccion", clear_on_submit=False):
                 guardar_sel_dux = st.form_submit_button(
@@ -2646,45 +2619,20 @@ with tab_wix:
                 orders_saved, key=_fecha_wix, reverse=True
             )
 
-            # Filtro de vista (no afecta gsheets, solo lo que se renderea)
-            n_total_wix = len(orders_saved)
-            n_pendientes_wix = sum(
-                1 for o in orders_saved
-                if not selecciones.get(str(o.get("id") or ""))
-            )
-            vista_wix = st.radio(
-                "Vista:",
-                options=["Solo pendientes", "Últimos 7 días", "Todos"],
-                index=0,
-                horizontal=True,
-                key="radio_vista_wix",
-                captions=[
-                    f"{n_pendientes_wix} sin fecha",
-                    "creados últimos 7 días",
-                    f"{n_total_wix} en total",
-                ],
-            )
-
-            if vista_wix == "Solo pendientes":
-                orders_saved_sorted = [
-                    o for o in orders_saved_sorted
-                    if not selecciones.get(str(o.get("id") or ""))
-                ]
-            elif vista_wix == "Últimos 7 días":
-                hace_7_wix = pd.Timestamp(date.today() - timedelta(days=7))
-                orders_saved_sorted = [
-                    o for o in orders_saved_sorted
-                    if _fecha_wix(o) >= hace_7_wix
-                ]
-            # "Todos" no filtra
+            # Solo mostrar pedidos creados en los ultimos 7 dias.
+            hace_7_wix = pd.Timestamp(date.today() - timedelta(days=7))
+            orders_saved_sorted = [
+                o for o in orders_saved_sorted
+                if _fecha_wix(o) >= hace_7_wix
+            ]
 
             st.caption(
-                f"Mostrando {len(orders_saved_sorted)} pedidos · "
+                f"Mostrando {len(orders_saved_sorted)} pedidos de los últimos 7 días · "
                 f"{len(selecciones)} con entrega asignada en total."
             )
 
             if not orders_saved_sorted:
-                st.info("No hay pedidos en esta vista.")
+                st.info("No hay pedidos en los últimos 7 días.")
 
             with st.form(key="form_wix_seleccion", clear_on_submit=False):
                 guardar_sel = st.form_submit_button(
