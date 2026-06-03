@@ -2039,32 +2039,14 @@ with tab_stock_teorico:
                     except Exception:
                         ts_calc = None
 
-                    # Pre-rellenar columna Real con el Stock guardado para
-                    # fecha_conteo (si existe). Asi al apretar Actualizar
-                    # Carlos ya ve el conteo de esa fecha y puede ajustarlo.
-                    stk_conteo_df = db.cargar_stock(fecha=fecha_conteo)
-                    map_stk_conteo = (
-                        dict(zip(
-                            stk_conteo_df["codigo"].astype(str),
-                            stk_conteo_df["cantidad"].astype(float),
-                        )) if not stk_conteo_df.empty else {}
-                    )
-                    real_prefill = {
-                        cod: (_fmt_num_es(map_stk_conteo[cod])
-                              if cod in map_stk_conteo else "")
-                        for cod in (r["Código"] for r in rows)
-                    }
-
                     st.session_state[TEO_RESULT_KEY] = {
                         "rows": rows,
                         "f0": f0,
                         "fc": fc,
                         "fp": fp,
-                        "fecha_conteo": fecha_conteo,
                         "ts": ts_calc,
                         "n_compras": len(map_compras),
                         "n_pedidos": len(map_pedidos),
-                        "real_prefill": real_prefill,
                     }
 
         # Render del resultado (si hay).
@@ -2100,16 +2082,13 @@ with tab_stock_teorico:
             f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
         )
 
-        # Pre-rellenar Real con lo que se cargo en el ultimo Actualizar.
-        real_prefill_map = resultado.get("real_prefill", {}) or {}
+        # Real siempre arranca vacio. El teorico es ayuda visual.
         df_editor = df_teorico_r.copy()
-        df_editor["Real"] = df_editor["Código"].astype(str).map(
-            lambda c: real_prefill_map.get(c, "")
-        )
+        df_editor["Real"] = ""
 
         st.caption(
-            "💡 Vacío en Real = se guarda el Teórico. "
-            "Si la fecha del conteo ya tenía Stock cargado, se reemplaza."
+            "💡 Vacío en Real = preserva el stock que ya estaba guardado para esa fecha (no toca). "
+            "Tipeá un número para reemplazarlo. '0' = cero real."
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
@@ -2151,15 +2130,15 @@ with tab_stock_teorico:
             )
 
         if guardar_conteo:
+            # Solo los productos con Real tipeada se actualizan.
+            # Los demas: preservan su valor del stock actual de fecha_conteo
+            # (no se pisan).
             nuevos_valores = {}
             for _, row in edited_real.iterrows():
                 cod = str(row["Código"])
                 real_str = str(row.get("Real", "") or "").strip()
-                teo_val = float(row.get("= Teórico", 0) or 0)
                 if real_str:
                     nuevos_valores[cod] = _parse_num_es(real_str)
-                else:
-                    nuevos_valores[cod] = teo_val
 
             stock_actual_conteo = db.cargar_stock(fecha=fecha_conteo)
             map_stk_actual = (
@@ -2169,6 +2148,10 @@ with tab_stock_teorico:
                 )) if not stock_actual_conteo.empty else {}
             )
 
+            # Para cada producto del catalogo:
+            # 1) si esta en nuevos_valores -> usar ese
+            # 2) sino, preservar el valor existente para fecha_conteo
+            # 3) sino, 0
             salida = productos[["codigo", "producto", "unidad_medida"]].copy()
             salida["cantidad"] = salida["codigo"].astype(str).map(
                 lambda c: nuevos_valores.get(c, map_stk_actual.get(c, 0.0))
@@ -2177,8 +2160,9 @@ with tab_stock_teorico:
             try:
                 db.guardar_stock(salida, fecha_conteo)
                 st.success(
-                    f"✅ Stock del {fecha_conteo} guardado en Sheets "
-                    f"({len(nuevos_valores)} productos)."
+                    f"✅ Stock del {fecha_conteo} guardado "
+                    f"({len(nuevos_valores)} productos cargados de nuevo, "
+                    f"el resto preservado)."
                 )
             except Exception as e:
                 st.error(f"⚠️ Error al guardar: {e}")
