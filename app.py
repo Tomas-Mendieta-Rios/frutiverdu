@@ -1899,38 +1899,47 @@ with tab_stock_teorico:
         "− Pedidos entregados del día."
     )
 
-    col_t1, col_t2, col_t3, col_t4 = st.columns([1, 1, 1, 1])
-    with col_t1:
-        f0 = st.date_input(
-            "📦 Stock inicial",
-            value=f0_default,
-            key="st_teorico_f0",
-            format="YYYY-MM-DD",
-            help="Día con conteo físico cargado en Stock.",
-        )
-    with col_t2:
-        fc = st.date_input(
-            "🛒 Compras",
-            value=fc_default,
-            key="st_teorico_fc",
-            format="YYYY-MM-DD",
-            help="Día de la compra a sumar.",
-        )
-    with col_t3:
-        fp = st.date_input(
-            "📋 Pedidos",
-            value=fp_default,
-            key="st_teorico_fp",
-            format="YYYY-MM-DD",
-            help="Día de entrega del pedido a restar.",
-        )
-    with col_t4:
-        fecha_conteo = st.date_input(
-            "📅 Conteo",
-            value=date.today(),
-            key="fecha_conteo_real",
-            format="YYYY-MM-DD",
-            help="Día con el que se guardará el Stock al apretar Guardar.",
+    # Las 4 fechas + boton Actualizar van adentro de un st.form.
+    # Asi cambiar fechas NO dispara rerun (sin spinner). Solo el submit
+    # del form (Actualizar) re-ejecuta el calculo.
+    with st.form("form_params_teorico", border=False):
+        col_t1, col_t2, col_t3, col_t4 = st.columns([1, 1, 1, 1])
+        with col_t1:
+            f0 = st.date_input(
+                "📦 Stock inicial",
+                value=f0_default,
+                key="st_teorico_f0",
+                format="YYYY-MM-DD",
+                help="Día con conteo físico cargado en Stock.",
+            )
+        with col_t2:
+            fc = st.date_input(
+                "🛒 Compras",
+                value=fc_default,
+                key="st_teorico_fc",
+                format="YYYY-MM-DD",
+                help="Día de la compra a sumar.",
+            )
+        with col_t3:
+            fp = st.date_input(
+                "📋 Pedidos",
+                value=fp_default,
+                key="st_teorico_fp",
+                format="YYYY-MM-DD",
+                help="Día de entrega del pedido a restar.",
+            )
+        with col_t4:
+            fecha_conteo = st.date_input(
+                "📅 Conteo",
+                value=date.today(),
+                key="fecha_conteo_real",
+                format="YYYY-MM-DD",
+                help="Día con el que se guardará el Stock al apretar Guardar.",
+            )
+        actualizar = st.form_submit_button(
+            "🔄 Actualizar",
+            type="primary",
+            use_container_width=True,
         )
 
     TEO_RESULT_KEY = "_st_teorico_result"
@@ -1964,12 +1973,7 @@ with tab_stock_teorico:
     # adentro re-ejecuta este bloque.
     @st.fragment
     def _fragment_stock_teorico():
-        if st.button(
-            "🔄 Actualizar",
-            type="primary",
-            key="btn_calc_teorico",
-            use_container_width=True,
-        ):
+        if actualizar:
             # Re-leer fechas frescas adentro del fragment (despues de un
             # Guardar el outer no re-ejecuta, asi que fechas_stk_disp_t
             # de afuera queda con la lista vieja).
