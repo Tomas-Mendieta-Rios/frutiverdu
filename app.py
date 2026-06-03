@@ -1970,7 +1970,11 @@ with tab_stock_teorico:
             key="btn_calc_teorico",
             use_container_width=True,
         ):
-            if str(f0) not in (fechas_stk_disp_t or []):
+            # Re-leer fechas frescas adentro del fragment (despues de un
+            # Guardar el outer no re-ejecuta, asi que fechas_stk_disp_t
+            # de afuera queda con la lista vieja).
+            fechas_actuales = db.fechas_stock()
+            if str(f0) not in (fechas_actuales or []):
                 st.error(
                     f"⚠️ No hay Stock guardado para la fecha {f0}. "
                     "Elegí una fecha que tenga conteo físico cargado."
