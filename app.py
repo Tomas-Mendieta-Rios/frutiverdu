@@ -1781,11 +1781,6 @@ with tab_stock:
     # Sin on_change: cambiar fechas no escribe nada. Las fechas se persisten
     # solo cuando se aprieta Calcular (junto con el resultado).
 
-    st.caption(
-        "Stock teórico de un día puntual = Stock inicial + Compras del día "
-        "− Pedidos entregados del día."
-    )
-
     # Las 4 fechas + boton Actualizar van adentro de un st.form.
     # Asi cambiar fechas NO dispara rerun (sin spinner). Solo el submit
     # del form (Actualizar) re-ejecuta el calculo.
@@ -1999,11 +1994,6 @@ with tab_stock:
         df_editor = df_teorico_r.copy()
         df_editor["Stock"] = df_editor["Código"].astype(str).map(
             lambda c: _fmt_num_es(map_stk_conteo.get(c, 0.0))
-        )
-
-        st.caption(
-            "💡 Stock muestra el valor guardado para esa fecha "
-            "(0 si nunca cargaste nada). Al guardar reemplaza todo."
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
