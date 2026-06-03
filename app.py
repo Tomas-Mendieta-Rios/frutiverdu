@@ -1741,10 +1741,17 @@ with tab_estimado:
     ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
 
 with tab_stock:
-    # Stock teorico (single-day): Stock(F0) + Compras(Fc) - Pedidos(Fp)
+    # Stock (single-day): Stock(F0) + Compras(Fc) - Pedidos(Fp)
     # Las fechas se persisten en gsheets config y el resultado vive en
     # session_state (no se pierde al cambiar fechas, solo se recalcula
     # cuando se aprieta el boton).
+
+    # Placeholder para "🕒 Ultima actualizacion". Se rellena ahora y se
+    # actualiza despues de cada Guardar (desde adentro del fragment).
+    ts_stk_save_ph = st.empty()
+    ts_stk_save_ph.caption(
+        f"🕒 Última actualización: **{db.ultima_carga('stock') or '?'}**"
+    )
 
     fechas_stk_disp_t = db.fechas_stock()
     cfg_teorico = db.cargar_config()
@@ -2061,6 +2068,14 @@ with tab_stock:
                 try:
                     db.guardar_config(
                         {"st_teorico_fecha_conteo": str(fecha_conteo)}
+                    )
+                except Exception:
+                    pass
+                # Actualizar el caption de "Ultima actualizacion" arriba
+                # (placeholder esta en outer scope, accesible por closure)
+                try:
+                    ts_stk_save_ph.caption(
+                        f"🕒 Última actualización: **{db.ultima_carga('stock') or '?'}**"
                     )
                 except Exception:
                     pass
