@@ -1995,11 +1995,8 @@ with tab_stock_teorico:
                         if cod and ctd > 0:
                             map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
 
-                codigos_set = (
-                    set(map_stock_ini.keys())
-                    | set(map_compras.keys())
-                    | set(map_pedidos.keys())
-                )
+                # Incluir TODOS los productos del catalogo, no solo los con
+                # movimientos (asi el conteo fisico puede cargarlos todos).
                 prod_map = {
                     str(c): (str(p), str(u))
                     for c, p, u in zip(
@@ -2008,6 +2005,7 @@ with tab_stock_teorico:
                         productos["unidad_medida"],
                     )
                 }
+                codigos_set = set(prod_map.keys())
 
                 rows = []
                 for cod in codigos_set:
@@ -2016,8 +2014,6 @@ with tab_stock_teorico:
                     c = float(map_compras.get(cod, 0.0))
                     p = float(map_pedidos.get(cod, 0.0))
                     t = s + c - p
-                    if abs(s) < 1e-6 and abs(c) < 1e-6 and abs(p) < 1e-6:
-                        continue
                     rows.append({
                         "Código": cod,
                         "Producto": nombre,
@@ -2060,38 +2056,119 @@ with tab_stock_teorico:
                 pd.DataFrame(rows_r).sort_values("Producto").reset_index(drop=True)
             )
 
+            # Sort: primero productos con movimientos, luego el resto.
+            # Dentro de cada grupo, por nombre.
+            def _tiene_mov(row):
+                return (
+                    abs(float(row.get("Stock inicial", 0))) > 1e-6
+                    or abs(float(row.get("+ Compras", 0))) > 1e-6
+                    or abs(float(row.get("− Pedidos", 0))) > 1e-6
+                )
+            df_teorico_r = df_teorico_r.assign(
+                _mov=df_teorico_r.apply(_tiene_mov, axis=1).astype(int)
+            ).sort_values(
+                ["_mov", "Producto"], ascending=[False, True]
+            ).drop(columns=["_mov"]).reset_index(drop=True)
+
+            n_con_mov = sum(1 for _, r in df_teorico_r.iterrows() if _tiene_mov(r))
             st.success(
-                f"✅ {len(df_teorico_r)} productos con movimientos. "
+                f"✅ {n_con_mov} productos con movimientos · "
+                f"{len(df_teorico_r)} en el catálogo. "
                 f"Compras del {resultado['fc']}: {resultado['n_compras']} códigos. "
                 f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
             )
 
-            def _color_teorico(v):
-                try:
-                    n = float(v)
-                except (ValueError, TypeError):
-                    return ""
-                if n < -0.001:
-                    return "color: #d11; font-weight: bold"
-                if n > 0.001:
-                    return "color: #1a8a1a; font-weight: bold"
-                return ""
+            # Tabla editable: el usuario puede cargar el conteo fisico en
+            # la columna 'Real'. Vacío = se guarda el Teorico. '0' explícito = se guarda 0.
+            df_editor = df_teorico_r.copy()
+            df_editor["Real"] = ""
 
-            styled_teo = (
-                df_teorico_r.style
-                .format({
-                    "Stock inicial": "{:,.2f}",
-                    "+ Compras": "{:,.2f}",
-                    "− Pedidos": "{:,.2f}",
-                    "= Teórico": "{:,.2f}",
-                })
-                .map(_color_teorico, subset=["= Teórico"])
-            )
-            st.dataframe(
-                styled_teo,
-                use_container_width=True,
-                hide_index=True,
-            )
+            with st.form("form_conteo_fisico", clear_on_submit=False):
+                edited_real = st.data_editor(
+                    df_editor,
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=[
+                        "Código", "Producto",
+                        "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
+                    ],
+                    column_config={
+                        "Código": st.column_config.TextColumn("Código"),
+                        "Producto": st.column_config.TextColumn("Producto"),
+                        "Stock inicial": st.column_config.NumberColumn(
+                            "Stock inicial", format="%.2f"
+                        ),
+                        "+ Compras": st.column_config.NumberColumn(
+                            "+ Compras", format="%.2f"
+                        ),
+                        "− Pedidos": st.column_config.NumberColumn(
+                            "− Pedidos", format="%.2f"
+                        ),
+                        "= Teórico": st.column_config.NumberColumn(
+                            "= Teórico", format="%.2f"
+                        ),
+                        "Real": st.column_config.TextColumn(
+                            "Real",
+                            help="Cargá el conteo físico. Coma o punto. "
+                                 "Vacío = usar Teórico. '0' = cero real.",
+                        ),
+                    },
+                    key=f"editor_real_{resultado.get('f0')}_{resultado.get('fc')}_{resultado.get('fp')}",
+                )
+
+                col_fc, col_info = st.columns([1, 2])
+                with col_fc:
+                    fecha_conteo = st.date_input(
+                        "📅 Fecha del conteo",
+                        value=date.today(),
+                        key="fecha_conteo_real",
+                        format="YYYY-MM-DD",
+                    )
+                with col_info:
+                    st.caption(
+                        "💡 Vacío en Real = se guarda el Teórico. "
+                        "Si la fecha ya tenía Stock cargado, se reemplaza."
+                    )
+                guardar_conteo = st.form_submit_button(
+                    "💾 Guardar Stock para esta fecha", type="primary"
+                )
+
+            if guardar_conteo:
+                # Construir salida: ALL productos, cantidad = Real (si filled)
+                # o Teorico (si Real vacio). Productos no en la tabla se preservan
+                # con su stock actual de fecha_conteo (caso raro: catalogo cambio).
+                nuevos_valores = {}
+                for _, row in edited_real.iterrows():
+                    cod = str(row["Código"])
+                    real_str = str(row.get("Real", "") or "").strip()
+                    teo_val = float(row.get("= Teórico", 0) or 0)
+                    if real_str:
+                        nuevos_valores[cod] = _parse_num_es(real_str)
+                    else:
+                        nuevos_valores[cod] = teo_val
+
+                # Preservar productos del catalogo que no esten en la tabla
+                stock_actual_conteo = db.cargar_stock(fecha=fecha_conteo)
+                map_stk_actual = (
+                    dict(zip(
+                        stock_actual_conteo["codigo"].astype(str),
+                        stock_actual_conteo["cantidad"].astype(float),
+                    )) if not stock_actual_conteo.empty else {}
+                )
+
+                salida = productos[["codigo", "producto", "unidad_medida"]].copy()
+                salida["cantidad"] = salida["codigo"].astype(str).map(
+                    lambda c: nuevos_valores.get(c, map_stk_actual.get(c, 0.0))
+                ).astype(float)
+
+                try:
+                    db.guardar_stock(salida, fecha_conteo)
+                    st.success(
+                        f"✅ Stock del {fecha_conteo} guardado en Sheets "
+                        f"({len(nuevos_valores)} productos)."
+                    )
+                except Exception as e:
+                    st.error(f"⚠️ Error al guardar: {e}")
 
             ts_txt = (
                 f" · 🕒 calculado {resultado.get('ts')}"
