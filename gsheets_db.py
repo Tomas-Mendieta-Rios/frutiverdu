@@ -93,6 +93,10 @@ SCHEMA = {
     ],
     "selecciones_dux": ["order_id", "fecha_entrega"],
     "selecciones_wix": ["order_id", "fecha_entrega"],
+    "stock_teorico_ultimo": [
+        "codigo", "producto", "unidad",
+        "stock_inicial", "compras", "pedidos", "teorico",
+    ],
     "pedidos_dux": ["order_id", "fecha", "json"],
     "pedidos_wix": ["order_id", "fecha", "json"],
     "proveedores": [
@@ -752,3 +756,72 @@ def guardar_config(updates):
     rows = [{"key": k, "value": v} for k, v in actual.items()]
     df = pd.DataFrame(rows, columns=SCHEMA["config"])
     escribir_tabla("config", df)
+
+
+# ---------------- STOCK TEORICO (cache del ultimo calculo) ----------------
+
+def guardar_stock_teorico(rows, f0, fc, fp):
+    """Persiste el ultimo calculo de stock teorico en gsheets.
+    rows: lista de dicts con las keys que usa la UI (Codigo, Producto, etc).
+    f0/fc/fp: las fechas usadas en el calculo (date objects o strings)."""
+    df = pd.DataFrame([
+        {
+            "codigo": str(r.get("Código", "") or ""),
+            "producto": str(r.get("Producto", "") or ""),
+            "unidad": str(r.get("Unidad", "") or ""),
+            "stock_inicial": float(r.get("Stock inicial", 0) or 0),
+            "compras": float(r.get("+ Compras", 0) or 0),
+            "pedidos": float(r.get("− Pedidos", 0) or 0),
+            "teorico": float(r.get("= Teórico", 0) or 0),
+        }
+        for r in rows
+    ], columns=SCHEMA["stock_teorico_ultimo"])
+    escribir_tabla("stock_teorico_ultimo", df)
+    # Metadata (fechas + timestamp del calculo) en config
+    ts = pd.Timestamp.now(
+        tz="America/Argentina/Buenos_Aires"
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    guardar_config({
+        "st_teorico_ultimo_f0": str(f0),
+        "st_teorico_ultimo_fc": str(fc),
+        "st_teorico_ultimo_fp": str(fp),
+        "st_teorico_ultimo_ts": ts,
+    })
+
+
+def cargar_stock_teorico():
+    """Devuelve dict con rows + metadata del ultimo calculo persistido.
+    Si no hay nada guardado, devuelve dict con rows=[] y dates None."""
+    df = leer_tabla("stock_teorico_ultimo")
+    cfg = cargar_config()
+    rows = []
+    if not df.empty:
+        for _, r in df.iterrows():
+            try:
+                rows.append({
+                    "Código": str(r.get("codigo", "") or ""),
+                    "Producto": str(r.get("producto", "") or ""),
+                    "Unidad": str(r.get("unidad", "") or ""),
+                    "Stock inicial": float(r.get("stock_inicial", 0) or 0),
+                    "+ Compras": float(r.get("compras", 0) or 0),
+                    "− Pedidos": float(r.get("pedidos", 0) or 0),
+                    "= Teórico": float(r.get("teorico", 0) or 0),
+                })
+            except (ValueError, TypeError):
+                continue
+
+    def _parse_date(s):
+        if not s:
+            return None
+        try:
+            return pd.to_datetime(s).date()
+        except Exception:
+            return None
+
+    return {
+        "rows": rows,
+        "f0": _parse_date(cfg.get("st_teorico_ultimo_f0")),
+        "fc": _parse_date(cfg.get("st_teorico_ultimo_fc")),
+        "fp": _parse_date(cfg.get("st_teorico_ultimo_fp")),
+        "ts": cfg.get("st_teorico_ultimo_ts"),
+    }

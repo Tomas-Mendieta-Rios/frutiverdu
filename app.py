@@ -1951,6 +1951,29 @@ with tab_stock_teorico:
 
     TEO_RESULT_KEY = "_st_teorico_result"
 
+    # Cargar el ultimo resultado persistido en gsheets (si no esta ya en session_state).
+    # Asi sobrevive cerrar/refresar la app.
+    if TEO_RESULT_KEY not in st.session_state:
+        try:
+            saved_teo = db.cargar_stock_teorico()
+        except Exception:
+            saved_teo = {"rows": [], "f0": None, "fc": None, "fp": None, "ts": None}
+        if saved_teo.get("rows"):
+            rows_s = saved_teo["rows"]
+            st.session_state[TEO_RESULT_KEY] = {
+                "rows": rows_s,
+                "f0": saved_teo.get("f0"),
+                "fc": saved_teo.get("fc"),
+                "fp": saved_teo.get("fp"),
+                "ts": saved_teo.get("ts"),
+                "n_compras": sum(
+                    1 for r in rows_s if float(r.get("+ Compras", 0) or 0) > 0
+                ),
+                "n_pedidos": sum(
+                    1 for r in rows_s if float(r.get("− Pedidos", 0) or 0) > 0
+                ),
+            }
+
     if st.button(
         "🧮 Calcular stock teórico",
         type="primary",
@@ -2029,6 +2052,15 @@ with tab_stock_teorico:
                         "= Teórico": t,
                     })
 
+                # Persistir en gsheets para que sobreviva cerrar la app
+                try:
+                    db.guardar_stock_teorico(rows, f0, fc, fp)
+                    ts_calc = pd.Timestamp.now(
+                        tz="America/Argentina/Buenos_Aires"
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    ts_calc = None
+
                 # Guardar resultado en session_state para que sobreviva
                 # los reruns provocados por cambiar fechas.
                 st.session_state[TEO_RESULT_KEY] = {
@@ -2036,6 +2068,7 @@ with tab_stock_teorico:
                     "f0": f0,
                     "fc": fc,
                     "fp": fp,
+                    "ts": ts_calc,
                     "n_compras": len(map_compras),
                     "n_pedidos": len(map_pedidos),
                 }
@@ -2085,9 +2118,13 @@ with tab_stock_teorico:
                 hide_index=True,
             )
 
+            ts_txt = (
+                f" · 🕒 calculado {resultado.get('ts')}"
+                if resultado.get("ts") else ""
+            )
             st.caption(
                 f"Fórmula: Stock({resultado['f0']}) + Compras({resultado['fc']}) "
-                f"− Pedidos({resultado['fp']}) = Teórico"
+                f"− Pedidos({resultado['fp']}) = Teórico{ts_txt}"
             )
 
 with tab_dux:
