@@ -511,14 +511,21 @@ def _cargar_pedidos(fuente):
 
 
 def _guardar_pedidos(fuente, pedidos, fecha_field_candidates):
-    """fuente: 'dux' o 'wix'. pedidos: lista de dicts. Persiste cada uno como fila.
+    """fuente: 'dux' o 'wix'. pedidos: lista de dicts.
+    MERGE por order_id: los pedidos existentes NO se pisan; los nuevos se
+    agregan; los del mismo order_id se actualizan a la version recibida.
+    Asi sobreviven los pedidos viejos aunque tu papa sincronice un rango chico.
     Defensa: si el JSON serializado de un pedido supera los 49000 chars (limite
     de Google Sheets = 50000 por celda), se omite ese pedido."""
     nombre = f"pedidos_{fuente}"
-    rows = []
+
+    # Construir filas nuevas a partir de los pedidos recibidos
+    nuevos_por_id = {}
     omitidos = 0
     for p in pedidos:
         oid = str(p.get("id") or p.get("nro_pedido") or p.get("nroPedido") or "")
+        if not oid:
+            continue
         fecha = ""
         for k in fecha_field_candidates:
             if p.get(k):
@@ -528,12 +535,31 @@ def _guardar_pedidos(fuente, pedidos, fecha_field_candidates):
         if len(js) > 49000:
             omitidos += 1
             continue
-        rows.append({
+        nuevos_por_id[oid] = {
             "order_id": oid,
             "fecha": fecha,
             "json": js,
-        })
-    df = pd.DataFrame(rows, columns=SCHEMA[nombre])
+        }
+
+    # Leer existentes (sin cache) e inicializar merge con ellos
+    existentes = _leer_tabla_fresh(nombre)
+    merged = {}
+    if not existentes.empty:
+        for _, r in existentes.iterrows():
+            oid = str(r.get("order_id", "") or "")
+            if not oid:
+                continue
+            merged[oid] = {
+                "order_id": oid,
+                "fecha": str(r.get("fecha", "") or ""),
+                "json": str(r.get("json", "") or ""),
+            }
+
+    # Sobreescribir con los nuevos (gana la version recibida)
+    for oid, row in nuevos_por_id.items():
+        merged[oid] = row
+
+    df = pd.DataFrame(list(merged.values()), columns=SCHEMA[nombre])
     escribir_tabla(nombre, df)
     _marcar_modificacion(f"pedidos_{fuente}")
     return omitidos

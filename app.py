@@ -2075,28 +2075,17 @@ with tab_dux:
         ts_ped = db.ultima_carga("pedidos_dux")
         st.caption(f"🕒 Última sync: **{ts_ped or '?'}**")
 
-        # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
-        with st.form("form_dux_sync", clear_on_submit=False, border=False):
-            consultar = st.form_submit_button(
-                "🔄 Sincronizar pedidos desde DUX",
-                type="primary",
-                use_container_width=True,
-            )
-            col_d1, col_d2 = st.columns([1, 1])
-            with col_d1:
-                fecha_desde = st.date_input(
-                    "Fecha desde",
-                    value=fecha_desde_default,
-                    key="dux_fecha_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_d2:
-                fecha_hasta = st.date_input(
-                    "Fecha hasta",
-                    value=fecha_hasta_default,
-                    key="dux_fecha_hasta",
-                    format="YYYY-MM-DD",
-                )
+        # Sync simple: boton unico, rango fijo de 7 dias.
+        # El merge en _guardar_pedidos asegura que los pedidos viejos
+        # sobrevivan (no se pisan).
+        consultar = st.button(
+            "🔄 Sincronizar últimos 7 días",
+            type="primary",
+            use_container_width=True,
+            key="btn_sync_dux",
+        )
+        fecha_desde = date.today() - timedelta(days=7)
+        fecha_hasta = date.today()
 
         if consultar:
             url_p = f"{base_url}/pedidos"
@@ -2197,7 +2186,49 @@ with tab_dux:
                 all_orders_saved, key=_fecha_dux, reverse=True
             )
 
-            st.caption(f"{n_asignados} con entrega asignada.")
+            # Filtro de vista (no afecta gsheets, solo lo que se renderea)
+            n_total_dux = len(all_orders_saved)
+            n_pendientes_dux = sum(
+                1 for o in all_orders_saved
+                if not selecciones_dux.get(
+                    str(o.get("id") or o.get("nro_pedido") or "")
+                )
+            )
+            vista_dux = st.radio(
+                "Vista:",
+                options=["Solo pendientes", "Últimos 7 días", "Todos"],
+                index=0,
+                horizontal=True,
+                key="radio_vista_dux",
+                captions=[
+                    f"{n_pendientes_dux} sin fecha",
+                    "creados últimos 7 días",
+                    f"{n_total_dux} en total",
+                ],
+            )
+
+            if vista_dux == "Solo pendientes":
+                all_orders_sorted = [
+                    o for o in all_orders_sorted
+                    if not selecciones_dux.get(
+                        str(o.get("id") or o.get("nro_pedido") or "")
+                    )
+                ]
+            elif vista_dux == "Últimos 7 días":
+                hace_7 = pd.Timestamp(date.today() - timedelta(days=7))
+                all_orders_sorted = [
+                    o for o in all_orders_sorted
+                    if _fecha_dux(o) >= hace_7
+                ]
+            # "Todos" no filtra
+
+            st.caption(
+                f"Mostrando {len(all_orders_sorted)} pedidos · "
+                f"{n_asignados} con entrega asignada en total."
+            )
+
+            if not all_orders_sorted:
+                st.info("No hay pedidos en esta vista.")
 
             with st.form(key="form_dux_seleccion", clear_on_submit=False):
                 guardar_sel_dux = st.form_submit_button(
@@ -2471,28 +2502,16 @@ with tab_wix:
         ts_wix = db.ultima_carga("pedidos_wix")
         st.caption(f"🕒 Última sync: **{ts_wix or '?'}**")
 
-        # st.form: los cambios de fecha NO disparan rerun hasta apretar Sincronizar.
-        with st.form("form_wix_sync", clear_on_submit=False, border=False):
-            consultar_wix = st.form_submit_button(
-                "🔄 Sincronizar pedidos desde Wix",
-                type="primary",
-                use_container_width=True,
-            )
-            col_w1, col_w2 = st.columns([1, 1])
-            with col_w1:
-                wix_desde = st.date_input(
-                    "Fecha desde",
-                    value=fecha_desde_default,
-                    key="wix_fecha_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_w2:
-                wix_hasta = st.date_input(
-                    "Fecha hasta",
-                    value=fecha_hasta_default,
-                    key="wix_fecha_hasta",
-                    format="YYYY-MM-DD",
-                )
+        # Sync simple: boton unico, rango fijo de 7 dias.
+        # El merge en _guardar_pedidos asegura que los pedidos viejos sobrevivan.
+        consultar_wix = st.button(
+            "🔄 Sincronizar últimos 7 días",
+            type="primary",
+            use_container_width=True,
+            key="btn_sync_wix",
+        )
+        wix_desde = date.today() - timedelta(days=7)
+        wix_hasta = date.today()
 
         if consultar_wix:
             url = "https://www.wixapis.com/ecom/v1/orders/search"
@@ -2622,7 +2641,45 @@ with tab_wix:
                 orders_saved, key=_fecha_wix, reverse=True
             )
 
-            st.caption(f"{len(selecciones)} con entrega asignada.")
+            # Filtro de vista (no afecta gsheets, solo lo que se renderea)
+            n_total_wix = len(orders_saved)
+            n_pendientes_wix = sum(
+                1 for o in orders_saved
+                if not selecciones.get(str(o.get("id") or ""))
+            )
+            vista_wix = st.radio(
+                "Vista:",
+                options=["Solo pendientes", "Últimos 7 días", "Todos"],
+                index=0,
+                horizontal=True,
+                key="radio_vista_wix",
+                captions=[
+                    f"{n_pendientes_wix} sin fecha",
+                    "creados últimos 7 días",
+                    f"{n_total_wix} en total",
+                ],
+            )
+
+            if vista_wix == "Solo pendientes":
+                orders_saved_sorted = [
+                    o for o in orders_saved_sorted
+                    if not selecciones.get(str(o.get("id") or ""))
+                ]
+            elif vista_wix == "Últimos 7 días":
+                hace_7_wix = pd.Timestamp(date.today() - timedelta(days=7))
+                orders_saved_sorted = [
+                    o for o in orders_saved_sorted
+                    if _fecha_wix(o) >= hace_7_wix
+                ]
+            # "Todos" no filtra
+
+            st.caption(
+                f"Mostrando {len(orders_saved_sorted)} pedidos · "
+                f"{len(selecciones)} con entrega asignada en total."
+            )
+
+            if not orders_saved_sorted:
+                st.info("No hay pedidos en esta vista.")
 
             with st.form(key="form_wix_seleccion", clear_on_submit=False):
                 guardar_sel = st.form_submit_button(
