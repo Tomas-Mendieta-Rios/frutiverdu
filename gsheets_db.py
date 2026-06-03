@@ -97,6 +97,10 @@ SCHEMA = {
         "codigo", "producto",
         "stock_inicial", "compras", "pedidos", "teorico",
     ],
+    # Tabla aislada para el snapshot pesado del calculo (JSONs grandes).
+    # Asi una falla escribiendo el detalle NO afecta a 'config' (donde
+    # viven los timestamps criticos de cada pestania).
+    "stock_teorico_detalle": ["key", "value"],
     "pedidos_dux": ["order_id", "fecha", "json"],
     "pedidos_wix": ["order_id", "fecha", "json"],
     "proveedores": [
@@ -826,14 +830,13 @@ def cargar_stock_teorico():
 
 
 def guardar_stock_teorico_detalle(map_stock_ini, map_compras, compras_raw, dux_contados, wix_contados):
-    """Persiste el detalle del ultimo calculo de stock teorico (para los
-    expanders que muestran stock inicial, compras y pedidos contados).
-    Cada pieza se guarda como JSON en una key de config. Si un JSON
-    excede el limite de Sheets (49KB), se guarda vacio (mejor sin detalle
-    que romper)."""
+    """Persiste el detalle del ultimo calculo de stock teorico.
+    Usa la tabla 'stock_teorico_detalle' (aislada de config) para que una
+    falla aca NO afecte los timestamps criticos de otras pestanias.
+    Si un JSON excede 49KB, se guarda vacio (defensivo)."""
     MAX = 49000
 
-    def _safe(obj, fallback="[]"):
+    def _safe(obj, fallback):
         try:
             s = _json.dumps(obj, ensure_ascii=False)
         except Exception:
@@ -842,22 +845,30 @@ def guardar_stock_teorico_detalle(map_stock_ini, map_compras, compras_raw, dux_c
             return fallback
         return s
 
-    guardar_config({
-        "st_teorico_stkini_json": _safe(map_stock_ini, "{}"),
-        "st_teorico_compras_agg_json": _safe(map_compras, "{}"),
-        "st_teorico_compras_raw_json": _safe(compras_raw, "[]"),
-        "st_teorico_dux_contados_json": _safe(dux_contados, "[]"),
-        "st_teorico_wix_contados_json": _safe(wix_contados, "[]"),
-    })
+    filas = [
+        {"key": "map_stock_ini", "value": _safe(map_stock_ini, "{}")},
+        {"key": "map_compras", "value": _safe(map_compras, "{}")},
+        {"key": "compras_raw", "value": _safe(compras_raw, "[]")},
+        {"key": "dux_contados", "value": _safe(dux_contados, "[]")},
+        {"key": "wix_contados", "value": _safe(wix_contados, "[]")},
+    ]
+    df = pd.DataFrame(filas, columns=SCHEMA["stock_teorico_detalle"])
+    escribir_tabla("stock_teorico_detalle", df)
 
 
 def cargar_stock_teorico_detalle():
-    """Lee el detalle del ultimo calculo desde config. Devuelve dict con
-    todas las piezas; si no hay nada guardado, devuelve valores vacios."""
-    cfg = cargar_config()
+    """Lee el detalle del ultimo calculo desde la tabla aislada."""
+    df = leer_tabla("stock_teorico_detalle")
+    if df.empty or "key" not in df.columns:
+        return {
+            "map_stock_ini": {}, "map_compras": {},
+            "compras_raw": [], "dux_contados": [], "wix_contados": [],
+        }
+
+    raw = dict(zip(df["key"].astype(str), df["value"].astype(str)))
 
     def _parse(key, default):
-        v = cfg.get(key, "")
+        v = raw.get(key, "")
         if not v:
             return default
         try:
@@ -866,9 +877,9 @@ def cargar_stock_teorico_detalle():
             return default
 
     return {
-        "map_stock_ini": _parse("st_teorico_stkini_json", {}),
-        "map_compras": _parse("st_teorico_compras_agg_json", {}),
-        "compras_raw": _parse("st_teorico_compras_raw_json", []),
-        "dux_contados": _parse("st_teorico_dux_contados_json", []),
-        "wix_contados": _parse("st_teorico_wix_contados_json", []),
+        "map_stock_ini": _parse("map_stock_ini", {}),
+        "map_compras": _parse("map_compras", {}),
+        "compras_raw": _parse("compras_raw", []),
+        "dux_contados": _parse("dux_contados", []),
+        "wix_contados": _parse("wix_contados", []),
     }
