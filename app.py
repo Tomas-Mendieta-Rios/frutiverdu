@@ -2011,7 +2011,7 @@ with tab_stock_teorico:
 
                 rows = []
                 for cod in codigos_set:
-                    nombre, unidad = prod_map.get(cod, ("(desconocido)", ""))
+                    nombre, _u = prod_map.get(cod, ("(desconocido)", ""))
                     s = float(map_stock_ini.get(cod, 0.0))
                     c = float(map_compras.get(cod, 0.0))
                     p = float(map_pedidos.get(cod, 0.0))
@@ -2021,7 +2021,6 @@ with tab_stock_teorico:
                     rows.append({
                         "Código": cod,
                         "Producto": nombre,
-                        "Unidad": unidad,
                         "Stock inicial": s,
                         "+ Compras": c,
                         "− Pedidos": p,

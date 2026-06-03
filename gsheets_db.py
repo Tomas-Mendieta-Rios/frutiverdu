@@ -94,7 +94,7 @@ SCHEMA = {
     "selecciones_dux": ["order_id", "fecha_entrega"],
     "selecciones_wix": ["order_id", "fecha_entrega"],
     "stock_teorico_ultimo": [
-        "codigo", "producto", "unidad",
+        "codigo", "producto",
         "stock_inicial", "compras", "pedidos", "teorico",
     ],
     "pedidos_dux": ["order_id", "fecha", "json"],
@@ -768,7 +768,6 @@ def guardar_stock_teorico(rows, f0, fc, fp):
         {
             "codigo": str(r.get("Código", "") or ""),
             "producto": str(r.get("Producto", "") or ""),
-            "unidad": str(r.get("Unidad", "") or ""),
             "stock_inicial": float(r.get("Stock inicial", 0) or 0),
             "compras": float(r.get("+ Compras", 0) or 0),
             "pedidos": float(r.get("− Pedidos", 0) or 0),
@@ -801,7 +800,6 @@ def cargar_stock_teorico():
                 rows.append({
                     "Código": str(r.get("codigo", "") or ""),
                     "Producto": str(r.get("producto", "") or ""),
-                    "Unidad": str(r.get("unidad", "") or ""),
                     "Stock inicial": float(r.get("stock_inicial", 0) or 0),
                     "+ Compras": float(r.get("compras", 0) or 0),
                     "− Pedidos": float(r.get("pedidos", 0) or 0),
