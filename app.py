@@ -2182,8 +2182,19 @@ with tab_dux:
                     return pd.to_datetime(f)
                 except Exception:
                     return pd.Timestamp.min
+            # Sort por nro_pedido DESC (mas reciente en numero arriba).
+            # Fallback -1 para los que no tengan numero parseable.
+            def _nro_dux_sort(o):
+                raw = _dux_get_first(
+                    o, ["nro_pedido", "nroPedido", "numero", "id"]
+                )
+                try:
+                    return int(str(raw).strip())
+                except (ValueError, TypeError):
+                    return -1
+
             all_orders_sorted = sorted(
-                all_orders_saved, key=_fecha_dux, reverse=True
+                all_orders_saved, key=_nro_dux_sort, reverse=True
             )
 
             # Solo mostrar pedidos creados en los ultimos 7 dias.
@@ -2615,8 +2626,16 @@ with tab_wix:
                     return pd.to_datetime(f)
                 except Exception:
                     return pd.Timestamp.min
+            # Sort por number (Wix) DESC.
+            def _nro_wix_sort(o):
+                raw = o.get("number") or o.get("id") or ""
+                try:
+                    return int(str(raw).strip())
+                except (ValueError, TypeError):
+                    return -1
+
             orders_saved_sorted = sorted(
-                orders_saved, key=_fecha_wix, reverse=True
+                orders_saved, key=_nro_wix_sort, reverse=True
             )
 
             # Solo mostrar pedidos creados en los ultimos 7 dias.
