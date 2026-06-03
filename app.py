@@ -2077,6 +2077,22 @@ with tab_stock_teorico:
         df_editor = df_teorico_r.copy()
         df_editor["Real"] = ""
 
+        # Fecha del conteo afuera del form (date_input dentro de form
+        # tiene comportamiento raro y no actualiza visualmente).
+        col_fc, col_info = st.columns([1, 2])
+        with col_fc:
+            fecha_conteo = st.date_input(
+                "📅 Fecha del conteo",
+                value=date.today(),
+                key="fecha_conteo_real",
+                format="YYYY-MM-DD",
+            )
+        with col_info:
+            st.caption(
+                "💡 Vacío en Real = se guarda el Teórico. "
+                "Si la fecha ya tenía Stock cargado, se reemplaza."
+            )
+
         with st.form("form_conteo_fisico", clear_on_submit=False):
             edited_real = st.data_editor(
                 df_editor,
@@ -2109,20 +2125,6 @@ with tab_stock_teorico:
                 },
                 key=f"editor_real_{resultado.get('f0')}_{resultado.get('fc')}_{resultado.get('fp')}",
             )
-
-            col_fc, col_info = st.columns([1, 2])
-            with col_fc:
-                fecha_conteo = st.date_input(
-                    "📅 Fecha del conteo",
-                    value=date.today(),
-                    key="fecha_conteo_real",
-                    format="YYYY-MM-DD",
-                )
-            with col_info:
-                st.caption(
-                    "💡 Vacío en Real = se guarda el Teórico. "
-                    "Si la fecha ya tenía Stock cargado, se reemplaza."
-                )
             guardar_conteo = st.form_submit_button(
                 "💾 Guardar Stock para esta fecha", type="primary"
             )
