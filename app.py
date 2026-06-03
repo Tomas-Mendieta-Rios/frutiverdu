@@ -2090,36 +2090,26 @@ with tab_stock_teorico:
             f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
         )
 
-        # Real se pre-rellena con el stock EFECTIVO en fecha_conteo:
-        # - Si hay stock guardado para esa fecha exacta -> usar ese
-        # - Si no, usar el stock de la fecha mas reciente ANTES de esa
-        #   (carry forward natural: "lo que tenia hasta ese momento")
-        # Asi Real arranca con valores realistas, no vacios.
-        all_stock_df = db.cargar_stock_completo()
-        map_stk_conteo = {}
-        if not all_stock_df.empty:
-            df_filt = all_stock_df.copy()
-            df_filt["fecha_dt"] = pd.to_datetime(df_filt["fecha"], errors="coerce")
-            fc_dt = pd.to_datetime(fecha_conteo)
-            df_filt = df_filt[df_filt["fecha_dt"] <= fc_dt]
-            if not df_filt.empty:
-                df_filt = df_filt.sort_values(
-                    ["codigo", "fecha_dt"], ascending=[True, False]
-                )
-                df_recent = df_filt.drop_duplicates(subset=["codigo"], keep="first")
-                map_stk_conteo = dict(zip(
-                    df_recent["codigo"].astype(str),
-                    df_recent["cantidad"].astype(float),
-                ))
+        # Pre-fill Real EXACTAMENTE como Stock tab:
+        # - Si hay stock guardado para fecha_conteo -> mostrar esos valores
+        # - Si no -> "0" para todos los productos
+        # Cero magia, sin carry-forward ni asumir nada.
+        stk_conteo_df = db.cargar_stock(fecha=fecha_conteo)
+        map_stk_conteo = (
+            dict(zip(
+                stk_conteo_df["codigo"].astype(str),
+                stk_conteo_df["cantidad"].astype(float),
+            )) if not stk_conteo_df.empty else {}
+        )
 
         df_editor = df_teorico_r.copy()
         df_editor["Real"] = df_editor["Código"].astype(str).map(
-            lambda c: _fmt_num_es(map_stk_conteo[c]) if c in map_stk_conteo else ""
+            lambda c: _fmt_num_es(map_stk_conteo.get(c, 0.0))
         )
 
         st.caption(
-            "💡 Real arranca con el último Stock conocido (de esta fecha o de la "
-            "fecha previa más cercana). Tipeá para modificar."
+            "💡 Real muestra el Stock guardado para la fecha del conteo "
+            "(0 si nunca cargaste nada). Al guardar reemplaza todo."
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
@@ -2163,60 +2153,26 @@ with tab_stock_teorico:
             )
 
         if guardar_conteo:
-            # Solo guardamos productos con Real tipeada o con stock previo.
-            # Productos sin Real y sin stock previo NO se incluyen (no se
-            # inventa un 0). Asi 'Guardar' sin haber tipeado nada NO pone
-            # a cero todo el catalogo.
-            nuevos = {}
+            # Save simple, igual que Stock tab: parsear todas las Real
+            # y reemplazar el stock_historico para fecha_conteo.
+            valores_real = {}
             for _, row in edited_real.iterrows():
                 cod = str(row["Código"])
                 real_str = str(row.get("Real", "") or "").strip()
-                if real_str:
-                    nuevos[cod] = _parse_num_es(real_str)
-
-            stock_actual_df = db.cargar_stock(fecha=fecha_conteo)
-            map_stk_actual = (
-                dict(zip(
-                    stock_actual_df["codigo"].astype(str),
-                    stock_actual_df["cantidad"].astype(float),
-                )) if not stock_actual_df.empty else {}
-            )
-
-            salida_rows = []
-            for _, prod_row in productos[
-                ["codigo", "producto", "unidad_medida"]
-            ].iterrows():
-                cod = str(prod_row["codigo"])
-                if cod in nuevos:
-                    cant = nuevos[cod]
-                elif cod in map_stk_actual:
-                    cant = map_stk_actual[cod]
-                else:
-                    continue
-                salida_rows.append({
-                    "codigo": cod,
-                    "producto": prod_row["producto"],
-                    "unidad_medida": prod_row["unidad_medida"],
-                    "cantidad": float(cant),
-                })
-
-            if not salida_rows:
-                st.warning(
-                    "⚠️ No cargaste valores en Real y no hay stock previo "
-                    "para esta fecha. No se guardó nada."
+                valores_real[cod] = (
+                    _parse_num_es(real_str) if real_str else 0.0
                 )
-            else:
-                salida = pd.DataFrame(salida_rows)
-                try:
-                    db.guardar_stock(salida, fecha_conteo)
-                    n_modificados = len(nuevos)
-                    n_preservados = len(salida_rows) - n_modificados
-                    st.success(
-                        f"✅ Stock del {fecha_conteo} guardado "
-                        f"({n_modificados} actualizados, {n_preservados} preservados)."
-                    )
-                except Exception as e:
-                    st.error(f"⚠️ Error al guardar: {e}")
+
+            salida = productos[["codigo", "producto", "unidad_medida"]].copy()
+            salida["cantidad"] = salida["codigo"].astype(str).map(
+                lambda c: valores_real.get(c, 0.0)
+            ).astype(float)
+
+            try:
+                db.guardar_stock(salida, fecha_conteo)
+                st.success(f"✅ Stock del {fecha_conteo} guardado en Sheets.")
+            except Exception as e:
+                st.error(f"⚠️ Error al guardar: {e}")
 
         ts_txt = (
             f" · 🕒 calculado {resultado.get('ts')}"
