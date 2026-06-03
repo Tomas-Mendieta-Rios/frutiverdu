@@ -1942,6 +1942,13 @@ with tab_stock_teorico:
             use_container_width=True,
         )
 
+    # Pasar el "click" de Actualizar al fragment via flag en session_state.
+    # Sin esto, el fragment captura 'actualizar' por closure y lo ve como
+    # True en cada rerun (incluido el del Guardar) -> dispara recalc =
+    # se pierde lo que se tipeo en Real.
+    if actualizar:
+        st.session_state["_st_teorico_should_calc"] = True
+
     TEO_RESULT_KEY = "_st_teorico_result"
 
     # Cargar el ultimo resultado persistido en gsheets (si no esta ya en session_state).
@@ -1973,7 +1980,9 @@ with tab_stock_teorico:
     # adentro re-ejecuta este bloque.
     @st.fragment
     def _fragment_stock_teorico():
-        if actualizar:
+        # Consumir el flag (pop = check + delete atomico). Solo es True una
+        # vez por click de Actualizar; en reruns posteriores (Guardar), False.
+        if st.session_state.pop("_st_teorico_should_calc", False):
             # Re-leer fechas frescas adentro del fragment (despues de un
             # Guardar el outer no re-ejecuta, asi que fechas_stk_disp_t
             # de afuera queda con la lista vieja).
