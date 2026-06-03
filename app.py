@@ -2670,12 +2670,15 @@ with tab_dux_productos:
                             unidad = nombre.rsplit(" - ", 1)[1].strip()
                         else:
                             unidad = ""
+                        rubro_obj = p.get("rubro") or {}
+                        rubro_nombre = str(rubro_obj.get("nombre", "") or "").strip()
                         filas.append(
                             {
                                 "codigo": str(p.get("cod_item", "")).strip(),
                                 "producto": nombre,
                                 "unidad_medida": unidad,
                                 "descripcion": "",
+                                "rubro": rubro_nombre,
                             }
                         )
 
@@ -2699,7 +2702,7 @@ with tab_dux_productos:
             if not df_csv_actual.empty:
                 cols_mostrar = [
                     c
-                    for c in ["codigo", "producto", "unidad_medida"]
+                    for c in ["codigo", "producto", "unidad_medida", "rubro"]
                     if c in df_csv_actual.columns
                 ]
                 st.caption(f"{len(df_csv_actual)} productos en Sheets.")
