@@ -983,12 +983,15 @@ if st.button(
     st.rerun()
 
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
+# NOTA: la pestania de Analitica esta oculta (los bloques 'with tab_X:'
+# correspondientes estan reemplazados por 'if False:' mas abajo).
+# Para re-habilitar, devolve tab_grupo_analitica al unpacking + label, y
+# cambia los 'if False:' por 'with tab_X:'.
 (
     tab_comprar,
     tab_compras,
     tab_grupo_pedidos,
     tab_grupo_diario,
-    tab_grupo_analitica,
     tab_grupo_config,
 ) = st.tabs(
     [
@@ -996,10 +999,15 @@ if st.button(
         "💰 Compras",
         "📋 Pedidos",
         "📦 Diario",
-        "📊 Analítica",
         "⚙️ Configuración",
     ]
 )
+# Tabs ocultas (definidas como None para que las referencias no rompan)
+tab_grupo_analitica = None
+tab_resumen_rango = None
+tab_desglose_rango = None
+tab_hist_precios = None
+tab_detalle_compras = None
 
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
@@ -1007,7 +1015,7 @@ with tab_grupo_pedidos:
 with tab_grupo_diario:
     tab_stock, tab_estimado = st.tabs(["📦 Stock", "Estimado"])
 
-with tab_grupo_analitica:
+if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analitica:'
     (
         tab_resumen_rango,
         tab_desglose_rango,
@@ -3557,7 +3565,7 @@ with tab_compras:
     ts_compras = db.ultima_carga("compras")
     ts_compras_ph.caption(f"🕒 Última actualización: **{ts_compras or '?'}**")
 
-with tab_resumen_rango:
+if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango:'
     st.markdown("### 📊 Resumen de compras por rango de fechas")
 
     df_rr = db.cargar_compras()
@@ -3710,7 +3718,7 @@ with tab_resumen_rango:
                 f"{len(df_rng)} líneas"
             )
 
-with tab_desglose_rango:
+if False:  # Analitica oculta — para volver: cambiar a 'with tab_desglose_rango:'
     st.markdown("### 📐 Desglose por unidad (con conversiones)")
     st.caption(
         "Para cada producto: precio promedio en TODAS las unidades de su familia "
@@ -3887,7 +3895,7 @@ with tab_desglose_rango:
                 f"{len(df_rng_dr)} líneas"
             )
 
-with tab_hist_precios:
+if False:  # Analitica oculta — para volver: cambiar a 'with tab_hist_precios:'
     st.markdown("### 📊 Histórico de precios promedio")
     st.caption(
         "Para cada producto, ver el precio promedio ponderado en el rango elegido. "
@@ -4030,7 +4038,7 @@ with tab_hist_precios:
                     df_evol_agg = df_evol_agg.set_index("fecha")
                     st.line_chart(df_evol_agg)
 
-with tab_detalle_compras:
+if False:  # Analitica oculta — para volver: cambiar a 'with tab_detalle_compras:'
     st.markdown("### 📋 Detalle compras")
     st.caption(
         "Listado completo de compras: qué día, qué producto, qué proveedor, cuánto te cobró."
