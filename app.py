@@ -1886,34 +1886,13 @@ with tab_stock_teorico:
         if fechas_stk_disp_t else date.today() - timedelta(days=7)
     )
 
-    f0_default = _default_or_saved("st_teorico_f0", f0_fallback)
-    fc_default = _default_or_saved("st_teorico_fc", date.today())
-    fp_default = _default_or_saved("st_teorico_fp", date.today())
+    # Los defaults vienen del ultimo calculo guardado (no de un on_change).
+    f0_default = _default_or_saved("st_teorico_ultimo_f0", f0_fallback)
+    fc_default = _default_or_saved("st_teorico_ultimo_fc", date.today())
+    fp_default = _default_or_saved("st_teorico_ultimo_fp", date.today())
 
-    # Callbacks: persisten fechas en gsheets para que sobrevivan entre sesiones
-    def _save_teorico_f0():
-        v = st.session_state.get("st_teorico_f0")
-        if v:
-            try:
-                db.guardar_config({"st_teorico_f0": str(v)})
-            except Exception:
-                pass
-
-    def _save_teorico_fc():
-        v = st.session_state.get("st_teorico_fc")
-        if v:
-            try:
-                db.guardar_config({"st_teorico_fc": str(v)})
-            except Exception:
-                pass
-
-    def _save_teorico_fp():
-        v = st.session_state.get("st_teorico_fp")
-        if v:
-            try:
-                db.guardar_config({"st_teorico_fp": str(v)})
-            except Exception:
-                pass
+    # Sin on_change: cambiar fechas no escribe nada. Las fechas se persisten
+    # solo cuando se aprieta Calcular (junto con el resultado).
 
     st.caption(
         "Stock teórico de un día puntual = Stock inicial + Compras del día "
@@ -1928,7 +1907,6 @@ with tab_stock_teorico:
             key="st_teorico_f0",
             format="YYYY-MM-DD",
             help="Día con conteo físico cargado en Stock.",
-            on_change=_save_teorico_f0,
         )
     with col_t2:
         fc = st.date_input(
@@ -1937,7 +1915,6 @@ with tab_stock_teorico:
             key="st_teorico_fc",
             format="YYYY-MM-DD",
             help="Día de la compra a sumar (filtra DUX por fecha_compra).",
-            on_change=_save_teorico_fc,
         )
     with col_t3:
         fp = st.date_input(
@@ -1946,7 +1923,6 @@ with tab_stock_teorico:
             key="st_teorico_fp",
             format="YYYY-MM-DD",
             help="Día de entrega del pedido a restar (filtra por fecha_entrega).",
-            on_change=_save_teorico_fp,
         )
 
     TEO_RESULT_KEY = "_st_teorico_result"
