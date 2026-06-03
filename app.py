@@ -2039,14 +2039,32 @@ with tab_stock_teorico:
                     except Exception:
                         ts_calc = None
 
+                    # Pre-rellenar columna Real con el Stock guardado para
+                    # fecha_conteo (si existe). Asi al apretar Actualizar
+                    # Carlos ya ve el conteo de esa fecha y puede ajustarlo.
+                    stk_conteo_df = db.cargar_stock(fecha=fecha_conteo)
+                    map_stk_conteo = (
+                        dict(zip(
+                            stk_conteo_df["codigo"].astype(str),
+                            stk_conteo_df["cantidad"].astype(float),
+                        )) if not stk_conteo_df.empty else {}
+                    )
+                    real_prefill = {
+                        cod: (_fmt_num_es(map_stk_conteo[cod])
+                              if cod in map_stk_conteo else "")
+                        for cod in (r["Código"] for r in rows)
+                    }
+
                     st.session_state[TEO_RESULT_KEY] = {
                         "rows": rows,
                         "f0": f0,
                         "fc": fc,
                         "fp": fp,
+                        "fecha_conteo": fecha_conteo,
                         "ts": ts_calc,
                         "n_compras": len(map_compras),
                         "n_pedidos": len(map_pedidos),
+                        "real_prefill": real_prefill,
                     }
 
         # Render del resultado (si hay).
@@ -2082,8 +2100,12 @@ with tab_stock_teorico:
             f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
         )
 
+        # Pre-rellenar Real con lo que se cargo en el ultimo Actualizar.
+        real_prefill_map = resultado.get("real_prefill", {}) or {}
         df_editor = df_teorico_r.copy()
-        df_editor["Real"] = ""
+        df_editor["Real"] = df_editor["Código"].astype(str).map(
+            lambda c: real_prefill_map.get(c, "")
+        )
 
         st.caption(
             "💡 Vacío en Real = se guarda el Teórico. "
@@ -2120,7 +2142,9 @@ with tab_stock_teorico:
                              "Vacío = usar Teórico. '0' = cero real.",
                     ),
                 },
-                key=f"editor_real_{resultado.get('f0')}_{resultado.get('fc')}_{resultado.get('fp')}",
+                # Key incluye ts del calculo asi cada Actualizar resetea
+                # el editor (descarta ediciones del calculo anterior).
+                key=f"editor_real_{resultado.get('ts') or 'init'}",
             )
             guardar_conteo = st.form_submit_button(
                 "💾 Guardar Stock para esta fecha", type="primary"
