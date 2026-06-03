@@ -2246,11 +2246,16 @@ with tab_dux:
 
                     oid = str(orden.get("id") or nro or i)
                     asignado_prev = selecciones_dux.get(oid)
-                    fecha_default_entrega = (
-                        pd.to_datetime(asignado_prev).date()
-                        if asignado_prev
-                        else date.today() + timedelta(days=1)
-                    )
+                    if asignado_prev:
+                        fecha_default_entrega = pd.to_datetime(asignado_prev).date()
+                    else:
+                        # Default: fecha de registro del pedido (cuando se cargo en DUX).
+                        # Fallback: manana.
+                        f_reg = _fecha_dux(orden)
+                        if f_reg and f_reg != pd.Timestamp.min:
+                            fecha_default_entrega = f_reg.date()
+                        else:
+                            fecha_default_entrega = date.today() + timedelta(days=1)
 
                     estado_fact = orden.get("estado_facturacion") or ""
                     estado_badges = {
@@ -2699,11 +2704,16 @@ with tab_wix:
 
                     oid = o.get("id") or nro
                     asignado_prev = selecciones.get(oid)
-                    fecha_default_entrega = (
-                        pd.to_datetime(asignado_prev).date()
-                        if asignado_prev
-                        else date.today() + timedelta(days=1)
-                    )
+                    if asignado_prev:
+                        fecha_default_entrega = pd.to_datetime(asignado_prev).date()
+                    else:
+                        # Default: fecha de creacion del pedido (Wix createdDate).
+                        # Fallback: manana.
+                        f_reg = _fecha_wix(o)
+                        if f_reg and f_reg != pd.Timestamp.min:
+                            fecha_default_entrega = f_reg.date()
+                        else:
+                            fecha_default_entrega = date.today() + timedelta(days=1)
 
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
