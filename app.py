@@ -2086,13 +2086,23 @@ with tab_stock_teorico:
             f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
         )
 
-        # Real siempre arranca vacio. El teorico es ayuda visual.
+        # La columna Real pre-rellena con el stock_historico para fecha_conteo
+        # (igual logica que la grilla del Stock tab).
+        stk_conteo_df = db.cargar_stock(fecha=fecha_conteo)
+        map_stk_conteo = (
+            dict(zip(
+                stk_conteo_df["codigo"].astype(str),
+                stk_conteo_df["cantidad"].astype(float),
+            )) if not stk_conteo_df.empty else {}
+        )
         df_editor = df_teorico_r.copy()
-        df_editor["Real"] = ""
+        df_editor["Real"] = df_editor["Código"].astype(str).map(
+            lambda c: _fmt_num_es(map_stk_conteo[c]) if c in map_stk_conteo else ""
+        )
 
         st.caption(
-            "💡 Vacío en Real = preserva el stock que ya estaba guardado para esa fecha (no toca). "
-            "Tipeá un número para reemplazarlo. '0' = cero real."
+            "💡 Real muestra el Stock guardado para la fecha del conteo. "
+            "Tipeá para modificar. Vacío = 0. Al guardar se reemplaza el Stock de esa fecha."
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
@@ -2125,49 +2135,35 @@ with tab_stock_teorico:
                              "Vacío = usar Teórico. '0' = cero real.",
                     ),
                 },
-                # Key incluye ts del calculo asi cada Actualizar resetea
-                # el editor (descarta ediciones del calculo anterior).
-                key=f"editor_real_{resultado.get('ts') or 'init'}",
+                # Key incluye ts del calculo Y fecha_conteo. Asi:
+                # - Cada Actualizar resetea el editor
+                # - Cambiar fecha_conteo tambien resetea (carga el stock
+                #   guardado para la nueva fecha)
+                key=f"editor_real_{resultado.get('ts') or 'init'}_{fecha_conteo}",
             )
             guardar_conteo = st.form_submit_button(
                 "💾 Guardar Stock para esta fecha", type="primary"
             )
 
         if guardar_conteo:
-            # Solo los productos con Real tipeada se actualizan.
-            # Los demas: preservan su valor del stock actual de fecha_conteo
-            # (no se pisan).
-            nuevos_valores = {}
+            # Save simple, igual que Stock tab: parsear todos los Real
+            # (vacio -> 0) y reemplazar el stock_historico de fecha_conteo.
+            valores_real = {}
             for _, row in edited_real.iterrows():
                 cod = str(row["Código"])
                 real_str = str(row.get("Real", "") or "").strip()
-                if real_str:
-                    nuevos_valores[cod] = _parse_num_es(real_str)
+                valores_real[cod] = (
+                    _parse_num_es(real_str) if real_str else 0.0
+                )
 
-            stock_actual_conteo = db.cargar_stock(fecha=fecha_conteo)
-            map_stk_actual = (
-                dict(zip(
-                    stock_actual_conteo["codigo"].astype(str),
-                    stock_actual_conteo["cantidad"].astype(float),
-                )) if not stock_actual_conteo.empty else {}
-            )
-
-            # Para cada producto del catalogo:
-            # 1) si esta en nuevos_valores -> usar ese
-            # 2) sino, preservar el valor existente para fecha_conteo
-            # 3) sino, 0
             salida = productos[["codigo", "producto", "unidad_medida"]].copy()
             salida["cantidad"] = salida["codigo"].astype(str).map(
-                lambda c: nuevos_valores.get(c, map_stk_actual.get(c, 0.0))
+                lambda c: valores_real.get(c, 0.0)
             ).astype(float)
 
             try:
                 db.guardar_stock(salida, fecha_conteo)
-                st.success(
-                    f"✅ Stock del {fecha_conteo} guardado "
-                    f"({len(nuevos_valores)} productos cargados de nuevo, "
-                    f"el resto preservado)."
-                )
+                st.success(f"✅ Stock del {fecha_conteo} guardado en Sheets.")
             except Exception as e:
                 st.error(f"⚠️ Error al guardar: {e}")
 
