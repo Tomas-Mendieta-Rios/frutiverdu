@@ -1962,6 +1962,15 @@ with tab_stock:
                         "ts": ts_calc,
                         "n_compras": len(map_compras),
                         "n_pedidos": len(map_pedidos),
+                        # Snapshot para los expanders de detalle
+                        "map_stock_ini": dict(map_stock_ini),
+                        "map_compras": dict(map_compras),
+                        "dux_contados": list(
+                            st.session_state.get("_dux_contados", [])
+                        ),
+                        "wix_contados": list(
+                            st.session_state.get("_wix_contados", [])
+                        ),
                     }
 
         # Render del resultado (si hay).
@@ -1995,6 +2004,133 @@ with tab_stock:
             f"Compras del {resultado['fc']}: {resultado['n_compras']} códigos. "
             f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
         )
+
+        # Expanders para auditar la data que esta entrando al calculo
+        # (similar a Total a comprar). Snapshot guardado al apretar Actualizar.
+        _prod_nombre = dict(zip(
+            productos["codigo"].astype(str),
+            productos["producto"].astype(str),
+        ))
+
+        _map_ini = resultado.get("map_stock_ini") or {}
+        with st.expander(
+            f"📦 Stock inicial usado ({n_stock_ini} códigos)",
+            expanded=False,
+        ):
+            if not _map_ini:
+                st.caption("Sin datos.")
+            else:
+                _filas_ini = [
+                    {
+                        "Código": cod,
+                        "Producto": _prod_nombre.get(cod, "(desconocido)"),
+                        "Cantidad": float(cant),
+                    }
+                    for cod, cant in _map_ini.items()
+                    if float(cant) > 1e-6
+                ]
+                if _filas_ini:
+                    st.dataframe(
+                        pd.DataFrame(_filas_ini).sort_values("Producto"),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.caption("Stock inicial todo en 0.")
+
+        _map_co = resultado.get("map_compras") or {}
+        with st.expander(
+            f"🛒 Compras del {resultado['fc']} ({resultado['n_compras']} códigos)",
+            expanded=False,
+        ):
+            if not _map_co:
+                st.caption("No hubo compras ese día (o DUX no respondió).")
+            else:
+                _filas_co = [
+                    {
+                        "Código": cod,
+                        "Producto": _prod_nombre.get(cod, "(desconocido)"),
+                        "Recepcionado": float(cant),
+                    }
+                    for cod, cant in _map_co.items()
+                ]
+                st.dataframe(
+                    pd.DataFrame(_filas_co).sort_values("Producto"),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        _dux_ct = resultado.get("dux_contados") or []
+        _wix_ct = resultado.get("wix_contados") or []
+        _total_ped = len(_dux_ct) + len(_wix_ct)
+        with st.expander(
+            f"📋 Pedidos contados del {resultado['fp']} ({_total_ped} pedidos)",
+            expanded=False,
+        ):
+            if not _total_ped:
+                st.caption("No hay pedidos asignados a esa fecha de entrega.")
+            else:
+                if _dux_ct:
+                    st.markdown(f"**DUX ({len(_dux_ct)})**")
+                    for o in _dux_ct:
+                        nro = _dux_get_first(
+                            o, ["nro_pedido", "nroPedido", "numero", "id"]
+                        )
+                        cliente = extraer_cliente_dux(o)
+                        items = extraer_items_dux(o)
+                        with st.expander(
+                            f"#{nro or '-'} · {cliente} · {len(items)} ítems",
+                            expanded=False,
+                        ):
+                            if items:
+                                filas_it = [extraer_item_dux(it) for it in items]
+                                st.dataframe(
+                                    pd.DataFrame(filas_it)[
+                                        ["codigo", "producto", "cantidad"]
+                                    ],
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+                            else:
+                                st.caption("Sin items.")
+                if _wix_ct:
+                    st.markdown(f"**Wix ({len(_wix_ct)})**")
+                    for o in _wix_ct:
+                        nro = o.get("number") or o.get("id", "")
+                        bi = (
+                            (o.get("billingInfo", {}) or {})
+                            .get("contactDetails", {}) or {}
+                        )
+                        nombre_w = (
+                            f"{bi.get('firstName', '') or ''} "
+                            f"{bi.get('lastName', '') or ''}".strip()
+                            or "(sin cliente)"
+                        )
+                        items_w = o.get("lineItems") or []
+                        with st.expander(
+                            f"#{nro} · {nombre_w} · {len(items_w)} ítems",
+                            expanded=False,
+                        ):
+                            if items_w:
+                                filas_iw = []
+                                for li in items_w:
+                                    nombre_prod = (
+                                        (li.get("productName") or {}).get("translated")
+                                        or (li.get("productName") or {}).get("original")
+                                        or ""
+                                    )
+                                    cant = li.get("quantity") or 0
+                                    filas_iw.append({
+                                        "producto": nombre_prod,
+                                        "cantidad": cant,
+                                    })
+                                st.dataframe(
+                                    pd.DataFrame(filas_iw),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+                            else:
+                                st.caption("Sin items.")
 
         # Pre-fill Real EXACTAMENTE como Stock tab:
         # - Si hay stock guardado para fecha_conteo -> mostrar esos valores
