@@ -4415,6 +4415,11 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_detalle_compr
             )
 
 with tab_mapeo:
+    ts_mapeo_ph = st.empty()
+    ts_mapeo_ph.caption(
+        f"🕒 Última actualización: **{db.ultima_carga('mapping_wix_dux') or '?'}**"
+    )
+
     st.info(
         "Mapeá cada producto de Wix con su equivalente en DUX. "
         "Lo que no tenga equivalente, dejalo en **(sin mapear)**."
@@ -4560,6 +4565,12 @@ with tab_mapeo:
                 ],
             )
             db.guardar_mapping_wix_dux(df_to_save)
+            try:
+                ts_mapeo_ph.caption(
+                    f"🕒 Última actualización: **{db.ultima_carga('mapping_wix_dux') or '?'}**"
+                )
+            except Exception:
+                pass
             st.success(f"✅ {len(rows)} mapeos guardados en Sheets.")
 
 with tab_packs:
