@@ -122,8 +122,11 @@ def obtener_ultimo_comprobante_dux():
 
 
 def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
-    """Lee las compras de DUX en un rango y devuelve dict {cod_item: cantidad_recepcionada_total}.
-    Usa el endpoint v2/compras con incluir_detalle=true, pagina automaticamente.
+    """Lee las compras de DUX en un rango.
+    Devuelve dict {
+      'cantidades': {cod_item: cantidad_recepcionada_total},
+      'compras': [lista de compras raw con sus items, proveedor, etc.]
+    }
     Si la API falla, devuelve None (para distinguir de '0 compras')."""
     dux_cfg = st.secrets.get("dux", {})
     token = dux_cfg.get("token", "")
@@ -142,6 +145,7 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
     url = f"{base_url}/v2/compras"
 
     cantidades = {}
+    compras_raw = []
     offset = 0
     page_size = 50
     max_pages = 50  # tope: 2500 compras absurdo en cualquier rango razonable
@@ -168,6 +172,7 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
             break
 
         for compra in datos:
+            compras_raw.append(compra)
             for item in (compra.get("items", []) or []):
                 cod = str(item.get("cod_item", "") or "").strip()
                 if not cod:
@@ -184,7 +189,7 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
         offset += page_size
         time.sleep(2)  # respetar rate limit DUX entre paginas
 
-    return cantidades
+    return {"cantidades": cantidades, "compras": compras_raw}
 
 
 # Dias de la semana (en castellano, sin acentos). Definicion unica reusada
@@ -1902,13 +1907,15 @@ with tab_stock:
                             )
                         )
 
-                    map_compras = cargar_compras_dux_v2(fc, fc)
-                    if map_compras is None:
+                    compras_res = cargar_compras_dux_v2(fc, fc)
+                    if compras_res is None:
                         st.error(
                             "⚠️ No se pudieron leer las compras de DUX. "
                             "Probá recargar en un momento."
                         )
                         return
+                    map_compras = compras_res.get("cantidades", {})
+                    compras_raw = compras_res.get("compras", [])
 
                     df_ped_agg = cargar_pedidos_dux_aggregated(
                         productos, dia_estimado=None, fecha_compra=[str(fp)]
@@ -1965,6 +1972,7 @@ with tab_stock:
                         # Snapshot para los expanders de detalle
                         "map_stock_ini": dict(map_stock_ini),
                         "map_compras": dict(map_compras),
+                        "compras_raw": list(compras_raw),
                         "dux_contados": list(
                             st.session_state.get("_dux_contados", [])
                         ),
@@ -2038,27 +2046,43 @@ with tab_stock:
                 else:
                     st.caption("Stock inicial todo en 0.")
 
-        _map_co = resultado.get("map_compras") or {}
+        _compras_raw = resultado.get("compras_raw") or []
         with st.expander(
-            f"🛒 Compras del {resultado['fc']} ({resultado['n_compras']} códigos)",
+            f"🛒 Compras del {resultado['fc']} ({len(_compras_raw)} compras)",
             expanded=False,
         ):
-            if not _map_co:
+            if not _compras_raw:
                 st.caption("No hubo compras ese día (o DUX no respondió).")
             else:
-                _filas_co = [
-                    {
-                        "Código": cod,
-                        "Producto": _prod_nombre.get(cod, "(desconocido)"),
-                        "Recepcionado": float(cant),
-                    }
-                    for cod, cant in _map_co.items()
-                ]
-                st.dataframe(
-                    pd.DataFrame(_filas_co).sort_values("Producto"),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                for c in _compras_raw:
+                    nro = c.get("nro_comprobante", "?")
+                    prov = (c.get("proveedor") or {}).get("razon_social") or "?"
+                    items = c.get("items") or []
+                    with st.expander(
+                        f"#{nro} · {prov} · {len(items)} ítems",
+                        expanded=False,
+                    ):
+                        if items:
+                            filas_c = [
+                                {
+                                    "Código": str(it.get("cod_item", "")),
+                                    "Producto": _prod_nombre.get(
+                                        str(it.get("cod_item", "")),
+                                        "(desconocido)",
+                                    ),
+                                    "Recepcionado": float(
+                                        it.get("ctd_recepcionada", 0) or 0
+                                    ),
+                                }
+                                for it in items
+                            ]
+                            st.dataframe(
+                                pd.DataFrame(filas_c),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        else:
+                            st.caption("Sin items.")
 
         _dux_ct = resultado.get("dux_contados") or []
         _wix_ct = resultado.get("wix_contados") or []
