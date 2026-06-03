@@ -1863,6 +1863,14 @@ with tab_stock:
             saved_teo = {"rows": [], "f0": None, "fc": None, "fp": None, "ts": None}
         if saved_teo.get("rows"):
             rows_s = saved_teo["rows"]
+            # Detalle de los expanders (puede no existir en deploys viejos)
+            try:
+                saved_detalle = db.cargar_stock_teorico_detalle()
+            except Exception:
+                saved_detalle = {
+                    "map_stock_ini": {}, "map_compras": {},
+                    "compras_raw": [], "dux_contados": [], "wix_contados": [],
+                }
             st.session_state[TEO_RESULT_KEY] = {
                 "rows": rows_s,
                 "f0": saved_teo.get("f0"),
@@ -1875,6 +1883,11 @@ with tab_stock:
                 "n_pedidos": sum(
                     1 for r in rows_s if float(r.get("− Pedidos", 0) or 0) > 0
                 ),
+                "map_stock_ini": saved_detalle.get("map_stock_ini", {}),
+                "map_compras": saved_detalle.get("map_compras", {}),
+                "compras_raw": saved_detalle.get("compras_raw", []),
+                "dux_contados": saved_detalle.get("dux_contados", []),
+                "wix_contados": saved_detalle.get("wix_contados", []),
             }
 
     # Fragment: boton Calcular + tabla resultado.
@@ -1955,6 +1968,17 @@ with tab_stock:
 
                     try:
                         db.guardar_stock_teorico(rows, f0, fc, fp)
+                        # Detalle (para que otros usuarios vean los dropdowns)
+                        try:
+                            db.guardar_stock_teorico_detalle(
+                                map_stock_ini=map_stock_ini,
+                                map_compras=map_compras,
+                                compras_raw=compras_raw,
+                                dux_contados=st.session_state.get("_dux_contados", []),
+                                wix_contados=st.session_state.get("_wix_contados", []),
+                            )
+                        except Exception:
+                            pass
                         ts_calc = pd.Timestamp.now(
                             tz="America/Argentina/Buenos_Aires"
                         ).strftime("%Y-%m-%d %H:%M:%S")

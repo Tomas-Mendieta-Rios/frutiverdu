@@ -823,3 +823,52 @@ def cargar_stock_teorico():
         "fp": _parse_date(cfg.get("st_teorico_ultimo_fp")),
         "ts": cfg.get("st_teorico_ultimo_ts"),
     }
+
+
+def guardar_stock_teorico_detalle(map_stock_ini, map_compras, compras_raw, dux_contados, wix_contados):
+    """Persiste el detalle del ultimo calculo de stock teorico (para los
+    expanders que muestran stock inicial, compras y pedidos contados).
+    Cada pieza se guarda como JSON en una key de config. Si un JSON
+    excede el limite de Sheets (49KB), se guarda vacio (mejor sin detalle
+    que romper)."""
+    MAX = 49000
+
+    def _safe(obj, fallback="[]"):
+        try:
+            s = _json.dumps(obj, ensure_ascii=False)
+        except Exception:
+            return fallback
+        if len(s) > MAX:
+            return fallback
+        return s
+
+    guardar_config({
+        "st_teorico_stkini_json": _safe(map_stock_ini, "{}"),
+        "st_teorico_compras_agg_json": _safe(map_compras, "{}"),
+        "st_teorico_compras_raw_json": _safe(compras_raw, "[]"),
+        "st_teorico_dux_contados_json": _safe(dux_contados, "[]"),
+        "st_teorico_wix_contados_json": _safe(wix_contados, "[]"),
+    })
+
+
+def cargar_stock_teorico_detalle():
+    """Lee el detalle del ultimo calculo desde config. Devuelve dict con
+    todas las piezas; si no hay nada guardado, devuelve valores vacios."""
+    cfg = cargar_config()
+
+    def _parse(key, default):
+        v = cfg.get(key, "")
+        if not v:
+            return default
+        try:
+            return _json.loads(v)
+        except Exception:
+            return default
+
+    return {
+        "map_stock_ini": _parse("st_teorico_stkini_json", {}),
+        "map_compras": _parse("st_teorico_compras_agg_json", {}),
+        "compras_raw": _parse("st_teorico_compras_raw_json", []),
+        "dux_contados": _parse("st_teorico_dux_contados_json", []),
+        "wix_contados": _parse("st_teorico_wix_contados_json", []),
+    }
