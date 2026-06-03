@@ -2623,7 +2623,12 @@ with tab_wix:
             def _fecha_wix(o):
                 f = o.get("createdDate") or ""
                 try:
-                    return pd.to_datetime(f)
+                    ts = pd.to_datetime(f)
+                    # Wix devuelve fechas en UTC con tz: las convierto a naive
+                    # para poder comparar con Timestamps locales sin tz.
+                    if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
+                        ts = ts.tz_localize(None)
+                    return ts
                 except Exception:
                     return pd.Timestamp.min
             # Sort por number (Wix) DESC.
