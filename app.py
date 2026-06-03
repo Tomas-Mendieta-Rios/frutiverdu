@@ -1950,234 +1950,226 @@ with tab_stock_teorico:
                 ),
             }
 
-    if st.button(
-        "🧮 Calcular stock teórico",
-        type="primary",
-        key="btn_calc_teorico",
-        use_container_width=True,
-    ):
-        if str(f0) not in (fechas_stk_disp_t or []):
-            st.error(
-                f"⚠️ No hay Stock guardado para la fecha {f0}. "
-                "Elegí una fecha que tenga conteo físico cargado."
-            )
-        else:
-            with st.spinner("Calculando stock teórico..."):
-                # 1) Stock inicial
-                stk_ini_df = db.cargar_stock(fecha=f0)
-                map_stock_ini = {}
-                if not stk_ini_df.empty:
-                    map_stock_ini = dict(
-                        zip(
-                            stk_ini_df["codigo"].astype(str),
-                            stk_ini_df["cantidad"].astype(float),
-                        )
-                    )
-
-                # 2) Compras DUX (un dia)
-                map_compras = cargar_compras_dux_v2(fc, fc)
-                if map_compras is None:
-                    st.error(
-                        "⚠️ No se pudieron leer las compras de DUX. "
-                        "Probá recargar en un momento."
-                    )
-                    st.stop()
-
-                # 3) Pedidos entregados (un dia)
-                df_ped_agg = cargar_pedidos_dux_aggregated(
-                    productos, dia_estimado=None, fecha_compra=[str(fp)]
+    # Fragment: boton Calcular + tabla resultado.
+    # Aislar en fragment hace que cambiar fechas (afuera) NO refresque la
+    # tabla pesada (300 productos en data_editor). Solo el click del boton
+    # adentro re-ejecuta este bloque.
+    @st.fragment
+    def _fragment_stock_teorico():
+        if st.button(
+            "🧮 Calcular stock teórico",
+            type="primary",
+            key="btn_calc_teorico",
+            use_container_width=True,
+        ):
+            if str(f0) not in (fechas_stk_disp_t or []):
+                st.error(
+                    f"⚠️ No hay Stock guardado para la fecha {f0}. "
+                    "Elegí una fecha que tenga conteo físico cargado."
                 )
-                map_pedidos = {}
-                if not df_ped_agg.empty:
-                    for _, r in df_ped_agg.iterrows():
-                        cod = str(r.get("codigo", ""))
-                        ctd = float(r.get("cantidad", 0) or 0)
-                        if cod and ctd > 0:
-                            map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
+            else:
+                with st.spinner("Calculando stock teórico..."):
+                    stk_ini_df = db.cargar_stock(fecha=f0)
+                    map_stock_ini = {}
+                    if not stk_ini_df.empty:
+                        map_stock_ini = dict(
+                            zip(
+                                stk_ini_df["codigo"].astype(str),
+                                stk_ini_df["cantidad"].astype(float),
+                            )
+                        )
 
-                # Incluir TODOS los productos del catalogo, no solo los con
-                # movimientos (asi el conteo fisico puede cargarlos todos).
-                prod_map = {
-                    str(c): (str(p), str(u))
-                    for c, p, u in zip(
-                        productos["codigo"],
-                        productos["producto"],
-                        productos["unidad_medida"],
+                    map_compras = cargar_compras_dux_v2(fc, fc)
+                    if map_compras is None:
+                        st.error(
+                            "⚠️ No se pudieron leer las compras de DUX. "
+                            "Probá recargar en un momento."
+                        )
+                        return
+
+                    df_ped_agg = cargar_pedidos_dux_aggregated(
+                        productos, dia_estimado=None, fecha_compra=[str(fp)]
                     )
-                }
-                codigos_set = set(prod_map.keys())
+                    map_pedidos = {}
+                    if not df_ped_agg.empty:
+                        for _, r in df_ped_agg.iterrows():
+                            cod = str(r.get("codigo", ""))
+                            ctd = float(r.get("cantidad", 0) or 0)
+                            if cod and ctd > 0:
+                                map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
 
-                rows = []
-                for cod in codigos_set:
-                    nombre, _u = prod_map.get(cod, ("(desconocido)", ""))
-                    s = float(map_stock_ini.get(cod, 0.0))
-                    c = float(map_compras.get(cod, 0.0))
-                    p = float(map_pedidos.get(cod, 0.0))
-                    t = s + c - p
-                    rows.append({
-                        "Código": cod,
-                        "Producto": nombre,
-                        "Stock inicial": s,
-                        "+ Compras": c,
-                        "− Pedidos": p,
-                        "= Teórico": t,
-                    })
+                    # Incluir TODOS los productos del catalogo
+                    prod_map = {
+                        str(c): (str(p), str(u))
+                        for c, p, u in zip(
+                            productos["codigo"],
+                            productos["producto"],
+                            productos["unidad_medida"],
+                        )
+                    }
+                    rows = []
+                    for cod in prod_map.keys():
+                        nombre, _u = prod_map[cod]
+                        s = float(map_stock_ini.get(cod, 0.0))
+                        c = float(map_compras.get(cod, 0.0))
+                        p = float(map_pedidos.get(cod, 0.0))
+                        t = s + c - p
+                        rows.append({
+                            "Código": cod,
+                            "Producto": nombre,
+                            "Stock inicial": s,
+                            "+ Compras": c,
+                            "− Pedidos": p,
+                            "= Teórico": t,
+                        })
 
-                # Persistir en gsheets para que sobreviva cerrar la app
-                try:
-                    db.guardar_stock_teorico(rows, f0, fc, fp)
-                    ts_calc = pd.Timestamp.now(
-                        tz="America/Argentina/Buenos_Aires"
-                    ).strftime("%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    ts_calc = None
+                    try:
+                        db.guardar_stock_teorico(rows, f0, fc, fp)
+                        ts_calc = pd.Timestamp.now(
+                            tz="America/Argentina/Buenos_Aires"
+                        ).strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception:
+                        ts_calc = None
 
-                # Guardar resultado en session_state para que sobreviva
-                # los reruns provocados por cambiar fechas.
-                st.session_state[TEO_RESULT_KEY] = {
-                    "rows": rows,
-                    "f0": f0,
-                    "fc": fc,
-                    "fp": fp,
-                    "ts": ts_calc,
-                    "n_compras": len(map_compras),
-                    "n_pedidos": len(map_pedidos),
-                }
+                    st.session_state[TEO_RESULT_KEY] = {
+                        "rows": rows,
+                        "f0": f0,
+                        "fc": fc,
+                        "fp": fp,
+                        "ts": ts_calc,
+                        "n_compras": len(map_compras),
+                        "n_pedidos": len(map_pedidos),
+                    }
 
-    # Render del resultado (si hay) — vive afuera del if del boton para
-    # que se siga viendo aunque el usuario cambie las fechas.
-    resultado = st.session_state.get(TEO_RESULT_KEY)
-    if resultado:
+        # Render del resultado (si hay).
+        resultado = st.session_state.get(TEO_RESULT_KEY)
+        if not resultado:
+            return
+
         rows_r = resultado["rows"]
         if not rows_r:
             st.info("No hay movimientos en las fechas seleccionadas.")
-        else:
-            df_teorico_r = (
-                pd.DataFrame(rows_r).sort_values("Producto").reset_index(drop=True)
+            return
+
+        df_teorico_r = pd.DataFrame(rows_r).reset_index(drop=True)
+
+        # Sort: primero productos con movimientos, despues por nombre.
+        def _tiene_mov(row):
+            return (
+                abs(float(row.get("Stock inicial", 0))) > 1e-6
+                or abs(float(row.get("+ Compras", 0))) > 1e-6
+                or abs(float(row.get("− Pedidos", 0))) > 1e-6
+            )
+        df_teorico_r = df_teorico_r.assign(
+            _mov=df_teorico_r.apply(_tiene_mov, axis=1).astype(int)
+        ).sort_values(
+            ["_mov", "Producto"], ascending=[False, True]
+        ).drop(columns=["_mov"]).reset_index(drop=True)
+
+        n_con_mov = sum(1 for _, r in df_teorico_r.iterrows() if _tiene_mov(r))
+        st.success(
+            f"✅ {n_con_mov} productos con movimientos · "
+            f"{len(df_teorico_r)} en el catálogo. "
+            f"Compras del {resultado['fc']}: {resultado['n_compras']} códigos. "
+            f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
+        )
+
+        df_editor = df_teorico_r.copy()
+        df_editor["Real"] = ""
+
+        with st.form("form_conteo_fisico", clear_on_submit=False):
+            edited_real = st.data_editor(
+                df_editor,
+                use_container_width=True,
+                hide_index=True,
+                disabled=[
+                    "Código", "Producto",
+                    "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
+                ],
+                column_config={
+                    "Código": st.column_config.TextColumn("Código"),
+                    "Producto": st.column_config.TextColumn("Producto"),
+                    "Stock inicial": st.column_config.NumberColumn(
+                        "Stock inicial", format="%.2f"
+                    ),
+                    "+ Compras": st.column_config.NumberColumn(
+                        "+ Compras", format="%.2f"
+                    ),
+                    "− Pedidos": st.column_config.NumberColumn(
+                        "− Pedidos", format="%.2f"
+                    ),
+                    "= Teórico": st.column_config.NumberColumn(
+                        "= Teórico", format="%.2f"
+                    ),
+                    "Real": st.column_config.TextColumn(
+                        "Real",
+                        help="Cargá el conteo físico. Coma o punto. "
+                             "Vacío = usar Teórico. '0' = cero real.",
+                    ),
+                },
+                key=f"editor_real_{resultado.get('f0')}_{resultado.get('fc')}_{resultado.get('fp')}",
             )
 
-            # Sort: primero productos con movimientos, luego el resto.
-            # Dentro de cada grupo, por nombre.
-            def _tiene_mov(row):
-                return (
-                    abs(float(row.get("Stock inicial", 0))) > 1e-6
-                    or abs(float(row.get("+ Compras", 0))) > 1e-6
-                    or abs(float(row.get("− Pedidos", 0))) > 1e-6
+            col_fc, col_info = st.columns([1, 2])
+            with col_fc:
+                fecha_conteo = st.date_input(
+                    "📅 Fecha del conteo",
+                    value=date.today(),
+                    key="fecha_conteo_real",
+                    format="YYYY-MM-DD",
                 )
-            df_teorico_r = df_teorico_r.assign(
-                _mov=df_teorico_r.apply(_tiene_mov, axis=1).astype(int)
-            ).sort_values(
-                ["_mov", "Producto"], ascending=[False, True]
-            ).drop(columns=["_mov"]).reset_index(drop=True)
-
-            n_con_mov = sum(1 for _, r in df_teorico_r.iterrows() if _tiene_mov(r))
-            st.success(
-                f"✅ {n_con_mov} productos con movimientos · "
-                f"{len(df_teorico_r)} en el catálogo. "
-                f"Compras del {resultado['fc']}: {resultado['n_compras']} códigos. "
-                f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
+            with col_info:
+                st.caption(
+                    "💡 Vacío en Real = se guarda el Teórico. "
+                    "Si la fecha ya tenía Stock cargado, se reemplaza."
+                )
+            guardar_conteo = st.form_submit_button(
+                "💾 Guardar Stock para esta fecha", type="primary"
             )
 
-            # Tabla editable: el usuario puede cargar el conteo fisico en
-            # la columna 'Real'. Vacío = se guarda el Teorico. '0' explícito = se guarda 0.
-            df_editor = df_teorico_r.copy()
-            df_editor["Real"] = ""
+        if guardar_conteo:
+            nuevos_valores = {}
+            for _, row in edited_real.iterrows():
+                cod = str(row["Código"])
+                real_str = str(row.get("Real", "") or "").strip()
+                teo_val = float(row.get("= Teórico", 0) or 0)
+                if real_str:
+                    nuevos_valores[cod] = _parse_num_es(real_str)
+                else:
+                    nuevos_valores[cod] = teo_val
 
-            with st.form("form_conteo_fisico", clear_on_submit=False):
-                edited_real = st.data_editor(
-                    df_editor,
-                    use_container_width=True,
-                    hide_index=True,
-                    disabled=[
-                        "Código", "Producto",
-                        "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
-                    ],
-                    column_config={
-                        "Código": st.column_config.TextColumn("Código"),
-                        "Producto": st.column_config.TextColumn("Producto"),
-                        "Stock inicial": st.column_config.NumberColumn(
-                            "Stock inicial", format="%.2f"
-                        ),
-                        "+ Compras": st.column_config.NumberColumn(
-                            "+ Compras", format="%.2f"
-                        ),
-                        "− Pedidos": st.column_config.NumberColumn(
-                            "− Pedidos", format="%.2f"
-                        ),
-                        "= Teórico": st.column_config.NumberColumn(
-                            "= Teórico", format="%.2f"
-                        ),
-                        "Real": st.column_config.TextColumn(
-                            "Real",
-                            help="Cargá el conteo físico. Coma o punto. "
-                                 "Vacío = usar Teórico. '0' = cero real.",
-                        ),
-                    },
-                    key=f"editor_real_{resultado.get('f0')}_{resultado.get('fc')}_{resultado.get('fp')}",
-                )
-
-                col_fc, col_info = st.columns([1, 2])
-                with col_fc:
-                    fecha_conteo = st.date_input(
-                        "📅 Fecha del conteo",
-                        value=date.today(),
-                        key="fecha_conteo_real",
-                        format="YYYY-MM-DD",
-                    )
-                with col_info:
-                    st.caption(
-                        "💡 Vacío en Real = se guarda el Teórico. "
-                        "Si la fecha ya tenía Stock cargado, se reemplaza."
-                    )
-                guardar_conteo = st.form_submit_button(
-                    "💾 Guardar Stock para esta fecha", type="primary"
-                )
-
-            if guardar_conteo:
-                # Construir salida: ALL productos, cantidad = Real (si filled)
-                # o Teorico (si Real vacio). Productos no en la tabla se preservan
-                # con su stock actual de fecha_conteo (caso raro: catalogo cambio).
-                nuevos_valores = {}
-                for _, row in edited_real.iterrows():
-                    cod = str(row["Código"])
-                    real_str = str(row.get("Real", "") or "").strip()
-                    teo_val = float(row.get("= Teórico", 0) or 0)
-                    if real_str:
-                        nuevos_valores[cod] = _parse_num_es(real_str)
-                    else:
-                        nuevos_valores[cod] = teo_val
-
-                # Preservar productos del catalogo que no esten en la tabla
-                stock_actual_conteo = db.cargar_stock(fecha=fecha_conteo)
-                map_stk_actual = (
-                    dict(zip(
-                        stock_actual_conteo["codigo"].astype(str),
-                        stock_actual_conteo["cantidad"].astype(float),
-                    )) if not stock_actual_conteo.empty else {}
-                )
-
-                salida = productos[["codigo", "producto", "unidad_medida"]].copy()
-                salida["cantidad"] = salida["codigo"].astype(str).map(
-                    lambda c: nuevos_valores.get(c, map_stk_actual.get(c, 0.0))
-                ).astype(float)
-
-                try:
-                    db.guardar_stock(salida, fecha_conteo)
-                    st.success(
-                        f"✅ Stock del {fecha_conteo} guardado en Sheets "
-                        f"({len(nuevos_valores)} productos)."
-                    )
-                except Exception as e:
-                    st.error(f"⚠️ Error al guardar: {e}")
-
-            ts_txt = (
-                f" · 🕒 calculado {resultado.get('ts')}"
-                if resultado.get("ts") else ""
+            stock_actual_conteo = db.cargar_stock(fecha=fecha_conteo)
+            map_stk_actual = (
+                dict(zip(
+                    stock_actual_conteo["codigo"].astype(str),
+                    stock_actual_conteo["cantidad"].astype(float),
+                )) if not stock_actual_conteo.empty else {}
             )
-            st.caption(
-                f"Fórmula: Stock({resultado['f0']}) + Compras({resultado['fc']}) "
-                f"− Pedidos({resultado['fp']}) = Teórico{ts_txt}"
-            )
+
+            salida = productos[["codigo", "producto", "unidad_medida"]].copy()
+            salida["cantidad"] = salida["codigo"].astype(str).map(
+                lambda c: nuevos_valores.get(c, map_stk_actual.get(c, 0.0))
+            ).astype(float)
+
+            try:
+                db.guardar_stock(salida, fecha_conteo)
+                st.success(
+                    f"✅ Stock del {fecha_conteo} guardado en Sheets "
+                    f"({len(nuevos_valores)} productos)."
+                )
+            except Exception as e:
+                st.error(f"⚠️ Error al guardar: {e}")
+
+        ts_txt = (
+            f" · 🕒 calculado {resultado.get('ts')}"
+            if resultado.get("ts") else ""
+        )
+        st.caption(
+            f"Fórmula: Stock({resultado['f0']}) + Compras({resultado['fc']}) "
+            f"− Pedidos({resultado['fp']}) = Teórico{ts_txt}"
+        )
+
+    _fragment_stock_teorico()
 
 with tab_dux:
     dux_cfg = st.secrets.get("dux", {})
