@@ -1005,9 +1005,7 @@ with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
 
 with tab_grupo_diario:
-    tab_stock, tab_estimado, tab_stock_teorico = st.tabs(
-        ["Stock", "Estimado", "📊 Stock teórico"]
-    )
+    tab_stock, tab_estimado = st.tabs(["📦 Stock", "Estimado"])
 
 with tab_grupo_analitica:
     (
@@ -1158,127 +1156,6 @@ with tab_probar:
                     )
                 else:
                     st.markdown(f"- **{factor:,.3f}** {otro['producto']}")
-
-with tab_stock:
-    df_stock_full = db.cargar_stock_completo()
-
-    fechas_stock_disp = db.fechas_stock()
-    cfg_stk_tab = db.cargar_config()
-    fecha_stock_default = (
-        pd.to_datetime(fechas_stock_disp[0]).date()
-        if fechas_stock_disp
-        else date.today()
-    )
-    if cfg_stk_tab.get("stock_fecha"):
-        try:
-            fecha_stock_default = pd.to_datetime(cfg_stk_tab["stock_fecha"]).date()
-        except Exception:
-            pass
-
-    def _save_fecha_stock():
-        v = st.session_state.get("fecha_stock_local")
-        if v:
-            try:
-                db.guardar_config({"stock_fecha": str(v)})
-            except Exception:
-                pass
-
-    # Timestamp arriba de todo (debajo de las pestañas)
-    ts_stk_ph = st.empty()
-
-    fecha_stock = st.date_input(
-        "Fecha",
-        value=fecha_stock_default,
-        key="fecha_stock_local",
-        format="YYYY-MM-DD",
-        on_change=_save_fecha_stock,
-    )
-
-    df_dia_stk_full = db.cargar_stock(fecha=fecha_stock)
-    map_stock_dia = dict(
-        zip(df_dia_stk_full["codigo"].astype(str), df_dia_stk_full["cantidad"])
-    ) if not df_dia_stk_full.empty else {}
-
-    base_stk = productos[["codigo", "producto", "unidad_medida"]].copy()
-    base_stk["cantidad"] = (
-        base_stk["codigo"]
-        .astype(str)
-        .map(map_stock_dia)
-        .fillna(0.0)
-        .astype(float)
-    )
-
-    # "Poner a cero" llena el editor con ceros (sin guardar).
-    # El usuario despues presiona Guardar para persistir.
-    if st.session_state.get(f"_stk_zero_{fecha_stock}"):
-        base_stk["cantidad"] = 0.0
-
-    # Boton "Poner a cero" (fuera de form)
-    cero_s = st.button(
-        "🧹 Poner stock a cero",
-        key="btn_cero_stock",
-        help="Llena todo el stock con 0. No se guarda hasta apretar 💾 Guardar stock.",
-    )
-
-    base_stk_view = base_stk.copy()
-    # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
-    base_stk_view["cantidad"] = base_stk_view["cantidad"].apply(_fmt_num_es)
-
-    # Editor key con contador: bump del contador = widget fresco (sin estado viejo).
-    # Esto es bulletproof para reset post-Cero y post-Guardar.
-    stk_counter_key = f"_stk_editor_counter_{fecha_stock}"
-    if stk_counter_key not in st.session_state:
-        st.session_state[stk_counter_key] = 0
-    stk_counter = st.session_state[stk_counter_key]
-
-    with st.form(key=f"form_stock_{fecha_stock}_{stk_counter}", clear_on_submit=False):
-        guardar_s = st.form_submit_button(
-            "💾 Guardar stock", type="primary"
-        )
-        stock_editado = st.data_editor(
-            base_stk_view,
-            use_container_width=True,
-            num_rows="fixed",
-            disabled=["codigo", "producto", "unidad_medida"],
-            column_config={
-                "codigo": st.column_config.TextColumn("Código"),
-                "producto": st.column_config.TextColumn("Producto"),
-                "unidad_medida": st.column_config.TextColumn("Unidad"),
-                "cantidad": st.column_config.TextColumn(
-                    "Cantidad",
-                    help="Podés usar coma (1,5) o punto (1.5)",
-                ),
-            },
-            key=f"editor_stock_{fecha_stock}_{stk_counter}",
-        )
-
-    if guardar_s:
-        edits_map = dict(
-            zip(
-                stock_editado["codigo"].astype(str),
-                stock_editado["cantidad"].apply(_parse_num_es),
-            )
-        )
-        salida_s = base_stk.copy()
-        salida_s["cantidad"] = [
-            edits_map.get(str(c), v)
-            for c, v in zip(salida_s["codigo"], salida_s["cantidad"])
-        ]
-        salida_s["cantidad"] = salida_s["cantidad"].fillna(0).astype(float)
-        db.guardar_stock(salida_s, fecha_stock)
-        st.session_state.pop(f"_stk_zero_{fecha_stock}", None)
-        st.session_state[stk_counter_key] = stk_counter + 1  # editor fresco post-save
-        st.success(f"Stock del {fecha_stock} guardado en Sheets.")
-        st.rerun()
-
-    if cero_s:
-        st.session_state[f"_stk_zero_{fecha_stock}"] = True
-        st.session_state[stk_counter_key] = stk_counter + 1  # editor fresco post-cero
-        st.rerun()
-
-    # Refrescar timestamp despues del posible save (placeholder esta arriba)
-    ts_stk_ultimo = db.ultima_carga("stock")
-    ts_stk_ph.caption(f"🕒 Última actualización: **{ts_stk_ultimo or '?'}**")
 
 with tab_comprar:
 
@@ -1863,7 +1740,7 @@ with tab_estimado:
     ts_est_ultimo = db.ultima_carga("estimado_semanal")
     ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
 
-with tab_stock_teorico:
+with tab_stock:
     # Stock teorico (single-day): Stock(F0) + Compras(Fc) - Pedidos(Fp)
     # Las fechas se persisten en gsheets config y el resultado vive en
     # session_state (no se pierde al cambiar fechas, solo se recalcula
