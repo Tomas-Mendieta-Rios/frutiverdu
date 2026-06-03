@@ -2135,17 +2135,30 @@ with tab_dux:
         ts_ped = db.ultima_carga("pedidos_dux")
         st.caption(f"🕒 Última sync: **{ts_ped or '?'}**")
 
-        # Sync simple: boton unico, rango fijo de 7 dias.
-        # El merge en _guardar_pedidos asegura que los pedidos viejos
-        # sobrevivan (no se pisan).
-        consultar = st.button(
-            "🔄 Sincronizar últimos 7 días",
-            type="primary",
-            use_container_width=True,
-            key="btn_sync_dux",
-        )
-        fecha_desde = date.today() - timedelta(days=7)
-        fecha_hasta = date.today()
+        # Sync por rango manual (con date pickers). Permite incluir fechas
+        # futuras si tu papa carga pedidos por adelantado. El merge en
+        # _guardar_pedidos asegura que los pedidos viejos sobrevivan.
+        with st.form("form_dux_sync", clear_on_submit=False, border=False):
+            consultar = st.form_submit_button(
+                "🔄 Sincronizar pedidos desde DUX",
+                type="primary",
+                use_container_width=True,
+            )
+            col_d1, col_d2 = st.columns([1, 1])
+            with col_d1:
+                fecha_desde = st.date_input(
+                    "Fecha desde",
+                    value=fecha_desde_default,
+                    key="dux_fecha_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_d2:
+                fecha_hasta = st.date_input(
+                    "Fecha hasta",
+                    value=fecha_hasta_default,
+                    key="dux_fecha_hasta",
+                    format="YYYY-MM-DD",
+                )
 
         if consultar:
             url_p = f"{base_url}/pedidos"
@@ -2257,17 +2270,13 @@ with tab_dux:
                 all_orders_saved, key=_nro_dux_sort, reverse=True
             )
 
-            # Solo mostrar pedidos creados en los ultimos 7 dias.
-            # Los viejos quedan en gsheets pero no se renderean aca
-            # (stock teorico los sigue usando).
-            hace_7 = pd.Timestamp(date.today() - timedelta(days=7))
-            all_orders_sorted = [
-                o for o in all_orders_sorted
-                if _fecha_dux(o) >= hace_7
-            ]
+            # Mostrar los ultimos 50 por nro_pedido (independiente de fecha).
+            # Robusto a cambios de fecha en DUX. Los viejos siguen en gsheets
+            # y stock teorico los usa.
+            all_orders_sorted = all_orders_sorted[:50]
 
             if not all_orders_sorted:
-                st.info("No hay pedidos en los últimos 7 días.")
+                st.info("No hay pedidos sincronizados todavía.")
 
             with st.form(key="form_dux_seleccion", clear_on_submit=False):
                 guardar_sel_dux = st.form_submit_button(
@@ -2550,16 +2559,30 @@ with tab_wix:
         ts_wix = db.ultima_carga("pedidos_wix")
         st.caption(f"🕒 Última sync: **{ts_wix or '?'}**")
 
-        # Sync simple: boton unico, rango fijo de 7 dias.
-        # El merge en _guardar_pedidos asegura que los pedidos viejos sobrevivan.
-        consultar_wix = st.button(
-            "🔄 Sincronizar últimos 7 días",
-            type="primary",
-            use_container_width=True,
-            key="btn_sync_wix",
-        )
-        wix_desde = date.today() - timedelta(days=7)
-        wix_hasta = date.today()
+        # Sync por rango manual (con date pickers). Permite incluir fechas
+        # futuras. El merge en _guardar_pedidos asegura que los pedidos
+        # viejos sobrevivan.
+        with st.form("form_wix_sync", clear_on_submit=False, border=False):
+            consultar_wix = st.form_submit_button(
+                "🔄 Sincronizar pedidos desde Wix",
+                type="primary",
+                use_container_width=True,
+            )
+            col_w1, col_w2 = st.columns([1, 1])
+            with col_w1:
+                wix_desde = st.date_input(
+                    "Fecha desde",
+                    value=fecha_desde_default,
+                    key="wix_fecha_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_w2:
+                wix_hasta = st.date_input(
+                    "Fecha hasta",
+                    value=fecha_hasta_default,
+                    key="wix_fecha_hasta",
+                    format="YYYY-MM-DD",
+                )
 
         if consultar_wix:
             url = "https://www.wixapis.com/ecom/v1/orders/search"
@@ -2702,15 +2725,11 @@ with tab_wix:
                 orders_saved, key=_nro_wix_sort, reverse=True
             )
 
-            # Solo mostrar pedidos creados en los ultimos 7 dias.
-            hace_7_wix = pd.Timestamp(date.today() - timedelta(days=7))
-            orders_saved_sorted = [
-                o for o in orders_saved_sorted
-                if _fecha_wix(o) >= hace_7_wix
-            ]
+            # Mostrar los ultimos 50 por number (independiente de fecha).
+            orders_saved_sorted = orders_saved_sorted[:50]
 
             if not orders_saved_sorted:
-                st.info("No hay pedidos en los últimos 7 días.")
+                st.info("No hay pedidos sincronizados todavía.")
 
             with st.form(key="form_wix_seleccion", clear_on_submit=False):
                 guardar_sel = st.form_submit_button(
