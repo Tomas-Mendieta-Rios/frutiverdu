@@ -2090,23 +2090,36 @@ with tab_stock_teorico:
             f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
         )
 
-        # La columna Real pre-rellena con el stock_historico para fecha_conteo
-        # (igual logica que la grilla del Stock tab).
-        stk_conteo_df = db.cargar_stock(fecha=fecha_conteo)
-        map_stk_conteo = (
-            dict(zip(
-                stk_conteo_df["codigo"].astype(str),
-                stk_conteo_df["cantidad"].astype(float),
-            )) if not stk_conteo_df.empty else {}
-        )
+        # Real se pre-rellena con el stock EFECTIVO en fecha_conteo:
+        # - Si hay stock guardado para esa fecha exacta -> usar ese
+        # - Si no, usar el stock de la fecha mas reciente ANTES de esa
+        #   (carry forward natural: "lo que tenia hasta ese momento")
+        # Asi Real arranca con valores realistas, no vacios.
+        all_stock_df = db.cargar_stock_completo()
+        map_stk_conteo = {}
+        if not all_stock_df.empty:
+            df_filt = all_stock_df.copy()
+            df_filt["fecha_dt"] = pd.to_datetime(df_filt["fecha"], errors="coerce")
+            fc_dt = pd.to_datetime(fecha_conteo)
+            df_filt = df_filt[df_filt["fecha_dt"] <= fc_dt]
+            if not df_filt.empty:
+                df_filt = df_filt.sort_values(
+                    ["codigo", "fecha_dt"], ascending=[True, False]
+                )
+                df_recent = df_filt.drop_duplicates(subset=["codigo"], keep="first")
+                map_stk_conteo = dict(zip(
+                    df_recent["codigo"].astype(str),
+                    df_recent["cantidad"].astype(float),
+                ))
+
         df_editor = df_teorico_r.copy()
         df_editor["Real"] = df_editor["Código"].astype(str).map(
             lambda c: _fmt_num_es(map_stk_conteo[c]) if c in map_stk_conteo else ""
         )
 
         st.caption(
-            "💡 Real muestra el Stock guardado para la fecha del conteo. "
-            "Tipeá para modificar; los que dejes en blanco se preservan tal cual."
+            "💡 Real arranca con el último Stock conocido (de esta fecha o de la "
+            "fecha previa más cercana). Tipeá para modificar."
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
