@@ -744,86 +744,68 @@ def guardar_mixes_dux(mixes_dict):
 # ---------------- CONFIG (key/value para preferencias) ----------------
 
 def cargar_config():
-    """Devuelve dict {key: value} con la configuración persistida."""
+    """Devuelve dict {key: value} con la configuración persistida.
+
+    APPEND-ONLY: la tabla config puede tener multiples filas con la
+    misma key (cada save agrega una fila nueva en vez de sobrescribir).
+    Tomamos la ULTIMA aparicion de cada key (la mas reciente queda al
+    fondo de la tabla)."""
     df = leer_tabla("config")
     if df.empty or "key" not in df.columns:
         return {}
+    # Dedupe por key, keep last (ultima aparicion = mas reciente).
+    df = df.drop_duplicates(subset=["key"], keep="last")
     result = dict(zip(df["key"].astype(str), df["value"].astype(str)))
-    # Snapshot en session_state como ultimo fallback en guardar_config.
-    # Se actualiza cada vez que se lee config con data -> sobrevive a
-    # cache clears y a fallas transitorias de la API.
-    try:
-        st.session_state["_config_snapshot"] = dict(result)
-    except Exception:
-        pass
     return result
 
 
 def guardar_config(updates):
-    """Merge dict updates con la config existente y persiste a Sheets.
-    Lee fresh (sin cache) para evitar race condition entre usuarios.
+    """Append-only: agrega una fila nueva por cada update, sin sobrescribir
+    ni hacer clear de la tabla.
 
-    DEFENSA contra wipe accidental (CRITICA - evita perder timestamps,
-    fechas guardadas, configs de tabs, etc):
+    Por que: el patron clear+update (que usa escribir_tabla) puede dejar
+    la tabla VACIA si ws.update() falla despues de ws.clear(). En config
+    eso significa perder todos los timestamps, fechas guardadas, etc.
 
-    1. Fresh read: si viene vacio, reintenta 3 veces con 500ms entre cada.
-    2. Si fresh sigue vacio -> fallback a leer_tabla cacheada.
-    3. Si cache tambien vacio -> fallback a session_state snapshot.
-    4. Si TODAS las fuentes vacias Y existe data en otras tablas
-       (productos) -> ABORTAR el write porque es claramente un bug, no
-       primer arranque.
-    5. Solo aceptar 'vacia legitima' si productos tambien esta vacio
-       (primer install)."""
-    df_fresh = _leer_tabla_fresh("config")
-    # 1. Si el fresh viene vacio, reintentar antes de creerle.
-    if df_fresh.empty or "key" not in df_fresh.columns:
-        for _ in range(3):
-            _time.sleep(0.5)
-            df_fresh = _leer_tabla_fresh("config")
-            if not df_fresh.empty and "key" in df_fresh.columns:
-                break
+    append_rows es ATOMICO en gsheets: o agrega todas las filas o ninguna.
+    Nunca deja la tabla en estado intermedio. Si dos saves concurrentes
+    aparecen, ambos se agregan sin conflicto.
 
-    actual = {}
-    fuente = "vacio"
-    if not df_fresh.empty and "key" in df_fresh.columns:
-        actual = dict(
-            zip(df_fresh["key"].astype(str), df_fresh["value"].astype(str))
-        )
-        fuente = "fresh"
-    else:
-        # 2. Fallback a la cache.
-        cached_df = leer_tabla("config")
-        if not cached_df.empty and "key" in cached_df.columns:
-            actual = dict(
-                zip(cached_df["key"].astype(str), cached_df["value"].astype(str))
-            )
-            fuente = "cache"
-        else:
-            # 3. Fallback al snapshot en session_state.
-            try:
-                snap = st.session_state.get("_config_snapshot")
-                if isinstance(snap, dict) and snap:
-                    actual = dict(snap)
-                    fuente = "snapshot"
-            except Exception:
-                pass
+    La lectura (cargar_config) dedupea tomando la fila mas reciente por key."""
+    if not updates:
+        return
 
-    # NOTA: previamente habia una salvaguarda que abortaba el write si
-    # 'actual' quedaba vacio y 'productos' tenia data (interpretando eso
-    # como bug). Pero abortar deja al usuario stuck en "no puedo poblar
-    # config" cuando config genuinamente esta vacio post-wipe anterior.
-    # En su lugar, confiamos en las 3 capas previas (retry/cache/snapshot)
-    # y procedemos. Si actual queda vacio, escribimos solo los updates -
-    # que es lo razonable cuando no hay nada que preservar.
-    actual.update({k: str(v) for k, v in updates.items() if v is not None})
-    rows = [{"key": k, "value": v} for k, v in actual.items()]
-    df = pd.DataFrame(rows, columns=SCHEMA["config"])
-    escribir_tabla("config", df)
-    # Mantener snapshot en sync con el ultimo write exitoso.
+    # Armar las filas. Cada una con [key, value] en orden de SCHEMA["config"].
+    rows = []
+    for k, v in updates.items():
+        if v is None:
+            continue
+        rows.append([str(k), str(v)])
+
+    if not rows:
+        return
+
+    ws = _get_ws("config")
+    # Si la pestaña esta vacia (primer arranque o post-wipe), escribir
+    # el header + las filas. Si ya tiene contenido, solo append.
     try:
-        st.session_state["_config_snapshot"] = dict(actual)
+        existing = _get_values_con_reintento(ws)
     except Exception:
-        pass
+        existing = []
+
+    if not existing:
+        # Pestaña vacia: header + filas nuevas en una sola escritura.
+        ws.update(
+            values=[SCHEMA["config"]] + rows,
+            range_name="A1",
+            value_input_option="RAW",
+        )
+    else:
+        # Pestaña con datos: append puro. NUNCA borra.
+        ws.append_rows(rows, value_input_option="RAW")
+
+    # Invalidar cache para que la proxima lectura traiga las filas nuevas.
+    leer_tabla.clear()
 
 
 # ---------------- STOCK TEORICO (cache del ultimo calculo) ----------------
