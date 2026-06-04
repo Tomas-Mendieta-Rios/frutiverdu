@@ -1559,29 +1559,26 @@ with tab_comprar:
                 _color = _color_base(df_base)
                 _label = f":{_color}[**{_label_txt}**]"
                 with st.expander(_label, expanded=False):
-                    _ped_col = f"Pedido {_lab_ped}".strip()
-                    _stk_col = f"Stock {_lab_stk}".strip()
-                    _est_col = f"Estimado {_lab_est}".strip()
                     _disp = (
                         df_base[[
                             "codigo", "Variante",
                             "stock", "pedido", "estimado", "a_comprar",
                         ]]
                         .rename(columns={
-                            "stock": _stk_col,
-                            "pedido": _ped_col,
-                            "estimado": _est_col,
-                            "a_comprar": "Total",
+                            "stock": "S",
+                            "pedido": "Pedido",
+                            "estimado": "E",
+                            "a_comprar": "T",
                         })
                     )
                     styled = (
                         _disp.style
-                        .map(_color_ac, subset=["Total"])
+                        .map(_color_ac, subset=["T"])
                         .format({
-                            _ped_col: "{:.2f}",
-                            _stk_col: "{:.2f}",
-                            _est_col: "{:.2f}",
-                            "Total": lambda v: f"{abs(v):.2f}",
+                            "Pedido": "{:.2f}",
+                            "S": "{:.2f}",
+                            "E": "{:.2f}",
+                            "T": lambda v: f"{abs(v):.2f}",
                         })
                     )
                     st.dataframe(
@@ -1632,9 +1629,9 @@ with tab_comprar:
         bases_set |= set(stk[stk["cantidad"] > 0]["base"].unique())
     bases = sorted(bases_set)
 
-    _ped_col_d = f"Pedido {_lab_ped}".strip()
-    _stk_col_d = f"Stock {_lab_stk}".strip()
-    _est_col_d = f"Estimado {_lab_est}".strip()
+    # Headers cortos (S/Pedido/E/T) en las tablas del desglozado.
+    # Las fechas correspondientes ya se muestran en los labels de los
+    # expanders de arriba (Ver stock / Ver pedidos / Ver estimado).
 
     with st.expander(
         f"🔧 Ver total a comprar **desglozado** ({len(bases)})",
@@ -1733,10 +1730,10 @@ with tab_comprar:
                     df_show = pd.DataFrame([
                         {
                             "Unidad": r["unidad"],
-                            _stk_col_d: r["stock"],
-                            _ped_col_d: r["pedido"],
-                            _est_col_d: r["estimado"],
-                            "Total": r["diff_est"],
+                            "S": r["stock"],
+                            "Pedido": r["pedido"],
+                            "E": r["estimado"],
+                            "T": r["diff_est"],
                         }
                         for r in resultados
                     ])
@@ -1755,12 +1752,12 @@ with tab_comprar:
                     styled_grupo = (
                         df_show.style
                         .format({
-                            _ped_col_d: "{:,.2f}",
-                            _stk_col_d: "{:,.2f}",
-                            _est_col_d: "{:,.2f}",
-                            "Total": lambda v: f"{abs(float(v)):,.2f}",
+                            "Pedido": "{:,.2f}",
+                            "S": "{:,.2f}",
+                            "E": "{:,.2f}",
+                            "T": lambda v: f"{abs(float(v)):,.2f}",
                         })
-                        .map(_color_diff, subset=["Total"])
+                        .map(_color_diff, subset=["T"])
                     )
                     st.dataframe(
                         styled_grupo,
