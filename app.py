@@ -1310,8 +1310,6 @@ with tab_comprar:
         return f"({items[0]} a {items[-1]})"
 
     _lab_ped = _fmt_fechas_label(fechas_entrega)
-    _lab_stk = f"({fecha_stock_sel})"
-    _lab_est = f"({DIAS_DISPLAY.get(dia_estimado_sel, dia_estimado_sel)})"
 
     wix_sin_mapear = st.session_state.get("_wix_sin_mapear", {})
     if wix_sin_mapear:
@@ -1439,7 +1437,7 @@ with tab_comprar:
                 ):
                     st.dataframe(
                         df_base[["codigo", "Variante", "cantidad"]].rename(
-                            columns={"codigo": "#", "Variante": "V"}
+                            columns={"codigo": "#", "cantidad": "S"}
                         ),
                         use_container_width=True,
                         hide_index=True,
@@ -1478,7 +1476,7 @@ with tab_comprar:
                 ):
                     st.dataframe(
                         df_base[["codigo", "Variante", "estimado"]].rename(
-                            columns={"codigo": "#", "Variante": "V"}
+                            columns={"codigo": "#", "estimado": "E"}
                         ),
                         use_container_width=True,
                         hide_index=True,
@@ -1570,7 +1568,6 @@ with tab_comprar:
                         ]]
                         .rename(columns={
                             "codigo": "#",
-                            "Variante": "V",
                             "stock": "S",
                             "pedido": "P",
                             "estimado": "E",
@@ -1707,6 +1704,7 @@ with tab_comprar:
                             total_stk += cant * factor
 
                     resultados.append({
+                        "codigo": codigo_destino,
                         "unidad": unidad,
                         "pedido": total_ped,
                         "estimado": total_est,
@@ -1735,7 +1733,8 @@ with tab_comprar:
                 with st.expander(f"{icono} **{nombre}**", expanded=False):
                     df_show = pd.DataFrame([
                         {
-                            "Unidad": r["unidad"],
+                            "#": r["codigo"],
+                            "Variante": r["unidad"],
                             "S": r["stock"],
                             "P": r["pedido"],
                             "E": r["estimado"],
