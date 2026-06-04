@@ -1526,11 +1526,11 @@ with tab_comprar:
                     _disp = (
                         df_base[[
                             "codigo", "Variante",
-                            "pedido", "stock", "estimado", "a_comprar",
+                            "stock", "pedido", "estimado", "a_comprar",
                         ]]
                         .rename(columns={
-                            "pedido": _ped_col,
                             "stock": _stk_col,
+                            "pedido": _ped_col,
                             "estimado": _est_col,
                             "a_comprar": "A comprar",
                         })
@@ -1694,8 +1694,8 @@ with tab_comprar:
                     df_show = pd.DataFrame([
                         {
                             "Unidad": r["unidad"],
-                            _ped_col_d: r["pedido"],
                             _stk_col_d: r["stock"],
+                            _ped_col_d: r["pedido"],
                             _est_col_d: r["estimado"],
                             "Resultado": r["diff"],
                             "Con estimado": r["diff_est"],
@@ -2311,6 +2311,12 @@ with tab_stock:
         rubros_presentes += extras
 
         edited_por_clave = {}  # (rubro, base) -> edited_df
+
+        st.caption(
+            "ℹ️ Los productos / rubros en :gray[**gris**] no tuvieron ningún "
+            "movimiento (sin stock inicial, sin compras y sin pedidos en las "
+            "fechas elegidas)."
+        )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
             guardar_conteo = st.form_submit_button(
