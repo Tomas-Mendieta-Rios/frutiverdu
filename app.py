@@ -2046,7 +2046,7 @@ with tab_stock:
 
         _map_ini = resultado.get("map_stock_ini") or {}
         with st.expander(
-            f"📦 Stock inicial usado ({n_stock_ini} códigos)",
+            f"📦 Stock inicial del {f0} ({n_stock_ini} códigos)",
             expanded=False,
         ):
             if not _map_ini:
