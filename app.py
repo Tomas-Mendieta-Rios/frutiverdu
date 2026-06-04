@@ -730,6 +730,54 @@ def extraer_item_dux(item):
     }
 
 
+def _slim_dux_pedido(o):
+    """Versión compacta de un pedido DUX con SOLO los campos que la UI usa
+    al mostrar 'Pedidos contados'. Reduce ~10x el JSON para que entre en
+    la celda de Sheets (49KB)."""
+    if not isinstance(o, dict):
+        return {}
+    nro = _dux_get_first(o, ["nro_pedido", "nroPedido", "numero", "id"])
+    cliente_txt = extraer_cliente_dux(o)
+    items_slim = [extraer_item_dux(it) for it in extraer_items_dux(o)]
+    return {
+        # 'nro_pedido' es la primer clave que mira _dux_get_first al renderizar.
+        "nro_pedido": nro,
+        # extraer_cliente_dux lee orden.cliente.razon_social, asi que
+        # preservamos esa forma para que el render no cambie.
+        "cliente": {"razon_social": cliente_txt},
+        # extraer_items_dux mira 'detalles' como primera opcion.
+        "detalles": items_slim,
+    }
+
+
+def _slim_wix_pedido(o):
+    """Versión compacta de un pedido Wix con SOLO los campos que la UI usa."""
+    if not isinstance(o, dict):
+        return {}
+    bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+    line_items_slim = []
+    for li in (o.get("lineItems") or []):
+        pn = li.get("productName") or {}
+        line_items_slim.append({
+            "productName": {
+                "translated": pn.get("translated"),
+                "original": pn.get("original"),
+            },
+            "quantity": li.get("quantity") or 0,
+        })
+    return {
+        "number": o.get("number") or o.get("id", ""),
+        "id": o.get("id", ""),
+        "billingInfo": {
+            "contactDetails": {
+                "firstName": bi.get("firstName", "") or "",
+                "lastName": bi.get("lastName", "") or "",
+            }
+        },
+        "lineItems": line_items_slim,
+    }
+
+
 @st.cache_data(ttl=120)
 def construir_grafo_conversion(compuestos_df):
     grafo = {}
@@ -2175,12 +2223,22 @@ with tab_stock:
                         db.guardar_stock_teorico(rows, f0, fc, fp)
                         # Detalle (para que otros usuarios vean los dropdowns)
                         try:
+                            # Slim para que entren en la celda de Sheets (49KB
+                            # por celda; un pedido DUX crudo pesa varios KB).
+                            dux_slim = [
+                                _slim_dux_pedido(o)
+                                for o in st.session_state.get("_dux_contados", [])
+                            ]
+                            wix_slim = [
+                                _slim_wix_pedido(o)
+                                for o in st.session_state.get("_wix_contados", [])
+                            ]
                             db.guardar_stock_teorico_detalle(
                                 map_stock_ini=map_stock_ini,
                                 map_compras=map_compras,
                                 compras_raw=compras_raw,
-                                dux_contados=st.session_state.get("_dux_contados", []),
-                                wix_contados=st.session_state.get("_wix_contados", []),
+                                dux_contados=dux_slim,
+                                wix_contados=wix_slim,
                             )
                         except Exception:
                             pass
