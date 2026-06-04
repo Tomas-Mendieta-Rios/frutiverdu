@@ -2465,6 +2465,33 @@ with tab_stock:
             )) if not stk_conteo_df.empty else {}
         )
 
+        # Auditoria visual: lo que ya esta cargado como Stock real
+        # para la fecha_conteo elegida (lectura desde gsheets).
+        _n_real = sum(1 for v in map_stk_conteo.values() if float(v) > 1e-6)
+        with st.expander(
+            f"✏️ Stock real del {fecha_conteo} ({_n_real} códigos)",
+            expanded=False,
+        ):
+            if not map_stk_conteo:
+                st.caption("Aún no se cargó stock real para esta fecha.")
+            else:
+                _filas_real = [
+                    {
+                        "Prod": _prod_nombre.get(cod, "(desconocido)"),
+                        "Cant": float(cant),
+                    }
+                    for cod, cant in map_stk_conteo.items()
+                    if float(cant) > 1e-6
+                ]
+                if _filas_real:
+                    st.dataframe(
+                        pd.DataFrame(_filas_real).sort_values("Prod"),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.caption("Aún no hay valores > 0 cargados.")
+
         df_editor = df_teorico_r.copy()
         df_editor["Stock"] = df_editor["Código"].astype(str).map(
             lambda c: _fmt_num_es(map_stk_conteo.get(c, 0.0))
