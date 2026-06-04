@@ -1461,26 +1461,47 @@ with tab_comprar:
                     return "color: #1a8a1a; font-weight: bold;"
                 return "color: #666;"
 
-            _disp_raw = (
-                _raw_view[["codigo", "producto",
-                           "pedido", "stock", "estimado", "a_comprar"]]
-                .rename(columns={"a_comprar": "A comprar"})
-            )
-            styled_raw = (
-                _disp_raw.style
-                .map(_color_ac, subset=["A comprar"])
-                .format({
-                    "pedido": "{:.2f}",
-                    "stock": "{:.2f}",
-                    "estimado": "{:.2f}",
-                    "A comprar": lambda v: f"{abs(v):.2f}",
-                })
-            )
-            st.dataframe(
-                styled_raw,
-                use_container_width=True,
-                hide_index=True,
-            )
+            # Partir producto en base / variante (mismo patron que Stock tab).
+            def _split_producto_raw(p):
+                s = str(p)
+                if " - " in s:
+                    base, var = s.rsplit(" - ", 1)
+                    return base.strip(), var.strip()
+                return s, ""
+
+            _split_raw = _raw_view["producto"].apply(_split_producto_raw)
+            _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
+            _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
+
+            for base_name, df_base in _raw_view.groupby("Base", sort=True):
+                n_var = len(df_base)
+                with st.expander(
+                    f"📦 {base_name} ({n_var} variante{'s' if n_var != 1 else ''})",
+                    expanded=False,
+                ):
+                    _disp = (
+                        df_base[[
+                            "codigo", "Variante",
+                            "pedido", "stock", "estimado", "a_comprar",
+                        ]]
+                        .rename(columns={"a_comprar": "A comprar"})
+                    )
+                    styled = (
+                        _disp.style
+                        .map(_color_ac, subset=["A comprar"])
+                        .format({
+                            "pedido": "{:.2f}",
+                            "stock": "{:.2f}",
+                            "estimado": "{:.2f}",
+                            "A comprar": lambda v: f"{abs(v):.2f}",
+                        })
+                    )
+                    st.dataframe(
+                        styled,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
             st.caption(
                 "**A comprar** = `pedido + estimado − stock` (por código, sin conversiones)."
             )
