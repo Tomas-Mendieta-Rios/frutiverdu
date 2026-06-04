@@ -2269,20 +2269,21 @@ with tab_stock:
                                     "Código": st.column_config.TextColumn("Código"),
                                     "Variante": st.column_config.TextColumn("Variante"),
                                     "Stock inicial": st.column_config.NumberColumn(
-                                        "Stock inicial", format="%.2f"
+                                        f"Stock inicial ({f0})", format="%.2f"
                                     ),
                                     "+ Compras": st.column_config.NumberColumn(
-                                        "+ Compras", format="%.2f"
+                                        f"+ Compras ({fc})", format="%.2f"
                                     ),
                                     "− Pedidos": st.column_config.NumberColumn(
-                                        "− Pedidos", format="%.2f"
+                                        f"− Pedidos ({fp})", format="%.2f"
                                     ),
                                     "= Teórico": st.column_config.NumberColumn(
                                         "= Teórico", format="%.2f"
                                     ),
                                     "Stock": st.column_config.TextColumn(
-                                        "Stock",
-                                        help="Cargá el stock real. Coma o punto. Vacío = 0.",
+                                        f"✏️ Stock ({fecha_conteo})",
+                                        help="✏️ Esta es la columna a completar. Coma o punto. Vacío = 0.",
+                                        required=False,
                                     ),
                                 },
                                 key=f"editor_stock_{rubro_name}_{base_name}_{fecha_conteo}",
