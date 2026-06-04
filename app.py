@@ -1438,7 +1438,9 @@ with tab_comprar:
                     expanded=False,
                 ):
                     st.dataframe(
-                        df_base[["codigo", "Variante", "cantidad"]],
+                        df_base[["codigo", "Variante", "cantidad"]].rename(
+                            columns={"codigo": "#", "Variante": "V"}
+                        ),
                         use_container_width=True,
                         hide_index=True,
                     )
@@ -1475,7 +1477,9 @@ with tab_comprar:
                     expanded=False,
                 ):
                     st.dataframe(
-                        df_base[["codigo", "Variante", "estimado"]],
+                        df_base[["codigo", "Variante", "estimado"]].rename(
+                            columns={"codigo": "#", "Variante": "V"}
+                        ),
                         use_container_width=True,
                         hide_index=True,
                     )
@@ -1565,8 +1569,10 @@ with tab_comprar:
                             "stock", "pedido", "estimado", "a_comprar",
                         ]]
                         .rename(columns={
+                            "codigo": "#",
+                            "Variante": "V",
                             "stock": "S",
-                            "pedido": "Pedido",
+                            "pedido": "P",
                             "estimado": "E",
                             "a_comprar": "T",
                         })
@@ -1575,7 +1581,7 @@ with tab_comprar:
                         _disp.style
                         .map(_color_ac, subset=["T"])
                         .format({
-                            "Pedido": "{:.2f}",
+                            "P": "{:.2f}",
                             "S": "{:.2f}",
                             "E": "{:.2f}",
                             "T": lambda v: f"{abs(v):.2f}",
@@ -1731,7 +1737,7 @@ with tab_comprar:
                         {
                             "Unidad": r["unidad"],
                             "S": r["stock"],
-                            "Pedido": r["pedido"],
+                            "P": r["pedido"],
                             "E": r["estimado"],
                             "T": r["diff_est"],
                         }
@@ -1752,7 +1758,7 @@ with tab_comprar:
                     styled_grupo = (
                         df_show.style
                         .format({
-                            "Pedido": "{:,.2f}",
+                            "P": "{:,.2f}",
                             "S": "{:,.2f}",
                             "E": "{:,.2f}",
                             "T": lambda v: f"{abs(float(v)):,.2f}",
