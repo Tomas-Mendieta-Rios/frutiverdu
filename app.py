@@ -1460,25 +1460,13 @@ with tab_comprar:
         f"🔍 Ver resumen por código sin conversiones ({len(_raw_view)})",
         expanded=False,
     ):
-        # Leyenda grande del codigo de colores (que tu viejo aprenda primero;
-        # despues la achicamos).
-        st.markdown(
-            """
-            <div style="font-size:1.15rem; line-height:1.7; padding:14px 18px;
-                        background:#f6f8fa; border:1px solid #d0d7de;
-                        border-radius:10px; margin-bottom:12px;">
-              <div style="font-weight:700; margin-bottom:6px;">
-                📖 Cómo leer los colores:
-              </div>
-              <div><span style="color:#d11; font-weight:700; font-size:1.3rem;">🔴 ROJO</span>
-                &nbsp;→ <b>HAY QUE COMPRAR</b> (los pedidos + estimado superan al stock)</div>
-              <div><span style="color:#666; font-weight:700; font-size:1.3rem;">⚪ GRIS</span>
-                &nbsp;→ <b>JUSTO</b> (stock alcanza para los pedidos)</div>
-              <div><span style="color:#1a8a1a; font-weight:700; font-size:1.3rem;">🟢 VERDE</span>
-                &nbsp;→ <b>SOBRA STOCK</b> (no hace falta comprar de este)</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        # Aclaracion compacta sobre como se decide el color del producto base
+        # a partir de sus variantes (regla de prioridad).
+        st.caption(
+            "ℹ️ El color del producto sigue la **peor variante**: "
+            "si una está en :red[**rojo**] → todo rojo. "
+            "Sino, si alguna está en :gray[**gris**] → gris. "
+            "Solo si todas están en :green[**verde**] → verde."
         )
 
         if _raw_view.empty:
