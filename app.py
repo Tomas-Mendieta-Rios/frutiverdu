@@ -1829,34 +1829,85 @@ with tab_estimado:
     # TextColumn para aceptar coma decimal (1,5) ademas de punto (1.5)
     base_est_view["estimado"] = base_est_view["estimado"].apply(_fmt_num_es)
 
+    # Enriquecer con rubro (catalogo productos) y partir producto en
+    # base / variante por ' - '. Misma logica que Stock teorico.
+    cod_to_rubro_est = dict(zip(
+        productos["codigo"].astype(str),
+        productos.get("rubro", pd.Series([""] * len(productos))).fillna("").astype(str),
+    ))
+
+    def _split_producto_est(p):
+        s = str(p)
+        if " - " in s:
+            b, v = s.rsplit(" - ", 1)
+            return b.strip(), v.strip()
+        return s, ""
+
+    base_est_view["Rubro"] = base_est_view["codigo"].astype(str).map(
+        lambda c: (cod_to_rubro_est.get(c, "") or "").strip().upper()
+    )
+    _split_est_v = base_est_view["producto"].apply(_split_producto_est)
+    base_est_view["Base"] = _split_est_v.apply(lambda t: t[0])
+    base_est_view["Variante"] = _split_est_v.apply(lambda t: t[1])
+
+    # Ocultar productos sin rubro (no son productos reales).
+    base_est_view = base_est_view[base_est_view["Rubro"] != ""].copy()
+
+    # Orden fijo de rubros (mismo que Stock tab).
+    orden_rubros_est = [
+        "HOJAS", "VERDURAS", "FRUTAS", "HIERBAS",
+        "HONGOS", "BROTES", "AJIES", "CONDIMENTOS", "OTROS",
+    ]
+    rubros_presentes_est = [
+        r for r in orden_rubros_est if r in base_est_view["Rubro"].values
+    ]
+    rubros_presentes_est += sorted(
+        set(base_est_view["Rubro"].values) - set(orden_rubros_est)
+    )
+
+    edits_por_clave_est = {}  # (rubro, base) -> edited_df
+
     with st.form(key=f"form_estimado_{dia_estimado}", clear_on_submit=False):
         guardar_est = st.form_submit_button(
             "💾 Guardar estimado", type="primary"
         )
-        editor_estimado = st.data_editor(
-            base_est_view,
-            use_container_width=True,
-            num_rows="fixed",
-            disabled=["codigo", "producto", "unidad_medida"],
-            column_config={
-                "codigo": st.column_config.TextColumn("Código"),
-                "producto": st.column_config.TextColumn("Producto"),
-                "unidad_medida": st.column_config.TextColumn("Unidad"),
-                "estimado": st.column_config.TextColumn(
-                    "Estimado",
-                    help="Podés usar coma (1,5) o punto (1.5)",
-                ),
-            },
-            key=f"editor_estimado_{dia_estimado}",
-        )
+
+        for rubro_name in rubros_presentes_est:
+            df_rubro = base_est_view[base_est_view["Rubro"] == rubro_name]
+            n_bases = df_rubro["Base"].nunique()
+            with st.expander(
+                f"📁 {rubro_name} ({n_bases} productos)", expanded=False
+            ):
+                for base_name, df_base in df_rubro.groupby("Base", sort=True):
+                    n_var = len(df_base)
+                    with st.expander(
+                        f"📦 {base_name} "
+                        f"({n_var} variante{'s' if n_var != 1 else ''})",
+                        expanded=False,
+                    ):
+                        edited = st.data_editor(
+                            df_base[["codigo", "Variante", "estimado"]].reset_index(drop=True),
+                            use_container_width=True,
+                            hide_index=True,
+                            disabled=["codigo", "Variante"],
+                            column_config={
+                                "codigo": st.column_config.TextColumn("Código"),
+                                "Variante": st.column_config.TextColumn("Variante"),
+                                "estimado": st.column_config.TextColumn(
+                                    "Estimado",
+                                    help="Podés usar coma (1,5) o punto (1.5)",
+                                ),
+                            },
+                            key=f"editor_estimado_{rubro_name}_{base_name}_{dia_estimado}",
+                        )
+                        edits_por_clave_est[(rubro_name, base_name)] = edited
 
     if guardar_est:
-        edits_map_e = dict(
-            zip(
-                editor_estimado["codigo"].astype(str),
-                editor_estimado["estimado"].apply(_parse_num_es),
-            )
-        )
+        edits_map_e = {}
+        for _key, edited in edits_por_clave_est.items():
+            for _, row in edited.iterrows():
+                edits_map_e[str(row["codigo"])] = _parse_num_es(row["estimado"])
+
         salida = base_est.copy()
         salida["estimado"] = [
             edits_map_e.get(str(c), v)
@@ -1869,8 +1920,13 @@ with tab_estimado:
 
     if reset_est:
         st.session_state[f"_est_zero_{dia_estimado}"] = True
-        editor_key = f"editor_estimado_{dia_estimado}"
-        st.session_state.pop(editor_key, None)
+        # Pop todas las keys de los editors por base (no sabemos los nombres
+        # exactos, asi que limpiamos las que coincidan con el patron).
+        prefix = "editor_estimado_"
+        suffix = f"_{dia_estimado}"
+        for k in list(st.session_state.keys()):
+            if k.startswith(prefix) and k.endswith(suffix):
+                st.session_state.pop(k, None)
         st.rerun()
 
     # Refrescar timestamp despues del posible save (placeholder esta arriba)
