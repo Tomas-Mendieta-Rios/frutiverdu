@@ -1788,6 +1788,11 @@ with tab_estimado:
     # Timestamp arriba de todo (debajo de las pestañas)
     ts_est_ph = st.empty()
 
+    # Flash de exito post-save (sobrevive al st.rerun() del Guardar).
+    _est_flash = st.session_state.pop("_est_saved_flash", None)
+    if _est_flash:
+        st.success(_est_flash)
+
     dia_estimado = st.selectbox(
         "Día de la semana",
         options=DIAS_SEMANA,
@@ -1936,7 +1941,14 @@ with tab_estimado:
         salida["estimado"] = salida["estimado"].fillna(0).astype(float)
         db.guardar_estimado_semanal_dia(salida, dia_estimado)
         st.session_state.pop(f"_est_zero_{dia_estimado}", None)
-        st.success(f"Estimado para {DIAS_DISPLAY[dia_estimado]} guardado en Sheets.")
+        # Forzar rerun para que los colores (gris/normal) reflejen los datos
+        # recien guardados. El mensaje de exito se renderiza en la proxima
+        # ejecucion via flash en session_state.
+        st.session_state["_est_saved_flash"] = (
+            f"Estimado para {DIAS_DISPLAY[dia_estimado]} guardado en Sheets."
+        )
+        st.cache_data.clear()
+        st.rerun()
 
     if reset_est:
         st.session_state[f"_est_zero_{dia_estimado}"] = True
