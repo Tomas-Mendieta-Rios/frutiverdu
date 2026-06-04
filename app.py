@@ -2104,6 +2104,17 @@ with tab_stock:
     # se pierde lo que se tipeo en Real.
     if actualizar:
         st.session_state["_st_teorico_should_calc"] = True
+        # Persistir las 3 fechas del calculo para que sobrevivan al refresh.
+        # (fecha_conteo se sigue persistiendo aparte en Guardar Stock para
+        # respetar la decision previa: 'solo al apretar Guardar'.)
+        try:
+            db.guardar_config({
+                "st_teorico_ultimo_f0": str(f0),
+                "st_teorico_ultimo_fc": str(fc),
+                "st_teorico_ultimo_fp": str(fp),
+            })
+        except Exception:
+            pass
 
     TEO_RESULT_KEY = "_st_teorico_result"
 
