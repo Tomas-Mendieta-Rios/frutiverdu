@@ -1571,17 +1571,17 @@ with tab_comprar:
                             "stock": _stk_col,
                             "pedido": _ped_col,
                             "estimado": _est_col,
-                            "a_comprar": "A comprar",
+                            "a_comprar": "Total",
                         })
                     )
                     styled = (
                         _disp.style
-                        .map(_color_ac, subset=["A comprar"])
+                        .map(_color_ac, subset=["Total"])
                         .format({
                             _ped_col: "{:.2f}",
                             _stk_col: "{:.2f}",
                             _est_col: "{:.2f}",
-                            "A comprar": lambda v: f"{abs(v):.2f}",
+                            "Total": lambda v: f"{abs(v):.2f}",
                         })
                     )
                     st.dataframe(
@@ -1591,7 +1591,7 @@ with tab_comprar:
                     )
 
             st.caption(
-                "**A comprar** = `pedido + estimado − stock` (por código, sin conversiones)."
+                "**Total** = `pedido + estimado − stock` (por código, sin conversiones)."
             )
 
     # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
@@ -1736,8 +1736,7 @@ with tab_comprar:
                             _stk_col_d: r["stock"],
                             _ped_col_d: r["pedido"],
                             _est_col_d: r["estimado"],
-                            "Resultado": r["diff"],
-                            "Con estimado": r["diff_est"],
+                            "Total": r["diff_est"],
                         }
                         for r in resultados
                     ])
@@ -1759,10 +1758,9 @@ with tab_comprar:
                             _ped_col_d: "{:,.2f}",
                             _stk_col_d: "{:,.2f}",
                             _est_col_d: "{:,.2f}",
-                            "Resultado": lambda v: f"{abs(float(v)):,.2f}",
-                            "Con estimado": lambda v: f"{abs(float(v)):,.2f}",
+                            "Total": lambda v: f"{abs(float(v)):,.2f}",
                         })
-                        .map(_color_diff, subset=["Resultado", "Con estimado"])
+                        .map(_color_diff, subset=["Total"])
                     )
                     st.dataframe(
                         styled_grupo,
