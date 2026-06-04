@@ -1866,24 +1866,45 @@ with tab_estimado:
 
     edits_por_clave_est = {}  # (rubro, base) -> edited_df
 
+    st.caption(
+        "ℹ️ Los productos / rubros en :gray[**gris**] no tienen ningún "
+        "estimado cargado para este día."
+    )
+
     with st.form(key=f"form_estimado_{dia_estimado}", clear_on_submit=False):
         guardar_est = st.form_submit_button(
             "💾 Guardar estimado", type="primary"
         )
 
+        def _df_estimado_tiene_carga(df):
+            for v in df["estimado"]:
+                try:
+                    if abs(_parse_num_es(str(v))) > 1e-6:
+                        return True
+                except Exception:
+                    pass
+            return False
+
         for rubro_name in rubros_presentes_est:
             df_rubro = base_est_view[base_est_view["Rubro"] == rubro_name]
             n_bases = df_rubro["Base"].nunique()
-            with st.expander(
-                f"📁 {rubro_name} ({n_bases} productos)", expanded=False
-            ):
+            _rubro_lbl_txt = f"📁 {rubro_name} ({n_bases} productos)"
+            _rubro_lbl = (
+                _rubro_lbl_txt if _df_estimado_tiene_carga(df_rubro)
+                else f":gray[{_rubro_lbl_txt}]"
+            )
+            with st.expander(_rubro_lbl, expanded=False):
                 for base_name, df_base in df_rubro.groupby("Base", sort=True):
                     n_var = len(df_base)
-                    with st.expander(
+                    _base_lbl_txt = (
                         f"📦 {base_name} "
-                        f"({n_var} variante{'s' if n_var != 1 else ''})",
-                        expanded=False,
-                    ):
+                        f"({n_var} variante{'s' if n_var != 1 else ''})"
+                    )
+                    _base_lbl = (
+                        _base_lbl_txt if _df_estimado_tiene_carga(df_base)
+                        else f":gray[{_base_lbl_txt}]"
+                    )
+                    with st.expander(_base_lbl, expanded=False):
                         edited = st.data_editor(
                             df_base[["codigo", "Variante", "estimado"]].reset_index(drop=True),
                             use_container_width=True,
