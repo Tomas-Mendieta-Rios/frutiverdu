@@ -748,22 +748,34 @@ def cargar_config():
     df = leer_tabla("config")
     if df.empty or "key" not in df.columns:
         return {}
-    return dict(zip(df["key"].astype(str), df["value"].astype(str)))
+    result = dict(zip(df["key"].astype(str), df["value"].astype(str)))
+    # Snapshot en session_state como ultimo fallback en guardar_config.
+    # Se actualiza cada vez que se lee config con data -> sobrevive a
+    # cache clears y a fallas transitorias de la API.
+    try:
+        st.session_state["_config_snapshot"] = dict(result)
+    except Exception:
+        pass
+    return result
 
 
 def guardar_config(updates):
     """Merge dict updates con la config existente y persiste a Sheets.
     Lee fresh (sin cache) para evitar race condition entre usuarios.
 
-    DEFENSA contra wipe accidental: si el read fresh viene vacio (lo cual
-    es muy sospechoso en operacion normal y casi siempre indica una
-    falla transitoria de la API o un race con otro write en curso entre
-    ws.clear() y ws.update()), reintenta antes de aceptarlo. Si tras los
-    reintentos sigue vacio, cae a la version CACHEADA por leer_tabla
-    como fallback. Solo asume 'realmente vacia' (primer arranque) si
-    ambas fuentes coinciden en vacio."""
+    DEFENSA contra wipe accidental (CRITICA - evita perder timestamps,
+    fechas guardadas, configs de tabs, etc):
+
+    1. Fresh read: si viene vacio, reintenta 3 veces con 500ms entre cada.
+    2. Si fresh sigue vacio -> fallback a leer_tabla cacheada.
+    3. Si cache tambien vacio -> fallback a session_state snapshot.
+    4. Si TODAS las fuentes vacias Y existe data en otras tablas
+       (productos) -> ABORTAR el write porque es claramente un bug, no
+       primer arranque.
+    5. Solo aceptar 'vacia legitima' si productos tambien esta vacio
+       (primer install)."""
     df_fresh = _leer_tabla_fresh("config")
-    # Si el fresh viene vacio, reintentar antes de creerle.
+    # 1. Si el fresh viene vacio, reintentar antes de creerle.
     if df_fresh.empty or "key" not in df_fresh.columns:
         for _ in range(3):
             _time.sleep(0.5)
@@ -772,25 +784,59 @@ def guardar_config(updates):
                 break
 
     actual = {}
+    fuente = "vacio"
     if not df_fresh.empty and "key" in df_fresh.columns:
         actual = dict(
             zip(df_fresh["key"].astype(str), df_fresh["value"].astype(str))
         )
+        fuente = "fresh"
     else:
-        # Fresh sigue vacio tras reintentos. Fallback: usar la version
-        # cacheada (puede estar un toque stale pero es mejor que wipear
-        # toda la config por una falla transitoria de lectura).
+        # 2. Fallback a la cache.
         cached_df = leer_tabla("config")
         if not cached_df.empty and "key" in cached_df.columns:
             actual = dict(
                 zip(cached_df["key"].astype(str), cached_df["value"].astype(str))
             )
-        # Si TAMBIEN cache esta vacio -> primer arranque legitimo, actual = {}
+            fuente = "cache"
+        else:
+            # 3. Fallback al snapshot en session_state.
+            try:
+                snap = st.session_state.get("_config_snapshot")
+                if isinstance(snap, dict) and snap:
+                    actual = dict(snap)
+                    fuente = "snapshot"
+            except Exception:
+                pass
+
+    # 4. Safety net: si despues de los 3 fallbacks seguimos con actual
+    # vacio, chequear si esto es realmente primer arranque o un bug.
+    if not actual:
+        try:
+            prods = leer_tabla("productos")
+            if not prods.empty:
+                # NO es primer arranque -> abortar para no wipear.
+                try:
+                    st.warning(
+                        "⚠️ guardar_config aborted: config aparece vacia "
+                        "pero productos tiene data. Reintentar la accion."
+                    )
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
+        # 5. Si productos tambien vacio, asumimos primer arranque legitimo
+        # y procedemos con actual = {} para sembrar las primeras keys.
 
     actual.update({k: str(v) for k, v in updates.items() if v is not None})
     rows = [{"key": k, "value": v} for k, v in actual.items()]
     df = pd.DataFrame(rows, columns=SCHEMA["config"])
     escribir_tabla("config", df)
+    # Mantener snapshot en sync con el ultimo write exitoso.
+    try:
+        st.session_state["_config_snapshot"] = dict(actual)
+    except Exception:
+        pass
 
 
 # ---------------- STOCK TEORICO (cache del ultimo calculo) ----------------
