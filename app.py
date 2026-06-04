@@ -1473,12 +1473,28 @@ with tab_comprar:
             _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
             _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
 
+            # Decidir color del expander segun prioridad rojo > gris > verde.
+            # Mismo criterio que _color_ac:
+            #   a_comprar > 0.001  -> rojo  (falta comprar)
+            #   a_comprar < -0.001 -> verde (sobra)
+            #   else               -> gris  (balanceado)
+            def _color_base(df):
+                vals = df["a_comprar"].astype(float)
+                if (vals > 0.001).any():
+                    return "red"
+                if ((vals >= -0.001) & (vals <= 0.001)).any():
+                    return "gray"
+                return "green"
+
             for base_name, df_base in _raw_view.groupby("Base", sort=True):
                 n_var = len(df_base)
-                with st.expander(
-                    f"📦 {base_name} ({n_var} variante{'s' if n_var != 1 else ''})",
-                    expanded=False,
-                ):
+                _label_txt = (
+                    f"📦 {base_name} "
+                    f"({n_var} variante{'s' if n_var != 1 else ''})"
+                )
+                _color = _color_base(df_base)
+                _label = f":{_color}[**{_label_txt}**]"
+                with st.expander(_label, expanded=False):
                     _disp = (
                         df_base[[
                             "codigo", "Variante",
