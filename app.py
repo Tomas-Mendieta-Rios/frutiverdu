@@ -1457,7 +1457,7 @@ with tab_comprar:
         | (_raw["stock"].astype(float) > 0)
     ].copy()
     with st.expander(
-        f"🔍 Ver total a comprar sin **desglozar** ({len(_raw_view)})",
+        f"🔍 Ver total a comprar **SIN** desglozar ({len(_raw_view)})",
         expanded=False,
     ):
         # Aclaracion compacta sobre como se decide el color del producto base
