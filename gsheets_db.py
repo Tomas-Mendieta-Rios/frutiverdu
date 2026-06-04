@@ -753,12 +753,40 @@ def cargar_config():
 
 def guardar_config(updates):
     """Merge dict updates con la config existente y persiste a Sheets.
-    Lee fresh (sin cache) para evitar race condition entre usuarios."""
+    Lee fresh (sin cache) para evitar race condition entre usuarios.
+
+    DEFENSA contra wipe accidental: si el read fresh viene vacio (lo cual
+    es muy sospechoso en operacion normal y casi siempre indica una
+    falla transitoria de la API o un race con otro write en curso entre
+    ws.clear() y ws.update()), reintenta antes de aceptarlo. Si tras los
+    reintentos sigue vacio, cae a la version CACHEADA por leer_tabla
+    como fallback. Solo asume 'realmente vacia' (primer arranque) si
+    ambas fuentes coinciden en vacio."""
     df_fresh = _leer_tabla_fresh("config")
+    # Si el fresh viene vacio, reintentar antes de creerle.
     if df_fresh.empty or "key" not in df_fresh.columns:
-        actual = {}
+        for _ in range(3):
+            _time.sleep(0.5)
+            df_fresh = _leer_tabla_fresh("config")
+            if not df_fresh.empty and "key" in df_fresh.columns:
+                break
+
+    actual = {}
+    if not df_fresh.empty and "key" in df_fresh.columns:
+        actual = dict(
+            zip(df_fresh["key"].astype(str), df_fresh["value"].astype(str))
+        )
     else:
-        actual = dict(zip(df_fresh["key"].astype(str), df_fresh["value"].astype(str)))
+        # Fresh sigue vacio tras reintentos. Fallback: usar la version
+        # cacheada (puede estar un toque stale pero es mejor que wipear
+        # toda la config por una falla transitoria de lectura).
+        cached_df = leer_tabla("config")
+        if not cached_df.empty and "key" in cached_df.columns:
+            actual = dict(
+                zip(cached_df["key"].astype(str), cached_df["value"].astype(str))
+            )
+        # Si TAMBIEN cache esta vacio -> primer arranque legitimo, actual = {}
+
     actual.update({k: str(v) for k, v in updates.items() if v is not None})
     rows = [{"key": k, "value": v} for k, v in actual.items()]
     df = pd.DataFrame(rows, columns=SCHEMA["config"])
