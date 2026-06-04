@@ -1425,6 +1425,22 @@ with tab_comprar:
                 hide_index=True,
             )
 
+    # Date labels para mostrar a que fechas corresponde cada columna en ambas
+    # vistas (desglozado y sin desglozar).
+    def _fmt_fechas_label(fechas):
+        if not fechas:
+            return ""
+        items = sorted(set(str(f) for f in (
+            fechas if isinstance(fechas, (list, tuple, set)) else [fechas]
+        )))
+        if len(items) == 1:
+            return f"({items[0]})"
+        return f"({items[0]} a {items[-1]})"
+
+    _lab_ped = _fmt_fechas_label(fechas_entrega)
+    _lab_stk = f"({fecha_stock_sel})"
+    _lab_est = f"({DIAS_DISPLAY.get(dia_estimado_sel, dia_estimado_sel)})"
+
     # Expander resumen crudo por codigo (sin conversiones): pedido + estimado + stock
     _raw = pedidos_actual.copy()
     _raw["codigo"] = _raw["codigo"].astype(str)
@@ -1444,6 +1460,27 @@ with tab_comprar:
         f"🔍 Ver resumen por código sin conversiones ({len(_raw_view)})",
         expanded=False,
     ):
+        # Leyenda grande del codigo de colores (que tu viejo aprenda primero;
+        # despues la achicamos).
+        st.markdown(
+            """
+            <div style="font-size:1.15rem; line-height:1.7; padding:14px 18px;
+                        background:#f6f8fa; border:1px solid #d0d7de;
+                        border-radius:10px; margin-bottom:12px;">
+              <div style="font-weight:700; margin-bottom:6px;">
+                📖 Cómo leer los colores:
+              </div>
+              <div><span style="color:#d11; font-weight:700; font-size:1.3rem;">🔴 ROJO</span>
+                &nbsp;→ <b>HAY QUE COMPRAR</b> (los pedidos + estimado superan al stock)</div>
+              <div><span style="color:#666; font-weight:700; font-size:1.3rem;">⚪ GRIS</span>
+                &nbsp;→ <b>JUSTO</b> (stock alcanza para los pedidos)</div>
+              <div><span style="color:#1a8a1a; font-weight:700; font-size:1.3rem;">🟢 VERDE</span>
+                &nbsp;→ <b>SOBRA STOCK</b> (no hace falta comprar de este)</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         if _raw_view.empty:
             st.caption("Sin datos.")
         else:
@@ -1495,20 +1532,28 @@ with tab_comprar:
                 _color = _color_base(df_base)
                 _label = f":{_color}[**{_label_txt}**]"
                 with st.expander(_label, expanded=False):
+                    _ped_col = f"Pedido {_lab_ped}".strip()
+                    _stk_col = f"Stock {_lab_stk}".strip()
+                    _est_col = f"Estimado {_lab_est}".strip()
                     _disp = (
                         df_base[[
                             "codigo", "Variante",
                             "pedido", "stock", "estimado", "a_comprar",
                         ]]
-                        .rename(columns={"a_comprar": "A comprar"})
+                        .rename(columns={
+                            "pedido": _ped_col,
+                            "stock": _stk_col,
+                            "estimado": _est_col,
+                            "a_comprar": "A comprar",
+                        })
                     )
                     styled = (
                         _disp.style
                         .map(_color_ac, subset=["A comprar"])
                         .format({
-                            "pedido": "{:.2f}",
-                            "stock": "{:.2f}",
-                            "estimado": "{:.2f}",
+                            _ped_col: "{:.2f}",
+                            _stk_col: "{:.2f}",
+                            _est_col: "{:.2f}",
                             "A comprar": lambda v: f"{abs(v):.2f}",
                         })
                     )
@@ -1560,136 +1605,143 @@ with tab_comprar:
         bases_set |= set(stk[stk["cantidad"] > 0]["base"].unique())
     bases = sorted(bases_set)
 
+    _ped_col_d = f"Pedido {_lab_ped}".strip()
+    _stk_col_d = f"Stock {_lab_stk}".strip()
+    _est_col_d = f"Estimado {_lab_est}".strip()
 
-    for base in bases:
-        opciones_grupo = prod_temp[prod_temp["base"] == base]
-        if opciones_grupo.empty:
-            continue
-
-        codigos_familia = opciones_grupo["codigo"].astype(str).tolist()
-        componentes = componentes_conectados(codigos_familia, grafo)
-
-        ped_base = ped[ped["base"] == base]
-        stk_base = stk[stk["base"] == base] if not stk.empty else stk
-
-        pedido_codigos = set(
-            ped_base[
-                (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
-            ]["codigo"].astype(str)
-        )
-        stock_codigos = (
-            set(stk_base[stk_base["cantidad"] > 0]["codigo"].astype(str))
-            if not stk_base.empty
-            else set()
-        )
-        codigos_con_valor = pedido_codigos | stock_codigos
-
-        for comp in componentes:
-            if not (comp & codigos_con_valor):
+    with st.expander(
+        f"🔧 Ver total a comprar desglozado con conversiones ({len(bases)})",
+        expanded=False,
+    ):
+        for base in bases:
+            opciones_grupo = prod_temp[prod_temp["base"] == base]
+            if opciones_grupo.empty:
                 continue
 
-            comp_productos = opciones_grupo[
-                opciones_grupo["codigo"].astype(str).isin(comp)
-            ]
-            # Lista de unidades unicas preservando orden
-            unidades_unicas = list(dict.fromkeys(comp_productos["unidad"].tolist()))
+            codigos_familia = opciones_grupo["codigo"].astype(str).tolist()
+            componentes = componentes_conectados(codigos_familia, grafo)
 
-            # Calcular totales para CADA unidad de la familia
-            resultados = []
-            for unidad in unidades_unicas:
-                codigo_destino = str(
-                    comp_productos[comp_productos["unidad"] == unidad].iloc[0]["codigo"]
-                )
-                total_ped = 0.0
-                total_est = 0.0
-                for _, fila in ped_base.iterrows():
-                    if str(fila["codigo"]) not in comp:
-                        continue
-                    factor = convertir(grafo, str(fila["codigo"]), codigo_destino)
-                    if factor is None:
-                        continue
-                    total_ped += float(fila["cantidad"]) * factor
-                    total_est += float(fila["estimado"]) * factor
+            ped_base = ped[ped["base"] == base]
+            stk_base = stk[stk["base"] == base] if not stk.empty else stk
 
-                total_stk = 0.0
-                if not stk_base.empty:
-                    for _, fila in stk_base.iterrows():
+            pedido_codigos = set(
+                ped_base[
+                    (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
+                ]["codigo"].astype(str)
+            )
+            stock_codigos = (
+                set(stk_base[stk_base["cantidad"] > 0]["codigo"].astype(str))
+                if not stk_base.empty
+                else set()
+            )
+            codigos_con_valor = pedido_codigos | stock_codigos
+
+            for comp in componentes:
+                if not (comp & codigos_con_valor):
+                    continue
+
+                comp_productos = opciones_grupo[
+                    opciones_grupo["codigo"].astype(str).isin(comp)
+                ]
+                # Lista de unidades unicas preservando orden
+                unidades_unicas = list(dict.fromkeys(comp_productos["unidad"].tolist()))
+
+                # Calcular totales para CADA unidad de la familia
+                resultados = []
+                for unidad in unidades_unicas:
+                    codigo_destino = str(
+                        comp_productos[comp_productos["unidad"] == unidad].iloc[0]["codigo"]
+                    )
+                    total_ped = 0.0
+                    total_est = 0.0
+                    for _, fila in ped_base.iterrows():
                         if str(fila["codigo"]) not in comp:
-                            continue
-                        cant = float(fila["cantidad"])
-                        if cant == 0:
                             continue
                         factor = convertir(grafo, str(fila["codigo"]), codigo_destino)
                         if factor is None:
                             continue
-                        total_stk += cant * factor
+                        total_ped += float(fila["cantidad"]) * factor
+                        total_est += float(fila["estimado"]) * factor
 
-                resultados.append({
-                    "unidad": unidad,
-                    "pedido": total_ped,
-                    "estimado": total_est,
-                    "stock": total_stk,
-                    "diff": total_ped - total_stk,
-                    "diff_est": (total_ped + total_est) - total_stk,
-                })
+                    total_stk = 0.0
+                    if not stk_base.empty:
+                        for _, fila in stk_base.iterrows():
+                            if str(fila["codigo"]) not in comp:
+                                continue
+                            cant = float(fila["cantidad"])
+                            if cant == 0:
+                                continue
+                            factor = convertir(grafo, str(fila["codigo"]), codigo_destino)
+                            if factor is None:
+                                continue
+                            total_stk += cant * factor
 
-            if not resultados:
-                continue
-
-            # Status overall (todos los diff dentro de la familia deberian tener el mismo signo)
-            primer = resultados[0]["diff_est"]
-            if primer > 0.001:
-                icono = "🔴"
-            elif primer < -0.001:
-                icono = "🟢"
-            else:
-                icono = "⚪"
-
-            # Nombre: si la familia tiene un solo producto, usar su nombre completo
-            nombre = (
-                comp_productos.iloc[0]["producto"] if len(comp) == 1 else base
-            )
-
-            with st.expander(f"{icono} **{nombre}**", expanded=False):
-                df_show = pd.DataFrame([
-                    {
-                        "Unidad": r["unidad"],
-                        "Pedido": r["pedido"],
-                        "Stock": r["stock"],
-                        "Estimado": r["estimado"],
-                        "Resultado": r["diff"],
-                        "Con estimado": r["diff_est"],
-                    }
-                    for r in resultados
-                ])
-
-                def _color_diff(v):
-                    try:
-                        n = float(v)
-                    except (ValueError, TypeError):
-                        return ""
-                    if n > 0.001:
-                        return "color: #d11; font-weight: bold"
-                    if n < -0.001:
-                        return "color: #1a8a1a; font-weight: bold"
-                    return ""
-
-                styled_grupo = (
-                    df_show.style
-                    .format({
-                        "Pedido": "{:,.2f}",
-                        "Stock": "{:,.2f}",
-                        "Estimado": "{:,.2f}",
-                        "Resultado": lambda v: f"{abs(float(v)):,.2f}",
-                        "Con estimado": lambda v: f"{abs(float(v)):,.2f}",
+                    resultados.append({
+                        "unidad": unidad,
+                        "pedido": total_ped,
+                        "estimado": total_est,
+                        "stock": total_stk,
+                        "diff": total_ped - total_stk,
+                        "diff_est": (total_ped + total_est) - total_stk,
                     })
-                    .map(_color_diff, subset=["Resultado", "Con estimado"])
+
+                if not resultados:
+                    continue
+
+                # Status overall (todos los diff dentro de la familia deberian tener el mismo signo)
+                primer = resultados[0]["diff_est"]
+                if primer > 0.001:
+                    icono = "🔴"
+                elif primer < -0.001:
+                    icono = "🟢"
+                else:
+                    icono = "⚪"
+
+                # Nombre: si la familia tiene un solo producto, usar su nombre completo
+                nombre = (
+                    comp_productos.iloc[0]["producto"] if len(comp) == 1 else base
                 )
-                st.dataframe(
-                    styled_grupo,
-                    use_container_width=True,
-                    hide_index=True,
-                )
+
+                with st.expander(f"{icono} **{nombre}**", expanded=False):
+                    df_show = pd.DataFrame([
+                        {
+                            "Unidad": r["unidad"],
+                            _ped_col_d: r["pedido"],
+                            _stk_col_d: r["stock"],
+                            _est_col_d: r["estimado"],
+                            "Resultado": r["diff"],
+                            "Con estimado": r["diff_est"],
+                        }
+                        for r in resultados
+                    ])
+
+                    def _color_diff(v):
+                        try:
+                            n = float(v)
+                        except (ValueError, TypeError):
+                            return ""
+                        if n > 0.001:
+                            return "color: #d11; font-weight: bold"
+                        if n < -0.001:
+                            return "color: #1a8a1a; font-weight: bold"
+                        return ""
+
+                    styled_grupo = (
+                        df_show.style
+                        .format({
+                            _ped_col_d: "{:,.2f}",
+                            _stk_col_d: "{:,.2f}",
+                            _est_col_d: "{:,.2f}",
+                            "Resultado": lambda v: f"{abs(float(v)):,.2f}",
+                            "Con estimado": lambda v: f"{abs(float(v)):,.2f}",
+                        })
+                        .map(_color_diff, subset=["Resultado", "Con estimado"])
+                    )
+                    st.dataframe(
+                        styled_grupo,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
 with tab_estimado:
     dia_actual = DIAS_SEMANA[date.today().weekday()]
