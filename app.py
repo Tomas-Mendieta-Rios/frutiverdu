@@ -1439,11 +1439,31 @@ with tab_comprar:
         if _est_view.empty:
             st.caption("Sin estimado cargado para este día.")
         else:
-            st.dataframe(
-                _est_view[["codigo", "producto", "unidad_medida", "estimado"]],
-                use_container_width=True,
-                hide_index=True,
-            )
+            def _split_est(p):
+                s = str(p)
+                if " - " in s:
+                    b, v = s.rsplit(" - ", 1)
+                    return b.strip(), v.strip()
+                return s, ""
+
+            _est_grp = _est_view.copy()
+            _split_est_series = _est_grp["producto"].apply(_split_est)
+            _est_grp["Base"] = _split_est_series.apply(lambda t: t[0])
+            _est_grp["Variante"] = _split_est_series.apply(lambda t: t[1])
+            _est_grp = _est_grp.sort_values(["Base", "Variante"])
+
+            for base_name, df_base in _est_grp.groupby("Base", sort=True):
+                n_var = len(df_base)
+                with st.expander(
+                    f"📦 {base_name} "
+                    f"({n_var} variante{'s' if n_var != 1 else ''})",
+                    expanded=False,
+                ):
+                    st.dataframe(
+                        df_base[["codigo", "Variante", "estimado"]],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
     # Date labels para mostrar a que fechas corresponde cada columna en ambas
     # vistas (desglozado y sin desglozar).
