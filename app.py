@@ -1989,9 +1989,17 @@ with tab_estimado:
         salida["estimado"] = salida["estimado"].fillna(0).astype(float)
         db.guardar_estimado_semanal_dia(salida, dia_estimado)
         st.session_state.pop(f"_est_zero_{dia_estimado}", None)
-        # Forzar rerun para que los colores (gris/normal) reflejen los datos
-        # recien guardados. El mensaje de exito se renderiza en la proxima
-        # ejecucion via flash en session_state.
+        # Limpiar el session_state de los data_editors para que se
+        # re-inicialicen desde la data fresca de gsheets. Sin esto, los
+        # editors conservan estado viejo y los colores (gris/normal) no
+        # se actualizan hasta un F5.
+        prefix = "editor_estimado_"
+        suffix = f"_{dia_estimado}"
+        for k in list(st.session_state.keys()):
+            if k.startswith(prefix) and k.endswith(suffix):
+                st.session_state.pop(k, None)
+        # Forzar rerun para que la UI refleje los datos recien guardados.
+        # El mensaje de exito sobrevive el rerun via flash en session_state.
         st.session_state["_est_saved_flash"] = (
             f"Estimado para {DIAS_DISPLAY[dia_estimado]} guardado en Sheets."
         )
