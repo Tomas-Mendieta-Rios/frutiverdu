@@ -808,26 +808,13 @@ def guardar_config(updates):
             except Exception:
                 pass
 
-    # 4. Safety net: si despues de los 3 fallbacks seguimos con actual
-    # vacio, chequear si esto es realmente primer arranque o un bug.
-    if not actual:
-        try:
-            prods = leer_tabla("productos")
-            if not prods.empty:
-                # NO es primer arranque -> abortar para no wipear.
-                try:
-                    st.warning(
-                        "⚠️ guardar_config aborted: config aparece vacia "
-                        "pero productos tiene data. Reintentar la accion."
-                    )
-                except Exception:
-                    pass
-                return
-        except Exception:
-            pass
-        # 5. Si productos tambien vacio, asumimos primer arranque legitimo
-        # y procedemos con actual = {} para sembrar las primeras keys.
-
+    # NOTA: previamente habia una salvaguarda que abortaba el write si
+    # 'actual' quedaba vacio y 'productos' tenia data (interpretando eso
+    # como bug). Pero abortar deja al usuario stuck en "no puedo poblar
+    # config" cuando config genuinamente esta vacio post-wipe anterior.
+    # En su lugar, confiamos en las 3 capas previas (retry/cache/snapshot)
+    # y procedemos. Si actual queda vacio, escribimos solo los updates -
+    # que es lo razonable cuando no hay nada que preservar.
     actual.update({k: str(v) for k, v in updates.items() if v is not None})
     rows = [{"key": k, "value": v} for k, v in actual.items()]
     df = pd.DataFrame(rows, columns=SCHEMA["config"])
