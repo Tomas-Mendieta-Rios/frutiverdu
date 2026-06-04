@@ -2518,22 +2518,34 @@ with tab_stock:
         edited_por_clave = {}  # (rubro, base) -> edited_df
 
         st.caption(
-            "ℹ️ Los productos / rubros en :gray[**gris**] no tuvieron ningún "
-            "movimiento (sin stock inicial, sin compras y sin pedidos en las "
-            "fechas elegidas)."
+            "ℹ️ Los productos / rubros en :gray[**gris**] no tienen ningún "
+            "valor: sin stock inicial, sin compras, sin pedidos y sin "
+            "stock real cargado."
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
             guardar_conteo = st.form_submit_button(
                 "💾 Guardar Stock", type="primary", use_container_width=True,
             )
+            # Placeholder para el mensaje de exito justo debajo del boton.
+            stk_save_msg_ph = st.empty()
 
             def _df_tiene_mov(df):
-                return (
+                if (
                     df["Stock inicial"].abs().astype(float).sum() > 1e-6
                     or df["+ Compras"].abs().astype(float).sum() > 1e-6
                     or df["− Pedidos"].abs().astype(float).sum() > 1e-6
-                )
+                ):
+                    return True
+                # Tambien chequear el Stock real cargado (columna editable,
+                # viene como string formateado en es-AR).
+                for v in df["Stock"]:
+                    try:
+                        if abs(_parse_num_es(str(v))) > 1e-6:
+                            return True
+                    except Exception:
+                        pass
+                return False
 
             for rubro_name in rubros_presentes:
                 df_rubro = df_editor[df_editor["Rubro"] == rubro_name]
@@ -2632,9 +2644,11 @@ with tab_stock:
                     )
                 except Exception:
                     pass
-                st.success(f"✅ Stock del {fecha_conteo} guardado en Sheets.")
+                stk_save_msg_ph.success(
+                    f"✅ Stock del {fecha_conteo} guardado en Sheets."
+                )
             except Exception as e:
-                st.error(f"⚠️ Error al guardar: {e}")
+                stk_save_msg_ph.error(f"⚠️ Error al guardar: {e}")
 
         # Actualizar el caption "Ultimo calculo" arriba (placeholder en outer)
         try:
