@@ -2329,17 +2329,31 @@ with tab_stock:
                 "💾 Guardar Stock", type="primary", use_container_width=True,
             )
 
+            def _df_tiene_mov(df):
+                return (
+                    df["Stock inicial"].abs().astype(float).sum() > 1e-6
+                    or df["+ Compras"].abs().astype(float).sum() > 1e-6
+                    or df["− Pedidos"].abs().astype(float).sum() > 1e-6
+                )
+
             for rubro_name in rubros_presentes:
                 df_rubro = df_editor[df_editor["Rubro"] == rubro_name]
                 n_bases = df_rubro["Base"].nunique()
-                with st.expander(
-                    f"📁 {rubro_name} ({n_bases} productos)", expanded=False
-                ):
+                _rubro_label_txt = f"📁 {rubro_name} ({n_bases} productos)"
+                _rubro_label = (
+                    _rubro_label_txt if _df_tiene_mov(df_rubro)
+                    else f":gray[{_rubro_label_txt}]"
+                )
+                with st.expander(_rubro_label, expanded=False):
                     for base_name, df_base in df_rubro.groupby("Base", sort=True):
                         n_var = len(df_base)
-                        label = (
+                        _base_label_txt = (
                             f"📦 {base_name} "
                             f"({n_var} variante{'s' if n_var != 1 else ''})"
+                        )
+                        label = (
+                            _base_label_txt if _df_tiene_mov(df_base)
+                            else f":gray[{_base_label_txt}]"
                         )
                         with st.expander(label, expanded=False):
                             edited = st.data_editor(
