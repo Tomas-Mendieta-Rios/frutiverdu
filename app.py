@@ -1918,6 +1918,7 @@ with tab_estimado:
     )
 
     edits_por_clave_est = {}  # (rubro, base) -> edited_df
+    codigos_por_clave_est = {}  # (rubro, base) -> [codigos] mismo orden de filas
 
     st.caption(
         "ℹ️ Los productos / rubros en :gray[**gris**] no tienen ningún "
@@ -1958,16 +1959,19 @@ with tab_estimado:
                         else f":gray[{_base_lbl_txt}]"
                     )
                     with st.expander(_base_lbl, expanded=False):
+                        df_base_reset = df_base.reset_index(drop=True)
+                        codigos_por_clave_est[(rubro_name, base_name)] = (
+                            df_base_reset["codigo"].astype(str).tolist()
+                        )
                         edited = st.data_editor(
-                            df_base[["codigo", "Variante", "estimado"]].reset_index(drop=True),
+                            df_base_reset[["Variante", "estimado"]],
                             use_container_width=True,
                             hide_index=True,
-                            disabled=["codigo", "Variante"],
+                            disabled=["Variante"],
                             column_config={
-                                "codigo": st.column_config.TextColumn("Código"),
-                                "Variante": st.column_config.TextColumn("Variante"),
+                                "Variante": st.column_config.TextColumn("Var"),
                                 "estimado": st.column_config.TextColumn(
-                                    "Estimado",
+                                    "Cant",
                                     help="Podés usar coma (1,5) o punto (1.5)",
                                 ),
                             },
@@ -1976,10 +1980,13 @@ with tab_estimado:
                         edits_por_clave_est[(rubro_name, base_name)] = edited
 
     if guardar_est:
+        # 'codigo' no se muestra en la tabla; vive en codigos_por_clave_est
+        # en el mismo orden de filas que el editor.
         edits_map_e = {}
-        for _key, edited in edits_por_clave_est.items():
-            for _, row in edited.iterrows():
-                edits_map_e[str(row["codigo"])] = _parse_num_es(row["estimado"])
+        for clave, edited in edits_por_clave_est.items():
+            codigos = codigos_por_clave_est.get(clave, [])
+            for cod, (_, row) in zip(codigos, edited.iterrows()):
+                edits_map_e[cod] = _parse_num_es(row["estimado"])
 
         salida = base_est.copy()
         salida["estimado"] = [
@@ -2328,16 +2335,15 @@ with tab_stock:
             else:
                 _filas_ini = [
                     {
-                        "Código": cod,
-                        "Producto": _prod_nombre.get(cod, "(desconocido)"),
-                        "Cantidad": float(cant),
+                        "Prod": _prod_nombre.get(cod, "(desconocido)"),
+                        "Cant": float(cant),
                     }
                     for cod, cant in _map_ini.items()
                     if float(cant) > 1e-6
                 ]
                 if _filas_ini:
                     st.dataframe(
-                        pd.DataFrame(_filas_ini).sort_values("Producto"),
+                        pd.DataFrame(_filas_ini).sort_values("Prod"),
                         use_container_width=True,
                         hide_index=True,
                     )
@@ -2363,12 +2369,11 @@ with tab_stock:
                         if items:
                             filas_c = [
                                 {
-                                    "Código": str(it.get("cod_item", "")),
-                                    "Producto": _prod_nombre.get(
+                                    "Prod": _prod_nombre.get(
                                         str(it.get("cod_item", "")),
                                         "(desconocido)",
                                     ),
-                                    "Recepcionado": float(
+                                    "Cant": float(
                                         it.get("ctd_recepcionada", 0) or 0
                                     ),
                                 }
@@ -2408,8 +2413,10 @@ with tab_stock:
                                 filas_it = [extraer_item_dux(it) for it in items]
                                 st.dataframe(
                                     pd.DataFrame(filas_it)[
-                                        ["codigo", "producto", "cantidad"]
-                                    ],
+                                        ["producto", "cantidad"]
+                                    ].rename(columns={
+                                        "producto": "Prod", "cantidad": "Cant",
+                                    }),
                                     use_container_width=True,
                                     hide_index=True,
                                 )
@@ -2443,8 +2450,8 @@ with tab_stock:
                                     )
                                     cant = li.get("quantity") or 0
                                     filas_iw.append({
-                                        "producto": nombre_prod,
-                                        "cantidad": cant,
+                                        "Prod": nombre_prod,
+                                        "Cant": cant,
                                     })
                                 st.dataframe(
                                     pd.DataFrame(filas_iw),
@@ -2508,6 +2515,7 @@ with tab_stock:
         rubros_presentes += extras
 
         edited_por_clave = {}  # (rubro, base) -> edited_df
+        codigos_por_clave = {}  # (rubro, base) -> [codigos] en el mismo orden de las filas del editor
 
         st.caption(
             "ℹ️ Los productos / rubros en :gray[**gris**] no tuvieron ningún "
@@ -2547,36 +2555,41 @@ with tab_stock:
                             else f":gray[{_base_label_txt}]"
                         )
                         with st.expander(label, expanded=False):
+                            df_base_reset = df_base.reset_index(drop=True)
+                            # Guardamos los codigos por separado porque NO los
+                            # mostramos en la tabla (Codigo voluntariamente fuera).
+                            codigos_por_clave[(rubro_name, base_name)] = (
+                                df_base_reset["Código"].astype(str).tolist()
+                            )
                             edited = st.data_editor(
-                                df_base[[
-                                    "Código", "Variante",
+                                df_base_reset[[
+                                    "Variante",
                                     "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
                                     "Stock",
-                                ]].reset_index(drop=True),
+                                ]],
                                 use_container_width=True,
                                 hide_index=True,
                                 disabled=[
-                                    "Código", "Variante",
+                                    "Variante",
                                     "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
                                 ],
                                 column_config={
-                                    "Código": st.column_config.TextColumn("Código"),
-                                    "Variante": st.column_config.TextColumn("Variante"),
+                                    "Variante": st.column_config.TextColumn("Var"),
                                     "Stock inicial": st.column_config.NumberColumn(
-                                        f"Stock inicial ({f0})", format="%.2f"
+                                        "S.I", format="%.2f"
                                     ),
                                     "+ Compras": st.column_config.NumberColumn(
-                                        f"+ Compras ({fc})", format="%.2f"
+                                        "+ Com", format="%.2f"
                                     ),
                                     "− Pedidos": st.column_config.NumberColumn(
-                                        f"− Pedidos ({fp})", format="%.2f"
+                                        "− Ped", format="%.2f"
                                     ),
                                     "= Teórico": st.column_config.NumberColumn(
-                                        "= Teórico", format="%.2f"
+                                        "= Tot", format="%.2f"
                                     ),
                                     "Stock": st.column_config.TextColumn(
-                                        f"✏️ Stock ({fecha_conteo})",
-                                        help="✏️ Esta es la columna a completar. Coma o punto. Vacío = 0.",
+                                        "✏️ S",
+                                        help="Cargá el stock real medido. Coma o punto. Vacío = 0.",
                                         required=False,
                                     ),
                                 },
@@ -2586,10 +2599,12 @@ with tab_stock:
 
         if guardar_conteo:
             # Recorrer todos los mini-editors y armar dict global {cod: ctd}.
+            # 'Codigo' no se muestra en la tabla; vive en codigos_por_clave en
+            # el mismo orden de filas que el editor.
             valores_stock = {}
-            for _clave, edited in edited_por_clave.items():
-                for _, row in edited.iterrows():
-                    cod = str(row["Código"])
+            for clave, edited in edited_por_clave.items():
+                codigos = codigos_por_clave.get(clave, [])
+                for cod, (_, row) in zip(codigos, edited.iterrows()):
                     v_str = str(row.get("Stock", "") or "").strip()
                     valores_stock[cod] = (
                         _parse_num_es(v_str) if v_str else 0.0
