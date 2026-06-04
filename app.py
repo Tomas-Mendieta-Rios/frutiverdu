@@ -1457,7 +1457,7 @@ with tab_comprar:
         | (_raw["stock"].astype(float) > 0)
     ].copy()
     with st.expander(
-        f"🔍 Ver resumen por código sin conversiones ({len(_raw_view)})",
+        f"🔍 Ver total a comprar sin **desglozar** ({len(_raw_view)})",
         expanded=False,
     ):
         # Aclaracion compacta sobre como se decide el color del producto base
@@ -1598,7 +1598,7 @@ with tab_comprar:
     _est_col_d = f"Estimado {_lab_est}".strip()
 
     with st.expander(
-        f"🔧 Ver total a comprar desglozado con conversiones ({len(bases)})",
+        f"🔧 Ver total a comprar **desglozado** ({len(bases)})",
         expanded=False,
     ):
         for base in bases:
