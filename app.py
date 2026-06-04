@@ -1406,7 +1406,9 @@ with tab_comprar:
                         if items:
                             filas_it = [extraer_item_dux(it) for it in items]
                             st.dataframe(
-                                pd.DataFrame(filas_it)[["codigo", "producto", "cantidad"]],
+                                pd.DataFrame(filas_it)[["producto", "cantidad"]].rename(
+                                    columns={"producto": "Prod", "cantidad": "Cant"}
+                                ),
                                 use_container_width=True,
                                 hide_index=True,
                             )
@@ -1435,14 +1437,9 @@ with tab_comprar:
                                     or (li.get("productName") or {}).get("original")
                                     or ""
                                 )
-                                wix_id_prod = (
-                                    (li.get("catalogReference") or {}).get("catalogItemId")
-                                    or li.get("productId") or ""
-                                )
                                 filas_iw.append({
-                                    "wix_id": str(wix_id_prod),
-                                    "producto": nombre_prod,
-                                    "cantidad": li.get("quantity") or 0,
+                                    "Prod": nombre_prod,
+                                    "Cant": li.get("quantity") or 0,
                                 })
                             st.dataframe(
                                 pd.DataFrame(filas_iw),
@@ -1484,8 +1481,8 @@ with tab_comprar:
                     expanded=False,
                 ):
                     st.dataframe(
-                        df_base[["codigo", "Variante", "cantidad"]].rename(
-                            columns={"codigo": "#", "cantidad": "S"}
+                        df_base[["Variante", "cantidad"]].rename(
+                            columns={"Variante": "Var", "cantidad": "Cant"}
                         ),
                         use_container_width=True,
                         hide_index=True,
@@ -1523,8 +1520,8 @@ with tab_comprar:
                     expanded=False,
                 ):
                     st.dataframe(
-                        df_base[["codigo", "Variante", "estimado"]].rename(
-                            columns={"codigo": "#", "estimado": "E"}
+                        df_base[["Variante", "estimado"]].rename(
+                            columns={"Variante": "Var", "estimado": "Cant"}
                         ),
                         use_container_width=True,
                         hide_index=True,
@@ -1611,11 +1608,11 @@ with tab_comprar:
                 with st.expander(_label, expanded=False):
                     _disp = (
                         df_base[[
-                            "codigo", "Variante",
+                            "Variante",
                             "stock", "pedido", "estimado", "a_comprar",
                         ]]
                         .rename(columns={
-                            "codigo": "#",
+                            "Variante": "Var",
                             "stock": "S",
                             "pedido": "P",
                             "estimado": "E",
@@ -1781,8 +1778,7 @@ with tab_comprar:
                 with st.expander(f"{icono} **{nombre}**", expanded=False):
                     df_show = pd.DataFrame([
                         {
-                            "#": r["codigo"],
-                            "Variante": r["unidad"],
+                            "Var": r["unidad"],
                             "S": r["stock"],
                             "P": r["pedido"],
                             "E": r["estimado"],
