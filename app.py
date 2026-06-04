@@ -2431,7 +2431,8 @@ with tab_stock:
         st.caption(
             "ℹ️ Los productos / rubros en :gray[**gris**] no tuvieron ningún "
             "movimiento (sin stock inicial, sin compras y sin pedidos en las "
-            "fechas elegidas)."
+            "fechas elegidas). "
+            "El **✏️** marca los que tienen stock real cargado para el día."
         )
 
         with st.form("form_conteo_fisico", clear_on_submit=False):
@@ -2446,10 +2447,20 @@ with tab_stock:
                     or df["− Pedidos"].abs().astype(float).sum() > 1e-6
                 )
 
+            def _df_stock_cargado(df):
+                for v in df["Stock"]:
+                    try:
+                        if abs(_parse_num_es(str(v))) > 1e-6:
+                            return True
+                    except Exception:
+                        pass
+                return False
+
             for rubro_name in rubros_presentes:
                 df_rubro = df_editor[df_editor["Rubro"] == rubro_name]
                 n_bases = df_rubro["Base"].nunique()
-                _rubro_label_txt = f"📁 {rubro_name} ({n_bases} productos)"
+                _pencil_r = "✏️ " if _df_stock_cargado(df_rubro) else ""
+                _rubro_label_txt = f"{_pencil_r}📁 {rubro_name} ({n_bases} productos)"
                 _rubro_label = (
                     _rubro_label_txt if _df_tiene_mov(df_rubro)
                     else f":gray[{_rubro_label_txt}]"
@@ -2457,8 +2468,9 @@ with tab_stock:
                 with st.expander(_rubro_label, expanded=False):
                     for base_name, df_base in df_rubro.groupby("Base", sort=True):
                         n_var = len(df_base)
+                        _pencil_b = "✏️ " if _df_stock_cargado(df_base) else ""
                         _base_label_txt = (
-                            f"📦 {base_name} "
+                            f"{_pencil_b}📦 {base_name} "
                             f"({n_var} variante{'s' if n_var != 1 else ''})"
                         )
                         label = (
