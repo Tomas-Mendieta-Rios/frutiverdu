@@ -1298,6 +1298,21 @@ with tab_comprar:
     # Para mantener compatibilidad con el resto del código de la pestaña
     fecha_compra = fechas_entrega
 
+    # Helper de fechas (usado en labels de varios expanders).
+    def _fmt_fechas_label(fechas):
+        if not fechas:
+            return ""
+        items = sorted(set(str(f) for f in (
+            fechas if isinstance(fechas, (list, tuple, set)) else [fechas]
+        )))
+        if len(items) == 1:
+            return f"({items[0]})"
+        return f"({items[0]} a {items[-1]})"
+
+    _lab_ped = _fmt_fechas_label(fechas_entrega)
+    _lab_stk = f"({fecha_stock_sel})"
+    _lab_est = f"({DIAS_DISPLAY.get(dia_estimado_sel, dia_estimado_sel)})"
+
     wix_sin_mapear = st.session_state.get("_wix_sin_mapear", {})
     if wix_sin_mapear:
         lineas = "\n".join(
@@ -1324,7 +1339,7 @@ with tab_comprar:
     _wix_contados = st.session_state.get("_wix_contados", [])
     _total_pedidos = len(_dux_contados) + len(_wix_contados)
     with st.expander(
-        f"📋 Ver pedidos que se están contando ({_total_pedidos})",
+        f"📋 Ver pedidos que se están contando {_lab_ped} ({_total_pedidos})",
         expanded=False,
     ):
         if not _total_pedidos:
@@ -1464,22 +1479,6 @@ with tab_comprar:
                         use_container_width=True,
                         hide_index=True,
                     )
-
-    # Date labels para mostrar a que fechas corresponde cada columna en ambas
-    # vistas (desglozado y sin desglozar).
-    def _fmt_fechas_label(fechas):
-        if not fechas:
-            return ""
-        items = sorted(set(str(f) for f in (
-            fechas if isinstance(fechas, (list, tuple, set)) else [fechas]
-        )))
-        if len(items) == 1:
-            return f"({items[0]})"
-        return f"({items[0]} a {items[-1]})"
-
-    _lab_ped = _fmt_fechas_label(fechas_entrega)
-    _lab_stk = f"({fecha_stock_sel})"
-    _lab_est = f"({DIAS_DISPLAY.get(dia_estimado_sel, dia_estimado_sel)})"
 
     # Expander resumen crudo por codigo (sin conversiones): pedido + estimado + stock
     _raw = pedidos_actual.copy()
