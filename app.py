@@ -46,6 +46,22 @@ def _fmt_num_es(v):
     return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
+_UNIDAD_PRIO = {
+    "CAJA": 1, "BOLSA": 1, "RIESTRA": 1,
+    "UNIDAD": 2, "CABEZA": 2, "ATADO": 2, "BANDEJA": 2,
+    "CUBETA": 2, "MAPLE": 2, "PLANTA": 2,
+    "KG": 3, "LITRO": 3, "KILO": 3,
+}
+
+
+def _prio_unidad(s):
+    u = str(s).upper()
+    for kw, p in _UNIDAD_PRIO.items():
+        if kw in u:
+            return p
+    return 99
+
+
 def obtener_ultimo_comprobante_dux():
     """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
     de los ultimos 5 dias. Pagina hasta agotar resultados.
@@ -1136,7 +1152,7 @@ with tab_editar:
         )
         tabla_editada = st.data_editor(
             tabla_editor,
-            use_container_width=True,
+            use_container_width=False,
             num_rows="fixed",
             disabled=["origen_label", "componente_label"],
             column_config={
@@ -1409,7 +1425,7 @@ with tab_comprar:
                                 pd.DataFrame(filas_it)[["producto", "cantidad"]].rename(
                                     columns={"producto": "Prod", "cantidad": "Cant"}
                                 ),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                             )
                         else:
@@ -1443,7 +1459,7 @@ with tab_comprar:
                                 })
                             st.dataframe(
                                 pd.DataFrame(filas_iw),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                             )
                         else:
@@ -1484,7 +1500,7 @@ with tab_comprar:
                         df_base[["Variante", "cantidad"]].rename(
                             columns={"Variante": "Var", "cantidad": "Cant"}
                         ),
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
 
@@ -1523,7 +1539,7 @@ with tab_comprar:
                         df_base[["Variante", "estimado"]].rename(
                             columns={"Variante": "Var", "estimado": "Cant"}
                         ),
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
 
@@ -1611,6 +1627,9 @@ with tab_comprar:
                             "Variante",
                             "stock", "pedido", "estimado", "a_comprar",
                         ]]
+                        .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                        .sort_values("_prio")
+                        .drop(columns="_prio")
                         .rename(columns={
                             "Variante": "Var",
                             "stock": "S",
@@ -1631,7 +1650,7 @@ with tab_comprar:
                     )
                     st.dataframe(
                         styled,
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
 
@@ -1784,7 +1803,7 @@ with tab_comprar:
                             "E": r["estimado"],
                             "T": r["diff_est"],
                         }
-                        for r in resultados
+                        for r in sorted(resultados, key=lambda r: _prio_unidad(r["unidad"]))
                     ])
 
                     def _color_diff(v):
@@ -1810,7 +1829,7 @@ with tab_comprar:
                     )
                     st.dataframe(
                         styled_grupo,
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
 
@@ -1949,9 +1968,14 @@ with tab_estimado:
                         else f":gray[{_base_lbl_txt}]"
                     )
                     with st.expander(_base_lbl, expanded=False):
+                        _df_est_sorted = (
+                            df_base
+                            .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                            .sort_values("_prio").drop(columns="_prio")
+                        )
                         edited = st.data_editor(
-                            df_base[["codigo", "Variante", "estimado"]].reset_index(drop=True),
-                            use_container_width=True,
+                            _df_est_sorted[["codigo", "Variante", "estimado"]].reset_index(drop=True),
+                            use_container_width=False,
                             hide_index=True,
                             disabled=["codigo", "Variante"],
                             # column_order oculta 'codigo' del display sin
@@ -2327,7 +2351,7 @@ with tab_stock:
                 if _filas_ini:
                     st.dataframe(
                         pd.DataFrame(_filas_ini).sort_values("Prod"),
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
                 else:
@@ -2364,7 +2388,7 @@ with tab_stock:
                             ]
                             st.dataframe(
                                 pd.DataFrame(filas_c),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                             )
                         else:
@@ -2400,7 +2424,7 @@ with tab_stock:
                                     ].rename(columns={
                                         "producto": "Prod", "cantidad": "Cant",
                                     }),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
                             else:
@@ -2438,7 +2462,7 @@ with tab_stock:
                                     })
                                 st.dataframe(
                                     pd.DataFrame(filas_iw),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
                             else:
@@ -2477,7 +2501,7 @@ with tab_stock:
                 if _filas_real:
                     st.dataframe(
                         pd.DataFrame(_filas_real).sort_values("Prod"),
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
                 else:
@@ -2576,13 +2600,18 @@ with tab_stock:
                             else f":gray[{_base_label_txt}]"
                         )
                         with st.expander(label, expanded=False):
+                            _df_stk_sorted = (
+                                df_base
+                                .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                                .sort_values("_prio").drop(columns="_prio")
+                            )
                             edited = st.data_editor(
-                                df_base[[
+                                _df_stk_sorted[[
                                     "Código", "Variante",
                                     "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
                                     "Stock",
                                 ]].reset_index(drop=True),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                                 disabled=[
                                     "Código", "Variante",
@@ -2946,7 +2975,7 @@ with tab_dux:
                                 filas = [extraer_item_dux(it) for it in items]
                                 st.dataframe(
                                     pd.DataFrame(filas),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
 
@@ -3107,7 +3136,7 @@ with tab_dux_productos:
 
                 st.dataframe(
                     df_show,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                 )
             else:
@@ -3422,7 +3451,7 @@ with tab_wix:
                                     )
                                 st.dataframe(
                                     pd.DataFrame(filas),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
 
@@ -3565,7 +3594,7 @@ with tab_wix_productos:
 
                 st.dataframe(
                     df_show_wp[["wix_id", "producto", "descripcion"]],
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "wix_id": st.column_config.TextColumn("ID Wix"),
@@ -3670,7 +3699,7 @@ with tab_proveedores:
             st.dataframe(
                 df_norm[["proveedor_id", "proveedor", "cuit_cuil", "telefono",
                          "celular", "email", "localidad"]].head(20),
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
             )
 
@@ -3710,7 +3739,7 @@ with tab_proveedores:
             st.caption(f"{len(df_prov_show)} de {len(df_prov_csv)} proveedores.")
             st.dataframe(
                 df_prov_show[SCHEMA_PROV],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "proveedor_id": st.column_config.TextColumn("ID"),
@@ -3865,7 +3894,7 @@ with tab_compras:
 
             edited_compras = st.data_editor(
                 df_view,
-                use_container_width=True,
+                use_container_width=False,
                 num_rows="dynamic",
                 column_config={
                     "Proveedor": st.column_config.SelectboxColumn(
@@ -4080,7 +4109,7 @@ with tab_compras:
                             "producto_nombre", "cantidad", "precio", "subtotal",
                             "condicion_pago",
                         ]],
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                         column_config={
                             "dux_asignado": st.column_config.TextColumn("DUX"),
@@ -4121,7 +4150,7 @@ with tab_compras:
                 por_prov["total"] = por_prov["total"].apply(lambda v: f"$ {v:,.2f}")
                 st.dataframe(
                     por_prov,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
@@ -4141,7 +4170,7 @@ with tab_compras:
                 por_pago["total"] = por_pago["total"].apply(lambda v: f"$ {v:,.2f}")
                 st.dataframe(
                     por_pago,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "condicion_pago": st.column_config.TextColumn("Forma de pago"),
@@ -4172,7 +4201,7 @@ with tab_compras:
             st.dataframe(
                 disp_dia[["codigo_producto", "producto_nombre", "cantidad",
                            "precio_prom", "gastado"]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "codigo_producto": st.column_config.TextColumn("Código"),
@@ -4273,7 +4302,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango
                 )
                 st.dataframe(
                     por_prov_rr,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
@@ -4295,7 +4324,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango
                 )
                 st.dataframe(
                     por_pago_rr,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "condicion_pago": st.column_config.TextColumn("Forma de pago"),
@@ -4326,7 +4355,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango
             st.dataframe(
                 disp_rr[["codigo_producto", "producto_nombre", "cantidad",
                           "precio_prom", "gastado"]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "codigo_producto": st.column_config.TextColumn("Código"),
@@ -4630,7 +4659,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_hist_precios:
             st.dataframe(
                 disp_hp[["codigo_producto", "producto_nombre", "cantidad",
                           "precio_min", "precio_prom", "precio_max", "gastado"]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "codigo_producto": st.column_config.TextColumn("Código"),
@@ -4788,7 +4817,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_detalle_compr
                     "producto_nombre", "cantidad", "precio", "subtotal",
                     "condicion_pago", "comprobante",
                 ]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "fecha": st.column_config.TextColumn("Fecha"),
@@ -5035,7 +5064,7 @@ with tab_packs:
 
                     edited = st.data_editor(
                         comp_view,
-                        use_container_width=True,
+                        use_container_width=False,
                         num_rows="dynamic",
                         column_config={
                             "producto": st.column_config.SelectboxColumn(
