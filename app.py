@@ -1136,7 +1136,7 @@ with tab_editar:
         )
         tabla_editada = st.data_editor(
             tabla_editor,
-            use_container_width=True,
+            use_container_width=False,
             num_rows="fixed",
             disabled=["origen_label", "componente_label"],
             column_config={
@@ -1951,7 +1951,7 @@ with tab_estimado:
                     with st.expander(_base_lbl, expanded=False):
                         edited = st.data_editor(
                             df_base[["codigo", "Variante", "estimado"]].reset_index(drop=True),
-                            use_container_width=True,
+                            use_container_width=False,
                             hide_index=True,
                             disabled=["codigo", "Variante"],
                             # column_order oculta 'codigo' del display sin
@@ -2582,7 +2582,7 @@ with tab_stock:
                                     "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
                                     "Stock",
                                 ]].reset_index(drop=True),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                                 disabled=[
                                     "Código", "Variante",
@@ -3865,7 +3865,7 @@ with tab_compras:
 
             edited_compras = st.data_editor(
                 df_view,
-                use_container_width=True,
+                use_container_width=False,
                 num_rows="dynamic",
                 column_config={
                     "Proveedor": st.column_config.SelectboxColumn(
@@ -5035,7 +5035,7 @@ with tab_packs:
 
                     edited = st.data_editor(
                         comp_view,
-                        use_container_width=True,
+                        use_container_width=False,
                         num_rows="dynamic",
                         column_config={
                             "producto": st.column_config.SelectboxColumn(
