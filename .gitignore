@@ -14,6 +14,12 @@ Thumbs.db
 
 .streamlit/secrets.toml
 
+# Supabase
+.supabase/
+supabase/seed.sql
+supabase/.env
+supabase/.env.local
+
 # Datos sensibles de clientes (regenerables por sync)
 pedidos_dux.json
 wix_pedidos.json
