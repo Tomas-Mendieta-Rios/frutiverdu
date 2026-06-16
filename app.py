@@ -1476,33 +1476,13 @@ with tab_comprar:
         if _stk_view.empty:
             st.caption("Sin stock cargado para esta fecha.")
         else:
-            def _split_stk(p):
-                s = str(p)
-                if " - " in s:
-                    b, v = s.rsplit(" - ", 1)
-                    return b.strip(), v.strip()
-                return s, ""
-
-            _stk_grp = _stk_view.copy()
-            _split_stk_series = _stk_grp["producto"].apply(_split_stk)
-            _stk_grp["Base"] = _split_stk_series.apply(lambda t: t[0])
-            _stk_grp["Variante"] = _split_stk_series.apply(lambda t: t[1])
-            _stk_grp = _stk_grp.sort_values(["Base", "Variante"])
-
-            for base_name, df_base in _stk_grp.groupby("Base", sort=True):
-                n_var = len(df_base)
-                with st.expander(
-                    f"📦 {base_name} "
-                    f"({n_var} variante{'s' if n_var != 1 else ''})",
-                    expanded=False,
-                ):
-                    st.dataframe(
-                        df_base[["Variante", "cantidad"]].rename(
-                            columns={"Variante": "Var", "cantidad": "Cant"}
-                        ),
-                        use_container_width=False,
-                        hide_index=True,
-                    )
+            st.dataframe(
+                _stk_view[["producto", "cantidad"]]
+                .sort_values("producto")
+                .rename(columns={"producto": "Producto", "cantidad": "Cant"}),
+                use_container_width=False,
+                hide_index=True,
+            )
 
     # Expander para ver el estimado del dia elegido
     _est_view = db.cargar_estimado_semanal(dia=dia_estimado_sel)
@@ -1515,33 +1495,13 @@ with tab_comprar:
         if _est_view.empty:
             st.caption("Sin estimado cargado para este día.")
         else:
-            def _split_est(p):
-                s = str(p)
-                if " - " in s:
-                    b, v = s.rsplit(" - ", 1)
-                    return b.strip(), v.strip()
-                return s, ""
-
-            _est_grp = _est_view.copy()
-            _split_est_series = _est_grp["producto"].apply(_split_est)
-            _est_grp["Base"] = _split_est_series.apply(lambda t: t[0])
-            _est_grp["Variante"] = _split_est_series.apply(lambda t: t[1])
-            _est_grp = _est_grp.sort_values(["Base", "Variante"])
-
-            for base_name, df_base in _est_grp.groupby("Base", sort=True):
-                n_var = len(df_base)
-                with st.expander(
-                    f"📦 {base_name} "
-                    f"({n_var} variante{'s' if n_var != 1 else ''})",
-                    expanded=False,
-                ):
-                    st.dataframe(
-                        df_base[["Variante", "estimado"]].rename(
-                            columns={"Variante": "Var", "estimado": "Cant"}
-                        ),
-                        use_container_width=False,
-                        hide_index=True,
-                    )
+            st.dataframe(
+                _est_view[["producto", "estimado"]]
+                .sort_values("producto")
+                .rename(columns={"producto": "Producto", "estimado": "Cant"}),
+                use_container_width=False,
+                hide_index=True,
+            )
 
     # Expander resumen crudo por codigo (sin conversiones): pedido + estimado + stock
     _raw = pedidos_actual.copy()
