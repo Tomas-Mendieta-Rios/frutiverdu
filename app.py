@@ -1136,6 +1136,110 @@ key = "tu-api-key-aqui"
                                 st.dataframe(df)
                     except Exception as e2:
                         st.error(f"❌ Error al leer desde Supabase: {e2}")
+
+            st.divider()
+            st.markdown("### 🔁 Sincronizar DUX → Supabase")
+            st.info("Leer productos desde DUX y guardarlos en `productos` de Supabase.")
+            if st.button("🔁 Sincronizar DUX → Supabase", key="dux_to_supabase"):
+                dux_cfg = st.secrets.get("dux", {})
+                token = dux_cfg.get("token", "")
+                base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+                if not token:
+                    st.error("Falta configurar el token de DUX en Streamlit Secrets.")
+                else:
+                    with st.spinner("Trayendo productos desde DUX..."):
+                        url_pr = f"{base_url}/items"
+                        headers_pr = {"accept": "application/json", "authorization": token}
+                        page_offset = 0
+                        page_size = 50
+                        all_prods = []
+                        error_corte = False
+                        total_servidor = None
+
+                        progress = st.progress(0.0, text="Trayendo productos desde DUX...")
+                        while True:
+                            params_pr = {"offset": page_offset, "limit": page_size}
+                            try:
+                                r = requests.get(url_pr, params=params_pr, headers=headers_pr, timeout=30)
+                            except requests.RequestException as e2:
+                                st.error(msg_error_red("DUX", e2))
+                                error_corte = True
+                                break
+
+                            if r.status_code != 200:
+                                st.error(msg_error_http("DUX", r.status_code, r.text))
+                                error_corte = True
+                                break
+
+                            try:
+                                d = r.json()
+                            except ValueError:
+                                st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
+                                error_corte = True
+                                break
+
+                            if isinstance(d, dict) and "message" in d and "results" not in d:
+                                st.error(f"DUX respondió: {d['message']}")
+                                error_corte = True
+                                break
+
+                            if isinstance(d, dict):
+                                page = d.get("results", []) or []
+                                if total_servidor is None:
+                                    total_servidor = (d.get("paging") or {}).get("total")
+                            else:
+                                page = []
+
+                            if not page:
+                                break
+
+                            all_prods.extend(page)
+
+                            if total_servidor:
+                                progress.progress(min(1.0, len(all_prods) / total_servidor), text=f"{len(all_prods)} / {total_servidor}")
+
+                            if len(page) < page_size:
+                                break
+                            page_offset += page_size
+                            time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+                        progress.empty()
+                        if not error_corte:
+                            if not all_prods:
+                                st.warning("No hay productos en DUX.")
+                            else:
+                                filas = []
+                                for p in all_prods:
+                                    nombre = str(p.get("item", "")).strip()
+                                    if " - " in nombre:
+                                        unidad = nombre.rsplit(" - ", 1)[1].strip()
+                                    else:
+                                        unidad = ""
+                                    rubro_obj = p.get("rubro") or {}
+                                    rubro_nombre = str(rubro_obj.get("nombre", "") or "").strip()
+                                    filas.append({
+                                        "codigo": str(p.get("cod_item", "")).strip(),
+                                        "producto": nombre,
+                                        "unidad_medida": unidad,
+                                        "descripcion": "",
+                                        "rubro": rubro_nombre,
+                                    })
+
+                                df_nuevo = pd.DataFrame(filas).sort_values("codigo").reset_index(drop=True)
+                                try:
+                                    records = df_nuevo.where(pd.notnull(df_nuevo), None).to_dict(orient="records")
+                                    batch_size = 500
+                                    for i in range(0, len(records), batch_size):
+                                        batch = records[i : i + batch_size]
+                                        resp = client.table("productos").upsert(batch).execute()
+                                        err = getattr(resp, "error", None)
+                                        if err:
+                                            st.error(f"Error al upsert en Supabase: {err}")
+                                            break
+                                    else:
+                                        st.success(f"✅ Sincronizado. {len(df_nuevo)} productos guardados en Supabase.")
+                                except Exception as e2:
+                                    st.error(f"❌ Error al escribir en Supabase: {e2}")
         except Exception as e:
             st.error(f"❌ Error al conectar: {e}")
             st.write("Detalles:", str(e))
