@@ -46,6 +46,22 @@ def _fmt_num_es(v):
     return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
+_UNIDAD_PRIO = {
+    "CAJA": 1, "BOLSA": 1, "RIESTRA": 1,
+    "UNIDAD": 2, "CABEZA": 2, "ATADO": 2, "BANDEJA": 2,
+    "CUBETA": 2, "MAPLE": 2, "PLANTA": 2,
+    "KG": 3, "LITRO": 3, "KILO": 3,
+}
+
+
+def _prio_unidad(s):
+    u = str(s).upper()
+    for kw, p in _UNIDAD_PRIO.items():
+        if kw in u:
+            return p
+    return 99
+
+
 def obtener_ultimo_comprobante_dux():
     """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
     de los ultimos 5 dias. Pagina hasta agotar resultados.
@@ -1611,6 +1627,9 @@ with tab_comprar:
                             "Variante",
                             "stock", "pedido", "estimado", "a_comprar",
                         ]]
+                        .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                        .sort_values("_prio")
+                        .drop(columns="_prio")
                         .rename(columns={
                             "Variante": "Var",
                             "stock": "S",
@@ -1784,7 +1803,7 @@ with tab_comprar:
                             "E": r["estimado"],
                             "T": r["diff_est"],
                         }
-                        for r in resultados
+                        for r in sorted(resultados, key=lambda r: _prio_unidad(r["unidad"]))
                     ])
 
                     def _color_diff(v):
@@ -1949,8 +1968,13 @@ with tab_estimado:
                         else f":gray[{_base_lbl_txt}]"
                     )
                     with st.expander(_base_lbl, expanded=False):
+                        _df_est_sorted = (
+                            df_base
+                            .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                            .sort_values("_prio").drop(columns="_prio")
+                        )
                         edited = st.data_editor(
-                            df_base[["codigo", "Variante", "estimado"]].reset_index(drop=True),
+                            _df_est_sorted[["codigo", "Variante", "estimado"]].reset_index(drop=True),
                             use_container_width=False,
                             hide_index=True,
                             disabled=["codigo", "Variante"],
@@ -2576,8 +2600,13 @@ with tab_stock:
                             else f":gray[{_base_label_txt}]"
                         )
                         with st.expander(label, expanded=False):
+                            _df_stk_sorted = (
+                                df_base
+                                .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                                .sort_values("_prio").drop(columns="_prio")
+                            )
                             edited = st.data_editor(
-                                df_base[[
+                                _df_stk_sorted[[
                                     "Código", "Variante",
                                     "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
                                     "Stock",
