@@ -1478,8 +1478,11 @@ with tab_comprar:
         else:
             st.dataframe(
                 _stk_view[["producto", "cantidad"]]
-                .assign(_prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad))
-                .sort_values(["_prio", "producto"]).drop(columns="_prio")
+                .assign(
+                    _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
+                    _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
+                )
+                .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
                 .rename(columns={"producto": "Producto", "cantidad": "Cant"}),
                 use_container_width=False,
                 hide_index=True,
@@ -1498,8 +1501,11 @@ with tab_comprar:
         else:
             st.dataframe(
                 _est_view[["producto", "estimado"]]
-                .assign(_prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad))
-                .sort_values(["_prio", "producto"]).drop(columns="_prio")
+                .assign(
+                    _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
+                    _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
+                )
+                .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
                 .rename(columns={"producto": "Producto", "estimado": "Cant"}),
                 use_container_width=False,
                 hide_index=True,
