@@ -1478,7 +1478,8 @@ with tab_comprar:
         else:
             st.dataframe(
                 _stk_view[["producto", "cantidad"]]
-                .sort_values("producto")
+                .assign(_prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad))
+                .sort_values(["_prio", "producto"]).drop(columns="_prio")
                 .rename(columns={"producto": "Producto", "cantidad": "Cant"}),
                 use_container_width=False,
                 hide_index=True,
@@ -1497,7 +1498,8 @@ with tab_comprar:
         else:
             st.dataframe(
                 _est_view[["producto", "estimado"]]
-                .sort_values("producto")
+                .assign(_prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad))
+                .sort_values(["_prio", "producto"]).drop(columns="_prio")
                 .rename(columns={"producto": "Producto", "estimado": "Cant"}),
                 use_container_width=False,
                 hide_index=True,
@@ -1931,7 +1933,7 @@ with tab_estimado:
                         _df_est_sorted = (
                             df_base
                             .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
-                            .sort_values("_prio").drop(columns="_prio")
+                            .sort_values(["_prio", "Variante"]).drop(columns="_prio")
                         )
                         edited = st.data_editor(
                             _df_est_sorted[["codigo", "Variante", "estimado"]].reset_index(drop=True),
@@ -2563,7 +2565,7 @@ with tab_stock:
                             _df_stk_sorted = (
                                 df_base
                                 .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
-                                .sort_values("_prio").drop(columns="_prio")
+                                .sort_values(["_prio", "Variante"]).drop(columns="_prio")
                             )
                             edited = st.data_editor(
                                 _df_stk_sorted[[
