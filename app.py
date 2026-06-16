@@ -1114,6 +1114,28 @@ key = "tu-api-key-aqui"
                 st.write("📋 Copia el SQL de arriba y pégalo en Supabase SQL Editor")
                 st.write("🔗 [Ir a Supabase SQL Editor](https://supabase.com/dashboard/project/)")
                 
+            # Sección de prueba: leer datos desde Supabase (equivalente a cargar_productos)
+            st.divider()
+            st.markdown("### 📥 Probar lectura: `productos` desde Supabase")
+            st.info("Esta acción solo lee datos desde Supabase (no modifica Sheets ni la DB).")
+
+            if st.button("📡 Cargar productos desde Supabase", key="load_products_supabase"):
+                with st.spinner("Cargando productos desde Supabase..."):
+                    try:
+                        resp = client.table("productos").select("*").limit(200).execute()
+                        # resp puede variar según la versión del cliente
+                        error = getattr(resp, "error", None)
+                        data = getattr(resp, "data", None)
+                        if error:
+                            st.error(f"Error al obtener productos: {error}")
+                        else:
+                            import pandas as pd
+                            df = pd.DataFrame(data or [])
+                            st.success(f"✅ {len(df)} productos cargados (solo lectura)")
+                            if not df.empty:
+                                st.dataframe(df)
+                    except Exception as e2:
+                        st.error(f"❌ Error al leer desde Supabase: {e2}")
         except Exception as e:
             st.error(f"❌ Error al conectar: {e}")
             st.write("Detalles:", str(e))
