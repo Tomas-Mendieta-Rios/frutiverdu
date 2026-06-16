@@ -1095,8 +1095,28 @@ key = "tu-api-key-aqui"
             client = create_client(url, key)
             st.success("✅ Cliente de Supabase creado correctamente")
             st.write("🎉 Conexión lista para migración de datos")
+            
+            # Sección para crear tablas
+            st.divider()
+            st.markdown("### 📊 Crear tablas en Supabase")
+            st.warning("⚠️ IMPORTANTE: No rompemos el Google Sheets, solo creamos tablas en Supabase")
+            
+            if st.button("🚀 Crear todas las tablas en Supabase", key="create_tables_btn"):
+                from setup_supabase_tables import generate_create_table_sql
+                sql_statements = generate_create_table_sql()
+                
+                with st.spinner("Preparando SQL..."):
+                    full_sql = "\n\n".join(sql_statements)
+                
+                st.markdown("### SQL para ejecutar en Supabase")
+                st.info("Ve a tu proyecto en Supabase → SQL Editor → copia y pega esto:")
+                st.code(full_sql, language="sql")
+                st.write("📋 Copia el SQL de arriba y pégalo en Supabase SQL Editor")
+                st.write("🔗 [Ir a Supabase SQL Editor](https://supabase.com/dashboard/project/)")
+                
         except Exception as e:
-            st.error(f"❌ Error al crear cliente: {e}")
+            st.error(f"❌ Error al conectar: {e}")
+            st.write("Detalles:", str(e))
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
 tab_grupo_analitica = None
