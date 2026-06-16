@@ -1088,7 +1088,8 @@ key = "tu-api-key-aqui"
 """)
     else:
         st.success(f"✅ Credenciales encontradas")
-        st.info(f"📍 URL: `{url}`")
+        st.info(f"📍 URL declarada: `{url}`")
+        st.info(f"🔑 Key presente: {'sí' if bool(key) else 'no'}")
         
         try:
             from supabase import create_client
