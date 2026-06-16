@@ -1048,6 +1048,7 @@ if st.button(
 # Para re-habilitar, devolve tab_grupo_analitica al unpacking + label, y
 # cambia los 'if False:' por 'with tab_X:'.
 (
+    tab_test_supabase,
     tab_comprar,
     tab_compras,
     tab_grupo_pedidos,
@@ -1055,6 +1056,7 @@ if st.button(
     tab_grupo_config,
 ) = st.tabs(
     [
+        "🧪 Test Supabase",
         "🛒 Total a comprar",
         "💰 Compras",
         "📋 Pedidos",
@@ -1062,6 +1064,40 @@ if st.button(
         "⚙️ Configuración",
     ]
 )
+# Test de Supabase (temporal, solo en rama supabase)
+with tab_test_supabase:
+    st.markdown("### 🧪 Test de conexión a Supabase")
+    
+    try:
+        import supabase
+    except ImportError:
+        st.error("❌ supabase-py no está instalado.")
+        st.info("En Streamlit Cloud agregá `supabase==2.1.1` a requirements.txt")
+        st.stop()
+    
+    supabase_config = st.secrets.get("supabase", {})
+    url = supabase_config.get("url")
+    key = supabase_config.get("key")
+    
+    if not url or not key:
+        st.error("❌ Credenciales de Supabase no configuradas")
+        st.info("Agregá en Streamlit Cloud → Settings → Secrets:")
+        st.code("""[supabase]
+url = "https://tu-proyecto.supabase.co"
+key = "tu-api-key-aqui"
+""")
+    else:
+        st.success(f"✅ Credenciales encontradas")
+        st.info(f"📍 URL: `{url}`")
+        
+        try:
+            from supabase import create_client
+            client = create_client(url, key)
+            st.success("✅ Cliente de Supabase creado correctamente")
+            st.write("🎉 Conexión lista para migración de datos")
+        except Exception as e:
+            st.error(f"❌ Error al crear cliente: {e}")
+
 # Tabs ocultas (definidas como None para que las referencias no rompan)
 tab_grupo_analitica = None
 tab_resumen_rango = None
