@@ -2823,7 +2823,7 @@ with tab_dux:
                 except Exception:
                     pass
 
-                all_orders_saved = all_orders
+                all_orders_saved = db.cargar_pedidos_dux()
                 if all_orders:
                     st.success(
                         f"✅ {len(all_orders)} pedidos guardados."
@@ -2866,7 +2866,7 @@ with tab_dux:
             # Mostrar los ultimos 50 por nro_pedido (independiente de fecha).
             # Robusto a cambios de fecha en DUX. Los viejos siguen en gsheets
             # y stock teorico los usa.
-            all_orders_sorted = all_orders_sorted[:50]
+            all_orders_sorted = all_orders_sorted[:100]
 
             if not all_orders_sorted:
                 st.info("No hay pedidos sincronizados todavía.")
@@ -3245,7 +3245,7 @@ with tab_wix:
                         except Exception:
                             pass
 
-                        wix_orders_saved = orders_slim
+                        wix_orders_saved = db.cargar_pedidos_wix()
                         st.success(f"✅ {len(orders)} pedidos guardados.")
 
         orders_saved = wix_orders_saved or []
@@ -3330,8 +3330,8 @@ with tab_wix:
                 orders_saved, key=_nro_wix_sort, reverse=True
             )
 
-            # Mostrar los ultimos 50 por number (independiente de fecha).
-            orders_saved_sorted = orders_saved_sorted[:50]
+            # Mostrar los ultimos 100 por number (independiente de fecha).
+            orders_saved_sorted = orders_saved_sorted[:100]
 
             if not orders_saved_sorted:
                 st.info("No hay pedidos sincronizados todavía.")
