@@ -1,2 +1,2 @@
-db:
-  push_branch_enabled: true
+[db]
+push_branch_enabled = true
