@@ -8,7 +8,7 @@ import requests
 import streamlit as st
 import pandas as pd
 
-import gsheets_db as db
+import supabase_db as db
 
 DUX_RATE_LIMIT_SECONDS = 5.5
 
