@@ -3367,6 +3367,7 @@ with tab_wix:
                         else:
                             fecha_default_entrega = date.today() + timedelta(days=1)
 
+                    es_cancelado = str(o.get("status", "")).upper() == "CANCELED"
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
@@ -3377,9 +3378,10 @@ with tab_wix:
                                 registro_badge = (
                                     f" · 📅 registrado {f_reg_wix.date()}"
                                 )
+                            cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
                             st.markdown(
                                 f"**#{nro}** — {cliente} · {len(items)} ítems · "
-                                f"**{total}**{registro_badge}"
+                                f"**{total}**{registro_badge}{cancelado_badge}"
                             )
                             detalles = []
                             if direccion:
@@ -3388,23 +3390,24 @@ with tab_wix:
                                 detalles.append(f"✉️ {email}")
                             if detalles:
                                 st.caption(" · ".join(detalles))
-                        with c_chk:
-                            asignar = st.checkbox(
-                                "Asignar entrega",
-                                value=bool(asignado_prev),
-                                key=f"wix_chk_{oid}",
-                            )
-                        with c_fec:
-                            fecha_entrega = st.date_input(
-                                "Fecha de entrega",
-                                value=fecha_default_entrega,
-                                key=f"wix_fent_{oid}",
-                                format="YYYY-MM-DD",
-                                label_visibility="collapsed",
-                            )
+                        if not es_cancelado:
+                            with c_chk:
+                                asignar = st.checkbox(
+                                    "Asignar entrega",
+                                    value=bool(asignado_prev),
+                                    key=f"wix_chk_{oid}",
+                                )
+                            with c_fec:
+                                fecha_entrega = st.date_input(
+                                    "Fecha de entrega",
+                                    value=fecha_default_entrega,
+                                    key=f"wix_fent_{oid}",
+                                    format="YYYY-MM-DD",
+                                    label_visibility="collapsed",
+                                )
 
-                        if asignar:
-                            nuevas_selecciones[oid] = str(fecha_entrega)
+                            if asignar:
+                                nuevas_selecciones[oid] = str(fecha_entrega)
 
                         if items:
                             with st.expander("Ver productos"):
