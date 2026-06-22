@@ -46,6 +46,22 @@ def _fmt_num_es(v):
     return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
+_UNIDAD_PRIO = {
+    "CAJA": 1, "BOLSA": 1, "RIESTRA": 1,
+    "UNIDAD": 2, "CABEZA": 2, "ATADO": 2, "BANDEJA": 2,
+    "CUBETA": 2, "MAPLE": 2, "PLANTA": 2,
+    "KG": 3, "LITRO": 3, "KILO": 3,
+}
+
+
+def _prio_unidad(s):
+    u = str(s).upper()
+    for kw, p in _UNIDAD_PRIO.items():
+        if kw in u:
+            return p
+    return 99
+
+
 def obtener_ultimo_comprobante_dux():
     """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
     de los ultimos 5 dias. Pagina hasta agotar resultados.
@@ -351,6 +367,7 @@ def _slim_wix_order(o):
     return {
         "id": o.get("id"),
         "number": o.get("number"),
+        "status": o.get("status"),
         "createdDate": o.get("createdDate"),
         "lineItems": [
             {
@@ -521,6 +538,10 @@ def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=
     # Sumar pedidos de Wix con fecha de entrega = fecha_compra
     if fecha_compra is not None:
         wix_orders = db.cargar_pedidos_wix()
+        wix_orders = [
+            o for o in wix_orders
+            if str(o.get("status", "")).upper() != "CANCELED"
+        ]
         try:
             wix_sel = db.cargar_selecciones("wix")
             wix_filtrados = [
@@ -1319,7 +1340,7 @@ with tab_editar:
         )
         tabla_editada = st.data_editor(
             tabla_editor,
-            use_container_width=True,
+            use_container_width=False,
             num_rows="fixed",
             disabled=["origen_label", "componente_label"],
             column_config={
@@ -1592,7 +1613,7 @@ with tab_comprar:
                                 pd.DataFrame(filas_it)[["producto", "cantidad"]].rename(
                                     columns={"producto": "Prod", "cantidad": "Cant"}
                                 ),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                             )
                         else:
@@ -1626,7 +1647,7 @@ with tab_comprar:
                                 })
                             st.dataframe(
                                 pd.DataFrame(filas_iw),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                             )
                         else:
@@ -1643,33 +1664,17 @@ with tab_comprar:
         if _stk_view.empty:
             st.caption("Sin stock cargado para esta fecha.")
         else:
-            def _split_stk(p):
-                s = str(p)
-                if " - " in s:
-                    b, v = s.rsplit(" - ", 1)
-                    return b.strip(), v.strip()
-                return s, ""
-
-            _stk_grp = _stk_view.copy()
-            _split_stk_series = _stk_grp["producto"].apply(_split_stk)
-            _stk_grp["Base"] = _split_stk_series.apply(lambda t: t[0])
-            _stk_grp["Variante"] = _split_stk_series.apply(lambda t: t[1])
-            _stk_grp = _stk_grp.sort_values(["Base", "Variante"])
-
-            for base_name, df_base in _stk_grp.groupby("Base", sort=True):
-                n_var = len(df_base)
-                with st.expander(
-                    f"📦 {base_name} "
-                    f"({n_var} variante{'s' if n_var != 1 else ''})",
-                    expanded=False,
-                ):
-                    st.dataframe(
-                        df_base[["Variante", "cantidad"]].rename(
-                            columns={"Variante": "Var", "cantidad": "Cant"}
-                        ),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+            st.dataframe(
+                _stk_view[["producto", "cantidad"]]
+                .assign(
+                    _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
+                    _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
+                )
+                .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
+                .rename(columns={"producto": "Producto", "cantidad": "Cant"}),
+                use_container_width=False,
+                hide_index=True,
+            )
 
     # Expander para ver el estimado del dia elegido
     _est_view = db.cargar_estimado_semanal(dia=dia_estimado_sel)
@@ -1682,33 +1687,17 @@ with tab_comprar:
         if _est_view.empty:
             st.caption("Sin estimado cargado para este día.")
         else:
-            def _split_est(p):
-                s = str(p)
-                if " - " in s:
-                    b, v = s.rsplit(" - ", 1)
-                    return b.strip(), v.strip()
-                return s, ""
-
-            _est_grp = _est_view.copy()
-            _split_est_series = _est_grp["producto"].apply(_split_est)
-            _est_grp["Base"] = _split_est_series.apply(lambda t: t[0])
-            _est_grp["Variante"] = _split_est_series.apply(lambda t: t[1])
-            _est_grp = _est_grp.sort_values(["Base", "Variante"])
-
-            for base_name, df_base in _est_grp.groupby("Base", sort=True):
-                n_var = len(df_base)
-                with st.expander(
-                    f"📦 {base_name} "
-                    f"({n_var} variante{'s' if n_var != 1 else ''})",
-                    expanded=False,
-                ):
-                    st.dataframe(
-                        df_base[["Variante", "estimado"]].rename(
-                            columns={"Variante": "Var", "estimado": "Cant"}
-                        ),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+            st.dataframe(
+                _est_view[["producto", "estimado"]]
+                .assign(
+                    _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
+                    _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
+                )
+                .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
+                .rename(columns={"producto": "Producto", "estimado": "Cant"}),
+                use_container_width=False,
+                hide_index=True,
+            )
 
     # Expander resumen crudo por codigo (sin conversiones): pedido + estimado + stock
     _raw = pedidos_actual.copy()
@@ -1794,6 +1783,9 @@ with tab_comprar:
                             "Variante",
                             "stock", "pedido", "estimado", "a_comprar",
                         ]]
+                        .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                        .sort_values("_prio")
+                        .drop(columns="_prio")
                         .rename(columns={
                             "Variante": "Var",
                             "stock": "S",
@@ -1814,7 +1806,7 @@ with tab_comprar:
                     )
                     st.dataframe(
                         styled,
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
 
@@ -1967,7 +1959,7 @@ with tab_comprar:
                             "E": r["estimado"],
                             "T": r["diff_est"],
                         }
-                        for r in resultados
+                        for r in sorted(resultados, key=lambda r: _prio_unidad(r["unidad"]))
                     ])
 
                     def _color_diff(v):
@@ -1993,7 +1985,7 @@ with tab_comprar:
                     )
                     st.dataframe(
                         styled_grupo,
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
 
@@ -2132,9 +2124,14 @@ with tab_estimado:
                         else f":gray[{_base_lbl_txt}]"
                     )
                     with st.expander(_base_lbl, expanded=False):
+                        _df_est_sorted = (
+                            df_base
+                            .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                            .sort_values(["_prio", "Variante"]).drop(columns="_prio")
+                        )
                         edited = st.data_editor(
-                            df_base[["codigo", "Variante", "estimado"]].reset_index(drop=True),
-                            use_container_width=True,
+                            _df_est_sorted[["codigo", "Variante", "estimado"]].reset_index(drop=True),
+                            use_container_width=False,
                             hide_index=True,
                             disabled=["codigo", "Variante"],
                             # column_order oculta 'codigo' del display sin
@@ -2510,7 +2507,7 @@ with tab_stock:
                 if _filas_ini:
                     st.dataframe(
                         pd.DataFrame(_filas_ini).sort_values("Prod"),
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
                 else:
@@ -2547,7 +2544,7 @@ with tab_stock:
                             ]
                             st.dataframe(
                                 pd.DataFrame(filas_c),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                             )
                         else:
@@ -2583,7 +2580,7 @@ with tab_stock:
                                     ].rename(columns={
                                         "producto": "Prod", "cantidad": "Cant",
                                     }),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
                             else:
@@ -2621,7 +2618,7 @@ with tab_stock:
                                     })
                                 st.dataframe(
                                     pd.DataFrame(filas_iw),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
                             else:
@@ -2660,7 +2657,7 @@ with tab_stock:
                 if _filas_real:
                     st.dataframe(
                         pd.DataFrame(_filas_real).sort_values("Prod"),
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                     )
                 else:
@@ -2759,13 +2756,18 @@ with tab_stock:
                             else f":gray[{_base_label_txt}]"
                         )
                         with st.expander(label, expanded=False):
+                            _df_stk_sorted = (
+                                df_base
+                                .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                                .sort_values(["_prio", "Variante"]).drop(columns="_prio")
+                            )
                             edited = st.data_editor(
-                                df_base[[
+                                _df_stk_sorted[[
                                     "Código", "Variante",
                                     "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
                                     "Stock",
                                 ]].reset_index(drop=True),
-                                use_container_width=True,
+                                use_container_width=False,
                                 hide_index=True,
                                 disabled=[
                                     "Código", "Variante",
@@ -3035,15 +3037,8 @@ with tab_dux:
                 except (ValueError, TypeError):
                     return -1
 
-            # Filtrar anulados ANTES de cortar a 50 (asi no perdemos visibles
-            # por anulados que estan en el top).
-            all_orders_filtered = [
-                o for o in all_orders_saved
-                if str(o.get("anulado", "N")).upper() != "S"
-            ]
-
             all_orders_sorted = sorted(
-                all_orders_filtered, key=_nro_dux_sort, reverse=True
+                all_orders_saved, key=_nro_dux_sort, reverse=True
             )
 
             # Mostrar los ultimos 50 por nro_pedido (independiente de fecha).
@@ -3092,6 +3087,7 @@ with tab_dux:
                         estado_fact, f"⚪ {estado_fact}" if estado_fact else ""
                     )
 
+                    es_anulado = str(orden.get("anulado", "N")).upper() == "S"
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
@@ -3102,34 +3098,36 @@ with tab_dux:
                                 registro_badge = (
                                     f" · 📅 registrado {f_reg_dux.date()}"
                                 )
+                            anulado_badge = " · 🚫 **ANULADO**" if es_anulado else ""
                             st.markdown(
                                 f"**#{nro or i}** — {cliente_str} · "
-                                f"{len(items)} ítems · {estado_badge}{registro_badge}"
+                                f"{len(items)} ítems · {estado_badge}{registro_badge}{anulado_badge}"
                             )
-                        with c_chk:
-                            asignar = st.checkbox(
-                                "Asignar entrega",
-                                value=bool(asignado_prev),
-                                key=f"dux_chk_{oid}",
-                            )
-                        with c_fec:
-                            fecha_entrega = st.date_input(
-                                "Fecha de entrega",
-                                value=fecha_default_entrega,
-                                key=f"dux_fent_{oid}",
-                                format="YYYY-MM-DD",
-                                label_visibility="collapsed",
-                            )
+                        if not es_anulado:
+                            with c_chk:
+                                asignar = st.checkbox(
+                                    "Asignar entrega",
+                                    value=bool(asignado_prev),
+                                    key=f"dux_chk_{oid}",
+                                )
+                            with c_fec:
+                                fecha_entrega = st.date_input(
+                                    "Fecha de entrega",
+                                    value=fecha_default_entrega,
+                                    key=f"dux_fent_{oid}",
+                                    format="YYYY-MM-DD",
+                                    label_visibility="collapsed",
+                                )
 
-                        if asignar:
-                            nuevas_selecciones_dux[oid] = str(fecha_entrega)
+                            if asignar:
+                                nuevas_selecciones_dux[oid] = str(fecha_entrega)
 
                         if items:
                             with st.expander("Ver productos"):
                                 filas = [extraer_item_dux(it) for it in items]
                                 st.dataframe(
                                     pd.DataFrame(filas),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
 
@@ -3290,7 +3288,7 @@ with tab_dux_productos:
 
                 st.dataframe(
                     df_show,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                 )
             else:
@@ -3548,6 +3546,7 @@ with tab_wix:
                         else:
                             fecha_default_entrega = date.today() + timedelta(days=1)
 
+                    es_cancelado = str(o.get("status", "")).upper() == "CANCELED"
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
@@ -3558,9 +3557,10 @@ with tab_wix:
                                 registro_badge = (
                                     f" · 📅 registrado {f_reg_wix.date()}"
                                 )
+                            cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
                             st.markdown(
                                 f"**#{nro}** — {cliente} · {len(items)} ítems · "
-                                f"**{total}**{registro_badge}"
+                                f"**{total}**{registro_badge}{cancelado_badge}"
                             )
                             detalles = []
                             if direccion:
@@ -3569,23 +3569,24 @@ with tab_wix:
                                 detalles.append(f"✉️ {email}")
                             if detalles:
                                 st.caption(" · ".join(detalles))
-                        with c_chk:
-                            asignar = st.checkbox(
-                                "Asignar entrega",
-                                value=bool(asignado_prev),
-                                key=f"wix_chk_{oid}",
-                            )
-                        with c_fec:
-                            fecha_entrega = st.date_input(
-                                "Fecha de entrega",
-                                value=fecha_default_entrega,
-                                key=f"wix_fent_{oid}",
-                                format="YYYY-MM-DD",
-                                label_visibility="collapsed",
-                            )
+                        if not es_cancelado:
+                            with c_chk:
+                                asignar = st.checkbox(
+                                    "Asignar entrega",
+                                    value=bool(asignado_prev),
+                                    key=f"wix_chk_{oid}",
+                                )
+                            with c_fec:
+                                fecha_entrega = st.date_input(
+                                    "Fecha de entrega",
+                                    value=fecha_default_entrega,
+                                    key=f"wix_fent_{oid}",
+                                    format="YYYY-MM-DD",
+                                    label_visibility="collapsed",
+                                )
 
-                        if asignar:
-                            nuevas_selecciones[oid] = str(fecha_entrega)
+                            if asignar:
+                                nuevas_selecciones[oid] = str(fecha_entrega)
 
                         if items:
                             with st.expander("Ver productos"):
@@ -3605,7 +3606,7 @@ with tab_wix:
                                     )
                                 st.dataframe(
                                     pd.DataFrame(filas),
-                                    use_container_width=True,
+                                    use_container_width=False,
                                     hide_index=True,
                                 )
 
@@ -3748,7 +3749,7 @@ with tab_wix_productos:
 
                 st.dataframe(
                     df_show_wp[["wix_id", "producto", "descripcion"]],
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "wix_id": st.column_config.TextColumn("ID Wix"),
@@ -3853,7 +3854,7 @@ with tab_proveedores:
             st.dataframe(
                 df_norm[["proveedor_id", "proveedor", "cuit_cuil", "telefono",
                          "celular", "email", "localidad"]].head(20),
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
             )
 
@@ -3893,7 +3894,7 @@ with tab_proveedores:
             st.caption(f"{len(df_prov_show)} de {len(df_prov_csv)} proveedores.")
             st.dataframe(
                 df_prov_show[SCHEMA_PROV],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "proveedor_id": st.column_config.TextColumn("ID"),
@@ -4048,7 +4049,7 @@ with tab_compras:
 
             edited_compras = st.data_editor(
                 df_view,
-                use_container_width=True,
+                use_container_width=False,
                 num_rows="dynamic",
                 column_config={
                     "Proveedor": st.column_config.SelectboxColumn(
@@ -4263,7 +4264,7 @@ with tab_compras:
                             "producto_nombre", "cantidad", "precio", "subtotal",
                             "condicion_pago",
                         ]],
-                        use_container_width=True,
+                        use_container_width=False,
                         hide_index=True,
                         column_config={
                             "dux_asignado": st.column_config.TextColumn("DUX"),
@@ -4304,7 +4305,7 @@ with tab_compras:
                 por_prov["total"] = por_prov["total"].apply(lambda v: f"$ {v:,.2f}")
                 st.dataframe(
                     por_prov,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
@@ -4324,7 +4325,7 @@ with tab_compras:
                 por_pago["total"] = por_pago["total"].apply(lambda v: f"$ {v:,.2f}")
                 st.dataframe(
                     por_pago,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "condicion_pago": st.column_config.TextColumn("Forma de pago"),
@@ -4355,7 +4356,7 @@ with tab_compras:
             st.dataframe(
                 disp_dia[["codigo_producto", "producto_nombre", "cantidad",
                            "precio_prom", "gastado"]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "codigo_producto": st.column_config.TextColumn("Código"),
@@ -4456,7 +4457,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango
                 )
                 st.dataframe(
                     por_prov_rr,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
@@ -4478,7 +4479,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango
                 )
                 st.dataframe(
                     por_pago_rr,
-                    use_container_width=True,
+                    use_container_width=False,
                     hide_index=True,
                     column_config={
                         "condicion_pago": st.column_config.TextColumn("Forma de pago"),
@@ -4509,7 +4510,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango
             st.dataframe(
                 disp_rr[["codigo_producto", "producto_nombre", "cantidad",
                           "precio_prom", "gastado"]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "codigo_producto": st.column_config.TextColumn("Código"),
@@ -4813,7 +4814,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_hist_precios:
             st.dataframe(
                 disp_hp[["codigo_producto", "producto_nombre", "cantidad",
                           "precio_min", "precio_prom", "precio_max", "gastado"]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "codigo_producto": st.column_config.TextColumn("Código"),
@@ -4971,7 +4972,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_detalle_compr
                     "producto_nombre", "cantidad", "precio", "subtotal",
                     "condicion_pago", "comprobante",
                 ]],
-                use_container_width=True,
+                use_container_width=False,
                 hide_index=True,
                 column_config={
                     "fecha": st.column_config.TextColumn("Fecha"),
@@ -5218,7 +5219,7 @@ with tab_packs:
 
                     edited = st.data_editor(
                         comp_view,
-                        use_container_width=True,
+                        use_container_width=False,
                         num_rows="dynamic",
                         column_config={
                             "producto": st.column_config.SelectboxColumn(
