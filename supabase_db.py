@@ -9,6 +9,25 @@ from supabase import create_client, Client
 
 DIAS_SEMANA = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 
+SCHEMA = {
+    "productos": ["codigo", "producto", "unidad_medida", "descripcion", "rubro"],
+    "compuestos": ["codigo_origen", "producto_origen", "cantidad_origen", "codigo_componente", "producto_componente", "cantidad_componente"],
+    "stock_historico": ["fecha", "codigo", "producto", "unidad_medida", "cantidad"],
+    "estimado_historico": ["fecha", "codigo", "producto", "unidad_medida", "estimado"],
+    "estimado_semanal": ["dia_semana", "codigo", "producto", "unidad_medida", "estimado"],
+    "wix_productos": ["wix_id", "producto", "descripcion"],
+    "mapping_wix_dux": ["wix_id", "wix_producto", "dux_codigo", "dux_producto", "factor"],
+    "packs_wix": ["wix_id_pack", "pack_nombre", "dux_codigo", "dux_producto", "cantidad"],
+    "selecciones_dux": ["order_id", "fecha_entrega"],
+    "selecciones_wix": ["order_id", "fecha_entrega"],
+    "pedidos_dux": ["order_id", "fecha", "json"],
+    "pedidos_wix": ["order_id", "fecha", "json"],
+    "proveedores": ["proveedor_id", "proveedor", "nombre_fantasia", "categoria_fiscal", "tipo_documento", "numero_documento", "cuit_cuil", "codigo", "email", "provincia", "localidad", "barrio", "domicilio", "telefono", "celular", "condicion_pago", "fecha_creacion", "persona_contacto", "lugar_entrega", "tipo_comprobante", "habilitado"],
+    "compras": ["fecha", "proveedor_id", "proveedor_nombre", "codigo_producto", "producto_nombre", "cantidad", "precio", "condicion_pago", "comprobante"],
+    "mixes_dux": ["mix_base", "componente_base"],
+    "config": ["key", "value"],
+}
+
 
 # ---------------- CONEXIÓN ----------------
 
