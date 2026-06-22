@@ -1070,16 +1070,14 @@ if st.button(
 # cambia los 'if False:' por 'with tab_X:'.
 (
     tab_comprar,
-    tab_compras,
-    tab_gastos,
+    tab_egresos,
     tab_grupo_pedidos,
     tab_grupo_diario,
     tab_grupo_config,
 ) = st.tabs(
     [
         "🛒 Total a comprar",
-        "💰 Compras",
-        "📄 Gastos",
+        "💸 Egresos",
         "📋 Pedidos",
         "📦 Diario",
         "⚙️ Configuración",
@@ -1092,6 +1090,9 @@ tab_resumen_rango = None
 tab_desglose_rango = None
 tab_hist_precios = None
 tab_detalle_compras = None
+
+with tab_egresos:
+    tab_eg_compras, tab_eg_gastos = st.tabs(["💰 Compras", "📄 Gastos"])
 
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
@@ -3748,7 +3749,7 @@ with tab_proveedores:
     ts_prov = db.ultima_carga("proveedores")
     ts_prov_ph.caption(f"🕒 Última actualización: **{ts_prov or '?'}**")
 
-with tab_compras:
+with tab_eg_compras:
     ts_compras_ph = st.empty()
 
     COND_PAGO_OPCIONES = ["CONTADO", "EFECTIVO", "CHEQUE", "CUENTA CORRIENTE"]
@@ -4807,7 +4808,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_detalle_compr
                 },
             )
 
-with tab_gastos:
+with tab_eg_gastos:
     dux_cfg = st.secrets.get("dux", {})
     token = dux_cfg.get("token", "")
     base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
