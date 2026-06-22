@@ -86,7 +86,7 @@ def cargar_compuestos():
     resp = client.table("compuestos").select("*").execute()
     df = pd.DataFrame(resp.data or [])
     if df.empty:
-        return df
+        return pd.DataFrame(columns=["codigo_origen", "producto_origen", "cantidad_origen", "codigo_componente", "producto_componente", "cantidad_componente"])
     df = _drop_meta(df)
     if "id" in df.columns:
         df = df.drop(columns=["id"])
@@ -250,7 +250,7 @@ def cargar_wix_productos():
     resp = client.table("wix_productos").select("*").execute()
     df = pd.DataFrame(resp.data or [])
     if df.empty:
-        return df
+        return pd.DataFrame(columns=["wix_id", "producto", "descripcion"])
     df = _drop_meta(df)
     df["wix_id"] = df["wix_id"].astype(str)
     return df
@@ -271,7 +271,7 @@ def cargar_mapping_wix_dux():
     resp = client.table("mapping_wix_dux").select("*").execute()
     df = pd.DataFrame(resp.data or [])
     if df.empty:
-        return df
+        return pd.DataFrame(columns=["wix_id", "wix_producto", "dux_codigo", "dux_producto", "factor"])
     df = _drop_meta(df)
     if "id" in df.columns:
         df = df.drop(columns=["id"])
@@ -298,7 +298,7 @@ def cargar_packs_wix():
     resp = client.table("packs_wix").select("*").execute()
     df = pd.DataFrame(resp.data or [])
     if df.empty:
-        return df
+        return pd.DataFrame(columns=["wix_id_pack", "pack_nombre", "dux_codigo", "dux_producto", "cantidad"])
     df = _drop_meta(df)
     if "id" in df.columns:
         df = df.drop(columns=["id"])
@@ -423,7 +423,7 @@ def cargar_proveedores():
     resp = client.table("proveedores").select("*").execute()
     df = pd.DataFrame(resp.data or [])
     if df.empty:
-        return df
+        return pd.DataFrame(columns=["proveedor_id", "proveedor", "cuit_cuil", "telefono", "email", "notas"])
     df = _drop_meta(df)
     if "id" in df.columns:
         df = df.drop(columns=["id"])
