@@ -345,9 +345,136 @@ def guardar_selecciones(fuente, selecciones):
 
 # ---------------- PEDIDOS ----------------
 
-def _cargar_pedidos(fuente):
+# ---------------- PEDIDOS DUX ----------------
+
+def cargar_pedidos_dux():
     client = get_client()
-    resp = client.table(f"pedidos_{fuente}").select("json").execute()
+    resp_orders = client.table("pedidos_dux").select("*").execute()
+    if not resp_orders.data:
+        return []
+
+    resp_items = client.table("pedidos_dux_items").select("*").execute()
+    items_por_order = {}
+    for it in (resp_items.data or []):
+        oid = str(it.get("order_id") or "")
+        if oid:
+            items_por_order.setdefault(oid, []).append({
+                "cod_item": it.get("cod_item"),
+                "item": it.get("item"),
+                "ctd": it.get("ctd"),
+                "precio_uni": it.get("precio_uni"),
+                "porc_desc": it.get("porc_desc"),
+                "porc_iva": it.get("porc_iva"),
+                "comentarios": it.get("comentarios"),
+                "ctd_facturada": it.get("ctd_facturada"),
+                "ctd_con_remito": it.get("ctd_con_remito"),
+            })
+
+    pedidos = []
+    for r in resp_orders.data:
+        oid = str(r.get("order_id") or "")
+        pedidos.append({
+            "id": oid,
+            "nro_pedido": r.get("nro_pedido"),
+            "fecha": r.get("fecha"),
+            "cliente": {"razon_social": r.get("cliente")},
+            "estado_facturacion": r.get("estado_facturacion"),
+            "estado_remito": r.get("estado_remito"),
+            "anulado": r.get("anulado", "N"),
+            "lugar_entrega": r.get("lugar_entrega"),
+            "monto_exento": r.get("monto_exento"),
+            "monto_gravado": r.get("monto_gravado"),
+            "monto_iva": r.get("monto_iva"),
+            "monto_descuento": r.get("monto_descuento"),
+            "total": r.get("total"),
+            "condicion_pago": r.get("condicion_pago"),
+            "detalles": items_por_order.get(oid, []),
+        })
+    return pedidos
+
+
+def guardar_pedidos_dux(pedidos):
+    client = get_client()
+    order_rows = []
+    items_por_order = {}
+
+    for p in pedidos:
+        oid = str(p.get("id") or p.get("nro_pedido") or p.get("nroPedido") or "")
+        if not oid:
+            continue
+
+        cliente = p.get("cliente")
+        if isinstance(cliente, dict):
+            cliente_str = (
+                cliente.get("razon_social") or cliente.get("nombre") or
+                cliente.get("razonSocial") or ""
+            )
+        else:
+            cliente_str = str(cliente or "")
+
+        order_rows.append({
+            "order_id": oid,
+            "nro_pedido": str(p.get("nro_pedido") or p.get("nroPedido") or ""),
+            "fecha": str(p.get("fecha") or p.get("fecha_pedido") or p.get("fechaPedido") or ""),
+            "cliente": cliente_str,
+            "estado_facturacion": str(p.get("estado_facturacion") or ""),
+            "estado_remito": str(p.get("estado_remito") or ""),
+            "anulado": str(p.get("anulado") or "N"),
+            "lugar_entrega": str(p.get("lugar_entrega") or ""),
+            "monto_exento": _to_float(p.get("monto_exento")),
+            "monto_gravado": _to_float(p.get("monto_gravado")),
+            "monto_iva": _to_float(p.get("monto_iva")),
+            "monto_descuento": _to_float(p.get("monto_descuento")),
+            "total": _to_float(p.get("total")),
+            "condicion_pago": str(p.get("condicion_pago") or ""),
+        })
+
+        detalles = []
+        for f in ["detalles", "items", "productos", "lineas", "renglones", "detalle"]:
+            v = p.get(f)
+            if isinstance(v, list):
+                detalles = v
+                break
+
+        items_por_order[oid] = [
+            {
+                "order_id": oid,
+                "cod_item": str(it.get("cod_item") or it.get("codItem") or ""),
+                "item": str(it.get("item") or it.get("descripcion") or ""),
+                "ctd": _to_float(it.get("ctd") or it.get("cantidad")),
+                "precio_uni": _to_float(it.get("precio_uni")),
+                "porc_desc": _to_float(it.get("porc_desc")),
+                "porc_iva": _to_float(it.get("porc_iva")),
+                "comentarios": str(it.get("comentarios") or ""),
+                "ctd_facturada": _to_float(it.get("ctd_facturada")),
+                "ctd_con_remito": _to_float(it.get("ctd_con_remito")),
+            }
+            for it in detalles
+        ]
+
+    if not order_rows:
+        return
+
+    client.table("pedidos_dux").upsert(order_rows, on_conflict="order_id").execute()
+
+    for oid, items in items_por_order.items():
+        client.table("pedidos_dux_items").delete().eq("order_id", oid).execute()
+        if items:
+            client.table("pedidos_dux_items").insert(items).execute()
+
+
+def _to_float(v):
+    try:
+        return float(v or 0)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+# ---------------- PEDIDOS WIX (sigue en JSON por ahora) ----------------
+
+def _cargar_pedidos_wix_json():
+    client = get_client()
+    resp = client.table("pedidos_wix").select("json").execute()
     if not resp.data:
         return []
     pedidos = []
@@ -362,58 +489,34 @@ def _cargar_pedidos(fuente):
     return pedidos
 
 
-def _guardar_pedidos(fuente, pedidos, fecha_field_candidates):
-    """Merge por order_id: los existentes se actualizan, los nuevos se agregan."""
+def _guardar_pedidos_wix_json(pedidos):
     client = get_client()
-    tabla = f"pedidos_{fuente}"
-
-    # Traer existentes
-    resp = client.table(tabla).select("order_id,fecha,json").execute()
+    resp = client.table("pedidos_wix").select("order_id,fecha,json").execute()
     merged = {}
     for r in (resp.data or []):
         oid = str(r.get("order_id") or "")
         if oid:
             merged[oid] = r
-
-    # Mergear con los nuevos (gana la versión recibida)
     for p in pedidos:
-        oid = str(p.get("id") or p.get("nro_pedido") or p.get("nroPedido") or "")
+        oid = str(p.get("id") or "")
         if not oid:
             continue
-        fecha = ""
-        for k in fecha_field_candidates:
-            if p.get(k):
-                fecha = str(p.get(k))
-                break
+        fecha = str(p.get("createdDate") or p.get("created_date") or "")
         merged[oid] = {
             "order_id": oid,
             "fecha": fecha,
             "json": _json.dumps(p, ensure_ascii=False),
         }
-
-    if not merged:
-        return 0
-
-    # Upsert todo
-    rows = list(merged.values())
-    client.table(tabla).upsert(rows, on_conflict="order_id").execute()
-    return 0
-
-
-def cargar_pedidos_dux():
-    return _cargar_pedidos("dux")
-
-
-def guardar_pedidos_dux(pedidos):
-    _guardar_pedidos("dux", pedidos, ["fecha", "fecha_pedido", "fechaPedido"])
+    if merged:
+        client.table("pedidos_wix").upsert(list(merged.values()), on_conflict="order_id").execute()
 
 
 def cargar_pedidos_wix():
-    return _cargar_pedidos("wix")
+    return _cargar_pedidos_wix_json()
 
 
 def guardar_pedidos_wix(pedidos):
-    _guardar_pedidos("wix", pedidos, ["createdDate", "created_date"])
+    _guardar_pedidos_wix_json(pedidos)
 
 
 # ---------------- PROVEEDORES ----------------
