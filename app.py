@@ -367,6 +367,7 @@ def _slim_wix_order(o):
     return {
         "id": o.get("id"),
         "number": o.get("number"),
+        "status": o.get("status"),
         "createdDate": o.get("createdDate"),
         "lineItems": [
             {
@@ -537,6 +538,10 @@ def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=
     # Sumar pedidos de Wix con fecha de entrega = fecha_compra
     if fecha_compra is not None:
         wix_orders = db.cargar_pedidos_wix()
+        wix_orders = [
+            o for o in wix_orders
+            if str(o.get("status", "")).upper() != "CANCELED"
+        ]
         try:
             wix_sel = db.cargar_selecciones("wix")
             wix_filtrados = [
