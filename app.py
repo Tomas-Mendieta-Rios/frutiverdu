@@ -1071,6 +1071,7 @@ if st.button(
 (
     tab_comprar,
     tab_compras,
+    tab_gastos,
     tab_grupo_pedidos,
     tab_grupo_diario,
     tab_grupo_config,
@@ -1078,6 +1079,7 @@ if st.button(
     [
         "🛒 Total a comprar",
         "💰 Compras",
+        "📄 Gastos",
         "📋 Pedidos",
         "📦 Diario",
         "⚙️ Configuración",
@@ -4804,6 +4806,142 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_detalle_compr
                     "comprobante": st.column_config.TextColumn("Comprobante"),
                 },
             )
+
+with tab_gastos:
+    dux_cfg = st.secrets.get("dux", {})
+    token = dux_cfg.get("token", "")
+    base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    id_empresa = dux_cfg.get("id_empresa", 3455)
+    id_sucursal = dux_cfg.get("id_sucursal", 3)
+
+    if not token:
+        st.error("Falta configurar el token de DUX en Streamlit Secrets.")
+    else:
+        ts_gastos_ph = st.empty()
+        ts_gastos_ph.caption(f"🕒 Última sync: **{db.ultima_carga('gastos') or 'nunca'}**")
+
+        hoy = date.today()
+        fecha_desde_default_g = hoy.replace(day=1)
+
+        with st.form("form_gastos_sync", clear_on_submit=False, border=False):
+            sincronizar_gastos = st.form_submit_button(
+                "🔄 Sincronizar gastos desde DUX",
+                type="primary",
+                use_container_width=True,
+            )
+            col_g1, col_g2 = st.columns([1, 1])
+            with col_g1:
+                fecha_desde_g = st.date_input(
+                    "Fecha desde",
+                    value=fecha_desde_default_g,
+                    key="gastos_fecha_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_g2:
+                fecha_hasta_g = st.date_input(
+                    "Fecha hasta",
+                    value=hoy,
+                    key="gastos_fecha_hasta",
+                    format="YYYY-MM-DD",
+                )
+
+        if sincronizar_gastos:
+            url_g = f"{base_url}/v2/gastos"
+            headers_g = {"accept": "application/json", "authorization": token}
+            page_offset = 0
+            page_size = 50
+            all_gastos = []
+            error_corte = False
+
+            with st.spinner("Consultando gastos en DUX..."):
+                while True:
+                    params_g = {
+                        "idEmpresa": int(id_empresa),
+                        "idSucursal": int(id_sucursal),
+                        "fechaDesde": fecha_desde_g.strftime("%Y-%m-%d"),
+                        "fechaHasta": fecha_hasta_g.strftime("%Y-%m-%d"),
+                        "incluirDetalle": "true",
+                        "offset": page_offset,
+                        "limit": page_size,
+                    }
+                    try:
+                        r = requests.get(url_g, params=params_g, headers=headers_g, timeout=30)
+                    except requests.RequestException as e:
+                        st.error(msg_error_red("DUX", e))
+                        error_corte = True
+                        break
+
+                    if r.status_code != 200:
+                        st.error(msg_error_http("DUX", r.status_code, r.text))
+                        error_corte = True
+                        break
+
+                    try:
+                        d = r.json()
+                    except ValueError:
+                        st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
+                        error_corte = True
+                        break
+
+                    if isinstance(d, dict) and "message" in d and "results" not in d:
+                        st.error(f"❌ DUX dice: {d['message']}. Avisale a Tomás si no se arregla.")
+                        error_corte = True
+                        break
+
+                    if isinstance(d, dict) and "results" in d:
+                        page = d["results"]
+                    elif isinstance(d, list):
+                        page = d
+                    else:
+                        page = []
+
+                    if not page:
+                        break
+
+                    all_gastos.extend(page)
+                    if len(page) < page_size:
+                        break
+                    page_offset += page_size
+                    time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+            if not error_corte:
+                try:
+                    db.guardar_gastos(all_gastos)
+                    try:
+                        ts_gastos_ph.caption(
+                            f"🕒 Última sync: **{db.ultima_carga('gastos') or '?'}**"
+                        )
+                    except Exception:
+                        pass
+                    st.success(f"✅ {len(all_gastos)} gastos sincronizados.")
+                except Exception as e:
+                    st.error(msg_error_sheets("guardar gastos", e))
+
+        # Display gastos guardados
+        try:
+            gastos_saved = db.cargar_gastos()
+        except Exception as e:
+            st.error(msg_error_sheets("leer gastos", e))
+            gastos_saved = []
+
+        if not gastos_saved:
+            st.info("Todavía no hay gastos. Apretá **Sincronizar**.")
+        else:
+            st.markdown(f"**{len(gastos_saved)} gastos guardados**")
+            filas = []
+            for g in gastos_saved:
+                filas.append({
+                    "Fecha": g.get("fecha", ""),
+                    "Proveedor": g.get("proveedor", ""),
+                    "Tipo": g.get("tipo_comprobante", ""),
+                    "Comprobante": g.get("nro_comprobante", ""),
+                    "Gasto": g.get("gasto", ""),
+                    "Estado": g.get("estado", ""),
+                    "Pago pend.": "✅" if g.get("pago_pendiente") else "",
+                    "Total": g.get("total", 0),
+                })
+            df_gastos = pd.DataFrame(filas)
+            st.dataframe(df_gastos, use_container_width=True, hide_index=True)
 
 with tab_mapeo:
     ts_mapeo_ph = st.empty()

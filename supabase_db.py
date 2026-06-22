@@ -44,6 +44,7 @@ def ultima_carga(clave):
         "proveedores": "proveedores",
         "wix_productos": "wix_productos",
         "mapping_wix_dux": "mapping_wix_dux",
+        "gastos": "gastos",
     }
     tabla = tabla_map.get(clave, clave)
     try:
@@ -858,3 +859,98 @@ def cargar_stock_teorico_detalle():
         "dux_contados": _parse("std_dux_contados", []),
         "wix_contados": _parse("std_wix_contados", []),
     }
+
+
+# ---------------- GASTOS ----------------
+
+def cargar_gastos():
+    client = get_client()
+    resp_gastos = client.table("gastos").select("*").execute()
+    if not resp_gastos.data:
+        return []
+
+    resp_items = client.table("gastos_items").select("*").execute()
+    items_por_gasto = {}
+    for it in (resp_items.data or []):
+        gid = it.get("gasto_id")
+        if gid is not None:
+            items_por_gasto.setdefault(gid, []).append({
+                "cod_item": it.get("cod_item"),
+                "item": it.get("item"),
+                "ctd": it.get("ctd"),
+                "precio_uni": it.get("precio_uni"),
+                "porc_desc": it.get("porc_desc"),
+                "porc_iva": it.get("porc_iva"),
+                "comentarios": it.get("comentarios"),
+            })
+
+    gastos = []
+    for r in resp_gastos.data:
+        gid = r.get("id")
+        gastos.append({
+            **r,
+            "detalles": items_por_gasto.get(gid, []),
+        })
+    return gastos
+
+
+def guardar_gastos(gastos):
+    client = get_client()
+    gasto_rows = []
+    items_por_gasto = {}
+
+    for g in gastos:
+        gid = g.get("id")
+        if not gid:
+            continue
+
+        proveedor = (
+            g.get("razon_social") or g.get("proveedor") or
+            g.get("apellido_razon_soc") or g.get("nombre_proveedor") or ""
+        )
+
+        gasto_rows.append({
+            "id": int(gid),
+            "id_empresa": g.get("id_empresa"),
+            "id_sucursal": g.get("id_sucursal"),
+            "id_proveedor": g.get("id_proveedor") or g.get("id_prov"),
+            "cuit": str(g.get("cuit") or ""),
+            "proveedor": str(proveedor),
+            "nro_comprobante": str(g.get("nro_comprobante") or g.get("nro_comp") or ""),
+            "tipo_comprobante": str(g.get("tipo_comprobante") or g.get("tipo_comp") or ""),
+            "gasto": str(g.get("gasto") or ""),
+            "estado": str(g.get("estado") or "EMITIDA"),
+            "fecha": str(g.get("fecha") or g.get("fecha_comp") or ""),
+            "fecha_vencimiento": str(g.get("fecha_vencimiento") or ""),
+            "pago_pendiente": bool(g.get("pago_pendiente") or False),
+            "monto_exento": _to_float(g.get("monto_exento")),
+            "monto_gravado": _to_float(g.get("monto_gravado")),
+            "monto_iva": _to_float(g.get("monto_iva")),
+            "monto_desc": _to_float(g.get("monto_desc")),
+            "total": _to_float(g.get("total")),
+        })
+
+        detalles = g.get("detalles") or []
+        items_por_gasto[int(gid)] = [
+            {
+                "gasto_id": int(gid),
+                "cod_item": str(it.get("cod_item") or ""),
+                "item": str(it.get("item") or ""),
+                "ctd": _to_float(it.get("ctd") or it.get("cantidad")),
+                "precio_uni": _to_float(it.get("precio_uni")),
+                "porc_desc": _to_float(it.get("porc_desc")),
+                "porc_iva": _to_float(it.get("porc_iva")),
+                "comentarios": str(it.get("comentarios") or ""),
+            }
+            for it in detalles
+        ]
+
+    if not gasto_rows:
+        return
+
+    client.table("gastos").upsert(gasto_rows, on_conflict="id").execute()
+
+    for gid, items in items_por_gasto.items():
+        client.table("gastos_items").delete().eq("gasto_id", gid).execute()
+        if items:
+            client.table("gastos_items").insert(items).execute()
