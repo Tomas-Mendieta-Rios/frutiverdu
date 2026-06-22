@@ -734,6 +734,21 @@ def fechas_compras():
     return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
 
 
+def guardar_compras_sync(rows):
+    """Guarda compras sincronizadas desde DUX. Agrupa por fecha y reemplaza."""
+    if not rows:
+        return
+    client = get_client()
+    por_fecha = {}
+    for r in rows:
+        f = str(r.get("fecha") or "")
+        if f:
+            por_fecha.setdefault(f, []).append(r)
+    for fecha, filas in por_fecha.items():
+        client.table("compras").delete().eq("fecha", fecha).execute()
+        client.table("compras").insert(filas).execute()
+
+
 # ---------------- MIXES DUX ----------------
 
 def cargar_mixes_dux():

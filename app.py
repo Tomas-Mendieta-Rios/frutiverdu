@@ -3752,6 +3752,74 @@ with tab_proveedores:
 with tab_eg_compras:
     ts_compras_ph = st.empty()
 
+    # --- Sync desde DUX ---
+    dux_cfg_c = st.secrets.get("dux", {})
+    token_c = dux_cfg_c.get("token", "")
+    if token_c:
+        hoy_c = date.today()
+        with st.form("form_compras_sync", clear_on_submit=False, border=False):
+            sincronizar_compras = st.form_submit_button(
+                "🔄 Sincronizar compras desde DUX",
+                type="primary",
+                use_container_width=True,
+            )
+            col_c1, col_c2 = st.columns([1, 1])
+            with col_c1:
+                fecha_desde_c = st.date_input(
+                    "Fecha desde",
+                    value=hoy_c.replace(day=1),
+                    key="compras_sync_desde",
+                    format="YYYY-MM-DD",
+                )
+            with col_c2:
+                fecha_hasta_c = st.date_input(
+                    "Fecha hasta",
+                    value=hoy_c,
+                    key="compras_sync_hasta",
+                    format="YYYY-MM-DD",
+                )
+
+        if sincronizar_compras:
+            with st.spinner("Consultando compras en DUX..."):
+                compras_res = cargar_compras_dux_v2(fecha_desde_c, fecha_hasta_c)
+            if compras_res is None:
+                st.error(msg_error_http("DUX", 401))
+            else:
+                compras_raw_sync = compras_res.get("compras", [])
+                prod_lookup = {}
+                if not productos.empty:
+                    prod_lookup = dict(zip(productos["codigo"].astype(str), productos["producto"]))
+
+                rows_sync = []
+                for compra in compras_raw_sync:
+                    fecha_c_val = str(compra.get("fecha") or "")
+                    prov = compra.get("proveedor", {}) or {}
+                    prov_id = str(prov.get("id_proveedor") or "")
+                    prov_nombre = str(prov.get("razon_social") or "")
+                    nro_comp = str(compra.get("nro_comprobante") or "")
+                    cond_pago = str(compra.get("condicion_pago") or "")
+                    for item in (compra.get("items", []) or []):
+                        cod = str(item.get("cod_item") or "")
+                        rows_sync.append({
+                            "fecha": fecha_c_val,
+                            "proveedor_id": prov_id,
+                            "proveedor_nombre": prov_nombre,
+                            "codigo_producto": cod,
+                            "producto_nombre": prod_lookup.get(cod, ""),
+                            "cantidad": float(item.get("ctd_recepcionada") or item.get("ctd") or 0),
+                            "precio": float(item.get("precio_uni") or 0),
+                            "condicion_pago": cond_pago,
+                            "comprobante": nro_comp,
+                        })
+
+                try:
+                    db.guardar_compras_sync(rows_sync)
+                    st.success(f"✅ {len(compras_raw_sync)} comprobantes sincronizados ({len(rows_sync)} ítems).")
+                except Exception as e:
+                    st.error(msg_error_sheets("guardar compras", e))
+
+        st.divider()
+
     COND_PAGO_OPCIONES = ["CONTADO", "EFECTIVO", "CHEQUE", "CUENTA CORRIENTE"]
     COLUMNAS_DUX = [
         "COMPROBANTE", "TIPO COMPROBANTE", "ID PROVEEDOR", "FECHA",
