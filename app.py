@@ -2854,15 +2854,8 @@ with tab_dux:
                 except (ValueError, TypeError):
                     return -1
 
-            # Filtrar anulados ANTES de cortar a 50 (asi no perdemos visibles
-            # por anulados que estan en el top).
-            all_orders_filtered = [
-                o for o in all_orders_saved
-                if str(o.get("anulado", "N")).upper() != "S"
-            ]
-
             all_orders_sorted = sorted(
-                all_orders_filtered, key=_nro_dux_sort, reverse=True
+                all_orders_saved, key=_nro_dux_sort, reverse=True
             )
 
             # Mostrar los ultimos 50 por nro_pedido (independiente de fecha).
@@ -2911,6 +2904,7 @@ with tab_dux:
                         estado_fact, f"⚪ {estado_fact}" if estado_fact else ""
                     )
 
+                    es_anulado = str(orden.get("anulado", "N")).upper() == "S"
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
@@ -2921,27 +2915,29 @@ with tab_dux:
                                 registro_badge = (
                                     f" · 📅 registrado {f_reg_dux.date()}"
                                 )
+                            anulado_badge = " · 🚫 **ANULADO**" if es_anulado else ""
                             st.markdown(
                                 f"**#{nro or i}** — {cliente_str} · "
-                                f"{len(items)} ítems · {estado_badge}{registro_badge}"
+                                f"{len(items)} ítems · {estado_badge}{registro_badge}{anulado_badge}"
                             )
-                        with c_chk:
-                            asignar = st.checkbox(
-                                "Asignar entrega",
-                                value=bool(asignado_prev),
-                                key=f"dux_chk_{oid}",
-                            )
-                        with c_fec:
-                            fecha_entrega = st.date_input(
-                                "Fecha de entrega",
-                                value=fecha_default_entrega,
-                                key=f"dux_fent_{oid}",
-                                format="YYYY-MM-DD",
-                                label_visibility="collapsed",
-                            )
+                        if not es_anulado:
+                            with c_chk:
+                                asignar = st.checkbox(
+                                    "Asignar entrega",
+                                    value=bool(asignado_prev),
+                                    key=f"dux_chk_{oid}",
+                                )
+                            with c_fec:
+                                fecha_entrega = st.date_input(
+                                    "Fecha de entrega",
+                                    value=fecha_default_entrega,
+                                    key=f"dux_fent_{oid}",
+                                    format="YYYY-MM-DD",
+                                    label_visibility="collapsed",
+                                )
 
-                        if asignar:
-                            nuevas_selecciones_dux[oid] = str(fecha_entrega)
+                            if asignar:
+                                nuevas_selecciones_dux[oid] = str(fecha_entrega)
 
                         if items:
                             with st.expander("Ver productos"):
