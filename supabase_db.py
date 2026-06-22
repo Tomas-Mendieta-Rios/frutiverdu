@@ -470,53 +470,144 @@ def _to_float(v):
         return 0.0
 
 
-# ---------------- PEDIDOS WIX (sigue en JSON por ahora) ----------------
+# ---------------- PEDIDOS WIX ----------------
 
-def _cargar_pedidos_wix_json():
+def cargar_pedidos_wix():
     client = get_client()
-    resp = client.table("pedidos_wix").select("json").execute()
-    if not resp.data:
+    resp_orders = client.table("pedidos_wix").select("*").execute()
+    if not resp_orders.data:
         return []
+
+    resp_items = client.table("pedidos_wix_items").select("*").execute()
+    items_por_order = {}
+    for it in (resp_items.data or []):
+        oid = str(it.get("order_id") or "")
+        if oid:
+            items_por_order.setdefault(oid, []).append({
+                "quantity": it.get("quantity"),
+                "catalogReference": {"catalogItemId": it.get("catalog_item_id")},
+                "productId": it.get("product_id"),
+                "productName": {
+                    "translated": it.get("product_name_translated"),
+                    "original": it.get("product_name_original"),
+                },
+            })
+
     pedidos = []
-    for r in resp.data:
-        raw = r.get("json") or ""
-        if not raw:
-            continue
-        try:
-            pedidos.append(_json.loads(raw))
-        except Exception:
-            continue
+    for r in resp_orders.data:
+        oid = str(r.get("order_id") or "")
+        buyer_email = r.get("buyer_email") or r.get("billing_email") or ""
+        pedidos.append({
+            "id": oid,
+            "number": r.get("number"),
+            "status": r.get("status"),
+            "createdDate": r.get("created_date"),
+            "lineItems": items_por_order.get(oid, []),
+            "billingInfo": {
+                "contactDetails": {
+                    "firstName": r.get("billing_first_name"),
+                    "lastName": r.get("billing_last_name"),
+                    "phone": r.get("billing_phone"),
+                    "email": r.get("billing_email"),
+                },
+            },
+            "shippingInfo": {
+                "logistics": {
+                    "shippingDestination": {
+                        "contactDetails": {
+                            "firstName": r.get("shipping_first_name"),
+                            "lastName": r.get("shipping_last_name"),
+                            "phone": r.get("shipping_phone"),
+                        },
+                        "address": {
+                            "addressLine": r.get("shipping_address_line"),
+                            "addressLine2": r.get("shipping_address_line2"),
+                            "city": r.get("shipping_city"),
+                            "subdivision": r.get("shipping_subdivision"),
+                        },
+                    },
+                },
+            },
+            "buyerInfo": {
+                "email": buyer_email,
+                "contactDetails": {"email": buyer_email},
+            },
+            "priceSummary": {
+                "total": {"formattedAmount": r.get("total_formatted")},
+            },
+        })
     return pedidos
 
 
-def _guardar_pedidos_wix_json(pedidos):
+def guardar_pedidos_wix(pedidos):
     client = get_client()
-    resp = client.table("pedidos_wix").select("order_id,fecha,json").execute()
-    merged = {}
-    for r in (resp.data or []):
-        oid = str(r.get("order_id") or "")
-        if oid:
-            merged[oid] = r
+    order_rows = []
+    items_por_order = {}
+
     for p in pedidos:
         oid = str(p.get("id") or "")
         if not oid:
             continue
-        fecha = str(p.get("createdDate") or p.get("created_date") or "")
-        merged[oid] = {
+
+        bi = (p.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+        si_dest = (
+            ((p.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
+            .get("shippingDestination", {}) or {}
+        )
+        si_cd = si_dest.get("contactDetails", {}) or {}
+        si_addr = si_dest.get("address", {}) or {}
+        bu = p.get("buyerInfo", {}) or {}
+        buyer_email = (
+            bu.get("email")
+            or (bu.get("contactDetails", {}) or {}).get("email")
+            or bi.get("email")
+            or ""
+        )
+        total_formatted = (
+            ((p.get("priceSummary", {}) or {}).get("total", {}) or {}).get("formattedAmount") or ""
+        )
+
+        order_rows.append({
             "order_id": oid,
-            "fecha": fecha,
-            "json": _json.dumps(p, ensure_ascii=False),
-        }
-    if merged:
-        client.table("pedidos_wix").upsert(list(merged.values()), on_conflict="order_id").execute()
+            "number": str(p.get("number") or ""),
+            "status": str(p.get("status") or ""),
+            "created_date": str(p.get("createdDate") or p.get("created_date") or ""),
+            "billing_first_name": str(bi.get("firstName") or ""),
+            "billing_last_name": str(bi.get("lastName") or ""),
+            "billing_phone": str(bi.get("phone") or ""),
+            "billing_email": str(bi.get("email") or ""),
+            "shipping_first_name": str(si_cd.get("firstName") or ""),
+            "shipping_last_name": str(si_cd.get("lastName") or ""),
+            "shipping_phone": str(si_cd.get("phone") or ""),
+            "shipping_address_line": str(si_addr.get("addressLine") or ""),
+            "shipping_address_line2": str(si_addr.get("addressLine2") or ""),
+            "shipping_city": str(si_addr.get("city") or ""),
+            "shipping_subdivision": str(si_addr.get("subdivision") or ""),
+            "buyer_email": str(buyer_email),
+            "total_formatted": str(total_formatted),
+        })
 
+        items_por_order[oid] = [
+            {
+                "order_id": oid,
+                "catalog_item_id": str((li.get("catalogReference") or {}).get("catalogItemId") or li.get("productId") or ""),
+                "product_id": str(li.get("productId") or ""),
+                "product_name_translated": str((li.get("productName") or {}).get("translated") or ""),
+                "product_name_original": str((li.get("productName") or {}).get("original") or ""),
+                "quantity": _to_float(li.get("quantity")),
+            }
+            for li in (p.get("lineItems") or [])
+        ]
 
-def cargar_pedidos_wix():
-    return _cargar_pedidos_wix_json()
+    if not order_rows:
+        return
 
+    client.table("pedidos_wix").upsert(order_rows, on_conflict="order_id").execute()
 
-def guardar_pedidos_wix(pedidos):
-    _guardar_pedidos_wix_json(pedidos)
+    for oid, items in items_por_order.items():
+        client.table("pedidos_wix_items").delete().eq("order_id", oid).execute()
+        if items:
+            client.table("pedidos_wix_items").insert(items).execute()
 
 
 # ---------------- PROVEEDORES ----------------
