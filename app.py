@@ -4925,11 +4925,11 @@ with tab_eg_gastos:
             with st.spinner("Consultando gastos en DUX..."):
                 while True:
                     params_g = {
-                        "idEmpresa": int(id_empresa),
-                        "idSucursal": int(id_sucursal),
-                        "fechaDesde": fecha_desde_g.strftime("%Y-%m-%d"),
-                        "fechaHasta": fecha_hasta_g.strftime("%Y-%m-%d"),
-                        "incluirDetalle": "true",
+                        "id_empresa": int(id_empresa),
+                        "id_sucursal": int(id_sucursal),
+                        "fecha_desde": fecha_desde_g.strftime("%Y-%m-%d"),
+                        "fecha_hasta": fecha_hasta_g.strftime("%Y-%m-%d"),
+                        "incluir_detalle": "true",
                         "offset": page_offset,
                         "limit": page_size,
                     }
