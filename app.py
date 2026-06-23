@@ -1012,9 +1012,8 @@ compuestos_orig = db.cargar_compuestos()
 # (rompe por columnas faltantes). El usuario debera re-sincronizar.
 if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
     st.error(
-        "⚠️ La tabla `compuestos` de Google Sheets está vacía o corrupta. "
-        "Andá a la pestaña ⚙️ Relacionar productos y volvé a guardar las relaciones, "
-        "o avisale a Tomás."
+        "⚠️ La tabla `compuestos` está vacía. "
+        "Andá a la pestaña ⚙️ Relacionar productos y guardá las relaciones."
     )
     compuestos = pd.DataFrame(
         columns=[
