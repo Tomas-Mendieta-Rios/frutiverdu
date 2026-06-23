@@ -1072,6 +1072,7 @@ if st.button(
     tab_egresos,
     tab_grupo_pedidos,
     tab_grupo_diario,
+    tab_balance,
     tab_grupo_config,
 ) = st.tabs(
     [
@@ -1079,6 +1080,7 @@ if st.button(
         "💸 Egresos",
         "📋 Pedidos",
         "📦 Diario",
+        "📊 Balance",
         "⚙️ Configuración",
     ]
 )
@@ -1113,6 +1115,168 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
             "Detalle compras",
         ]
     )
+
+with tab_balance:
+    st.subheader("📊 Balance")
+
+    hoy_bal = date.today()
+    col_bal1, col_bal2 = st.columns(2)
+    with col_bal1:
+        bal_desde = st.date_input(
+            "Desde", value=hoy_bal.replace(day=1), key="bal_desde", format="YYYY-MM-DD"
+        )
+    with col_bal2:
+        bal_hasta = st.date_input(
+            "Hasta", value=hoy_bal, key="bal_hasta", format="YYYY-MM-DD"
+        )
+
+    def _parse_wix_total(v):
+        try:
+            return float(str(v or "0").replace("$", "").replace(",", "").replace(" ", "").strip())
+        except (ValueError, TypeError):
+            return 0.0
+
+    def _en_rango(fecha_str):
+        try:
+            f = pd.to_datetime(str(fecha_str or "")).date()
+            return bal_desde <= f <= bal_hasta
+        except Exception:
+            return False
+
+    with st.spinner("Cargando datos..."):
+        pedidos_dux_bal  = db.cargar_pedidos_dux()
+        pedidos_wix_bal  = db.cargar_pedidos_wix()
+        compras_bal      = db.cargar_compras()
+        gastos_bal       = db.cargar_gastos()
+
+    # Filtrar por rango
+    ped_dux_f  = [p for p in pedidos_dux_bal  if _en_rango(p.get("fecha")) and str(p.get("anulado","N")).upper() != "S"]
+    ped_wix_f  = [p for p in pedidos_wix_bal  if _en_rango(p.get("createdDate"))]
+    if not compras_bal.empty:
+        compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
+        compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
+    else:
+        compras_f = pd.DataFrame()
+    gastos_f   = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
+
+    # Totales
+    total_dux     = sum(float(p.get("total") or 0) for p in ped_dux_f)
+    total_wix     = sum(_parse_wix_total(p.get("priceSummary", {}).get("total", {}).get("formattedAmount")) for p in ped_wix_f)
+    total_compras = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
+    total_gastos  = sum(float(g.get("total") or 0) for g in gastos_f)
+
+    total_ingresos = total_dux + total_wix
+    total_egresos  = total_compras + total_gastos
+    resultado      = total_ingresos - total_egresos
+
+    # ── INGRESOS ────────────────────────────────────────────────────────────
+    st.divider()
+    st.markdown(f"### 📈 Ingresos — **$ {total_ingresos:,.2f}**")
+
+    # DUX
+    st.markdown(f"**📦 DUX** — $ {total_dux:,.2f} · {len(ped_dux_f)} pedidos")
+    with st.expander(f"Ver pedidos DUX ({len(ped_dux_f)})"):
+        for p in sorted(ped_dux_f, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+            nro    = p.get("nro_pedido") or p.get("id") or "—"
+            cli    = (p.get("cliente") or {}).get("razon_social") or "—"
+            fecha  = p.get("fecha") or "—"
+            total  = float(p.get("total") or 0)
+            items  = p.get("detalles") or []
+            with st.container(border=True):
+                c1, c2 = st.columns([5, 1.5])
+                with c1:
+                    st.markdown(f"**#{nro}** — {cli} · 📅 {fecha} · {len(items)} ítem{'s' if len(items)!=1 else ''}")
+                with c2:
+                    st.markdown(f"**$ {total:,.2f}**")
+                if items:
+                    with st.expander("Ver ítems"):
+                        st.dataframe(pd.DataFrame([{
+                            "Código": it.get("cod_item",""),
+                            "Producto": it.get("item",""),
+                            "Cant.": float(it.get("ctd") or 0),
+                            "Precio unit.": float(it.get("precio_uni") or 0),
+                        } for it in items]), use_container_width=True, hide_index=True)
+
+    # Wix
+    st.markdown(f"**🌐 Wix** — $ {total_wix:,.2f} · {len(ped_wix_f)} pedidos")
+    with st.expander(f"Ver pedidos Wix ({len(ped_wix_f)})"):
+        for p in sorted(ped_wix_f, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
+            nro    = p.get("number") or p.get("id") or "—"
+            bi     = (p.get("billingInfo") or {}).get("contactDetails") or {}
+            nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
+            fecha  = str(p.get("createdDate") or "")[:10]
+            total  = _parse_wix_total((p.get("priceSummary") or {}).get("total", {}).get("formattedAmount"))
+            items  = p.get("lineItems") or []
+            with st.container(border=True):
+                c1, c2 = st.columns([5, 1.5])
+                with c1:
+                    st.markdown(f"**#{nro}** — {nombre} · 📅 {fecha} · {len(items)} ítem{'s' if len(items)!=1 else ''}")
+                with c2:
+                    st.markdown(f"**$ {total:,.2f}**")
+                if items:
+                    with st.expander("Ver ítems"):
+                        st.dataframe(pd.DataFrame([{
+                            "Producto": (it.get("productName") or {}).get("translated") or "",
+                            "Cant.": float(it.get("quantity") or 0),
+                        } for it in items]), use_container_width=True, hide_index=True)
+
+    # ── EGRESOS ─────────────────────────────────────────────────────────────
+    st.divider()
+    st.markdown(f"### 📉 Egresos — **$ {total_egresos:,.2f}**")
+
+    # Compras
+    st.markdown(f"**💰 Compras** — $ {total_compras:,.2f}")
+    with st.expander(f"Ver compras ({len(compras_f) if not compras_f.empty else 0} líneas)"):
+        if compras_f.empty:
+            st.caption("Sin compras en el período.")
+        else:
+            grupos_comp = compras_f.groupby(["comprobante","fecha","proveedor_nombre"], dropna=False, sort=False)
+            for key, df_g in sorted(grupos_comp, key=lambda x: str(x[0][1]), reverse=True):
+                nro_c, fecha_c, prov_c = key
+                total_c = float(df_g["subtotal"].sum())
+                with st.container(border=True):
+                    c1, c2 = st.columns([5, 1.5])
+                    with c1:
+                        st.markdown(f"**#{nro_c or '—'}** — {prov_c or '—'} · 📅 {fecha_c}")
+                    with c2:
+                        st.markdown(f"**$ {total_c:,.2f}**")
+                    with st.expander("Ver ítems"):
+                        st.dataframe(df_g[["codigo_producto","producto_nombre","cantidad","precio","subtotal"]].rename(columns={
+                            "codigo_producto":"Código","producto_nombre":"Producto",
+                            "cantidad":"Cant.","precio":"Precio","subtotal":"Subtotal"
+                        }), use_container_width=True, hide_index=True)
+
+    # Gastos
+    st.markdown(f"**📄 Gastos** — $ {total_gastos:,.2f}")
+    with st.expander(f"Ver gastos ({len(gastos_f)})"):
+        if not gastos_f:
+            st.caption("Sin gastos en el período.")
+        else:
+            for g in sorted(gastos_f, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                nro_g   = g.get("nro_comprobante") or "—"
+                prov_g  = g.get("proveedor") or "—"
+                fecha_g = g.get("fecha") or "—"
+                total_g = float(g.get("total") or 0)
+                items_g = g.get("detalles") or []
+                with st.container(border=True):
+                    c1, c2 = st.columns([5, 1.5])
+                    with c1:
+                        st.markdown(f"**#{nro_g}** — {prov_g} · 📅 {fecha_g} · {len(items_g)} ítem{'s' if len(items_g)!=1 else ''}")
+                    with c2:
+                        st.markdown(f"**$ {total_g:,.2f}**")
+                    if items_g:
+                        with st.expander("Ver ítems"):
+                            st.dataframe(pd.DataFrame([{
+                                "Código": it.get("cod_item",""),
+                                "Cant.": float(it.get("ctd") or 0),
+                                "Precio unit.": float(it.get("precio_uni") or 0),
+                            } for it in items_g]), use_container_width=True, hide_index=True)
+
+    # ── RESULTADO ────────────────────────────────────────────────────────────
+    st.divider()
+    color = "green" if resultado >= 0 else "red"
+    signo = "+" if resultado >= 0 else ""
+    st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {resultado:,.2f}**]")
 
 with tab_grupo_config:
     (
