@@ -4971,9 +4971,6 @@ with tab_eg_gastos:
                     time.sleep(DUX_RATE_LIMIT_SECONDS)
 
             if not error_corte:
-                if all_gastos:
-                    with st.expander(f"🔍 Debug: primer gasto crudo de DUX ({len(all_gastos)} total)", expanded=True):
-                        st.json(all_gastos[0])
                 try:
                     db.guardar_gastos(all_gastos)
                     try:
@@ -4996,21 +4993,42 @@ with tab_eg_gastos:
         if not gastos_saved:
             st.info("Todavía no hay gastos. Apretá **Sincronizar**.")
         else:
-            st.markdown(f"**{len(gastos_saved)} gastos guardados**")
-            filas = []
-            for g in gastos_saved:
-                filas.append({
-                    "Fecha": g.get("fecha", ""),
-                    "Proveedor": g.get("proveedor", ""),
-                    "Tipo": g.get("tipo_comprobante", ""),
-                    "Comprobante": g.get("nro_comprobante", ""),
-                    "Gasto": g.get("gasto", ""),
-                    "Estado": g.get("estado", ""),
-                    "Pago pend.": "✅" if g.get("pago_pendiente") else "",
-                    "Total": g.get("total", 0),
-                })
-            df_gastos = pd.DataFrame(filas)
-            st.dataframe(df_gastos, use_container_width=True, hide_index=True)
+            gastos_sorted = sorted(gastos_saved, key=lambda g: g.get("fecha") or "", reverse=True)
+            st.markdown(f"**{len(gastos_sorted)} gastos guardados**")
+            for g in gastos_sorted:
+                nro = g.get("nro_comprobante") or "—"
+                proveedor = g.get("proveedor") or "—"
+                fecha = g.get("fecha") or "—"
+                total = g.get("total") or 0
+                cond_pago = g.get("tipo_comprobante") or ""
+                pago_badge = " · 💳 **pago pendiente**" if g.get("pago_pendiente") else ""
+                detalles = g.get("detalles") or []
+                with st.container(border=True):
+                    c_info, c_total = st.columns([5, 1.5])
+                    with c_info:
+                        st.markdown(
+                            f"**#{nro}** — {proveedor} · 📅 {fecha}"
+                            + (f" · {cond_pago}" if cond_pago else "")
+                            + f" · {len(detalles)} ítem{'s' if len(detalles) != 1 else ''}"
+                            + pago_badge
+                        )
+                    with c_total:
+                        st.markdown(f"**$ {total:,.2f}**")
+                    if detalles:
+                        with st.expander("Ver ítems"):
+                            filas_det = [
+                                {
+                                    "Código": d.get("cod_item", ""),
+                                    "Ítem": d.get("item", ""),
+                                    "Cantidad": d.get("ctd", 0),
+                                    "Precio unit.": d.get("precio_uni", 0),
+                                    "% Desc.": d.get("porc_desc", 0),
+                                    "% IVA": d.get("porc_iva", 0),
+                                    "Observaciones": d.get("comentarios", ""),
+                                }
+                                for d in detalles
+                            ]
+                            st.dataframe(pd.DataFrame(filas_det), use_container_width=True, hide_index=True)
 
 with tab_mapeo:
     ts_mapeo_ph = st.empty()

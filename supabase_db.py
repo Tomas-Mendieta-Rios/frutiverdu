@@ -934,47 +934,62 @@ def guardar_gastos(gastos):
     items_por_gasto = {}
 
     for g in gastos:
-        gid = g.get("id")
+        gid = g.get("id_compra") or g.get("id")
         if not gid:
             continue
 
-        proveedor = (
-            g.get("razon_social") or g.get("proveedor") or
-            g.get("apellido_razon_soc") or g.get("nombre_proveedor") or ""
-        )
+        prov_obj = g.get("proveedor") or {}
+        if isinstance(prov_obj, dict):
+            proveedor = prov_obj.get("razon_social") or ""
+            id_proveedor = prov_obj.get("id_proveedor")
+        else:
+            proveedor = str(prov_obj)
+            id_proveedor = None
+
+        montos = g.get("montos") or {}
+        if not isinstance(montos, dict):
+            montos = {}
+
+        pago_pendiente = _to_float(montos.get("monto_pendiente")) > 0
 
         gasto_rows.append({
             "id": int(gid),
             "id_empresa": g.get("id_empresa"),
             "id_sucursal": g.get("id_sucursal"),
-            "id_proveedor": g.get("id_proveedor") or g.get("id_prov"),
+            "id_proveedor": id_proveedor,
             "cuit": str(g.get("cuit") or ""),
             "proveedor": str(proveedor),
-            "nro_comprobante": str(g.get("nro_comprobante") or g.get("nro_comp") or ""),
-            "tipo_comprobante": str(g.get("tipo_comprobante") or g.get("tipo_comp") or ""),
+            "nro_comprobante": str(g.get("nro_comprobante") or ""),
+            "tipo_comprobante": str(g.get("tipo_comprobante") or g.get("condicion_pago") or ""),
             "gasto": str(g.get("gasto") or ""),
             "estado": str(g.get("estado") or "EMITIDA"),
-            "fecha": str(g.get("fecha") or g.get("fecha_comp") or ""),
+            "fecha": str(g.get("fecha") or ""),
             "fecha_vencimiento": str(g.get("fecha_vencimiento") or ""),
-            "pago_pendiente": bool(g.get("pago_pendiente") or False),
-            "monto_exento": _to_float(g.get("monto_exento")),
-            "monto_gravado": _to_float(g.get("monto_gravado")),
-            "monto_iva": _to_float(g.get("monto_iva")),
-            "monto_desc": _to_float(g.get("monto_desc")),
-            "total": _to_float(g.get("total")),
+            "pago_pendiente": pago_pendiente,
+            "monto_exento": _to_float(montos.get("monto_exento")),
+            "monto_gravado": _to_float(montos.get("monto_gravado")),
+            "monto_iva": _to_float(montos.get("monto_iva")),
+            "monto_desc": _to_float(montos.get("monto_descuento")),
+            "total": _to_float(montos.get("total")),
         })
 
-        detalles = g.get("detalles") or []
+        detalles = []
+        for f in ["items", "detalles", "productos", "lineas", "renglones", "detalle"]:
+            v = g.get(f)
+            if isinstance(v, list):
+                detalles = v
+                break
+
         items_por_gasto[int(gid)] = [
             {
                 "gasto_id": int(gid),
                 "cod_item": str(it.get("cod_item") or ""),
-                "item": str(it.get("item") or ""),
+                "item": str(it.get("item") or it.get("descripcion") or ""),
                 "ctd": _to_float(it.get("ctd") or it.get("cantidad")),
                 "precio_uni": _to_float(it.get("precio_uni")),
                 "porc_desc": _to_float(it.get("porc_desc")),
                 "porc_iva": _to_float(it.get("porc_iva")),
-                "comentarios": str(it.get("comentarios") or ""),
+                "comentarios": str(it.get("observaciones") or it.get("comentarios") or ""),
             }
             for it in detalles
         ]
