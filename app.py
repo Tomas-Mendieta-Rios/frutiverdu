@@ -4916,7 +4916,7 @@ with tab_eg_gastos:
 
         if sincronizar_gastos:
             url_g = f"{base_url}/v2/gastos"
-            headers_g = {"accept": "application/json", "authorization": token}
+            headers_g = {"accept": "application/json", "authorization": f"Bearer {token}"}
             page_offset = 0
             page_size = 50
             all_gastos = []
