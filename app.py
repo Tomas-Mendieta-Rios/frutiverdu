@@ -4952,23 +4952,20 @@ with tab_eg_gastos:
                         error_corte = True
                         break
 
-                    if isinstance(d, dict) and "message" in d and "results" not in d:
-                        st.error(f"❌ DUX dice: {d['message']}. Avisale a Tomás si no se arregla.")
+                    if isinstance(d, dict) and "error" in d:
+                        st.error(f"❌ DUX dice: {d['error'].get('mensaje', d['error'])}. Avisale a Tomás si no se arregla.")
                         error_corte = True
                         break
 
-                    if isinstance(d, dict) and "results" in d:
-                        page = d["results"]
-                    elif isinstance(d, list):
-                        page = d
-                    else:
-                        page = []
+                    page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
 
                     if not page:
                         break
 
                     all_gastos.extend(page)
-                    if len(page) < page_size:
+
+                    paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
+                    if not paging.get("hay_mas"):
                         break
                     page_offset += page_size
                     time.sleep(DUX_RATE_LIMIT_SECONDS)
