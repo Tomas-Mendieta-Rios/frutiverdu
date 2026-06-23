@@ -4971,6 +4971,9 @@ with tab_eg_gastos:
                     time.sleep(DUX_RATE_LIMIT_SECONDS)
 
             if not error_corte:
+                if all_gastos:
+                    with st.expander(f"🔍 Debug: primer gasto crudo de DUX ({len(all_gastos)} total)", expanded=True):
+                        st.json(all_gastos[0])
                 try:
                     db.guardar_gastos(all_gastos)
                     try:
