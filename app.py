@@ -2175,13 +2175,7 @@ with tab_stock:
                             )
                         )
 
-                    compras_res = cargar_compras_dux_v2(fc, fc)
-                    if compras_res is None:
-                        st.error(
-                            "⚠️ No se pudieron leer las compras de DUX. "
-                            "Probá recargar en un momento."
-                        )
-                        return
+                    compras_res = db.cargar_compras_desde_gastos(fc)
                     map_compras = compras_res.get("cantidades", {})
                     compras_raw = compras_res.get("compras", [])
 
@@ -2340,7 +2334,7 @@ with tab_stock:
             expanded=False,
         ):
             if not _compras_raw:
-                st.caption("No hubo compras ese día (o DUX no respondió).")
+                st.caption("No hubo compras ese día (o no fueron sincronizadas en Egresos → Gastos).")
             else:
                 for c in _compras_raw:
                     nro = c.get("nro_comprobante", "?")

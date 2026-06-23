@@ -1003,3 +1003,39 @@ def guardar_gastos(gastos):
         client.table("gastos_items").delete().eq("gasto_id", gid).execute()
         if items:
             client.table("gastos_items").insert(items).execute()
+
+
+def cargar_compras_desde_gastos(fecha):
+    """Lee compras del día desde gastos sincronizados en Supabase.
+    Retorna el mismo formato que cargar_compras_dux_v2 para compatibilidad
+    con el stock teórico: {"cantidades": {cod_item: qty}, "compras": [list]}
+    """
+    gastos = cargar_gastos()
+    fecha_str = str(fecha)
+
+    cantidades = {}
+    compras_raw = []
+
+    for g in gastos:
+        if str(g.get("fecha") or "") != fecha_str:
+            continue
+
+        detalles = g.get("detalles") or []
+        items_list = []
+        for it in detalles:
+            cod = str(it.get("cod_item") or "").strip()
+            ctd = float(it.get("ctd") or 0)
+            if cod:
+                cantidades[cod] = cantidades.get(cod, 0.0) + ctd
+            items_list.append({
+                "cod_item": cod,
+                "ctd_recepcionada": ctd,
+            })
+
+        compras_raw.append({
+            "nro_comprobante": g.get("nro_comprobante") or "—",
+            "proveedor": {"razon_social": g.get("proveedor") or ""},
+            "items": items_list,
+        })
+
+    return {"cantidades": cantidades, "compras": compras_raw}
