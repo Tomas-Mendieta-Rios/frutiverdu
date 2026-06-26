@@ -1171,7 +1171,11 @@ def guardar_gastos(gastos):
         if not isinstance(montos, dict):
             montos = {}
 
-        pago_pendiente = _to_float(montos.get("monto_pendiente")) > 0
+        monto_pendiente_val = _to_float(montos.get("monto_pendiente"))
+        pago_pendiente = monto_pendiente_val > 0
+
+        rubro_obj = g.get("rubro") or {}
+        sub_rubro_obj = g.get("sub_rubro") or {}
 
         gasto_rows.append({
             "id": int(gid),
@@ -1181,18 +1185,24 @@ def guardar_gastos(gastos):
             "cuit": str(g.get("cuit") or ""),
             "proveedor": str(proveedor),
             "nro_comprobante": str(g.get("nro_comprobante") or ""),
-            "tipo_comprobante": str(g.get("tipo_comprobante") or g.get("condicion_pago") or ""),
+            "tipo_comprobante": str(g.get("tipo_comprobante") or ""),
+            "condicion_pago": str(g.get("condicion_pago") or ""),
             "gasto": str(g.get("gasto") or ""),
             "estado": str(g.get("estado") or "EMITIDA"),
             "fecha": str(g.get("fecha") or ""),
             "fecha_vencimiento": str(g.get("fecha_vencimiento") or ""),
+            "observaciones": str(g.get("observaciones") or g.get("comentarios") or ""),
             "pago_pendiente": pago_pendiente,
+            "monto_pendiente": monto_pendiente_val,
             "monto_exento": _to_float(montos.get("monto_exento")),
             "monto_gravado": _to_float(montos.get("monto_gravado")),
             "monto_iva": _to_float(montos.get("monto_iva")),
             "monto_desc": _to_float(montos.get("monto_descuento")),
             "total": _to_float(montos.get("total")),
-            "json": g,
+            "id_rubro": rubro_obj.get("id_rubro") if isinstance(rubro_obj, dict) else None,
+            "rubro_nombre": str(rubro_obj.get("rubro") or "") if isinstance(rubro_obj, dict) else "",
+            "id_sub_rubro": sub_rubro_obj.get("id_sub_rubro") if isinstance(sub_rubro_obj, dict) else None,
+            "sub_rubro_nombre": str(sub_rubro_obj.get("sub_rubro") or "") if isinstance(sub_rubro_obj, dict) else "",
         })
 
         detalles = []
@@ -1212,7 +1222,7 @@ def guardar_gastos(gastos):
                 "porc_desc": _to_float(it.get("porc_desc")),
                 "porc_iva": _to_float(it.get("porc_iva")),
                 "comentarios": str(it.get("observaciones") or it.get("comentarios") or ""),
-                "json": it,
+                "monto_total": _to_float(it.get("monto_total") or it.get("importe") or it.get("total")),
             }
             for it in detalles
         ]
