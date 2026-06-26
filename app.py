@@ -199,8 +199,6 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
                     continue
                 cantidades[cod] = cantidades.get(cod, 0.0) + ctd
 
-        if len(datos) < page_size:
-            break
         offset += page_size
         time.sleep(2)
 
