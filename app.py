@@ -1475,15 +1475,15 @@ with tab_balance:
     _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
     def _render_factura(f):
         comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
-        cli   = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
-        fecha = str(f.get("fecha_comp") or "")[:12]
+        fecha = str(f.get("fecha_comp") or "")[:10]
         total = float(f.get("total") or 0)
         with st.container(border=True):
-            c1, c2 = st.columns([5, 1.5])
+            c1, c2 = st.columns([4, 1.5])
             with c1:
-                st.markdown(f"**{comp}** — {cli} · 📅 {fecha}")
+                st.markdown(f"🧾 **{comp}**")
+                st.caption(f"📅 {fecha}")
             with c2:
-                st.markdown(f"**$ {_pesos(total)}**")
+                st.markdown(f"### $ {_pesos(total)}")
 
     for _label, _lista in [
         ("✅ Cobrado", fac_cobradas),
@@ -1498,7 +1498,7 @@ with tab_balance:
                     _by_cli.setdefault(_k, []).append(_f)
                 for _cli_name, _cli_items in sorted(_by_cli.items()):
                     _cli_total = sum(float(_f.get("total") or 0) for _f in _cli_items)
-                    with st.expander(f"{_cli_name} · {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}"):
+                    with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
                         for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
                             _render_factura(f)
 
@@ -1512,27 +1512,26 @@ with tab_balance:
 
     def _render_pedido_wix(p):
         nro    = p.get("number") or p.get("id") or "—"
-        bi     = (p.get("billingInfo") or {}).get("contactDetails") or {}
-        nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
         fecha  = str(p.get("createdDate") or "")[:10]
         total  = _wix_monto(p)
         pay    = str(p.get("paymentStatus") or "").upper()
         ful    = str(p.get("fulfillmentStatus") or "").upper()
         status = str(p.get("status") or "").upper()
         if status == "CANCELED":
-            badge = " ❌"
+            badge = "❌"
         elif pay == "PAID":
-            badge = " ✅"
+            badge = "✅"
         elif ful == "FULFILLED":
-            badge = " ⏳"
+            badge = "⏳"
         else:
-            badge = " 🚚"
+            badge = "🚚"
         with st.container(border=True):
-            c1, c2 = st.columns([5, 1.5])
+            c1, c2 = st.columns([4, 1.5])
             with c1:
-                st.markdown(f"**#{nro}**{badge} — {nombre} · 📅 {fecha}")
+                st.markdown(f"{badge} **Pedido #{nro}**")
+                st.caption(f"📅 {fecha}")
             with c2:
-                st.markdown(f"**$ {_pesos(total)}**")
+                st.markdown(f"### $ {_pesos(total)}")
 
     for _label, _lista in [
         ("✅ Cobrado", wix_cobradas),
@@ -1549,7 +1548,7 @@ with tab_balance:
                     _by_cli.setdefault(_k, []).append(_p)
                 for _cli_name, _cli_items in sorted(_by_cli.items()):
                     _cli_total = sum(_wix_monto(_p) for _p in _cli_items)
-                    with st.expander(f"{_cli_name} · {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}"):
+                    with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
                         for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
                             _render_pedido_wix(p)
 
