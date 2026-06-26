@@ -1109,35 +1109,13 @@ def _sync_gastos(fecha_desde, fecha_hasta):
 
 
 def _sync_compras(fecha_desde, fecha_hasta):
-    prod_lookup = {}
-    if not productos.empty:
-        prod_lookup = dict(zip(productos["codigo"].astype(str), productos["producto"]))
     compras_res = cargar_compras_dux_v2(fecha_desde, fecha_hasta)
     if compras_res is None:
         return False, 0, msg_error_http("DUX (compras)", 401)
     compras_raw = compras_res.get("compras", [])
-    rows_sync = []
-    for compra in compras_raw:
-        fecha_c_val = str(compra.get("fecha") or "")
-        prov = compra.get("proveedor", {}) or {}
-        prov_id = str(prov.get("id_proveedor") or "")
-        prov_nombre = str(prov.get("razon_social") or "")
-        nro_comp = str(compra.get("nro_comprobante") or "")
-        cond_pago = str(compra.get("condicion_pago") or "")
-        total_comp = float(compra.get("total") or 0)
-        for item in (compra.get("items", []) or []):
-            cod = str(item.get("cod_item") or "")
-            rows_sync.append({
-                "fecha": fecha_c_val, "proveedor_id": prov_id,
-                "proveedor_nombre": prov_nombre, "codigo_producto": cod,
-                "producto_nombre": prod_lookup.get(cod, ""),
-                "cantidad": float(item.get("ctd_recepcionada") or item.get("ctd") or 0),
-                "precio": float(item.get("precio_uni") or 0),
-                "condicion_pago": cond_pago, "comprobante": nro_comp,
-                "total_comprobante": total_comp,
-            })
-    db.guardar_compras_sync(rows_sync)
-    return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes sincronizados ({len(rows_sync)} ítems)."
+    n_items = sum(len(c.get("items", []) or []) for c in compras_raw)
+    db.guardar_compras_sync(compras_raw)
+    return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes sincronizados ({n_items} ítems)."
 
 
 def _sync_pedidos_dux(fecha_desde, fecha_hasta):

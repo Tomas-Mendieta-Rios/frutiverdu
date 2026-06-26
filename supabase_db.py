@@ -809,12 +809,11 @@ def guardar_proveedores(df):
 # ---------------- COMPRAS ----------------
 
 def cargar_compras():
-    """Devuelve un DataFrame plano por ítem. Incluye comprobante_id y total_comprobante
-    (total DUX del comprobante, repetido por ítem) para calcular totales correctos en el balance."""
+    """DataFrame plano por ítem. Incluye comprobante_id y total_comprobante para el balance."""
     client = get_client()
     resp = client.table("items_compra").select(
-        "comprobante_id, codigo_producto, producto_nombre, cantidad, precio, "
-        "comprobantes_compra(nro_comprobante, fecha, proveedor_id, proveedor_nombre, condicion_pago, total)"
+        "comprobante_id, cod_item, item, ctd, precio_uni, porc_desc, porc_iva, "
+        "comprobantes_compra(nro_comprobante, fecha, id_proveedor, proveedor, condicion_pago, total)"
     ).execute()
     rows = resp.data or []
     if not rows:
@@ -824,83 +823,18 @@ def cargar_compras():
         cab = it.get("comprobantes_compra") or {}
         records.append({
             "fecha": str(cab.get("fecha") or ""),
-            "proveedor_id": str(cab.get("proveedor_id") or ""),
-            "proveedor_nombre": str(cab.get("proveedor_nombre") or ""),
-            "codigo_producto": str(it.get("codigo_producto") or ""),
-            "producto_nombre": str(it.get("producto_nombre") or ""),
-            "cantidad": float(it.get("cantidad") or 0),
-            "precio": float(it.get("precio") or 0),
+            "proveedor_id": str(cab.get("id_proveedor") or ""),
+            "proveedor_nombre": str(cab.get("proveedor") or ""),
+            "codigo_producto": str(it.get("cod_item") or ""),
+            "producto_nombre": str(it.get("item") or ""),
+            "cantidad": _to_float(it.get("ctd")),
+            "precio": _to_float(it.get("precio_uni")),
             "condicion_pago": str(cab.get("condicion_pago") or ""),
             "comprobante": str(cab.get("nro_comprobante") or ""),
             "comprobante_id": it.get("comprobante_id"),
-            "total_comprobante": float(cab.get("total") or 0),
+            "total_comprobante": _to_float(cab.get("total")),
         })
     return pd.DataFrame(records)
-
-
-def _proximo_comprobante_id():
-    cfg = cargar_config()
-    try:
-        n = int(cfg.get("next_comprobante_id", "1"))
-    except (ValueError, TypeError):
-        n = 1
-    nuevo = f"APP-{n:05d}"
-    guardar_config({"next_comprobante_id": str(n + 1)})
-    return nuevo
-
-
-def guardar_compras_fecha(df_fecha, fecha):
-    """Guarda compras manuales para una fecha, agrupando por proveedor en comprobantes."""
-    client = get_client()
-    fecha_str = str(fecha)
-
-    # Traer nro_comprobante existentes para esta fecha (para reusar si ya existe)
-    resp = client.table("comprobantes_compra").select("id, proveedor_id, nro_comprobante").eq("fecha", fecha_str).execute()
-    prov_a_id = {}
-    for r in (resp.data or []):
-        pid = str(r.get("proveedor_id") or "")
-        if pid and pid not in prov_a_id:
-            prov_a_id[pid] = r["id"]
-
-    df_fecha = df_fecha.copy()
-    df_fecha["fecha"] = fecha_str
-
-    # Agrupar por proveedor_id
-    por_proveedor = {}
-    for _, row in df_fecha.iterrows():
-        pid = str(row.get("proveedor_id") or "")
-        por_proveedor.setdefault(pid, []).append(row)
-
-    for pid, filas in por_proveedor.items():
-        first = filas[0]
-        if pid in prov_a_id:
-            comp_id = prov_a_id[pid]
-            # Eliminar items anteriores (el CASCADE no aplica aquí, borramos manualmente)
-            client.table("items_compra").delete().eq("comprobante_id", comp_id).execute()
-        else:
-            nro = _proximo_comprobante_id()
-            cab = {
-                "nro_comprobante": nro,
-                "fecha": fecha_str,
-                "proveedor_id": pid,
-                "proveedor_nombre": str(first.get("proveedor_nombre") or ""),
-                "condicion_pago": str(first.get("condicion_pago") or ""),
-            }
-            ins = client.table("comprobantes_compra").insert(cab).execute()
-            comp_id = ins.data[0]["id"]
-            prov_a_id[pid] = comp_id
-
-        items = [
-            {
-                "comprobante_id": comp_id,
-                "codigo_producto": str(r.get("codigo_producto") or ""),
-                "producto_nombre": str(r.get("producto_nombre") or ""),
-                "cantidad": float(r.get("cantidad") or 0),
-                "precio": float(r.get("precio") or 0),
-            }
-            for r in filas
-        ]
-        client.table("items_compra").insert(items).execute()
 
 
 def fechas_compras():
@@ -910,50 +844,74 @@ def fechas_compras():
     return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
 
 
-def guardar_compras_sync(rows):
-    """Guarda compras sincronizadas desde DUX, agrupando en comprobantes + items."""
-    if not rows:
+def guardar_compras_sync(compras):
+    """Guarda compras sincronizadas desde DUX. Recibe lista de comprobantes raw de la API."""
+    if not compras:
         return
     client = get_client()
 
-    # Agrupar por (nro_comprobante, fecha, proveedor_id)
-    por_comp: dict = {}
-    for r in rows:
-        key = (str(r.get("comprobante") or ""), str(r.get("fecha") or ""), str(r.get("proveedor_id") or ""))
-        por_comp.setdefault(key, []).append(r)
+    comp_rows = []
+    items_por_comp = {}
 
-    # Eliminar comprobantes existentes para las fechas afectadas y re-insertar
-    fechas_afectadas = {k[1] for k in por_comp}
-    for fecha in fechas_afectadas:
-        resp = client.table("comprobantes_compra").select("id").eq("fecha", fecha).execute()
-        ids = [r["id"] for r in (resp.data or [])]
-        if ids:
-            client.table("items_compra").delete().in_("comprobante_id", ids).execute()
-            client.table("comprobantes_compra").delete().eq("fecha", fecha).execute()
+    for c in compras:
+        cid = c.get("id_compra") or c.get("id")
+        if not cid:
+            continue
 
-    for (nro_comp, fecha, prov_id), filas in por_comp.items():
-        first = filas[0]
-        cab = {
-            "nro_comprobante": nro_comp,
-            "fecha": fecha,
-            "proveedor_id": prov_id,
-            "proveedor_nombre": str(first.get("proveedor_nombre") or ""),
-            "condicion_pago": str(first.get("condicion_pago") or ""),
-            "total": float(first.get("total_comprobante") or 0),
-        }
-        ins = client.table("comprobantes_compra").insert(cab).execute()
-        comp_id = ins.data[0]["id"]
-        items = [
+        prov_obj = c.get("proveedor") or {}
+        if isinstance(prov_obj, dict):
+            proveedor = prov_obj.get("razon_social") or ""
+            id_proveedor = prov_obj.get("id_proveedor")
+        else:
+            proveedor = str(prov_obj)
+            id_proveedor = None
+
+        montos = c.get("montos") or {}
+        if not isinstance(montos, dict):
+            montos = {}
+
+        comp_rows.append({
+            "id": int(cid),
+            "id_empresa": c.get("id_empresa"),
+            "id_sucursal": c.get("id_sucursal"),
+            "id_proveedor": id_proveedor,
+            "cuit": str(c.get("cuit") or ""),
+            "proveedor": str(proveedor),
+            "nro_comprobante": str(c.get("nro_comprobante") or ""),
+            "tipo_comprobante": str(c.get("tipo_comprobante") or ""),
+            "condicion_pago": str(c.get("condicion_pago") or ""),
+            "estado": str(c.get("estado") or "EMITIDA"),
+            "fecha": str(c.get("fecha") or ""),
+            "fecha_vencimiento": str(c.get("fecha_vencimiento") or ""),
+            "monto_exento": _to_float(montos.get("monto_exento")),
+            "monto_gravado": _to_float(montos.get("monto_gravado")),
+            "monto_iva": _to_float(montos.get("monto_iva")),
+            "monto_desc": _to_float(montos.get("monto_descuento")),
+            "total": _to_float(montos.get("total")),
+        })
+
+        items_por_comp[int(cid)] = [
             {
-                "comprobante_id": comp_id,
-                "codigo_producto": str(r.get("codigo_producto") or ""),
-                "producto_nombre": str(r.get("producto_nombre") or ""),
-                "cantidad": float(r.get("cantidad") or 0),
-                "precio": float(r.get("precio") or 0),
+                "comprobante_id": int(cid),
+                "cod_item": str(it.get("cod_item") or ""),
+                "item": str(it.get("item") or it.get("descripcion") or ""),
+                "ctd": _to_float(it.get("ctd_recepcionada") or it.get("ctd") or it.get("cantidad")),
+                "precio_uni": _to_float(it.get("precio_uni")),
+                "porc_desc": _to_float(it.get("porc_desc")),
+                "porc_iva": _to_float(it.get("porc_iva")),
             }
-            for r in filas
+            for it in (c.get("items", []) or [])
         ]
-        client.table("items_compra").insert(items).execute()
+
+    if not comp_rows:
+        return
+
+    client.table("comprobantes_compra").upsert(comp_rows, on_conflict="id").execute()
+
+    for cid, items in items_por_comp.items():
+        client.table("items_compra").delete().eq("comprobante_id", cid).execute()
+        if items:
+            client.table("items_compra").insert(items).execute()
 
 
 # ---------------- MIXES DUX ----------------
