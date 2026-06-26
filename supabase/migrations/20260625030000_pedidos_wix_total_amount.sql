@@ -1,0 +1,2 @@
+ALTER TABLE pedidos_wix
+    ADD COLUMN IF NOT EXISTS total_amount NUMERIC DEFAULT 0;

@@ -562,6 +562,7 @@ def cargar_pedidos_wix():
                 "email": buyer_email,
                 "contactDetails": {"email": buyer_email},
             },
+            "total_amount": float(r.get("total_amount") or 0),
             "priceSummary": {
                 "total": {"formattedAmount": r.get("total_formatted")},
             },
@@ -597,9 +598,9 @@ def guardar_pedidos_wix(pedidos):
             or bi.get("email")
             or ""
         )
-        total_formatted = (
-            ((p.get("priceSummary", {}) or {}).get("total", {}) or {}).get("formattedAmount") or ""
-        )
+        _price_total = ((p.get("priceSummary", {}) or {}).get("total", {}) or {})
+        total_formatted = str(_price_total.get("formattedAmount") or "")
+        total_amount = _to_float(_price_total.get("amount"))
 
         order_rows.append({
             "order_id": oid,
@@ -619,7 +620,8 @@ def guardar_pedidos_wix(pedidos):
             "shipping_city": str(si_addr.get("city") or ""),
             "shipping_subdivision": str(si_addr.get("subdivision") or ""),
             "buyer_email": str(buyer_email),
-            "total_formatted": str(total_formatted),
+            "total_formatted": total_formatted,
+            "total_amount": total_amount,
             "payment_status": str(p.get("paymentStatus") or ""),
             "fulfillment_status": str(p.get("fulfillmentStatus") or ""),
             "buyer_note": str(p.get("buyerNote") or ""),

@@ -1389,7 +1389,7 @@ with tab_balance:
 
     # Totales
     total_facturas = sum(float(f.get("total") or 0) for f in facturas_f)
-    total_wix      = sum(_parse_wix_total(p.get("priceSummary", {}).get("total", {}).get("formattedAmount")) for p in ped_wix_f)
+    total_wix      = sum(float(p.get("total_amount") or 0) for p in ped_wix_f)
     total_compras  = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
     total_gastos   = sum(float(g.get("total") or 0) for g in gastos_f)
 
@@ -1433,7 +1433,7 @@ with tab_balance:
             bi     = (p.get("billingInfo") or {}).get("contactDetails") or {}
             nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
             fecha  = str(p.get("createdDate") or "")[:10]
-            total  = _parse_wix_total((p.get("priceSummary") or {}).get("total", {}).get("formattedAmount"))
+            total  = float(p.get("total_amount") or 0)
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:
