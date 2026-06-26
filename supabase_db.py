@@ -897,6 +897,7 @@ def guardar_compras_sync(compras):
             "monto_iva": _to_float(montos.get("monto_iva")),
             "monto_desc": _to_float(montos.get("monto_descuento")),
             "total": _to_float(montos.get("total")),
+            "json": c,
         })
 
         items_por_comp[int(cid)] = [
@@ -908,6 +909,7 @@ def guardar_compras_sync(compras):
                 "precio_uni": _to_float(it.get("precio_uni")),
                 "porc_desc": _to_float(it.get("porc_desc")),
                 "porc_iva": _to_float(it.get("porc_iva")),
+                "json": it,
             }
             for it in (c.get("items", []) or [])
         ]
@@ -1145,6 +1147,7 @@ def guardar_gastos(gastos):
             "monto_iva": _to_float(montos.get("monto_iva")),
             "monto_desc": _to_float(montos.get("monto_descuento")),
             "total": _to_float(montos.get("total")),
+            "json": g,
         })
 
         detalles = []
@@ -1164,6 +1167,7 @@ def guardar_gastos(gastos):
                 "porc_desc": _to_float(it.get("porc_desc")),
                 "porc_iva": _to_float(it.get("porc_iva")),
                 "comentarios": str(it.get("observaciones") or it.get("comentarios") or ""),
+                "json": it,
             }
             for it in detalles
         ]
