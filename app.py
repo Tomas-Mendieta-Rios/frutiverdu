@@ -1369,13 +1369,13 @@ with tab_balance:
             return False
 
     with st.spinner("Cargando datos..."):
-        pedidos_dux_bal  = db.cargar_pedidos_dux()
+        facturas_bal     = db.cargar_facturas()
         pedidos_wix_bal  = db.cargar_pedidos_wix()
         compras_bal      = db.cargar_compras()
         gastos_bal       = db.cargar_gastos()
 
     # Filtrar por rango
-    ped_dux_f  = [p for p in pedidos_dux_bal  if _en_rango(p.get("fecha")) and str(p.get("anulado","N")).upper() != "S"]
+    facturas_f = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
     ped_wix_f  = [p for p in pedidos_wix_bal  if _en_rango(p.get("createdDate"))]
     if not compras_bal.empty:
         compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
@@ -1385,12 +1385,12 @@ with tab_balance:
     gastos_f   = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
 
     # Totales
-    total_dux     = sum(float(p.get("total") or 0) for p in ped_dux_f)
-    total_wix     = sum(_parse_wix_total(p.get("priceSummary", {}).get("total", {}).get("formattedAmount")) for p in ped_wix_f)
-    total_compras = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
-    total_gastos  = sum(float(g.get("total") or 0) for g in gastos_f)
+    total_facturas = sum(float(f.get("total") or 0) for f in facturas_f)
+    total_wix      = sum(_parse_wix_total(p.get("priceSummary", {}).get("total", {}).get("formattedAmount")) for p in ped_wix_f)
+    total_compras  = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
+    total_gastos   = sum(float(g.get("total") or 0) for g in gastos_f)
 
-    total_ingresos = total_dux + total_wix
+    total_ingresos = total_facturas + total_wix
     total_egresos  = total_compras + total_gastos
     resultado      = total_ingresos - total_egresos
 
@@ -1398,19 +1398,19 @@ with tab_balance:
     st.divider()
     st.markdown(f"### 📈 Ingresos — **$ {total_ingresos:,.2f}**")
 
-    # DUX
-    st.markdown(f"**📦 DUX** — $ {total_dux:,.2f} · {len(ped_dux_f)} pedidos")
-    with st.expander(f"Ver pedidos DUX ({len(ped_dux_f)})"):
-        for p in sorted(ped_dux_f, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-            nro    = p.get("nro_pedido") or p.get("id") or "—"
-            cli    = (p.get("cliente") or {}).get("razon_social") or "—"
-            fecha  = p.get("fecha") or "—"
-            total  = float(p.get("total") or 0)
-            items  = p.get("detalles") or []
+    # Facturas DUX
+    st.markdown(f"**🧾 Facturas DUX** — $ {total_facturas:,.2f} · {len(facturas_f)} facturas")
+    with st.expander(f"Ver facturas ({len(facturas_f)})"):
+        for f in sorted(facturas_f, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+            comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
+            cli   = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
+            fecha = str(f.get("fecha_comp") or "")[:12]
+            total = float(f.get("total") or 0)
+            items = f.get("detalles") or []
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:
-                    st.markdown(f"**#{nro}** — {cli} · 📅 {fecha} · {len(items)} ítem{'s' if len(items)!=1 else ''}")
+                    st.markdown(f"**{comp}** — {cli} · 📅 {fecha} · {len(items)} ítem{'s' if len(items)!=1 else ''}")
                 with c2:
                     st.markdown(f"**$ {total:,.2f}**")
                 if items:
