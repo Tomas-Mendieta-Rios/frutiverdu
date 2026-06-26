@@ -653,6 +653,111 @@ def guardar_pedidos_wix(pedidos):
             client.table("pedidos_wix_items").insert(items).execute()
 
 
+# ---------------- FACTURAS ----------------
+
+def guardar_facturas(facturas):
+    client = get_client()
+    rows = []
+    items_por_factura = {}
+
+    for f in facturas:
+        fid = str(f.get("id") or "")
+        if not fid:
+            continue
+        rows.append({
+            "factura_id": fid,
+            "tipo_comp": str(f.get("tipo_comp") or ""),
+            "letra_comp": str(f.get("letra_comp") or ""),
+            "nro_comp": str(f.get("nro_comp") or ""),
+            "nro_pto_vta": str(f.get("nro_pto_vta") or ""),
+            "fecha_comp": str(f.get("fecha_comp") or ""),
+            "apellido_razon_soc": str(f.get("apellido_razon_soc") or ""),
+            "nombre": str(f.get("nombre") or ""),
+            "cuit": str(f.get("cuit") or ""),
+            "nro_pedido": str(f.get("nro_pedido") or ""),
+            "monto_exento": _to_float(f.get("monto_exento")),
+            "monto_gravado": _to_float(f.get("monto_gravado")),
+            "monto_iva": _to_float(f.get("monto_iva")),
+            "monto_desc": _to_float(f.get("monto_desc")),
+            "total": _to_float(f.get("total")),
+            "anulada": str(f.get("anulada") or "N"),
+            "nro_cae_cai": str(f.get("nro_cae_cai") or ""),
+            "url_factura": str(f.get("url_factura") or ""),
+        })
+        detalles = f.get("detalles") or f.get("detalles_json") or []
+        items_por_factura[fid] = [
+            {
+                "factura_id": fid,
+                "cod_item": str(it.get("cod_item") or ""),
+                "item": str(it.get("item") or ""),
+                "ctd": _to_float(it.get("ctd")),
+                "precio_uni": _to_float(it.get("precio_uni")),
+                "porc_desc": _to_float(it.get("porc_desc")),
+                "porc_iva": _to_float(it.get("porc_iva")),
+            }
+            for it in detalles
+        ]
+
+    if not rows:
+        return
+
+    dedup = {r["factura_id"]: r for r in rows}
+    rows = list(dedup.values())
+    client.table("facturas").upsert(rows, on_conflict="factura_id").execute()
+
+    for fid, items in items_por_factura.items():
+        client.table("facturas_items").delete().eq("factura_id", fid).execute()
+        if items:
+            client.table("facturas_items").insert(items).execute()
+
+
+def cargar_facturas():
+    client = get_client()
+    resp = client.table("facturas").select("*").order("fecha_comp", desc=True).execute()
+    if not resp.data:
+        return []
+
+    resp_items = client.table("facturas_items").select("*").execute()
+    items_por_factura = {}
+    for it in (resp_items.data or []):
+        fid = str(it.get("factura_id") or "")
+        if fid:
+            items_por_factura.setdefault(fid, []).append({
+                "cod_item": it.get("cod_item"),
+                "item": it.get("item"),
+                "ctd": it.get("ctd"),
+                "precio_uni": it.get("precio_uni"),
+                "porc_desc": it.get("porc_desc"),
+                "porc_iva": it.get("porc_iva"),
+            })
+
+    facturas = []
+    for r in resp.data:
+        fid = str(r.get("factura_id") or "")
+        facturas.append({
+            "id": fid,
+            "tipo_comp": r.get("tipo_comp"),
+            "letra_comp": r.get("letra_comp"),
+            "nro_comp": r.get("nro_comp"),
+            "nro_pto_vta": r.get("nro_pto_vta"),
+            "fecha_comp": r.get("fecha_comp"),
+            "apellido_razon_soc": r.get("apellido_razon_soc"),
+            "nombre": r.get("nombre"),
+            "cuit": r.get("cuit"),
+            "nro_pedido": r.get("nro_pedido"),
+            "monto_exento": r.get("monto_exento"),
+            "monto_gravado": r.get("monto_gravado"),
+            "monto_iva": r.get("monto_iva"),
+            "monto_desc": r.get("monto_desc"),
+            "total": r.get("total"),
+            "anulada": r.get("anulada"),
+            "nro_cae_cai": r.get("nro_cae_cai"),
+            "url_factura": r.get("url_factura"),
+            "detalles": items_por_factura.get(fid, []),
+        })
+    return facturas
+
+
 # ---------------- PROVEEDORES ----------------
 
 def cargar_proveedores():

@@ -1235,6 +1235,51 @@ def _sync_pedidos_wix(fecha_desde, fecha_hasta):
     return True, len(all_orders), f"✅ {len(all_orders)} pedidos Wix sincronizados."
 
 
+def _sync_facturas(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url_f = f"{_base_url}/facturas"
+    headers_f = {"accept": "application/json", "authorization": _token}
+    page_size = 50
+    all_facturas = []
+    offset = 0
+    while True:
+        params_f = {
+            "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+            "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "idEmpresa": _id_empresa,
+            "idSucursal": _id_sucursal,
+            "offset": offset,
+            "limit": page_size,
+        }
+        try:
+            r = requests.get(url_f, params=params_f, headers=headers_f, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("DUX (facturas)", e)
+        if r.status_code != 200:
+            return False, 0, msg_error_http("DUX (facturas)", r.status_code, r.text)
+        try:
+            d = r.json()
+        except ValueError:
+            return False, 0, "❌ DUX devolvió una respuesta inválida (facturas)."
+        if isinstance(d, dict) and "message" in d and "results" not in d:
+            return False, 0, f"❌ DUX (facturas): {d['message']}"
+        results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
+        if not results:
+            break
+        all_facturas.extend(results)
+        total = (d.get("paging") or {}).get("total", 0) if isinstance(d, dict) else 0
+        offset += page_size
+        if offset >= total or len(results) < page_size:
+            break
+        time.sleep(DUX_RATE_LIMIT_SECONDS)
+    db.guardar_facturas(all_facturas)
+    return True, len(all_facturas), f"✅ {len(all_facturas)} facturas sincronizadas."
+
+
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
 # NOTA: la pestania de Analitica esta oculta (los bloques 'with tab_X:'
 # correspondientes estan reemplazados por 'if False:' mas abajo).
@@ -1243,6 +1288,7 @@ def _sync_pedidos_wix(fecha_desde, fecha_hasta):
 (
     tab_comprar,
     tab_egresos,
+    tab_ingresos,
     tab_grupo_pedidos,
     tab_grupo_diario,
     tab_balance,
@@ -1252,6 +1298,7 @@ def _sync_pedidos_wix(fecha_desde, fecha_hasta):
     [
         "🛒 Total a comprar",
         "💸 Egresos",
+        "📈 Ingresos",
         "📋 Pedidos",
         "📦 Diario",
         "📊 Balance",
@@ -1269,6 +1316,9 @@ tab_detalle_compras = None
 
 with tab_egresos:
     tab_eg_compras, tab_eg_gastos = st.tabs(["💰 Compras", "📄 Gastos"])
+
+with tab_ingresos:
+    tab_ing_facturas, = st.tabs(["🧾 Facturas"])
 
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
@@ -1453,6 +1503,61 @@ with tab_balance:
     signo = "+" if resultado >= 0 else ""
     st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {resultado:,.2f}**]")
 
+with tab_ingresos:
+    with tab_ing_facturas:
+        st.subheader("🧾 Facturas")
+        _facturas = db.cargar_facturas()
+        if not _facturas:
+            st.info("No hay facturas cargadas. Sincronizá desde el tab 🔄 Sincronizar.")
+        else:
+            _fac_df_rows = []
+            for _f in _facturas:
+                _fac_df_rows.append({
+                    "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
+                    "Fecha": _f.get("fecha_comp", ""),
+                    "Cliente": f"{_f.get('apellido_razon_soc','')} {_f.get('nombre','')}".strip(),
+                    "CUIT": _f.get("cuit", ""),
+                    "Nro Pedido": _f.get("nro_pedido", ""),
+                    "Total": _f.get("total", 0.0),
+                    "Anulada": _f.get("anulada", "N"),
+                    "URL": _f.get("url_factura", ""),
+                    "_raw": _f,
+                })
+            _total_fac = sum(r["Total"] for r in _fac_df_rows if r["Anulada"] != "S")
+            st.caption(f"{len(_fac_df_rows)} facturas · Total vigente: **$ {_total_fac:,.2f}**")
+            for _fr in _fac_df_rows:
+                _f = _fr["_raw"]
+                _anulada = _fr["Anulada"] == "S"
+                _label = f"{'~~' if _anulada else ''}**{_fr['Comprobante']}** — {_fr['Cliente']} · {_fr['Fecha']} · $ {_fr['Total']:,.2f}{'~~' if _anulada else ''}"
+                if _anulada:
+                    _label += " :red[ANULADA]"
+                with st.expander(_label):
+                    _col1, _col2 = st.columns(2)
+                    with _col1:
+                        st.write(f"**CUIT:** {_fr['CUIT']}")
+                        st.write(f"**Nro Pedido:** {_fr['Nro Pedido']}")
+                        st.write(f"**Gravado:** $ {_f.get('monto_gravado', 0):,.2f}")
+                        st.write(f"**IVA:** $ {_f.get('monto_iva', 0):,.2f}")
+                    with _col2:
+                        st.write(f"**Exento:** $ {_f.get('monto_exento', 0):,.2f}")
+                        st.write(f"**Descuento:** $ {_f.get('monto_desc', 0):,.2f}")
+                        st.write(f"**CAE/CAI:** {_f.get('nro_cae_cai', '')}")
+                        if _f.get("url_factura"):
+                            st.markdown(f"[Ver factura PDF]({_f['url_factura']})")
+                    _items = _f.get("detalles", []) or _f.get("items", [])
+                    if _items:
+                        st.dataframe(
+                            [{
+                                "Código": it.get("cod_item", ""),
+                                "Item": it.get("item", ""),
+                                "Cantidad": it.get("ctd", 0),
+                                "Precio Unit.": it.get("precio_uni", 0),
+                                "% Desc": it.get("porc_desc", 0),
+                                "% IVA": it.get("porc_iva", 0),
+                            } for it in _items],
+                            use_container_width=True, hide_index=True
+                        )
+
 with tab_sync:
     st.subheader("🔄 Sincronizar")
     st.caption("Trae y guarda Gastos, Compras, Pedidos DUX y Pedidos Wix de una sola vez.")
@@ -1487,6 +1592,7 @@ with tab_sync:
         for _i, (_label, _fn) in enumerate([
             ("Gastos (DUX)", _sync_gastos),
             ("Compras (DUX)", _sync_compras),
+            ("Facturas (DUX)", _sync_facturas),
             ("Pedidos DUX", _sync_pedidos_dux),
             ("Pedidos Wix", _sync_pedidos_wix),
         ]):
