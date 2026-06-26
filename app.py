@@ -1498,9 +1498,9 @@ with tab_balance:
                     _by_cli.setdefault(_k, []).append(_f)
                 for _cli_name, _cli_items in sorted(_by_cli.items()):
                     _cli_total = sum(float(_f.get("total") or 0) for _f in _cli_items)
-                    st.markdown(f"**{_cli_name}** · {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}")
-                    for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-                        _render_factura(f)
+                    with st.expander(f"{_cli_name} · {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}"):
+                        for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                            _render_factura(f)
 
     # Wix
     st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)}")
@@ -1549,9 +1549,9 @@ with tab_balance:
                     _by_cli.setdefault(_k, []).append(_p)
                 for _cli_name, _cli_items in sorted(_by_cli.items()):
                     _cli_total = sum(_wix_monto(_p) for _p in _cli_items)
-                    st.markdown(f"**{_cli_name}** · {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}")
-                    for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
-                        _render_pedido_wix(p)
+                    with st.expander(f"{_cli_name} · {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}"):
+                        for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
+                            _render_pedido_wix(p)
 
     # ── EGRESOS ─────────────────────────────────────────────────────────────
     st.divider()
