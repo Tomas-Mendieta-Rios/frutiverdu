@@ -1863,6 +1863,7 @@ with tab_grupo_config:
         tab_packs,
         tab_mixes,
         tab_dux_productos,
+        tab_dux_rubros,
         tab_wix_productos,
         tab_proveedores,
         tab_editar,
@@ -1873,6 +1874,7 @@ with tab_grupo_config:
             "Packs Wix",
             "Mixes DUX",
             "DUX Productos",
+            "DUX Rubros",
             "Wix Productos",
             "Proveedores",
             "Relacionar productos",
@@ -3793,6 +3795,125 @@ with tab_dux_productos:
 
     ts_dux_prod = db.ultima_carga("dux_productos")
     ts_dux_prod_ph.caption(f"🕒 Última actualización: **{ts_dux_prod or '?'}**")
+
+with tab_dux_rubros:
+    ts_dux_rubros_ph = st.empty()
+
+    if not token:
+        st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
+    else:
+        # ---- RUBROS ----
+        st.subheader("Rubros")
+        col_r1, col_r2 = st.columns([3, 1])
+        with col_r1:
+            sincronizar_rubros = st.button(
+                "🔄 Sincronizar rubros desde DUX",
+                type="primary",
+                key="dux_sincronizar_rubros",
+                use_container_width=True,
+            )
+
+        if sincronizar_rubros:
+            url_r = f"{base_url}/rubros"
+            headers_r = {"accept": "application/json", "authorization": token}
+            try:
+                resp_r = requests.get(url_r, headers=headers_r, timeout=30)
+            except requests.RequestException as e:
+                st.error(msg_error_red("DUX", e))
+                resp_r = None
+
+            if resp_r is not None:
+                if resp_r.status_code != 200:
+                    st.error(msg_error_http("DUX", resp_r.status_code, resp_r.text))
+                else:
+                    try:
+                        data_r = resp_r.json()
+                    except ValueError:
+                        data_r = None
+                        st.error("❌ DUX devolvió una respuesta inválida para rubros.")
+
+                    if data_r is not None:
+                        items_r = data_r if isinstance(data_r, list) else data_r.get("results", [])
+                        registros_r = [
+                            {"id": r.get("id"), "nombre": str(r.get("nombre", "") or "").strip()}
+                            for r in (items_r or [])
+                            if r.get("id") is not None
+                        ]
+                        db.guardar_rubros(registros_r)
+                        st.success(f"✅ {len(registros_r)} rubros sincronizados.")
+
+        st.divider()
+        st.caption("Rubros cargados")
+        try:
+            df_rubros = db.cargar_rubros()
+            if not df_rubros.empty:
+                cols_r = [c for c in ["id", "nombre"] if c in df_rubros.columns]
+                st.dataframe(df_rubros[cols_r].sort_values("nombre").reset_index(drop=True), use_container_width=False, hide_index=True)
+            else:
+                st.info("Sin rubros. Apretá **Sincronizar rubros**.")
+        except Exception as e:
+            st.error(msg_error_sheets("leer rubros", e))
+
+        st.divider()
+
+        # ---- SUBRUBROS ----
+        st.subheader("Subrubros")
+        sincronizar_subrubros = st.button(
+            "🔄 Sincronizar subrubros desde DUX",
+            type="primary",
+            key="dux_sincronizar_subrubros",
+            use_container_width=True,
+        )
+
+        if sincronizar_subrubros:
+            url_sr = f"{base_url}/subrubros"
+            headers_sr = {"accept": "application/json", "authorization": token}
+            try:
+                resp_sr = requests.get(url_sr, headers=headers_sr, timeout=30)
+            except requests.RequestException as e:
+                st.error(msg_error_red("DUX", e))
+                resp_sr = None
+
+            if resp_sr is not None:
+                if resp_sr.status_code != 200:
+                    st.error(msg_error_http("DUX", resp_sr.status_code, resp_sr.text))
+                else:
+                    try:
+                        data_sr = resp_sr.json()
+                    except ValueError:
+                        data_sr = None
+                        st.error("❌ DUX devolvió una respuesta inválida para subrubros.")
+
+                    if data_sr is not None:
+                        items_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
+                        registros_sr = []
+                        for sr in (items_sr or []):
+                            if sr.get("id") is None:
+                                continue
+                            rubro_obj = sr.get("rubro") or {}
+                            registros_sr.append({
+                                "id": sr.get("id"),
+                                "nombre": str(sr.get("nombre", "") or "").strip(),
+                                "rubro_id": rubro_obj.get("id"),
+                                "rubro_nombre": str(rubro_obj.get("nombre", "") or "").strip(),
+                            })
+                        db.guardar_subrubros(registros_sr)
+                        st.success(f"✅ {len(registros_sr)} subrubros sincronizados.")
+
+        st.divider()
+        st.caption("Subrubros cargados")
+        try:
+            df_subrubros = db.cargar_subrubros()
+            if not df_subrubros.empty:
+                cols_sr = [c for c in ["id", "nombre", "rubro_nombre"] if c in df_subrubros.columns]
+                st.dataframe(df_subrubros[cols_sr].sort_values("nombre").reset_index(drop=True), use_container_width=False, hide_index=True)
+            else:
+                st.info("Sin subrubros. Apretá **Sincronizar subrubros**.")
+        except Exception as e:
+            st.error(msg_error_sheets("leer subrubros", e))
+
+    ts_dux_rubros = db.ultima_carga("dux_rubros")
+    ts_dux_rubros_ph.caption(f"🕒 Última actualización rubros: **{ts_dux_rubros or '?'}**")
 
 with tab_wix:
     wix_cfg = st.secrets.get("wix", {})

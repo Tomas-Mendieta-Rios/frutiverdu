@@ -65,6 +65,8 @@ def ultima_carga(clave):
         "wix_productos": "wix_productos",
         "mapping_wix_dux": "mapping_wix_dux",
         "gastos": "gastos",
+        "dux_rubros": "rubros",
+        "dux_subrubros": "subrubros",
     }
     tabla = tabla_map.get(clave, clave)
     try:
@@ -98,6 +100,42 @@ def guardar_productos(df):
     if not df.empty:
         records = df.where(pd.notnull(df), None).to_dict(orient="records")
         client.table("productos").insert(records).execute()
+
+
+# ---------------- RUBROS / SUBRUBROS ----------------
+
+def cargar_rubros():
+    client = get_client()
+    resp = client.table("rubros").select("*").execute()
+    df = pd.DataFrame(resp.data or [])
+    if df.empty:
+        return pd.DataFrame(columns=["id", "nombre"])
+    df = _drop_meta(df)
+    return df
+
+
+def guardar_rubros(registros):
+    client = get_client()
+    client.table("rubros").delete().neq("id", -1).execute()
+    if registros:
+        client.table("rubros").insert(registros).execute()
+
+
+def cargar_subrubros():
+    client = get_client()
+    resp = client.table("subrubros").select("*").execute()
+    df = pd.DataFrame(resp.data or [])
+    if df.empty:
+        return pd.DataFrame(columns=["id", "nombre", "rubro_id", "rubro_nombre"])
+    df = _drop_meta(df)
+    return df
+
+
+def guardar_subrubros(registros):
+    client = get_client()
+    client.table("subrubros").delete().neq("id", -1).execute()
+    if registros:
+        client.table("subrubros").insert(registros).execute()
 
 
 # ---------------- COMPUESTOS ----------------
