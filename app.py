@@ -199,7 +199,7 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
                     continue
                 cantidades[cod] = cantidades.get(cod, 0.0) + ctd
 
-        offset += page_size
+        offset += len(datos)
         time.sleep(2)
 
     return {"cantidades": cantidades, "compras": compras_raw}
