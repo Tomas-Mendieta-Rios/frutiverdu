@@ -1461,11 +1461,6 @@ with tab_balance:
                         st.markdown(f"**#{nro_c or '—'}** — {prov_c or '—'} · 📅 {fecha_c}")
                     with c2:
                         st.markdown(f"**$ {_pesos(total_c)}**")
-                    with st.expander("Ver ítems"):
-                        st.dataframe(df_g[["codigo_producto","producto_nombre","cantidad","precio","subtotal"]].rename(columns={
-                            "codigo_producto":"Código","producto_nombre":"Producto",
-                            "cantidad":"Cant.","precio":"Precio","subtotal":"Subtotal"
-                        }), use_container_width=True, hide_index=True)
 
     # Gastos
     st.markdown(f"**📄 Gastos** — $ {_pesos(total_gastos)}")
@@ -1478,20 +1473,12 @@ with tab_balance:
                 prov_g  = g.get("proveedor") or "—"
                 fecha_g = g.get("fecha") or "—"
                 total_g = float(g.get("total") or 0)
-                items_g = g.get("detalles") or []
                 with st.container(border=True):
                     c1, c2 = st.columns([5, 1.5])
                     with c1:
-                        st.markdown(f"**#{nro_g}** — {prov_g} · 📅 {fecha_g} · {len(items_g)} ítem{'s' if len(items_g)!=1 else ''}")
+                        st.markdown(f"**#{nro_g}** — {prov_g} · 📅 {fecha_g}")
                     with c2:
                         st.markdown(f"**$ {_pesos(total_g)}**")
-                    if items_g:
-                        with st.expander("Ver ítems"):
-                            st.dataframe(pd.DataFrame([{
-                                "Código": it.get("cod_item",""),
-                                "Cant.": float(it.get("ctd") or 0),
-                                "Precio unit.": float(it.get("precio_uni") or 0),
-                            } for it in items_g]), use_container_width=True, hide_index=True)
 
     # ── RESULTADO ────────────────────────────────────────────────────────────
     st.divider()
