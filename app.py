@@ -1403,235 +1403,313 @@ with tab_balance:
         comprobantes_bal    = db.cargar_comprobantes_compra()
         gastos_bal          = db.cargar_gastos()
 
-    # Filtrar por rango
-    facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
-    facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
-    ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
-    if not compras_bal.empty:
-        compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
-        compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
-    else:
-        compras_f = pd.DataFrame()
-    comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
-    gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
+    tab_bal_resumen, tab_bal_pendientes = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores"])
 
-    # Categorizar facturas DUX
-    fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro")]
-    fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
+    with tab_bal_pendientes:
+        # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
+        _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA"]
+        _gas_pend_hist  = [g for g in gastos_bal       if g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA"]
+        _total_pend_comp = sum(float(c.get("total") or 0) for c in _comp_pend_hist)
+        _total_pend_gas  = sum(float(g.get("total") or 0) for g in _gas_pend_hist)
+        _total_pend      = _total_pend_comp + _total_pend_gas
 
-    # Categorizar Wix
-    wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
-    wix_anulados      = [p for p in ped_wix_f if str(p.get("status") or "").upper() == "CANCELED"]
-    wix_pendientes    = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED" and str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
-    wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>💸 Pagos pendientes — $ {_pesos(_total_pend)}</h4>", unsafe_allow_html=True)
+        _pp1, _pp2 = st.columns(2)
+        _pp1.metric("💰 Compras",  f"$ {_pesos(_total_pend_comp)}", f"{len(_comp_pend_hist)} comprobantes")
+        _pp2.metric("📄 Gastos",   f"$ {_pesos(_total_pend_gas)}",  f"{len(_gas_pend_hist)} gastos")
 
-    # Totales
-    total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
-    total_fac_cobr    = sum(float(f.get("total") or 0) for f in fac_cobradas)
-    total_fac_pend    = sum(float(f.get("total") or 0) for f in fac_pendientes)
-    total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
-    total_wix         = sum(_wix_monto(p) for p in ped_wix_f)
-    total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
-    total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
-    total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
-    total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
-    # Categorizar compras
-    comp_pagadas    = [c for c in comprobantes_f if not c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA"]
-    comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente")     and str(c.get("estado") or "").upper() != "ANULADA"]
-    comp_anuladas   = [c for c in comprobantes_f if str(c.get("estado") or "").upper() == "ANULADA"]
+        if _comp_pend_hist:
+            with st.expander(f"💰 Compras pendientes ({len(_comp_pend_hist)}) — $ {_pesos(_total_pend_comp)}"):
+                _by_prov = {}
+                for _c in _comp_pend_hist:
+                    _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
+                for _pnombre, _pitems in sorted(_by_prov.items()):
+                    _ptot = sum(float(_c.get("total") or 0) for _c in _pitems)
+                    with st.expander(f"🏭 {_pnombre}  —  {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''}  ·  $ {_pesos(_ptot)}"):
+                        for _c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                            with st.container(border=True):
+                                _x1, _x2 = st.columns([4, 1.5])
+                                with _x1:
+                                    st.markdown(f"**#{_c.get('nro_comprobante') or '—'}**")
+                                    st.caption(f"📅 {_c.get('fecha') or '—'}")
+                                with _x2:
+                                    st.markdown(f"### $ {_pesos(float(_c.get('total') or 0))}")
 
-    # Categorizar gastos
-    gas_pagados    = [g for g in gastos_f if not g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA"]
-    gas_pendientes = [g for g in gastos_f if g.get("pago_pendiente")     and str(g.get("estado") or "").upper() != "ANULADA"]
-    gas_anulados   = [g for g in gastos_f if str(g.get("estado") or "").upper() == "ANULADA"]
+        if _gas_pend_hist:
+            with st.expander(f"📄 Gastos pendientes ({len(_gas_pend_hist)}) — $ {_pesos(_total_pend_gas)}"):
+                _by_prov = {}
+                for _g in _gas_pend_hist:
+                    _by_prov.setdefault(_g.get("proveedor") or "—", []).append(_g)
+                for _pnombre, _pitems in sorted(_by_prov.items()):
+                    _ptot = sum(float(_g.get("total") or 0) for _g in _pitems)
+                    with st.expander(f"🏭 {_pnombre}  —  {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''}  ·  $ {_pesos(_ptot)}"):
+                        for _g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                            with st.container(border=True):
+                                _x1, _x2 = st.columns([4, 1.5])
+                                with _x1:
+                                    st.markdown(f"**#{_g.get('nro_comprobante') or '—'}**")
+                                    st.caption(f"📅 {_g.get('fecha') or '—'}")
+                                with _x2:
+                                    st.markdown(f"### $ {_pesos(float(_g.get('total') or 0))}")
 
-    total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_pendientes)
-    total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_pendientes)
+        st.divider()
 
-    total_ingresos = total_facturas + total_wix
-    total_egresos  = total_compras + total_gastos
-    resultado      = total_ingresos - total_egresos
+        # ── DEUDORES (lo que nos deben) ────────────────────────────────────
+        _fac_deud = [f for f in facturas_bal if not f.get("con_cobro") and str(f.get("anulada","N")).upper() != "S"]
+        _total_deud = sum(float(f.get("total") or 0) for f in _fac_deud)
 
-    # ── INGRESOS ────────────────────────────────────────────────────────────
-    st.divider()
-    st.markdown(f"<h3 style='color:#111111; font-weight:800'>📈 Ingresos — $ {_pesos(total_ingresos)}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🧾 Deudores — $ {_pesos(_total_deud)}</h4>", unsafe_allow_html=True)
+        st.metric("Facturas sin cobrar", f"$ {_pesos(_total_deud)}", f"{len(_fac_deud)} facturas")
 
-    # Facturas DUX
-    st.markdown(f"<h4 style='color:#111111; font-weight:800'>🧾 DUX — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas</h4>", unsafe_allow_html=True)
-    _c1, _c2, _c3 = st.columns(3)
-    _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
-    _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
-    _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
-    def _render_factura(f):
-        comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
-        fecha = str(f.get("fecha_comp") or "")[:10]
-        total = float(f.get("total") or 0)
-        with st.container(border=True):
-            c1, c2 = st.columns([4, 1.5])
-            with c1:
-                st.markdown(f"🧾 **{comp}**")
-                st.caption(f"📅 {fecha}")
-            with c2:
-                st.markdown(f"### $ {_pesos(total)}")
-
-    for _label, _lista in [
-        ("✅ Cobrado", fac_cobradas),
-        ("⏳ Pendiente", fac_pendientes),
-        ("❌ Anulado", facturas_anul),
-    ]:
-        if _lista:
-            with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
+        if _fac_deud:
+            with st.expander(f"Ver deudores ({len(_fac_deud)}) — $ {_pesos(_total_deud)}"):
                 _by_cli = {}
-                for _f in _lista:
+                for _f in _fac_deud:
                     _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                     _by_cli.setdefault(_k, []).append(_f)
-                for _cli_name, _cli_items in sorted(_by_cli.items()):
-                    _cli_total = sum(float(_f.get("total") or 0) for _f in _cli_items)
-                    with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
-                        for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-                            _render_factura(f)
+                for _cli, _citems in sorted(_by_cli.items()):
+                    _ctot = sum(float(_f.get("total") or 0) for _f in _citems)
+                    with st.expander(f"👤 {_cli}  —  {len(_citems)} factura{'s' if len(_citems)!=1 else ''}  ·  $ {_pesos(_ctot)}"):
+                        for _f in sorted(_citems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                            comp  = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
+                            with st.container(border=True):
+                                _x1, _x2 = st.columns([4, 1.5])
+                                with _x1:
+                                    st.markdown(f"🧾 **{comp}**")
+                                    st.caption(f"📅 {str(_f.get('fecha_comp') or '')[:10]}")
+                                with _x2:
+                                    st.markdown(f"### $ {_pesos(float(_f.get('total') or 0))}")
 
-    # Wix
-    st.markdown(f"<h4 style='color:#111111; font-weight:800'>🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos</h4>", unsafe_allow_html=True)
-    _w1, _w2, _w3, _w4 = st.columns(4)
-    _w1.metric("✅ Cobrado", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)}")
-    _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
-    _w3.metric("❌ Anulado", f"$ {_pesos(total_wix_anul)}", f"{len(wix_anulados)}")
-    _w4.metric("🚚 No entregado", f"$ {_pesos(total_wix_no_ent)}", f"{len(wix_no_entregados)}")
-
-    def _render_pedido_wix(p):
-        nro    = p.get("number") or p.get("id") or "—"
-        fecha  = str(p.get("createdDate") or "")[:10]
-        total  = _wix_monto(p)
-        pay    = str(p.get("paymentStatus") or "").upper()
-        ful    = str(p.get("fulfillmentStatus") or "").upper()
-        status = str(p.get("status") or "").upper()
-        if status == "CANCELED":
-            badge = "❌"
-        elif pay == "PAID":
-            badge = "✅"
-        elif ful == "FULFILLED":
-            badge = "⏳"
+    with tab_bal_resumen:
+        # Filtrar por rango
+        facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
+        facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
+        ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
+        if not compras_bal.empty:
+            compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
+            compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
         else:
-            badge = "🚚"
-        with st.container(border=True):
-            c1, c2 = st.columns([4, 1.5])
-            with c1:
-                st.markdown(f"{badge} **Pedido #{nro}**")
-                st.caption(f"📅 {fecha}")
-            with c2:
-                st.markdown(f"### $ {_pesos(total)}")
+            compras_f = pd.DataFrame()
+        comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
+        gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
 
-    for _label, _lista in [
-        ("✅ Cobrado", wix_cobradas),
-        ("⏳ Pendiente", wix_pendientes),
-        ("❌ Anulado", wix_anulados),
-        ("🚚 No entregado", wix_no_entregados),
-    ]:
-        if _lista:
-            with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
-                _by_cli = {}
-                for _p in _lista:
-                    _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
-                    _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
-                    _by_cli.setdefault(_k, []).append(_p)
-                for _cli_name, _cli_items in sorted(_by_cli.items()):
-                    _cli_total = sum(_wix_monto(_p) for _p in _cli_items)
-                    with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
-                        for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
-                            _render_pedido_wix(p)
+        # Categorizar facturas DUX
+        fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro")]
+        fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
 
-    # ── EGRESOS ─────────────────────────────────────────────────────────────
-    st.divider()
-    st.markdown(f"<h3 style='color:#111111; font-weight:800'>📉 Egresos — $ {_pesos(total_egresos)}</h3>", unsafe_allow_html=True)
+        # Categorizar Wix
+        wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+        wix_anulados      = [p for p in ped_wix_f if str(p.get("status") or "").upper() == "CANCELED"]
+        wix_pendientes    = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED" and str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+        wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
 
-    def _render_comprobante(c):
-        nro  = c.get("nro_comprobante") or "—"
-        prov = c.get("proveedor") or "—"
-        fec  = c.get("fecha") or "—"
-        tot  = float(c.get("total") or 0)
-        cond = c.get("condicion_pago") or ""
-        with st.container(border=True):
-            _c1, _c2 = st.columns([4, 1.5])
-            with _c1:
-                st.markdown(f"**#{nro}** — {prov}")
-                st.caption(f"📅 {fec}" + (f" · {cond}" if cond else ""))
-            with _c2:
-                st.markdown(f"### $ {_pesos(tot)}")
+        # Totales
+        total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
+        total_fac_cobr    = sum(float(f.get("total") or 0) for f in fac_cobradas)
+        total_fac_pend    = sum(float(f.get("total") or 0) for f in fac_pendientes)
+        total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
+        total_wix         = sum(_wix_monto(p) for p in ped_wix_f)
+        total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
+        total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
+        total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
+        total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
+        # Categorizar compras
+        comp_pagadas    = [c for c in comprobantes_f if not c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA"]
+        comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente")     and str(c.get("estado") or "").upper() != "ANULADA"]
+        comp_anuladas   = [c for c in comprobantes_f if str(c.get("estado") or "").upper() == "ANULADA"]
 
-    def _render_gasto(g):
-        nro  = g.get("nro_comprobante") or "—"
-        prov = g.get("proveedor") or "—"
-        fec  = g.get("fecha") or "—"
-        tot  = float(g.get("total") or 0)
-        tipo = g.get("tipo_comprobante") or ""
-        with st.container(border=True):
-            _c1, _c2 = st.columns([4, 1.5])
-            with _c1:
-                st.markdown(f"**#{nro}** — {prov}")
-                st.caption(f"📅 {fec}" + (f" · {tipo}" if tipo else ""))
-            with _c2:
-                st.markdown(f"### $ {_pesos(tot)}")
+        # Categorizar gastos
+        gas_pagados    = [g for g in gastos_f if not g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA"]
+        gas_pendientes = [g for g in gastos_f if g.get("pago_pendiente")     and str(g.get("estado") or "").upper() != "ANULADA"]
+        gas_anulados   = [g for g in gastos_f if str(g.get("estado") or "").upper() == "ANULADA"]
 
-    # Compras
-    total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
-    total_comp_pend = sum(float(c.get("total") or 0) for c in comp_pendientes)
-    total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
-    st.markdown(f"<h4 style='color:#111111; font-weight:800'>💰 Compras — $ {_pesos(total_compras)} · {len(comp_pagadas) + len(comp_pendientes)} comprobantes</h4>", unsafe_allow_html=True)
-    _ec1, _ec2, _ec3 = st.columns(3)
-    _ec1.metric("✅ Pagado",    f"$ {_pesos(total_comp_pag)}",  f"{len(comp_pagadas)}")
-    _ec2.metric("⏳ Pendiente", f"$ {_pesos(total_comp_pend)}", f"{len(comp_pendientes)}")
-    _ec3.metric("❌ Anulado",   f"$ {_pesos(total_comp_anul)}", f"{len(comp_anuladas)}")
-    for _label, _lista in [
-        ("✅ Pagado",    comp_pagadas),
-        ("⏳ Pendiente", comp_pendientes),
-        ("❌ Anulado",   comp_anuladas),
-    ]:
-        if _lista:
-            _tot_lbl = sum(float(c.get("total") or 0) for c in _lista)
-            with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
-                _by_prov = {}
-                for _c in _lista:
-                    _k = _c.get("proveedor") or "—"
-                    _by_prov.setdefault(_k, []).append(_c)
-                for _prov_name, _prov_items in sorted(_by_prov.items()):
-                    _prov_total = sum(float(_c.get("total") or 0) for _c in _prov_items)
-                    with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} comprobante{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
-                        for _c in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                            _render_comprobante(_c)
+        total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_pendientes)
+        total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_pendientes)
 
-    # Gastos
-    total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
-    total_gas_pend = sum(float(g.get("total") or 0) for g in gas_pendientes)
-    total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
-    st.markdown(f"<h4 style='color:#111111; font-weight:800'>📄 Gastos — $ {_pesos(total_gastos)} · {len(gas_pagados) + len(gas_pendientes)} gastos</h4>", unsafe_allow_html=True)
-    _eg1, _eg2, _eg3 = st.columns(3)
-    _eg1.metric("✅ Pagado",    f"$ {_pesos(total_gas_pag)}",  f"{len(gas_pagados)}")
-    _eg2.metric("⏳ Pendiente", f"$ {_pesos(total_gas_pend)}", f"{len(gas_pendientes)}")
-    _eg3.metric("❌ Anulado",   f"$ {_pesos(total_gas_anul)}", f"{len(gas_anulados)}")
-    for _label, _lista in [
-        ("✅ Pagado",    gas_pagados),
-        ("⏳ Pendiente", gas_pendientes),
-        ("❌ Anulado",   gas_anulados),
-    ]:
-        if _lista:
-            _tot_lbl = sum(float(g.get("total") or 0) for g in _lista)
-            with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
-                _by_prov = {}
-                for _g in _lista:
-                    _k = _g.get("proveedor") or "—"
-                    _by_prov.setdefault(_k, []).append(_g)
-                for _prov_name, _prov_items in sorted(_by_prov.items()):
-                    _prov_total = sum(float(_g.get("total") or 0) for _g in _prov_items)
-                    with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} gasto{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
-                        for _g in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                            _render_gasto(_g)
+        total_ingresos = total_facturas + total_wix
+        total_egresos  = total_compras + total_gastos
+        resultado      = total_ingresos - total_egresos
 
-    # ── RESULTADO ────────────────────────────────────────────────────────────
-    st.divider()
-    color = "green" if resultado >= 0 else "red"
-    signo = "+" if resultado >= 0 else ""
-    st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
+        # ── INGRESOS ────────────────────────────────────────────────────────────
+        st.divider()
+        st.markdown(f"<h3 style='color:#111111; font-weight:800'>📈 Ingresos — $ {_pesos(total_ingresos)}</h3>", unsafe_allow_html=True)
+
+        # Facturas DUX
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🧾 DUX — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas</h4>", unsafe_allow_html=True)
+        _c1, _c2, _c3 = st.columns(3)
+        _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
+        _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
+        _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
+        def _render_factura(f):
+            comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
+            fecha = str(f.get("fecha_comp") or "")[:10]
+            total = float(f.get("total") or 0)
+            with st.container(border=True):
+                c1, c2 = st.columns([4, 1.5])
+                with c1:
+                    st.markdown(f"🧾 **{comp}**")
+                    st.caption(f"📅 {fecha}")
+                with c2:
+                    st.markdown(f"### $ {_pesos(total)}")
+
+        for _label, _lista in [
+            ("✅ Cobrado", fac_cobradas),
+            ("⏳ Pendiente", fac_pendientes),
+            ("❌ Anulado", facturas_anul),
+        ]:
+            if _lista:
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
+                    _by_cli = {}
+                    for _f in _lista:
+                        _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                        _by_cli.setdefault(_k, []).append(_f)
+                    for _cli_name, _cli_items in sorted(_by_cli.items()):
+                        _cli_total = sum(float(_f.get("total") or 0) for _f in _cli_items)
+                        with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
+                            for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                                _render_factura(f)
+
+        # Wix
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos</h4>", unsafe_allow_html=True)
+        _w1, _w2, _w3, _w4 = st.columns(4)
+        _w1.metric("✅ Cobrado", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)}")
+        _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
+        _w3.metric("❌ Anulado", f"$ {_pesos(total_wix_anul)}", f"{len(wix_anulados)}")
+        _w4.metric("🚚 No entregado", f"$ {_pesos(total_wix_no_ent)}", f"{len(wix_no_entregados)}")
+
+        def _render_pedido_wix(p):
+            nro    = p.get("number") or p.get("id") or "—"
+            fecha  = str(p.get("createdDate") or "")[:10]
+            total  = _wix_monto(p)
+            pay    = str(p.get("paymentStatus") or "").upper()
+            ful    = str(p.get("fulfillmentStatus") or "").upper()
+            status = str(p.get("status") or "").upper()
+            if status == "CANCELED":
+                badge = "❌"
+            elif pay == "PAID":
+                badge = "✅"
+            elif ful == "FULFILLED":
+                badge = "⏳"
+            else:
+                badge = "🚚"
+            with st.container(border=True):
+                c1, c2 = st.columns([4, 1.5])
+                with c1:
+                    st.markdown(f"{badge} **Pedido #{nro}**")
+                    st.caption(f"📅 {fecha}")
+                with c2:
+                    st.markdown(f"### $ {_pesos(total)}")
+
+        for _label, _lista in [
+            ("✅ Cobrado", wix_cobradas),
+            ("⏳ Pendiente", wix_pendientes),
+            ("❌ Anulado", wix_anulados),
+            ("🚚 No entregado", wix_no_entregados),
+        ]:
+            if _lista:
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
+                    _by_cli = {}
+                    for _p in _lista:
+                        _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
+                        _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
+                        _by_cli.setdefault(_k, []).append(_p)
+                    for _cli_name, _cli_items in sorted(_by_cli.items()):
+                        _cli_total = sum(_wix_monto(_p) for _p in _cli_items)
+                        with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
+                            for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
+                                _render_pedido_wix(p)
+
+        # ── EGRESOS ─────────────────────────────────────────────────────────────
+        st.divider()
+        st.markdown(f"<h3 style='color:#111111; font-weight:800'>📉 Egresos — $ {_pesos(total_egresos)}</h3>", unsafe_allow_html=True)
+
+        def _render_comprobante(c):
+            nro  = c.get("nro_comprobante") or "—"
+            prov = c.get("proveedor") or "—"
+            fec  = c.get("fecha") or "—"
+            tot  = float(c.get("total") or 0)
+            cond = c.get("condicion_pago") or ""
+            with st.container(border=True):
+                _c1, _c2 = st.columns([4, 1.5])
+                with _c1:
+                    st.markdown(f"**#{nro}** — {prov}")
+                    st.caption(f"📅 {fec}" + (f" · {cond}" if cond else ""))
+                with _c2:
+                    st.markdown(f"### $ {_pesos(tot)}")
+
+        def _render_gasto(g):
+            nro  = g.get("nro_comprobante") or "—"
+            prov = g.get("proveedor") or "—"
+            fec  = g.get("fecha") or "—"
+            tot  = float(g.get("total") or 0)
+            tipo = g.get("tipo_comprobante") or ""
+            with st.container(border=True):
+                _c1, _c2 = st.columns([4, 1.5])
+                with _c1:
+                    st.markdown(f"**#{nro}** — {prov}")
+                    st.caption(f"📅 {fec}" + (f" · {tipo}" if tipo else ""))
+                with _c2:
+                    st.markdown(f"### $ {_pesos(tot)}")
+
+        # Compras
+        total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
+        total_comp_pend = sum(float(c.get("total") or 0) for c in comp_pendientes)
+        total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>💰 Compras — $ {_pesos(total_compras)} · {len(comp_pagadas) + len(comp_pendientes)} comprobantes</h4>", unsafe_allow_html=True)
+        _ec1, _ec2, _ec3 = st.columns(3)
+        _ec1.metric("✅ Pagado",    f"$ {_pesos(total_comp_pag)}",  f"{len(comp_pagadas)}")
+        _ec2.metric("⏳ Pendiente", f"$ {_pesos(total_comp_pend)}", f"{len(comp_pendientes)}")
+        _ec3.metric("❌ Anulado",   f"$ {_pesos(total_comp_anul)}", f"{len(comp_anuladas)}")
+        for _label, _lista in [
+            ("✅ Pagado",    comp_pagadas),
+            ("⏳ Pendiente", comp_pendientes),
+            ("❌ Anulado",   comp_anuladas),
+        ]:
+            if _lista:
+                _tot_lbl = sum(float(c.get("total") or 0) for c in _lista)
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
+                    _by_prov = {}
+                    for _c in _lista:
+                        _k = _c.get("proveedor") or "—"
+                        _by_prov.setdefault(_k, []).append(_c)
+                    for _prov_name, _prov_items in sorted(_by_prov.items()):
+                        _prov_total = sum(float(_c.get("total") or 0) for _c in _prov_items)
+                        with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} comprobante{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
+                            for _c in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                                _render_comprobante(_c)
+
+        # Gastos
+        total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
+        total_gas_pend = sum(float(g.get("total") or 0) for g in gas_pendientes)
+        total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>📄 Gastos — $ {_pesos(total_gastos)} · {len(gas_pagados) + len(gas_pendientes)} gastos</h4>", unsafe_allow_html=True)
+        _eg1, _eg2, _eg3 = st.columns(3)
+        _eg1.metric("✅ Pagado",    f"$ {_pesos(total_gas_pag)}",  f"{len(gas_pagados)}")
+        _eg2.metric("⏳ Pendiente", f"$ {_pesos(total_gas_pend)}", f"{len(gas_pendientes)}")
+        _eg3.metric("❌ Anulado",   f"$ {_pesos(total_gas_anul)}", f"{len(gas_anulados)}")
+        for _label, _lista in [
+            ("✅ Pagado",    gas_pagados),
+            ("⏳ Pendiente", gas_pendientes),
+            ("❌ Anulado",   gas_anulados),
+        ]:
+            if _lista:
+                _tot_lbl = sum(float(g.get("total") or 0) for g in _lista)
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
+                    _by_prov = {}
+                    for _g in _lista:
+                        _k = _g.get("proveedor") or "—"
+                        _by_prov.setdefault(_k, []).append(_g)
+                    for _prov_name, _prov_items in sorted(_by_prov.items()):
+                        _prov_total = sum(float(_g.get("total") or 0) for _g in _prov_items)
+                        with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} gasto{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
+                            for _g in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                                _render_gasto(_g)
+
+        # ── RESULTADO ────────────────────────────────────────────────────────────
+        st.divider()
+        color = "green" if resultado >= 0 else "red"
+        signo = "+" if resultado >= 0 else ""
+        st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
 
 with tab_ingresos:
     with tab_ing_facturas:
