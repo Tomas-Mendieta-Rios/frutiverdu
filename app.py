@@ -1492,8 +1492,15 @@ with tab_balance:
     ]:
         if _lista:
             with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
-                for f in sorted(_lista, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-                    _render_factura(f)
+                _by_cli = {}
+                for _f in _lista:
+                    _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                    _by_cli.setdefault(_k, []).append(_f)
+                for _cli_name, _cli_items in sorted(_by_cli.items()):
+                    _cli_total = sum(float(_f.get("total") or 0) for _f in _cli_items)
+                    st.markdown(f"**{_cli_name}** · {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}")
+                    for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                        _render_factura(f)
 
     # Wix
     st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)}")
@@ -1535,8 +1542,16 @@ with tab_balance:
     ]:
         if _lista:
             with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
-                for p in sorted(_lista, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
-                    _render_pedido_wix(p)
+                _by_cli = {}
+                for _p in _lista:
+                    _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
+                    _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
+                    _by_cli.setdefault(_k, []).append(_p)
+                for _cli_name, _cli_items in sorted(_by_cli.items()):
+                    _cli_total = sum(_wix_monto(_p) for _p in _cli_items)
+                    st.markdown(f"**{_cli_name}** · {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''} · $ {_pesos(_cli_total)}")
+                    for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
+                        _render_pedido_wix(p)
 
     # ── EGRESOS ─────────────────────────────────────────────────────────────
     st.divider()
