@@ -1,13 +1,5 @@
--- Relacionar facturas con pedidos_dux via nro_pedido
--- nro_pedido es el numero de pedido legible (ej. "12345"), unico en DUX
+-- Relacion logica facturas <-> pedidos_dux via nro_pedido
+-- Solo indice (sin FK ni UNIQUE) para evitar problemas con nro_pedido vacio o duplicado
 
-ALTER TABLE pedidos_dux
-    ADD CONSTRAINT pedidos_dux_nro_pedido_unique UNIQUE (nro_pedido);
-
-ALTER TABLE facturas
-    ADD CONSTRAINT facturas_nro_pedido_fkey
-    FOREIGN KEY (nro_pedido)
-    REFERENCES pedidos_dux (nro_pedido)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
-    DEFERRABLE INITIALLY DEFERRED;
+CREATE INDEX IF NOT EXISTS idx_pedidos_dux_nro_pedido ON pedidos_dux (nro_pedido);
+CREATE INDEX IF NOT EXISTS idx_facturas_nro_pedido ON facturas (nro_pedido);
