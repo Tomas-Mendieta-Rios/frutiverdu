@@ -1283,21 +1283,21 @@ def _sync_facturas(fecha_desde, fecha_hasta):
         return results_all, None
 
     # Todas las facturas vigentes
-    all_facturas, err = _fetch_facturas({"anuladas": False})
+    all_facturas, err = _fetch_facturas({"anuladas": "false"})
     if err:
         return False, 0, err
 
     time.sleep(DUX_RATE_LIMIT_SECONDS)
 
     # IDs de facturas cobradas
-    cobradas, err2 = _fetch_facturas({"anuladas": False, "conCobro": True})
+    cobradas, err2 = _fetch_facturas({"anuladas": "false", "conCobro": "true"})
     if err2:
         cobradas = []
     cobradas_ids = {str(f.get("id") or "") for f in (cobradas or [])}
 
     # Facturas anuladas
     time.sleep(DUX_RATE_LIMIT_SECONDS)
-    anuladas, _ = _fetch_facturas({"anuladas": True})
+    anuladas, _ = _fetch_facturas({"anuladas": "true"})
     all_facturas.extend(anuladas or [])
 
     # Marcar con_cobro
@@ -1305,7 +1305,9 @@ def _sync_facturas(fecha_desde, fecha_hasta):
         f["con_cobro"] = str(f.get("id") or "") in cobradas_ids
 
     db.guardar_facturas(all_facturas)
-    return True, len(all_facturas), f"✅ {len(all_facturas)} facturas sincronizadas."
+    n_cobr = sum(1 for f in all_facturas if f.get("con_cobro"))
+    n_anul = len(anuladas or [])
+    return True, len(all_facturas), f"✅ {len(all_facturas)} facturas — {n_cobr} cobradas, {n_anul} anuladas."
 
 
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
