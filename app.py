@@ -8,7 +8,7 @@ import requests
 import streamlit as st
 import pandas as pd
 
-import gsheets_db as db
+import supabase_db as db
 
 DUX_RATE_LIMIT_SECONDS = 5.5
 
@@ -164,7 +164,7 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
     compras_raw = []
     offset = 0
     page_size = 50
-    max_pages = 50  # tope: 2500 compras absurdo en cualquier rango razonable
+    max_pages = 50
 
     for _ in range(max_pages):
         params = {
@@ -199,11 +199,8 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
                     continue
                 cantidades[cod] = cantidades.get(cod, 0.0) + ctd
 
-        paging = d.get("paginacion", {}) or {}
-        if not paging.get("hay_mas"):
-            break
-        offset += page_size
-        time.sleep(2)  # respetar rate limit DUX entre paginas
+        offset += len(datos)
+        time.sleep(2)
 
     return {"cantidades": cantidades, "compras": compras_raw}
 
@@ -380,6 +377,7 @@ def _slim_wix_order(o):
                     "translated": ((li or {}).get("productName") or {}).get("translated"),
                     "original": ((li or {}).get("productName") or {}).get("original"),
                 },
+                "price": (li or {}).get("price") or {},
             }
             for li in (o.get("lineItems") or [])
         ],
@@ -413,6 +411,10 @@ def _slim_wix_order(o):
                 "formattedAmount": ((o.get("priceSummary", {}) or {}).get("total", {}) or {}).get("formattedAmount"),
             },
         },
+        "paymentStatus": o.get("paymentStatus"),
+        "fulfillmentStatus": o.get("fulfillmentStatus"),
+        "buyerNote": o.get("buyerNote"),
+        "updatedDate": o.get("updatedDate"),
     }
 
 
@@ -1012,9 +1014,8 @@ compuestos_orig = db.cargar_compuestos()
 # (rompe por columnas faltantes). El usuario debera re-sincronizar.
 if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
     st.error(
-        "⚠️ La tabla `compuestos` de Google Sheets está vacía o corrupta. "
-        "Andá a la pestaña ⚙️ Relacionar productos y volvé a guardar las relaciones, "
-        "o avisale a Tomás."
+        "⚠️ La tabla `compuestos` está vacía. "
+        "Andá a la pestaña ⚙️ Relacionar productos y guardá las relaciones."
     )
     compuestos = pd.DataFrame(
         columns=[
@@ -1063,6 +1064,230 @@ if st.button(
     st.toast("Datos actualizados", icon="✅")
     st.rerun()
 
+def _sync_gastos(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url_g = f"{_base_url}/v2/gastos"
+    headers_g = {"accept": "application/json", "authorization": f"Bearer {_token}"}
+    page_offset, page_size, all_gastos = 0, 50, []
+    while True:
+        params_g = {
+            "id_empresa": _id_empresa, "id_sucursal": _id_sucursal,
+            "fecha_desde": fecha_desde.strftime("%Y-%m-%d"),
+            "fecha_hasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "incluir_detalle": "true", "offset": page_offset, "limit": page_size,
+        }
+        try:
+            r = requests.get(url_g, params=params_g, headers=headers_g, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("DUX (gastos)", e)
+        if r.status_code != 200:
+            return False, 0, msg_error_http("DUX (gastos)", r.status_code, r.text)
+        try:
+            d = r.json()
+        except ValueError:
+            return False, 0, "❌ DUX devolvió una respuesta inválida (gastos)."
+        if isinstance(d, dict) and "error" in d:
+            return False, 0, f"❌ DUX (gastos): {d['error'].get('mensaje', d['error'])}"
+        page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
+        if not page:
+            break
+        all_gastos.extend(page)
+        paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
+        if not paging.get("hay_mas"):
+            break
+        page_offset += page_size
+        time.sleep(DUX_RATE_LIMIT_SECONDS)
+    db.guardar_gastos(all_gastos)
+    return True, len(all_gastos), f"✅ {len(all_gastos)} gastos sincronizados."
+
+
+def _sync_compras(fecha_desde, fecha_hasta):
+    compras_res = cargar_compras_dux_v2(fecha_desde, fecha_hasta)
+    if compras_res is None:
+        return False, 0, msg_error_http("DUX (compras)", 401)
+    compras_raw = compras_res.get("compras", [])
+    n_items = sum(len(c.get("items", []) or []) for c in compras_raw)
+    db.guardar_compras_sync(compras_raw)
+    return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes sincronizados ({n_items} ítems)."
+
+
+def _sync_pedidos_dux(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url_p = f"{_base_url}/pedidos"
+    headers_p = {"accept": "application/json", "authorization": _token}
+    page_offset, page_size, all_orders = 0, 50, []
+    while True:
+        params_p = {
+            "idEmpresa": _id_empresa, "idSucursal": _id_sucursal,
+            "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+            "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "offset": page_offset, "limit": page_size,
+        }
+        try:
+            r = requests.get(url_p, params=params_p, headers=headers_p, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("DUX (pedidos)", e)
+        if r.status_code != 200:
+            return False, 0, msg_error_http("DUX (pedidos)", r.status_code, r.text)
+        try:
+            d = r.json()
+        except ValueError:
+            return False, 0, "❌ DUX devolvió una respuesta inválida (pedidos)."
+        if isinstance(d, dict) and "message" in d and "results" not in d:
+            return False, 0, f"❌ DUX (pedidos): {d['message']}"
+        if isinstance(d, dict) and "results" in d:
+            page = d["results"]
+        elif isinstance(d, list):
+            page = d
+        else:
+            page = []
+        if not page:
+            break
+        all_orders.extend(page)
+        if len(page) < page_size:
+            break
+        page_offset += page_size
+        time.sleep(DUX_RATE_LIMIT_SECONDS)
+    db.guardar_pedidos_dux(all_orders)
+    try:
+        db.guardar_config({"dux_fecha_desde": str(fecha_desde), "dux_fecha_hasta": str(fecha_hasta)})
+    except Exception:
+        pass
+    n = len(all_orders)
+    return True, n, f"✅ {n} pedidos DUX sincronizados." if n else (True, 0, "No hay pedidos DUX en ese rango.")
+
+
+def _sync_pedidos_wix(fecha_desde, fecha_hasta):
+    wix_cfg = st.secrets.get("wix", {})
+    wix_token_s = wix_cfg.get("api_key", "")
+    wix_account_s = wix_cfg.get("account_id", "")
+    wix_site_s = wix_cfg.get("site_id", "")
+    url = "https://www.wixapis.com/ecom/v1/orders/search"
+    headers = {
+        "Authorization": wix_token_s, "wix-account-id": wix_account_s,
+        "wix-site-id": wix_site_s, "Content-Type": "application/json",
+    }
+    _filter = {
+        "$and": [
+            {"createdDate": {"$gte": f"{fecha_desde}T00:00:00.000Z"}},
+            {"createdDate": {"$lte": f"{fecha_hasta}T23:59:59.999Z"}},
+        ]
+    }
+    all_orders = []
+    cursor = None
+    while True:
+        paging = {"limit": 100}
+        if cursor:
+            paging["cursor"] = cursor
+        body = {"search": {"filter": _filter, "cursorPaging": paging}}
+        try:
+            resp = requests.post(url, json=body, headers=headers, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("Wix", e)
+        if resp.status_code != 200:
+            return False, 0, msg_error_http("Wix", resp.status_code, resp.text)
+        try:
+            data = resp.json()
+        except ValueError:
+            return False, 0, "❌ Wix devolvió una respuesta inválida."
+        all_orders.extend(data.get("orders", []))
+        meta = data.get("metadata") or data.get("pagingMetadata") or {}
+        cursor = (meta.get("cursors") or {}).get("next") or meta.get("next")
+        if not cursor or not data.get("orders"):
+            break
+    orders_slim = [_slim_wix_order(o) for o in all_orders]
+    db.guardar_pedidos_wix(orders_slim)
+    try:
+        db.guardar_config({"wix_fecha_desde": str(fecha_desde), "wix_fecha_hasta": str(fecha_hasta)})
+    except Exception:
+        pass
+    return True, len(all_orders), f"✅ {len(all_orders)} pedidos Wix sincronizados."
+
+
+def _sync_facturas(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url_f = f"{_base_url}/facturas"
+    headers_f = {"accept": "application/json", "authorization": _token}
+    page_size = 50
+
+    def _fetch_facturas(extra_params=None):
+        results_all = []
+        offset = 0
+        while True:
+            params_f = {
+                "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+                "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+                "idEmpresa": _id_empresa,
+                "idSucursal": _id_sucursal,
+                "offset": offset,
+                "limit": page_size,
+            }
+            if extra_params:
+                params_f.update(extra_params)
+            try:
+                r = requests.get(url_f, params=params_f, headers=headers_f, timeout=30)
+            except requests.RequestException as e:
+                return None, msg_error_red("DUX (facturas)", e)
+            if r.status_code != 200:
+                return None, msg_error_http("DUX (facturas)", r.status_code, r.text)
+            try:
+                d = r.json()
+            except ValueError:
+                return None, "❌ DUX devolvió una respuesta inválida (facturas)."
+            if isinstance(d, dict) and "message" in d and "results" not in d:
+                return None, f"❌ DUX (facturas): {d['message']}"
+            results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
+            if not results:
+                break
+            results_all.extend(results)
+            total = (d.get("paging") or {}).get("total", 0) if isinstance(d, dict) else 0
+            offset += page_size
+            if offset >= total or len(results) < page_size:
+                break
+            time.sleep(DUX_RATE_LIMIT_SECONDS)
+        return results_all, None
+
+    # Todas las facturas vigentes
+    all_facturas, err = _fetch_facturas({"anuladas": "false"})
+    if err:
+        return False, 0, err
+
+    time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+    # IDs de facturas cobradas
+    cobradas, err2 = _fetch_facturas({"anuladas": "false", "conCobro": "true"})
+    _debug_cobro = f"conCobro=true → {len(cobradas or [])} resultados, err={err2}"
+    if err2:
+        cobradas = []
+    cobradas_ids = {str(f.get("id") or "") for f in (cobradas or [])}
+
+    # Facturas anuladas
+    time.sleep(DUX_RATE_LIMIT_SECONDS)
+    anuladas, _ = _fetch_facturas({"anuladas": "true"})
+    all_facturas.extend(anuladas or [])
+
+    # Marcar con_cobro
+    for f in all_facturas:
+        f["con_cobro"] = str(f.get("id") or "") in cobradas_ids
+
+    db.guardar_facturas(all_facturas)
+    n_cobr = sum(1 for f in all_facturas if f.get("con_cobro"))
+    n_anul = len(anuladas or [])
+    return True, len(all_facturas), f"✅ {len(all_facturas)} facturas — {n_cobr} cobradas, {n_anul} anuladas. [{_debug_cobro}]"
+
+
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
 # NOTA: la pestania de Analitica esta oculta (los bloques 'with tab_X:'
 # correspondientes estan reemplazados por 'if False:' mas abajo).
@@ -1070,19 +1295,26 @@ if st.button(
 # cambia los 'if False:' por 'with tab_X:'.
 (
     tab_comprar,
-    tab_compras,
+    tab_egresos,
+    tab_ingresos,
     tab_grupo_pedidos,
     tab_grupo_diario,
+    tab_balance,
+    tab_sync,
     tab_grupo_config,
 ) = st.tabs(
     [
         "🛒 Total a comprar",
-        "💰 Compras",
+        "💸 Egresos",
+        "📈 Ingresos",
         "📋 Pedidos",
         "📦 Diario",
+        "📊 Balance",
+        "🔄 Sincronizar",
         "⚙️ Configuración",
     ]
 )
+
 # Tabs ocultas (definidas como None para que las referencias no rompan)
 tab_grupo_analitica = None
 tab_resumen_rango = None
@@ -1090,11 +1322,17 @@ tab_desglose_rango = None
 tab_hist_precios = None
 tab_detalle_compras = None
 
+with tab_egresos:
+    tab_eg_compras, tab_eg_gastos = st.tabs(["💰 Compras", "📄 Gastos"])
+
+with tab_ingresos:
+    tab_ing_facturas, = st.tabs(["🧾 Facturas"])
+
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
 
 with tab_grupo_diario:
-    tab_stock, tab_estimado = st.tabs(["📦 Stock", "Estimado"])
+    tab_stock, tab_carga_stock, tab_estimado = st.tabs(["📦 Stock", "📝 Cargar Stock", "Estimado"])
 
 if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analitica:'
     (
@@ -1111,12 +1349,521 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
         ]
     )
 
+with tab_balance:
+    def _parse_wix_total(v):
+        try:
+            import re as _re
+            s = _re.sub(r"[^\d.,]", "", str(v or "0"))
+            if not s:
+                return 0.0
+            if "," in s and "." in s:
+                if s.rfind(",") > s.rfind("."):
+                    s = s.replace(".", "").replace(",", ".")
+                else:
+                    s = s.replace(",", "")
+            elif "," in s:
+                s = s.replace(",", "." if (len(s) - s.rfind(",") - 1) <= 2 else "")
+            return float(s)
+        except (ValueError, TypeError):
+            return 0.0
+
+    def _wix_monto(p):
+        v = float(p.get("total_amount") or 0)
+        if v == 0:
+            v = _parse_wix_total((p.get("priceSummary") or {}).get("total", {}).get("formattedAmount"))
+        return v
+
+    def _pesos(v):
+        return f"{int(round(float(v or 0))):,}".replace(",", ".")
+
+    with st.spinner("Cargando datos..."):
+        facturas_bal        = db.cargar_facturas()
+        pedidos_wix_bal     = db.cargar_pedidos_wix()
+        compras_bal         = db.cargar_compras()
+        comprobantes_bal    = db.cargar_comprobantes_compra()
+        gastos_bal          = db.cargar_gastos()
+
+    tab_bal_resumen, tab_bal_pendientes = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores"])
+
+    with tab_bal_pendientes:
+        # ── Rango de fechas propio ─────────────────────────────────────────
+        _pd_col1, _pd_col2 = st.columns(2)
+        _pend_desde = _pd_col1.date_input("Desde", value=date(2020, 1, 1), key="pend_desde")
+        _pend_hasta = _pd_col2.date_input("Hasta", value=date.today(),     key="pend_hasta")
+
+        def _pend_en_rango(fecha_str):
+            try:
+                f = pd.to_datetime(str(fecha_str or "")).date()
+                return _pend_desde <= f <= _pend_hasta
+            except Exception:
+                return False
+
+        # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
+        _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA" and _pend_en_rango(c.get("fecha"))]
+        _gas_pend_hist  = [g for g in gastos_bal       if g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA" and _pend_en_rango(g.get("fecha"))]
+        _total_pend_comp = sum(float(c.get("total") or 0) for c in _comp_pend_hist)
+        _total_pend_gas  = sum(float(g.get("total") or 0) for g in _gas_pend_hist)
+        _total_pend      = _total_pend_comp + _total_pend_gas
+
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>💸 Pagos pendientes — $ {_pesos(_total_pend)}</h4>", unsafe_allow_html=True)
+        _pp1, _pp2 = st.columns(2)
+        _pp1.metric("💰 Compras",  f"$ {_pesos(_total_pend_comp)}", f"{len(_comp_pend_hist)} comprobantes")
+        _pp2.metric("📄 Gastos",   f"$ {_pesos(_total_pend_gas)}",  f"{len(_gas_pend_hist)} gastos")
+
+        with st.expander(f"💰 Compras pendientes ({len(_comp_pend_hist)}) — $ {_pesos(_total_pend_comp)}"):
+            if not _comp_pend_hist:
+                st.caption("Sin compras pendientes en el rango seleccionado.")
+            else:
+                _by_prov = {}
+                for _c in _comp_pend_hist:
+                    _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
+                for _pnombre, _pitems in sorted(_by_prov.items()):
+                    _ptot = sum(float(_c.get("total") or 0) for _c in _pitems)
+                    with st.expander(f"🏭 {_pnombre}  —  {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''}  ·  $ {_pesos(_ptot)}"):
+                        for _c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                            with st.container(border=True):
+                                _x1, _x2 = st.columns([4, 1.5])
+                                with _x1:
+                                    _cond = _c.get("condicion_pago") or ""
+                                    st.markdown(f"**#{_c.get('nro_comprobante') or '—'}**")
+                                    st.caption(f"📅 {_c.get('fecha') or '—'}" + (f" · {_cond}" if _cond else ""))
+                                with _x2:
+                                    st.markdown(f"### $ {_pesos(float(_c.get('total') or 0))}")
+
+        with st.expander(f"📄 Gastos pendientes ({len(_gas_pend_hist)}) — $ {_pesos(_total_pend_gas)}"):
+            if not _gas_pend_hist:
+                st.caption("Sin gastos pendientes en el rango seleccionado.")
+            else:
+                _by_prov = {}
+                for _g in _gas_pend_hist:
+                    _by_prov.setdefault(_g.get("proveedor") or "—", []).append(_g)
+                for _pnombre, _pitems in sorted(_by_prov.items()):
+                    _ptot = sum(float(_g.get("total") or 0) for _g in _pitems)
+                    with st.expander(f"🏭 {_pnombre}  —  {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''}  ·  $ {_pesos(_ptot)}"):
+                        for _g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                            with st.container(border=True):
+                                _x1, _x2 = st.columns([4, 1.5])
+                                with _x1:
+                                    _tipo = _g.get("tipo_comprobante") or ""
+                                    st.markdown(f"**#{_g.get('nro_comprobante') or '—'}**")
+                                    st.caption(f"📅 {_g.get('fecha') or '—'}" + (f" · {_tipo}" if _tipo else ""))
+                                with _x2:
+                                    st.markdown(f"### $ {_pesos(float(_g.get('total') or 0))}")
+
+        st.divider()
+
+        # ── DEUDORES (lo que nos deben) ────────────────────────────────────
+        _fac_deud  = [f for f in facturas_bal     if not f.get("con_cobro") and str(f.get("anulada","N")).upper() != "S" and _pend_en_rango(f.get("fecha_comp"))]
+        _wix_deud  = [p for p in pedidos_wix_bal  if str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED" and _pend_en_rango(p.get("createdDate"))]
+        _total_deud_dux = sum(float(f.get("total") or 0) for f in _fac_deud)
+        _total_deud_wix = sum(_wix_monto(p) for p in _wix_deud)
+        _total_deud     = _total_deud_dux + _total_deud_wix
+
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🧾 Deudores — $ {_pesos(_total_deud)}</h4>", unsafe_allow_html=True)
+        _dd1, _dd2 = st.columns(2)
+        _dd1.metric("🧾 DUX (facturas)",  f"$ {_pesos(_total_deud_dux)}", f"{len(_fac_deud)} facturas")
+        _dd2.metric("🌐 Wix (pedidos)",   f"$ {_pesos(_total_deud_wix)}", f"{len(_wix_deud)} pedidos")
+
+        # DUX deudores
+        with st.expander(f"🧾 DUX sin cobrar ({len(_fac_deud)}) — $ {_pesos(_total_deud_dux)}"):
+            if not _fac_deud:
+                st.caption("Sin facturas pendientes de cobro en el rango seleccionado.")
+            else:
+                _by_cli = {}
+                for _f in _fac_deud:
+                    _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                    _by_cli.setdefault(_k, []).append(_f)
+                for _cli, _citems in sorted(_by_cli.items()):
+                    _ctot = sum(float(_f.get("total") or 0) for _f in _citems)
+                    with st.expander(f"👤 {_cli}  —  {len(_citems)} factura{'s' if len(_citems)!=1 else ''}  ·  $ {_pesos(_ctot)}"):
+                        for _f in sorted(_citems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                            _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
+                            with st.container(border=True):
+                                _x1, _x2 = st.columns([4, 1.5])
+                                with _x1:
+                                    st.markdown(f"🧾 **{_comp}**")
+                                    st.caption(f"📅 {str(_f.get('fecha_comp') or '')[:10]}")
+                                with _x2:
+                                    st.markdown(f"### $ {_pesos(float(_f.get('total') or 0))}")
+
+        # Wix deudores
+        with st.expander(f"🌐 Wix sin cobrar ({len(_wix_deud)}) — $ {_pesos(_total_deud_wix)}"):
+            if not _wix_deud:
+                st.caption("Sin pedidos pendientes de cobro en el rango seleccionado.")
+            else:
+                _by_cli = {}
+                for _p in _wix_deud:
+                    _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
+                    _k  = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
+                    _by_cli.setdefault(_k, []).append(_p)
+                for _cli, _citems in sorted(_by_cli.items()):
+                    _ctot = sum(_wix_monto(_p) for _p in _citems)
+                    with st.expander(f"👤 {_cli}  —  {len(_citems)} pedido{'s' if len(_citems)!=1 else ''}  ·  $ {_pesos(_ctot)}"):
+                        for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
+                            _nro = _p.get("number") or _p.get("id") or "—"
+                            with st.container(border=True):
+                                _x1, _x2 = st.columns([4, 1.5])
+                                with _x1:
+                                    st.markdown(f"🛒 **Pedido #{_nro}**")
+                                    st.caption(f"📅 {str(_p.get('createdDate') or '')[:10]}")
+                                with _x2:
+                                    st.markdown(f"### $ {_pesos(_wix_monto(_p))}")
+
+    with tab_bal_resumen:
+        _hoy_bal = date.today()
+        _cb1, _cb2 = st.columns(2)
+        bal_desde = _cb1.date_input("Desde", value=_hoy_bal.replace(day=1), key="bal_desde", format="YYYY-MM-DD")
+        bal_hasta = _cb2.date_input("Hasta", value=_hoy_bal,                key="bal_hasta", format="YYYY-MM-DD")
+
+        def _en_rango(fecha_str):
+            try:
+                f = pd.to_datetime(str(fecha_str or "")).date()
+                return bal_desde <= f <= bal_hasta
+            except Exception:
+                return False
+
+        # Filtrar por rango
+        facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
+        facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
+        ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
+        if not compras_bal.empty:
+            compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
+            compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
+        else:
+            compras_f = pd.DataFrame()
+        comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
+        gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
+
+        # Categorizar facturas DUX
+        fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro")]
+        fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
+
+        # Categorizar Wix
+        wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+        wix_anulados      = [p for p in ped_wix_f if str(p.get("status") or "").upper() == "CANCELED"]
+        wix_pendientes    = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED" and str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+        wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
+
+        # Totales
+        total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
+        total_fac_cobr    = sum(float(f.get("total") or 0) for f in fac_cobradas)
+        total_fac_pend    = sum(float(f.get("total") or 0) for f in fac_pendientes)
+        total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
+        total_wix         = sum(_wix_monto(p) for p in ped_wix_f)
+        total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
+        total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
+        total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
+        total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
+        # Categorizar compras
+        comp_pagadas    = [c for c in comprobantes_f if not c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA"]
+        comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente")     and str(c.get("estado") or "").upper() != "ANULADA"]
+        comp_anuladas   = [c for c in comprobantes_f if str(c.get("estado") or "").upper() == "ANULADA"]
+
+        # Categorizar gastos
+        gas_pagados    = [g for g in gastos_f if not g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA"]
+        gas_pendientes = [g for g in gastos_f if g.get("pago_pendiente")     and str(g.get("estado") or "").upper() != "ANULADA"]
+        gas_anulados   = [g for g in gastos_f if str(g.get("estado") or "").upper() == "ANULADA"]
+
+        total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_pendientes)
+        total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_pendientes)
+
+        total_ingresos = total_facturas + total_wix
+        total_egresos  = total_compras + total_gastos
+        resultado      = total_ingresos - total_egresos
+
+        # ── INGRESOS ────────────────────────────────────────────────────────────
+        st.divider()
+        st.markdown(f"<h3 style='color:#111111; font-weight:800'>📈 Ingresos — $ {_pesos(total_ingresos)}</h3>", unsafe_allow_html=True)
+
+        # Facturas DUX
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🧾 DUX — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas</h4>", unsafe_allow_html=True)
+        _c1, _c2, _c3 = st.columns(3)
+        _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
+        _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
+        _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
+        def _render_factura(f):
+            comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
+            fecha = str(f.get("fecha_comp") or "")[:10]
+            total = float(f.get("total") or 0)
+            with st.container(border=True):
+                c1, c2 = st.columns([4, 1.5])
+                with c1:
+                    st.markdown(f"🧾 **{comp}**")
+                    st.caption(f"📅 {fecha}")
+                with c2:
+                    st.markdown(f"### $ {_pesos(total)}")
+
+        for _label, _lista in [
+            ("✅ Cobrado", fac_cobradas),
+            ("⏳ Pendiente", fac_pendientes),
+            ("❌ Anulado", facturas_anul),
+        ]:
+            if _lista:
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
+                    _by_cli = {}
+                    for _f in _lista:
+                        _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                        _by_cli.setdefault(_k, []).append(_f)
+                    for _cli_name, _cli_items in sorted(_by_cli.items()):
+                        _cli_total = sum(float(_f.get("total") or 0) for _f in _cli_items)
+                        with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
+                            for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                                _render_factura(f)
+
+        # Wix
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos</h4>", unsafe_allow_html=True)
+        _w1, _w2, _w3, _w4 = st.columns(4)
+        _w1.metric("✅ Cobrado", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)}")
+        _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
+        _w3.metric("❌ Anulado", f"$ {_pesos(total_wix_anul)}", f"{len(wix_anulados)}")
+        _w4.metric("🚚 No entregado", f"$ {_pesos(total_wix_no_ent)}", f"{len(wix_no_entregados)}")
+
+        def _render_pedido_wix(p):
+            nro    = p.get("number") or p.get("id") or "—"
+            fecha  = str(p.get("createdDate") or "")[:10]
+            total  = _wix_monto(p)
+            pay    = str(p.get("paymentStatus") or "").upper()
+            ful    = str(p.get("fulfillmentStatus") or "").upper()
+            status = str(p.get("status") or "").upper()
+            if status == "CANCELED":
+                badge = "❌"
+            elif pay == "PAID":
+                badge = "✅"
+            elif ful == "FULFILLED":
+                badge = "⏳"
+            else:
+                badge = "🚚"
+            with st.container(border=True):
+                c1, c2 = st.columns([4, 1.5])
+                with c1:
+                    st.markdown(f"{badge} **Pedido #{nro}**")
+                    st.caption(f"📅 {fecha}")
+                with c2:
+                    st.markdown(f"### $ {_pesos(total)}")
+
+        for _label, _lista in [
+            ("✅ Cobrado", wix_cobradas),
+            ("⏳ Pendiente", wix_pendientes),
+            ("❌ Anulado", wix_anulados),
+            ("🚚 No entregado", wix_no_entregados),
+        ]:
+            if _lista:
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
+                    _by_cli = {}
+                    for _p in _lista:
+                        _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
+                        _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
+                        _by_cli.setdefault(_k, []).append(_p)
+                    for _cli_name, _cli_items in sorted(_by_cli.items()):
+                        _cli_total = sum(_wix_monto(_p) for _p in _cli_items)
+                        with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
+                            for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
+                                _render_pedido_wix(p)
+
+        # ── EGRESOS ─────────────────────────────────────────────────────────────
+        st.divider()
+        st.markdown(f"<h3 style='color:#111111; font-weight:800'>📉 Egresos — $ {_pesos(total_egresos)}</h3>", unsafe_allow_html=True)
+
+        def _render_comprobante(c):
+            nro  = c.get("nro_comprobante") or "—"
+            prov = c.get("proveedor") or "—"
+            fec  = c.get("fecha") or "—"
+            tot  = float(c.get("total") or 0)
+            cond = c.get("condicion_pago") or ""
+            with st.container(border=True):
+                _c1, _c2 = st.columns([4, 1.5])
+                with _c1:
+                    st.markdown(f"**#{nro}** — {prov}")
+                    st.caption(f"📅 {fec}" + (f" · {cond}" if cond else ""))
+                with _c2:
+                    st.markdown(f"### $ {_pesos(tot)}")
+
+        def _render_gasto(g):
+            nro  = g.get("nro_comprobante") or "—"
+            prov = g.get("proveedor") or "—"
+            fec  = g.get("fecha") or "—"
+            tot  = float(g.get("total") or 0)
+            tipo = g.get("tipo_comprobante") or ""
+            with st.container(border=True):
+                _c1, _c2 = st.columns([4, 1.5])
+                with _c1:
+                    st.markdown(f"**#{nro}** — {prov}")
+                    st.caption(f"📅 {fec}" + (f" · {tipo}" if tipo else ""))
+                with _c2:
+                    st.markdown(f"### $ {_pesos(tot)}")
+
+        # Compras
+        total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
+        total_comp_pend = sum(float(c.get("total") or 0) for c in comp_pendientes)
+        total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>💰 Compras — $ {_pesos(total_compras)} · {len(comp_pagadas) + len(comp_pendientes)} comprobantes</h4>", unsafe_allow_html=True)
+        _ec1, _ec2, _ec3 = st.columns(3)
+        _ec1.metric("✅ Pagado",    f"$ {_pesos(total_comp_pag)}",  f"{len(comp_pagadas)}")
+        _ec2.metric("⏳ Pendiente", f"$ {_pesos(total_comp_pend)}", f"{len(comp_pendientes)}")
+        _ec3.metric("❌ Anulado",   f"$ {_pesos(total_comp_anul)}", f"{len(comp_anuladas)}")
+        for _label, _lista in [
+            ("✅ Pagado",    comp_pagadas),
+            ("⏳ Pendiente", comp_pendientes),
+            ("❌ Anulado",   comp_anuladas),
+        ]:
+            if _lista:
+                _tot_lbl = sum(float(c.get("total") or 0) for c in _lista)
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
+                    _by_prov = {}
+                    for _c in _lista:
+                        _k = _c.get("proveedor") or "—"
+                        _by_prov.setdefault(_k, []).append(_c)
+                    for _prov_name, _prov_items in sorted(_by_prov.items()):
+                        _prov_total = sum(float(_c.get("total") or 0) for _c in _prov_items)
+                        with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} comprobante{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
+                            for _c in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                                _render_comprobante(_c)
+
+        # Gastos
+        total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
+        total_gas_pend = sum(float(g.get("total") or 0) for g in gas_pendientes)
+        total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
+        st.markdown(f"<h4 style='color:#111111; font-weight:800'>📄 Gastos — $ {_pesos(total_gastos)} · {len(gas_pagados) + len(gas_pendientes)} gastos</h4>", unsafe_allow_html=True)
+        _eg1, _eg2, _eg3 = st.columns(3)
+        _eg1.metric("✅ Pagado",    f"$ {_pesos(total_gas_pag)}",  f"{len(gas_pagados)}")
+        _eg2.metric("⏳ Pendiente", f"$ {_pesos(total_gas_pend)}", f"{len(gas_pendientes)}")
+        _eg3.metric("❌ Anulado",   f"$ {_pesos(total_gas_anul)}", f"{len(gas_anulados)}")
+        for _label, _lista in [
+            ("✅ Pagado",    gas_pagados),
+            ("⏳ Pendiente", gas_pendientes),
+            ("❌ Anulado",   gas_anulados),
+        ]:
+            if _lista:
+                _tot_lbl = sum(float(g.get("total") or 0) for g in _lista)
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
+                    _by_prov = {}
+                    for _g in _lista:
+                        _k = _g.get("proveedor") or "—"
+                        _by_prov.setdefault(_k, []).append(_g)
+                    for _prov_name, _prov_items in sorted(_by_prov.items()):
+                        _prov_total = sum(float(_g.get("total") or 0) for _g in _prov_items)
+                        with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} gasto{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
+                            for _g in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                                _render_gasto(_g)
+
+        # ── RESULTADO ────────────────────────────────────────────────────────────
+        st.divider()
+        color = "green" if resultado >= 0 else "red"
+        signo = "+" if resultado >= 0 else ""
+        st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
+
+with tab_ingresos:
+    with tab_ing_facturas:
+        st.subheader("🧾 Facturas")
+        _facturas = db.cargar_facturas()
+        if not _facturas:
+            st.info("No hay facturas cargadas. Sincronizá desde el tab 🔄 Sincronizar.")
+        else:
+            _fac_df_rows = []
+            for _f in _facturas:
+                _fac_df_rows.append({
+                    "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
+                    "Fecha": _f.get("fecha_comp", ""),
+                    "Cliente": f"{_f.get('apellido_razon_soc','')} {_f.get('nombre','')}".strip(),
+                    "CUIT": _f.get("cuit", ""),
+                    "Nro Pedido": _f.get("nro_pedido", ""),
+                    "Total": _f.get("total", 0.0),
+                    "Anulada": _f.get("anulada", "N"),
+                    "URL": _f.get("url_factura", ""),
+                    "_raw": _f,
+                })
+            _total_fac = sum(r["Total"] for r in _fac_df_rows if r["Anulada"] != "S")
+            st.caption(f"{len(_fac_df_rows)} facturas · Total vigente: **$ {_total_fac:,.2f}**")
+            for _fr in _fac_df_rows:
+                _f = _fr["_raw"]
+                _anulada = _fr["Anulada"] == "S"
+                _label = f"{'~~' if _anulada else ''}**{_fr['Comprobante']}** — {_fr['Cliente']} · {_fr['Fecha']} · $ {_fr['Total']:,.2f}{'~~' if _anulada else ''}"
+                if _anulada:
+                    _label += " :red[ANULADA]"
+                with st.expander(_label):
+                    _col1, _col2 = st.columns(2)
+                    with _col1:
+                        st.write(f"**CUIT:** {_fr['CUIT']}")
+                        st.write(f"**Nro Pedido:** {_fr['Nro Pedido']}")
+                        st.write(f"**Gravado:** $ {_f.get('monto_gravado', 0):,.2f}")
+                        st.write(f"**IVA:** $ {_f.get('monto_iva', 0):,.2f}")
+                    with _col2:
+                        st.write(f"**Exento:** $ {_f.get('monto_exento', 0):,.2f}")
+                        st.write(f"**Descuento:** $ {_f.get('monto_desc', 0):,.2f}")
+                        st.write(f"**CAE/CAI:** {_f.get('nro_cae_cai', '')}")
+                        if _f.get("url_factura"):
+                            st.markdown(f"[Ver factura PDF]({_f['url_factura']})")
+                    _items = _f.get("detalles", []) or _f.get("items", [])
+                    if _items:
+                        st.dataframe(
+                            [{
+                                "Código": it.get("cod_item", ""),
+                                "Item": it.get("item", ""),
+                                "Cantidad": it.get("ctd", 0),
+                                "Precio Unit.": it.get("precio_uni", 0),
+                                "% Desc": it.get("porc_desc", 0),
+                                "% IVA": it.get("porc_iva", 0),
+                            } for it in _items],
+                            use_container_width=True, hide_index=True
+                        )
+
+with tab_sync:
+    st.subheader("🔄 Sincronizar")
+    st.caption("Trae y guarda Gastos, Compras, Pedidos DUX y Pedidos Wix de una sola vez.")
+
+    _hoy_sync = date.today()
+    _m3, _y3 = _hoy_sync.month - 2, _hoy_sync.year
+    if _m3 <= 0:
+        _m3 += 12
+        _y3 -= 1
+    _sync_desde_default = _hoy_sync.replace(year=_y3, month=_m3)
+    _m1, _y1 = _hoy_sync.month + 1, _hoy_sync.year
+    if _m1 > 12:
+        _m1 -= 12
+        _y1 += 1
+    _sync_hasta_default = _hoy_sync.replace(year=_y1, month=_m1)
+
+    with st.form("form_sync_central", border=False):
+        col_s1, col_s2 = st.columns([1, 1])
+        with col_s1:
+            sync_desde = st.date_input(
+                "Desde", value=_sync_desde_default, key="sync_central_desde", format="YYYY-MM-DD"
+            )
+        with col_s2:
+            sync_hasta = st.date_input(
+                "Hasta", value=_sync_hasta_default, key="sync_central_hasta", format="YYYY-MM-DD"
+            )
+        sincronizar_todo = st.form_submit_button(
+            "🔄 Sincronizar todo", type="primary", use_container_width=True
+        )
+
+    if sincronizar_todo:
+        for _i, (_label, _fn) in enumerate([
+            ("Gastos (DUX)", _sync_gastos),
+            ("Compras (DUX)", _sync_compras),
+            ("Pedidos DUX", _sync_pedidos_dux),
+            ("Facturas (DUX)", _sync_facturas),
+            ("Pedidos Wix", _sync_pedidos_wix),
+        ]):
+            if _i > 0:
+                time.sleep(DUX_RATE_LIMIT_SECONDS)
+            with st.spinner(f"Sincronizando {_label}..."):
+                try:
+                    _ok, _n, _msg = _fn(sync_desde, sync_hasta)
+                except Exception as _e:
+                    _ok, _msg = False, msg_error_sheets(_label, _e)
+            if _ok:
+                st.success(_msg)
+            else:
+                st.error(_msg)
+
 with tab_grupo_config:
     (
         tab_mapeo,
         tab_packs,
         tab_mixes,
         tab_dux_productos,
+        tab_dux_rubros,
         tab_wix_productos,
         tab_proveedores,
         tab_editar,
@@ -1127,6 +1874,7 @@ with tab_grupo_config:
             "Packs Wix",
             "Mixes DUX",
             "DUX Productos",
+            "DUX Rubros",
             "Wix Productos",
             "Proveedores",
             "Relacionar productos",
@@ -2000,6 +2748,80 @@ with tab_estimado:
     ts_est_ultimo = db.ultima_carga("estimado_semanal")
     ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
 
+with tab_carga_stock:
+    ts_carga_stk_ph = st.empty()
+    ts_carga_stk_ph.caption(
+        f"🕒 Último guardado: **{db.ultima_carga('stock') or '?'}**"
+    )
+
+    fecha_carga = st.date_input(
+        "Fecha de conteo",
+        value=date.today(),
+        key="carga_stock_fecha",
+        format="YYYY-MM-DD",
+    )
+
+    if productos.empty:
+        st.warning("Primero sincronizá los productos en 📡 DUX Productos.")
+    else:
+        stk_prev = db.cargar_stock(fecha=str(fecha_carga))
+        valores_prev = {}
+        if not stk_prev.empty:
+            valores_prev = dict(zip(
+                stk_prev["codigo"].astype(str),
+                stk_prev["cantidad"].astype(float),
+            ))
+
+        df_carga = productos[["codigo", "producto", "unidad_medida"]].copy()
+        df_carga = df_carga.rename(columns={
+            "codigo": "Código", "producto": "Producto", "unidad_medida": "Unidad"
+        })
+        df_carga["Cantidad"] = df_carga["Código"].astype(str).map(
+            lambda c: valores_prev.get(c, 0.0)
+        ).astype(float)
+
+        with st.form("form_carga_stock_simple", clear_on_submit=False):
+            guardar_carga = st.form_submit_button(
+                "💾 Guardar Stock", type="primary", use_container_width=True,
+            )
+            edited_carga = st.data_editor(
+                df_carga,
+                use_container_width=True,
+                hide_index=True,
+                disabled=["Código", "Producto", "Unidad"],
+                column_config={
+                    "Código": st.column_config.TextColumn("Cód.", width="small"),
+                    "Producto": st.column_config.TextColumn("Producto"),
+                    "Unidad": st.column_config.TextColumn("Und.", width="small"),
+                    "Cantidad": st.column_config.NumberColumn(
+                        "Cantidad", format="%.2f", min_value=0, width="small"
+                    ),
+                },
+                key=f"editor_carga_stock_{fecha_carga}",
+            )
+
+        if guardar_carga:
+            salida_carga = productos[["codigo", "producto", "unidad_medida"]].copy()
+            cantidades_carga = dict(zip(
+                edited_carga["Código"].astype(str),
+                edited_carga["Cantidad"].astype(float),
+            ))
+            salida_carga["cantidad"] = salida_carga["codigo"].astype(str).map(
+                lambda c: cantidades_carga.get(c, 0.0)
+            ).astype(float)
+            try:
+                db.guardar_stock(salida_carga, str(fecha_carga))
+                try:
+                    db.guardar_config({"st_teorico_fecha_conteo": str(fecha_carga)})
+                except Exception:
+                    pass
+                ts_carga_stk_ph.caption(
+                    f"🕒 Último guardado: **{db.ultima_carga('stock') or '?'}**"
+                )
+                st.success(f"✅ Stock del {fecha_carga} guardado.")
+            except Exception as e:
+                st.error(f"❌ No se pudo guardar el stock: {e}")
+
 with tab_stock:
     # Stock (single-day): Stock(F0) + Compras(Fc) - Pedidos(Fp)
     # Las fechas se persisten en gsheets config y el resultado vive en
@@ -2171,13 +2993,7 @@ with tab_stock:
                             )
                         )
 
-                    compras_res = cargar_compras_dux_v2(fc, fc)
-                    if compras_res is None:
-                        st.error(
-                            "⚠️ No se pudieron leer las compras de DUX. "
-                            "Probá recargar en un momento."
-                        )
-                        return
+                    compras_res = db.cargar_compras_desde_gastos(fc)
                     map_compras = compras_res.get("cantidades", {})
                     compras_raw = compras_res.get("compras", [])
 
@@ -2336,7 +3152,7 @@ with tab_stock:
             expanded=False,
         ):
             if not _compras_raw:
-                st.caption("No hubo compras ese día (o DUX no respondió).")
+                st.caption("No hubo compras ese día (o no fueron sincronizadas en Egresos → Gastos).")
             else:
                 for c in _compras_raw:
                     nro = c.get("nro_comprobante", "?")
@@ -2686,152 +3502,14 @@ with tab_dux:
             "bajo `[dux] token = \"...\"`."
         )
     else:
-        id_empresa = id_empresa_default
-        id_sucursal = id_sucursal_default
-
         all_orders_saved = []
         selecciones_dux = db.cargar_selecciones("dux")
-        config_app = db.cargar_config()
-        # Rango persistido en Sheets (config); fallback a hoy
-        fecha_desde_default = date.today() - timedelta(days=7)
-        fecha_hasta_default = date.today()
-        if config_app.get("dux_fecha_desde"):
-            try:
-                fecha_desde_default = pd.to_datetime(config_app["dux_fecha_desde"]).date()
-            except Exception:
-                pass
-        if config_app.get("dux_fecha_hasta"):
-            try:
-                fecha_hasta_default = pd.to_datetime(config_app["dux_fecha_hasta"]).date()
-            except Exception:
-                pass
         try:
             all_orders_saved = db.cargar_pedidos_dux()
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos DUX", e))
 
-        # Timestamp arriba (placeholder para actualizar tras el sync sin refresh)
-        ts_ped_ph = st.empty()
-        ts_ped_ph.caption(
-            f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**"
-        )
-
-        # Sync por rango manual (con date pickers). Permite incluir fechas
-        # futuras si tu papa carga pedidos por adelantado. El merge en
-        # _guardar_pedidos asegura que los pedidos viejos sobrevivan.
-        with st.form("form_dux_sync", clear_on_submit=False, border=False):
-            consultar = st.form_submit_button(
-                "🔄 Sincronizar pedidos desde DUX",
-                type="primary",
-                use_container_width=True,
-            )
-            col_d1, col_d2 = st.columns([1, 1])
-            with col_d1:
-                fecha_desde = st.date_input(
-                    "Fecha desde",
-                    value=fecha_desde_default,
-                    key="dux_fecha_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_d2:
-                fecha_hasta = st.date_input(
-                    "Fecha hasta",
-                    value=fecha_hasta_default,
-                    key="dux_fecha_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if consultar:
-            url_p = f"{base_url}/pedidos"
-            headers_p = {"accept": "application/json", "authorization": token}
-            page_offset = 0
-            page_size = 50
-            all_orders = []
-            error_corte = False
-
-            with st.spinner("Consultando DUX..."):
-                while True:
-                    params_p = {
-                        "idEmpresa": int(id_empresa),
-                        "idSucursal": int(id_sucursal),
-                        "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
-                        "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
-                        "offset": page_offset,
-                        "limit": page_size,
-                    }
-                    try:
-                        r = requests.get(
-                            url_p, params=params_p, headers=headers_p, timeout=30
-                        )
-                    except requests.RequestException as e:
-                        st.error(msg_error_red("DUX", e))
-                        error_corte = True
-                        break
-
-                    if r.status_code != 200:
-                        st.error(msg_error_http("DUX", r.status_code, r.text))
-                        error_corte = True
-                        break
-
-                    try:
-                        d = r.json()
-                    except ValueError:
-                        st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
-                        error_corte = True
-                        break
-
-                    if isinstance(d, dict) and "message" in d and "results" not in d:
-                        st.error(f"❌ DUX dice: {d['message']}. Avisale a Tomás si no se arregla.")
-                        error_corte = True
-                        break
-
-                    if isinstance(d, dict) and "results" in d:
-                        page = d["results"]
-                    elif isinstance(d, list):
-                        page = d
-                    else:
-                        page = []
-
-                    if not page:
-                        break
-
-                    all_orders.extend(page)
-                    if len(page) < page_size:
-                        break
-                    page_offset += page_size
-                    time.sleep(DUX_RATE_LIMIT_SECONDS)
-
-            if not error_corte:
-                try:
-                    db.guardar_pedidos_dux(all_orders)
-                    # Actualizar el caption "Ultima sync" al toque (sin refresh)
-                    try:
-                        ts_ped_ph.caption(
-                            f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**"
-                        )
-                    except Exception:
-                        pass
-                except Exception as e:
-                    st.error(msg_error_sheets("guardar pedidos DUX", e))
-
-                # Persistir rango en Sheets (config) para que sobreviva reinicios
-                try:
-                    db.guardar_config(
-                        {
-                            "dux_fecha_desde": str(fecha_desde),
-                            "dux_fecha_hasta": str(fecha_hasta),
-                        }
-                    )
-                except Exception:
-                    pass
-
-                all_orders_saved = db.cargar_pedidos_dux()
-                if all_orders:
-                    st.success(
-                        f"✅ {len(all_orders)} pedidos guardados."
-                    )
-                else:
-                    st.warning("No hay pedidos pendientes en ese rango.")
+        st.caption(f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**")
 
         if all_orders_saved:
             n_asignados = sum(1 for v in selecciones_dux.values() if v)
@@ -3118,6 +3796,131 @@ with tab_dux_productos:
     ts_dux_prod = db.ultima_carga("dux_productos")
     ts_dux_prod_ph.caption(f"🕒 Última actualización: **{ts_dux_prod or '?'}**")
 
+with tab_dux_rubros:
+    ts_dux_rubros_ph = st.empty()
+
+    if not token:
+        st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
+    else:
+        # ---- RUBROS ----
+        st.subheader("Rubros")
+        col_r1, col_r2 = st.columns([3, 1])
+        with col_r1:
+            sincronizar_rubros = st.button(
+                "🔄 Sincronizar rubros desde DUX",
+                type="primary",
+                key="dux_sincronizar_rubros",
+                use_container_width=True,
+            )
+
+        if sincronizar_rubros:
+            url_r = f"{base_url}/rubros"
+            headers_r = {"accept": "application/json", "authorization": token}
+            params_r = {"id_empresa": id_empresa_default}
+            try:
+                resp_r = requests.get(url_r, headers=headers_r, params=params_r, timeout=30)
+            except requests.RequestException as e:
+                st.error(msg_error_red("DUX", e))
+                resp_r = None
+
+            if resp_r is not None:
+                if resp_r.status_code != 200:
+                    st.error(msg_error_http("DUX", resp_r.status_code, resp_r.text))
+                else:
+                    try:
+                        data_r = resp_r.json()
+                    except ValueError:
+                        data_r = None
+                        st.error("❌ DUX devolvió una respuesta inválida para rubros.")
+
+                    if data_r is not None:
+                        items_r = data_r if isinstance(data_r, list) else data_r.get("results", [])
+                        registros_r = [
+                            {"id": r.get("id_rubro"), "nombre": str(r.get("rubro", "") or "").strip()}
+                            for r in (items_r or [])
+                            if r.get("id_rubro") is not None and r.get("eliminado", "N") == "N"
+                        ]
+                        db.guardar_rubros(registros_r)
+                        st.success(f"✅ {len(registros_r)} rubros sincronizados.")
+
+        st.divider()
+        st.caption("Rubros cargados")
+        try:
+            df_rubros = db.cargar_rubros()
+            if not df_rubros.empty:
+                cols_r = [c for c in ["id", "nombre"] if c in df_rubros.columns]
+                st.dataframe(df_rubros[cols_r].sort_values("nombre").reset_index(drop=True), use_container_width=False, hide_index=True)
+            else:
+                st.info("Sin rubros. Apretá **Sincronizar rubros**.")
+        except Exception as e:
+            st.error(msg_error_sheets("leer rubros", e))
+
+        st.divider()
+
+        # ---- SUBRUBROS ----
+        st.subheader("Subrubros")
+        sincronizar_subrubros = st.button(
+            "🔄 Sincronizar subrubros desde DUX",
+            type="primary",
+            key="dux_sincronizar_subrubros",
+            use_container_width=True,
+        )
+
+        if sincronizar_subrubros:
+            url_sr = f"{base_url}/subrubros"
+            headers_sr = {"accept": "application/json", "authorization": token}
+            params_sr = {"id_empresa": id_empresa_default}
+            try:
+                resp_sr = requests.get(url_sr, headers=headers_sr, params=params_sr, timeout=30)
+            except requests.RequestException as e:
+                st.error(msg_error_red("DUX", e))
+                resp_sr = None
+
+            if resp_sr is not None:
+                if resp_sr.status_code != 200:
+                    st.error(msg_error_http("DUX", resp_sr.status_code, resp_sr.text))
+                else:
+                    try:
+                        data_sr = resp_sr.json()
+                    except ValueError:
+                        data_sr = None
+                        st.error("❌ DUX devolvió una respuesta inválida para subrubros.")
+
+                    if data_sr is not None:
+                        st.caption(f"Respuesta DUX subrubros: `{str(data_sr)[:300]}`")
+                        items_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
+                        registros_sr = []
+                        for sr in (items_sr or []):
+                            sid = sr.get("id_subrubro") or sr.get("id")
+                            if sid is None:
+                                continue
+                            if sr.get("eliminado", "N") != "N":
+                                continue
+                            rubro_obj = sr.get("rubro") or {}
+                            registros_sr.append({
+                                "id": sid,
+                                "nombre": str(sr.get("subrubro") or sr.get("nombre", "") or "").strip(),
+                                "rubro_id": rubro_obj.get("id_rubro") or rubro_obj.get("id"),
+                                "rubro_nombre": str(rubro_obj.get("rubro") or rubro_obj.get("nombre", "") or "").strip(),
+                            })
+                        db.guardar_subrubros(registros_sr)
+                        st.success(f"✅ {len(registros_sr)} subrubros sincronizados.")
+
+        st.divider()
+        st.caption("Subrubros cargados")
+        try:
+            df_subrubros = db.cargar_subrubros()
+            if not df_subrubros.empty:
+                cols_sr = [c for c in ["id", "nombre", "rubro_nombre"] if c in df_subrubros.columns]
+                st.dataframe(df_subrubros[cols_sr].sort_values("nombre").reset_index(drop=True), use_container_width=False, hide_index=True)
+            else:
+                st.info("Sin subrubros. Apretá **Sincronizar subrubros**.")
+        except Exception as e:
+            st.error(msg_error_sheets("leer subrubros", e))
+
+    ts_dux_rubros = db.ultima_carga("dux_rubros")
+    ts_dux_rubros_ph.caption(f"🕒 Última actualización rubros: **{ts_dux_rubros or '?'}**")
+
 with tab_wix:
     wix_cfg = st.secrets.get("wix", {})
     wix_token = wix_cfg.get("api_key", "")
@@ -3135,116 +3938,7 @@ with tab_wix:
             st.error(msg_error_sheets("leer pedidos Wix", e))
             wix_orders_saved = []
 
-        config_app_wix = db.cargar_config()
-        fecha_desde_default = date.today() - timedelta(days=3)
-        fecha_hasta_default = date.today()
-        if config_app_wix.get("wix_fecha_desde"):
-            try:
-                fecha_desde_default = pd.to_datetime(config_app_wix["wix_fecha_desde"]).date()
-            except Exception:
-                pass
-        if config_app_wix.get("wix_fecha_hasta"):
-            try:
-                fecha_hasta_default = pd.to_datetime(config_app_wix["wix_fecha_hasta"]).date()
-            except Exception:
-                pass
-
-        # Timestamp arriba del boton Sincronizar
-        ts_wix_ph = st.empty()
-        ts_wix_ph.caption(
-            f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**"
-        )
-
-        # Sync por rango manual (con date pickers). Permite incluir fechas
-        # futuras. El merge en _guardar_pedidos asegura que los pedidos
-        # viejos sobrevivan.
-        with st.form("form_wix_sync", clear_on_submit=False, border=False):
-            consultar_wix = st.form_submit_button(
-                "🔄 Sincronizar pedidos desde Wix",
-                type="primary",
-                use_container_width=True,
-            )
-            col_w1, col_w2 = st.columns([1, 1])
-            with col_w1:
-                wix_desde = st.date_input(
-                    "Fecha desde",
-                    value=fecha_desde_default,
-                    key="wix_fecha_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_w2:
-                wix_hasta = st.date_input(
-                    "Fecha hasta",
-                    value=fecha_hasta_default,
-                    key="wix_fecha_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if consultar_wix:
-            url = "https://www.wixapis.com/ecom/v1/orders/search"
-            headers = {
-                "Authorization": wix_token,
-                "wix-account-id": wix_account,
-                "wix-site-id": wix_site,
-                "Content-Type": "application/json",
-            }
-            body = {
-                "search": {
-                    "filter": {
-                        "$and": [
-                            {"createdDate": {"$gte": f"{wix_desde}T00:00:00.000Z"}},
-                            {"createdDate": {"$lte": f"{wix_hasta}T23:59:59.999Z"}},
-                        ]
-                    },
-                    "cursorPaging": {"limit": 100},
-                }
-            }
-
-            try:
-                with st.spinner("Consultando Wix..."):
-                    resp = requests.post(url, json=body, headers=headers, timeout=30)
-            except requests.RequestException as e:
-                st.error(msg_error_red("Wix", e))
-                resp = None
-
-            if resp is not None:
-                if resp.status_code != 200:
-                    st.error(msg_error_http("Wix", resp.status_code, resp.text))
-                else:
-                    try:
-                        data = resp.json()
-                    except ValueError:
-                        st.error("❌ Wix devolvió una respuesta inválida. Probá de nuevo.")
-                        data = None
-
-                    if data is not None:
-                        orders = data.get("orders", [])
-                        # Recortar campos no usados para no superar el limite de 50k chars/celda de Sheets
-                        orders_slim = [_slim_wix_order(o) for o in orders]
-                        try:
-                            db.guardar_pedidos_wix(orders_slim)
-                            # Actualizar el caption "Ultima sync" al toque
-                            try:
-                                ts_wix_ph.caption(
-                                    f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**"
-                                )
-                            except Exception:
-                                pass
-                        except Exception as e:
-                            st.error(msg_error_sheets("guardar pedidos Wix", e))
-
-                        try:
-                            db.guardar_config(
-                                {
-                                    "wix_fecha_desde": str(wix_desde),
-                                    "wix_fecha_hasta": str(wix_hasta),
-                                }
-                            )
-                        except Exception:
-                            pass
-
-                        wix_orders_saved = db.cargar_pedidos_wix()
-                        st.success(f"✅ {len(orders)} pedidos guardados.")
+        st.caption(f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**")
 
         orders_saved = wix_orders_saved or []
         selecciones = db.cargar_selecciones("wix")
@@ -3364,26 +4058,42 @@ with tab_wix:
                             fecha_default_entrega = date.today() + timedelta(days=1)
 
                     es_cancelado = str(o.get("status", "")).upper() == "CANCELED"
+                    _pay_badges = {
+                        "PAID": "🟢 Pagado",
+                        "UNPAID": "🔴 Sin pagar",
+                        "PENDING": "🟡 Pago pendiente",
+                        "PARTIALLY_REFUNDED": "🟠 Parcialmente reembolsado",
+                        "FULLY_REFUNDED": "⚫ Reembolsado",
+                    }
+                    _ful_badges = {
+                        "FULFILLED": "✅ Entregado",
+                        "NOT_FULFILLED": "⏳ No entregado",
+                        "PARTIALLY_FULFILLED": "🔶 Entrega parcial",
+                    }
+                    pay_badge = _pay_badges.get(str(o.get("paymentStatus") or "").upper(), "")
+                    ful_badge = _ful_badges.get(str(o.get("fulfillmentStatus") or "").upper(), "")
+                    buyer_note = o.get("buyerNote") or ""
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
-                            # Fecha de registro del pedido en Wix
                             f_reg_wix = _fecha_wix(o)
                             registro_badge = ""
                             if f_reg_wix and f_reg_wix != pd.Timestamp.min:
-                                registro_badge = (
-                                    f" · 📅 registrado {f_reg_wix.date()}"
-                                )
+                                registro_badge = f" · 📅 {f_reg_wix.date()}"
                             cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
+                            badges_line = " · ".join(b for b in [pay_badge, ful_badge] if b)
                             st.markdown(
                                 f"**#{nro}** — {cliente} · {len(items)} ítems · "
                                 f"**{total}**{registro_badge}{cancelado_badge}"
+                                + (f" · {badges_line}" if badges_line else "")
                             )
                             detalles = []
                             if direccion:
                                 detalles.append(f"📍 {direccion}")
                             if email:
                                 detalles.append(f"✉️ {email}")
+                            if buyer_note:
+                                detalles.append(f"💬 {buyer_note}")
                             if detalles:
                                 st.caption(" · ".join(detalles))
                         if not es_cancelado:
@@ -3415,10 +4125,12 @@ with tab_wix:
                                         or nombre_obj.get("translated")
                                         or ""
                                     )
+                                    price_obj = it.get("price") or {}
                                     filas.append(
                                         {
                                             "producto": nombre,
                                             "cantidad": it.get("quantity", 0),
+                                            "precio unit.": price_obj.get("formattedAmount") or "",
                                         }
                                     )
                                 st.dataframe(
@@ -3745,1064 +4457,117 @@ with tab_proveedores:
     ts_prov = db.ultima_carga("proveedores")
     ts_prov_ph.caption(f"🕒 Última actualización: **{ts_prov or '?'}**")
 
-with tab_compras:
-    ts_compras_ph = st.empty()
+with tab_eg_compras:
+    st.caption(f"🕒 Última sync: **{db.ultima_carga('compras_sync') or '?'}**")
 
-    COND_PAGO_OPCIONES = ["CONTADO", "EFECTIVO", "CHEQUE", "CUENTA CORRIENTE"]
-    COLUMNAS_DUX = [
-        "COMPROBANTE", "TIPO COMPROBANTE", "ID PROVEEDOR", "FECHA",
-        "FECHA IMPUTACION CONTABLE", "FECHA VENCIMIENTO", "CONDICION PAGO",
-        "REALIZA RECEPCION", "DEPOSITO", "OBSERVACIONES", "CÓDIGO PRODUCTO",
-        "TALLE", "COLOR", "CANTIDAD", "PRECIO", "PRECIO INCLUYE IVA",
-        "PORCENTAJE DESCUENTO", "PORCENTAJE IVA", "COMENTARIOS",
-        "NUMERO IDENTIFICACION TRAZABLE", "DESCRIPCION TRAZABLE",
-        "PERCEPCIONES", "VALORES PERCEPCIONES",
-    ]
-
-    df_prov_data = db.cargar_proveedores()
-    df_prods_data = db.cargar_productos()
-
-    if df_prov_data.empty:
-        st.warning("Primero cargá proveedores en 👥 Proveedores.")
-    elif df_prods_data.empty:
-        st.warning("Primero sincronizá productos en 📡 DUX Productos.")
-    else:
-        fechas_comp = db.fechas_compras()
-        cfg_comp_tab = db.cargar_config()
-        fecha_compra_default = (
-            pd.to_datetime(fechas_comp[0]).date() if fechas_comp else date.today()
-        )
-        if cfg_comp_tab.get("compras_fecha"):
-            try:
-                fecha_compra_default = pd.to_datetime(
-                    cfg_comp_tab["compras_fecha"]
-                ).date()
-            except Exception:
-                pass
-
-        def _save_fecha_compras():
-            v = st.session_state.get("compras_fecha")
-            if v:
-                try:
-                    db.guardar_config({"compras_fecha": str(v)})
-                except Exception:
-                    pass
-
-        fecha_compra_sel = st.date_input(
-            "Fecha de compra",
-            value=fecha_compra_default,
-            key="compras_fecha",
-            format="YYYY-MM-DD",
-            on_change=_save_fecha_compras,
-        )
-
-        # Opciones para los selectbox
-        opciones_prov = [
-            f"{pid} - {nom}"
-            for pid, nom in zip(
-                df_prov_data["proveedor_id"].astype(str),
-                df_prov_data["proveedor"].astype(str),
-            )
-        ]
-        prov_label_to_id = {
-            f"{pid} - {nom}": (pid, nom)
-            for pid, nom in zip(
-                df_prov_data["proveedor_id"].astype(str),
-                df_prov_data["proveedor"].astype(str),
-            )
-        }
-
-        opciones_prod = [
-            f"{cod} - {prod}"
-            for cod, prod in zip(
-                df_prods_data["codigo"].astype(str),
-                df_prods_data["producto"].astype(str),
-            )
-        ]
-        prod_label_to_codigo = {
-            f"{cod} - {prod}": (cod, prod)
-            for cod, prod in zip(
-                df_prods_data["codigo"].astype(str),
-                df_prods_data["producto"].astype(str),
-            )
-        }
-
-        # Cargar compras existentes para esta fecha
+    # Visualización de compras sincronizadas
+    try:
         df_compras_all = db.cargar_compras()
-        if not df_compras_all.empty:
-            df_compras_fecha = df_compras_all[
-                df_compras_all["fecha"] == str(fecha_compra_sel)
-            ].reset_index(drop=True)
-        else:
-            df_compras_fecha = pd.DataFrame(columns=db.SCHEMA["compras"])
+    except Exception as e:
+        st.error(msg_error_sheets("leer compras", e))
+        df_compras_all = pd.DataFrame()
 
-        # Armar vista editable
-        if not df_compras_fecha.empty:
-            view_rows = []
-            for _, r in df_compras_fecha.iterrows():
-                prov_label = f"{r['proveedor_id']} - {r.get('proveedor_nombre', '')}"
-                prod_label = f"{r['codigo_producto']} - {r.get('producto_nombre', '')}"
-                view_rows.append({
-                    "Proveedor": prov_label if prov_label in opciones_prov else "",
-                    "Producto": prod_label if prod_label in opciones_prod else "",
-                    "Cantidad": float(r.get("cantidad", 0) or 0),
-                    "Precio Unit.": float(r.get("precio", 0) or 0),
-                    "Cond. Pago": str(r.get("condicion_pago", "") or "CONTADO"),
-                })
-            df_view = pd.DataFrame(view_rows)
-        else:
-            df_view = pd.DataFrame({
-                "Proveedor": pd.Series(dtype=str),
-                "Producto": pd.Series(dtype=str),
-                "Cantidad": pd.Series(dtype=float),
-                "Precio Unit.": pd.Series(dtype=float),
-                "Cond. Pago": pd.Series(dtype=str),
-            })
+    if df_compras_all.empty:
+        st.info("Todavía no hay compras sincronizadas. Apretá **Sincronizar**.")
+    else:
+        df_compras_all["subtotal"] = (
+            pd.to_numeric(df_compras_all["cantidad"], errors="coerce").fillna(0)
+            * pd.to_numeric(df_compras_all["precio"], errors="coerce").fillna(0)
+        )
 
-        with st.form(f"form_compras_{fecha_compra_sel}", clear_on_submit=False, border=False):
-            guardar_c = st.form_submit_button(
-                "💾 Guardar compras del día", type="primary"
-            )
+        # Agrupar por comprobante para mostrar cards
+        grupos = df_compras_all.groupby(
+            ["comprobante", "fecha", "proveedor_nombre", "condicion_pago"],
+            dropna=False,
+            sort=False,
+        )
 
-            edited_compras = st.data_editor(
-                df_view,
-                use_container_width=False,
-                num_rows="dynamic",
-                column_config={
-                    "Proveedor": st.column_config.SelectboxColumn(
-                        "Proveedor",
-                        options=opciones_prov,
-                        required=True,
-                    ),
-                    "Producto": st.column_config.SelectboxColumn(
-                        "Producto",
-                        options=opciones_prod,
-                        required=True,
-                    ),
-                    "Cantidad": st.column_config.NumberColumn(
-                        "Cantidad", min_value=0.0, step=1.0, format="%.3f",
-                    ),
-                    "Precio Unit.": st.column_config.NumberColumn(
-                        "Precio Unit.", min_value=0.0, step=0.01, format="%.2f",
-                    ),
-                    "Cond. Pago": st.column_config.SelectboxColumn(
-                        "Cond. Pago",
-                        options=COND_PAGO_OPCIONES,
-                    ),
-                },
-                key=f"editor_compras_{fecha_compra_sel}",
-            )
+        comprobantes = sorted(
+            grupos.groups.keys(),
+            key=lambda k: str(k[1]),
+            reverse=True,
+        )
 
-        if guardar_c:
-            rows_save = []
-            for _, r in edited_compras.iterrows():
-                prov_label = r.get("Proveedor")
-                prod_label = r.get("Producto")
-                if not prov_label or not prod_label:
-                    continue
-                if prov_label not in prov_label_to_id or prod_label not in prod_label_to_codigo:
-                    continue
-                pid, pnom = prov_label_to_id[prov_label]
-                pcod, ppnom = prod_label_to_codigo[prod_label]
-                try:
-                    cant = float(r.get("Cantidad") or 0)
-                    precio = float(r.get("Precio Unit.") or 0)
-                except (ValueError, TypeError):
-                    cant, precio = 0.0, 0.0
-                rows_save.append({
-                    "fecha": str(fecha_compra_sel),
-                    "proveedor_id": str(pid),
-                    "proveedor_nombre": str(pnom),
-                    "codigo_producto": str(pcod),
-                    "producto_nombre": str(ppnom),
-                    "cantidad": cant,
-                    "precio": precio,
-                    "condicion_pago": str(r.get("Cond. Pago") or "CONTADO"),
-                })
-            df_save = pd.DataFrame(rows_save, columns=db.SCHEMA["compras"])
-            try:
-                db.guardar_compras_fecha(df_save, fecha_compra_sel)
-                st.success(f"✅ {len(df_save)} líneas guardadas para el {fecha_compra_sel}.")
-            except Exception as e:
-                st.error(msg_error_sheets("guardar compras", e))
+        st.markdown(f"**{len(comprobantes)} comprobantes sincronizados**")
 
-        # Botón de descargar Excel DUX
-        # Releemos lo guardado (post-save) para que la descarga refleje el estado actual
-        df_compras_all_post = db.cargar_compras()
-        if not df_compras_all_post.empty:
-            df_compras_fecha_post = df_compras_all_post[
-                df_compras_all_post["fecha"] == str(fecha_compra_sel)
-            ].reset_index(drop=True)
-        else:
-            df_compras_fecha_post = pd.DataFrame()
+        for key in comprobantes:
+            nro_comp, fecha_c, proveedor_c, cond_pago_c = key
+            df_grupo = grupos.get_group(key)
+            total_c = float(df_grupo["subtotal"].sum())
+            n_items = len(df_grupo)
 
-        if not df_compras_fecha_post.empty:
-            import xlwt
-            # DUX pide fecha con guiones DD-MM-AAAA
-            fecha_str_dux = pd.to_datetime(fecha_compra_sel).strftime("%d-%m-%Y")
-
-            def _num_es(v):
-                try:
-                    n = float(v)
-                except (ValueError, TypeError):
-                    return ""
-                return f"{n:.3f}".rstrip("0").rstrip(".").replace(".", ",")
-
-            grupos_unicos = list(
-                dict.fromkeys(
-                    str(c) for c in df_compras_fecha_post["comprobante"]
-                    if str(c).strip()
-                )
-            )
-
-            prep_key = f"_compras_excel_{fecha_compra_sel}"
-            prep_dux_key = f"_compras_ultimo_dux_{fecha_compra_sel}"
-            prep_map_key = f"_compras_grupo_a_dux_{fecha_compra_sel}"
-            prep_err_key = f"_compras_dux_err_{fecha_compra_sel}"
-
-            # Fragment: aisla el rerun del boton Preparar al bloque interno.
-            # Sin esto, el click reruneaba toda la app y st.tabs visualmente
-            # volvia a la primera pestania (Total a comprar).
-            @st.fragment
-            def _render_preparar_descargar_dux():
-                st.warning(
-                    "⚠️ **APRETAR PREPARAR ANTES DE DESCARGAR EXCEL** — "
-                    "sin tocar Preparar, los números DUX pueden quedar viejos."
-                )
-
-                if st.button("🔄 Preparar Excel para DUX", type="primary",
-                             key=f"btn_prep_excel_{fecha_compra_sel}"):
-                    ultimo_dux_fresh = obtener_ultimo_comprobante_dux()
-                    if ultimo_dux_fresh is None:
-                        st.session_state[prep_err_key] = True
-                        st.session_state.pop(prep_key, None)
-                        st.session_state.pop(prep_dux_key, None)
-                        st.session_state.pop(prep_map_key, None)
-                    else:
-                        grupo_a_dux_fresh = {
-                            g: str(ultimo_dux_fresh + i + 1)
-                            for i, g in enumerate(grupos_unicos)
+            with st.container(border=True):
+                c_info, c_total = st.columns([5, 1.5])
+                with c_info:
+                    st.markdown(
+                        f"**#{nro_comp or '—'}** — {proveedor_c or '—'} · 📅 {fecha_c or '—'}"
+                        + (f" · {cond_pago_c}" if cond_pago_c else "")
+                        + f" · {n_items} ítem{'s' if n_items != 1 else ''}"
+                    )
+                with c_total:
+                    st.markdown(f"**$ {total_c:,.2f}**")
+                with st.expander("Ver ítems"):
+                    filas_items = [
+                        {
+                            "Código": str(r.get("codigo_producto", "")),
+                            "Producto": str(r.get("producto_nombre", "")),
+                            "Cantidad": float(r.get("cantidad", 0) or 0),
+                            "Precio unit.": float(r.get("precio", 0) or 0),
+                            "Subtotal": float(r.get("subtotal", 0) or 0),
                         }
-                        def _try_int(v):
-                            try:
-                                return int(str(v).strip())
-                            except (ValueError, TypeError, AttributeError):
-                                return None
+                        for _, r in df_grupo.iterrows()
+                    ]
+                    st.dataframe(pd.DataFrame(filas_items), use_container_width=True, hide_index=True)
 
-                        def _try_float(v):
-                            try:
-                                return float(v)
-                            except (ValueError, TypeError):
-                                return None
+with tab_eg_gastos:
+    st.caption(f"🕒 Última sync: **{db.ultima_carga('gastos') or '?'}**")
 
-                        filas_excel = []
-                        for _, r in df_compras_fecha_post.iterrows():
-                            pid = r.get("proveedor_id", "")
-                            grupo = str(r.get("comprobante", "") or "")
-                            comp_final = grupo_a_dux_fresh.get(grupo, "")
-                            fila = {col: "" for col in COLUMNAS_DUX}
-                            # Numericos (DUX requiere number, no text)
-                            fila["COMPROBANTE"] = _try_int(comp_final) or comp_final
-                            fila["ID PROVEEDOR"] = _try_int(pid) or pid
-                            fila["CANTIDAD"] = _try_float(r.get("cantidad", 0)) or 0
-                            fila["PRECIO"] = _try_float(r.get("precio", 0)) or 0
-                            # Textos
-                            fila["TIPO COMPROBANTE"] = "COMPROBANTE_COMPRA"
-                            fila["DEPOSITO"] = "DEPOSITO"
-                            fila["FECHA"] = fecha_str_dux
-                            fila["FECHA IMPUTACION CONTABLE"] = fecha_str_dux
-                            fila["FECHA VENCIMIENTO"] = fecha_str_dux
-                            fila["CONDICION PAGO"] = r.get("condicion_pago", "") or "CONTADO"
-                            # CODIGO PRODUCTO se queda como string para preservar ceros adelante (0145, 003)
-                            fila["CÓDIGO PRODUCTO"] = str(r.get("codigo_producto", "") or "")
-                            # REALIZA RECEPCION = "S" -> sin esto DUX crea el comprobante pero
-                            # no lo procesa (queda en 0 procesados / 0 errores). CRITICO.
-                            fila["REALIZA RECEPCION"] = "S"
-                            fila["PRECIO INCLUYE IVA"] = "S"
-                            filas_excel.append(fila)
+    # Display gastos guardados
+    try:
+        gastos_saved = db.cargar_gastos()
+    except Exception as e:
+        st.error(msg_error_sheets("leer gastos", e))
+        gastos_saved = []
 
-                        wb = xlwt.Workbook(encoding="utf-8")
-                        sheet = wb.add_sheet("Hoja Principal")
-                        for col_idx, col_name in enumerate(COLUMNAS_DUX):
-                            sheet.write(0, col_idx, col_name)
-                        for row_idx, fila in enumerate(filas_excel, start=1):
-                            for col_idx, col_name in enumerate(COLUMNAS_DUX):
-                                val = fila.get(col_name, "")
-                                if val == "" or val is None:
-                                    continue
-                                sheet.write(row_idx, col_idx, val)
-                        buf = io.BytesIO()
-                        wb.save(buf)
-                        buf.seek(0)
-                        st.session_state[prep_key] = buf.getvalue()
-                        st.session_state[prep_dux_key] = ultimo_dux_fresh
-                        st.session_state[prep_map_key] = grupo_a_dux_fresh
-                        st.session_state.pop(prep_err_key, None)
-
-                ultimo_dux_prep = st.session_state.get(prep_dux_key)
-
-                if st.session_state.get(prep_err_key):
-                    st.error(
-                        "⚠️ No se pudo consultar el último comprobante de DUX. "
-                        "Puede ser un lag de la API: esperá unos minutos e intentá de nuevo."
-                    )
-                elif st.session_state.get(prep_key):
-                    ultimo_asignado = ultimo_dux_prep + len(grupos_unicos)
-                    st.download_button(
-                        "📥 Descargar Excel para DUX",
-                        data=st.session_state[prep_key],
-                        file_name=f"compras_dux_{fecha_compra_sel}.xls",
-                        mime="application/vnd.ms-excel",
-                        type="primary",
-                        key=f"dl_excel_{fecha_compra_sel}",
-                    )
-                    st.success(
-                        f"✅ Último DUX tomado: **{ultimo_asignado}** "
-                        f"(detectado en API: {ultimo_dux_prep}, "
-                        f"asignados {len(grupos_unicos)} consecutivos)"
-                    )
-                else:
-                    st.caption("Hacé click en **Preparar Excel** para consultar DUX y generar el archivo.")
-
-                # Detalle linea por linea (dentro del fragment para que se actualice
-                # con los numeros DUX apenas se preparan, sin esperar a otro rerun).
-                grupo_a_dux_now = st.session_state.get(prep_map_key, {})
-                with st.expander(f"Ver detalle línea por línea ({len(df_compras_fecha_post)} líneas)"):
-                    df_det = df_compras_fecha_post.copy()
-                    df_det["subtotal"] = (
-                        df_det["cantidad"].astype(float) * df_det["precio"].astype(float)
-                    )
-                    df_det["dux_asignado"] = df_det["comprobante"].astype(str).map(
-                        lambda g: grupo_a_dux_now.get(g, "—") if grupo_a_dux_now else "—"
-                    )
-                    st.dataframe(
-                        df_det[[
-                            "dux_asignado", "proveedor_nombre", "codigo_producto",
-                            "producto_nombre", "cantidad", "precio", "subtotal",
-                            "condicion_pago",
-                        ]],
-                        use_container_width=False,
-                        hide_index=True,
-                        column_config={
-                            "dux_asignado": st.column_config.TextColumn("DUX"),
-                            "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
-                            "codigo_producto": st.column_config.TextColumn("Código"),
-                            "producto_nombre": st.column_config.TextColumn("Producto"),
-                            "cantidad": st.column_config.NumberColumn("Cantidad"),
-                            "precio": st.column_config.NumberColumn("Precio"),
-                            "subtotal": st.column_config.NumberColumn("Subtotal"),
-                            "condicion_pago": st.column_config.TextColumn("Pago"),
-                        },
-                    )
-
-            _render_preparar_descargar_dux()
-
-            # ---------- Resumen del día ----------
-            df_resumen = df_compras_fecha_post.copy()
-            df_resumen["subtotal"] = (
-                df_resumen["cantidad"].astype(float) * df_resumen["precio"].astype(float)
-            )
-            total_gastado = float(df_resumen["subtotal"].sum())
-
-            st.markdown("### 📊 Resumen del día")
-            col_m1, col_m2 = st.columns(2)
-            col_m1.metric("💰 Total gastado", f"$ {total_gastado:,.2f}")
-            col_m2.metric("🧾 Facturas", df_resumen["comprobante"].nunique())
-
-            col_r1, col_r2 = st.columns(2)
-            with col_r1:
-                st.markdown("**Por proveedor**")
-                por_prov = (
-                    df_resumen.groupby("proveedor_nombre")
-                    .agg(items=("codigo_producto", "count"),
-                         total=("subtotal", "sum"))
-                    .reset_index()
-                    .sort_values("total", ascending=False)
-                )
-                por_prov["total"] = por_prov["total"].apply(lambda v: f"$ {v:,.2f}")
-                st.dataframe(
-                    por_prov,
-                    use_container_width=False,
-                    hide_index=True,
-                    column_config={
-                        "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
-                        "items": st.column_config.NumberColumn("Items"),
-                        "total": st.column_config.TextColumn("Total"),
-                    },
-                )
-            with col_r2:
-                st.markdown("**Por forma de pago**")
-                por_pago = (
-                    df_resumen.groupby("condicion_pago")
-                    .agg(items=("codigo_producto", "count"),
-                         total=("subtotal", "sum"))
-                    .reset_index()
-                    .sort_values("total", ascending=False)
-                )
-                por_pago["total"] = por_pago["total"].apply(lambda v: f"$ {v:,.2f}")
-                st.dataframe(
-                    por_pago,
-                    use_container_width=False,
-                    hide_index=True,
-                    column_config={
-                        "condicion_pago": st.column_config.TextColumn("Forma de pago"),
-                        "items": st.column_config.NumberColumn("Items"),
-                        "total": st.column_config.TextColumn("Total"),
-                    },
-                )
-
-            # Precio promedio por producto (cada codigo/unidad individual, sin conversiones)
-            st.markdown("**Precio promedio por producto**")
-            por_prod_dia = (
-                df_resumen.groupby(["codigo_producto", "producto_nombre"])
-                .agg(cantidad=("cantidad", "sum"), gastado=("subtotal", "sum"))
-                .reset_index()
-            )
-            por_prod_dia["precio_prom"] = (
-                por_prod_dia["gastado"] / por_prod_dia["cantidad"]
-            )
-            por_prod_dia = por_prod_dia.sort_values("producto_nombre")
-            disp_dia = por_prod_dia.copy()
-            disp_dia["cantidad"] = disp_dia["cantidad"].apply(
-                lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
-            )
-            disp_dia["gastado"] = disp_dia["gastado"].apply(lambda v: f"$ {v:,.2f}")
-            disp_dia["precio_prom"] = disp_dia["precio_prom"].apply(
-                lambda v: f"$ {v:,.2f}"
-            )
-            st.dataframe(
-                disp_dia[["codigo_producto", "producto_nombre", "cantidad",
-                           "precio_prom", "gastado"]],
-                use_container_width=False,
-                hide_index=True,
-                column_config={
-                    "codigo_producto": st.column_config.TextColumn("Código"),
-                    "producto_nombre": st.column_config.TextColumn("Producto"),
-                    "cantidad": st.column_config.TextColumn("Cantidad"),
-                    "precio_prom": st.column_config.TextColumn("Precio prom."),
-                    "gastado": st.column_config.TextColumn("Gastado"),
-                },
-            )
-
-        else:
-            st.caption("Cargá líneas y guardá para poder descargar el Excel DUX.")
-
-    ts_compras = db.ultima_carga("compras")
-    ts_compras_ph.caption(f"🕒 Última actualización: **{ts_compras or '?'}**")
-
-if False:  # Analitica oculta — para volver: cambiar a 'with tab_resumen_rango:'
-    st.markdown("### 📊 Resumen de compras por rango de fechas")
-
-    df_rr = db.cargar_compras()
-    if df_rr.empty:
-        st.info("Todavía no hay compras cargadas.")
+    if not gastos_saved:
+        st.info("Todavía no hay gastos. Andá a **🔄 Sincronizar**.")
     else:
-        cfg_rr = db.cargar_config()
-        def_desde_rr = date.today() - timedelta(days=30)
-        def_hasta_rr = date.today()
-        if cfg_rr.get("rr_fecha_desde"):
-            try:
-                def_desde_rr = pd.to_datetime(cfg_rr["rr_fecha_desde"]).date()
-            except Exception:
-                pass
-        if cfg_rr.get("rr_fecha_hasta"):
-            try:
-                def_hasta_rr = pd.to_datetime(cfg_rr["rr_fecha_hasta"]).date()
-            except Exception:
-                pass
-
-        with st.form("form_resumen_rango", border=False):
-            aplicar_rr = st.form_submit_button(
-                "🔄 Aplicar", type="primary", use_container_width=True
-            )
-            col_rr1, col_rr2 = st.columns([1, 1])
-            with col_rr1:
-                fecha_desde_rr = st.date_input(
-                    "Desde",
-                    value=def_desde_rr,
-                    key="rr_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_rr2:
-                fecha_hasta_rr = st.date_input(
-                    "Hasta",
-                    value=def_hasta_rr,
-                    key="rr_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if aplicar_rr:
-            try:
-                db.guardar_config({
-                    "rr_fecha_desde": str(fecha_desde_rr),
-                    "rr_fecha_hasta": str(fecha_hasta_rr),
-                })
-            except Exception:
-                pass
-
-        df_rr["fecha_dt"] = pd.to_datetime(df_rr["fecha"], errors="coerce")
-        mask_rr = (
-            (df_rr["fecha_dt"] >= pd.to_datetime(fecha_desde_rr))
-            & (df_rr["fecha_dt"] <= pd.to_datetime(fecha_hasta_rr))
-        )
-        df_rng = df_rr[mask_rr].copy()
-
-        if df_rng.empty:
-            st.warning("No hay compras en el rango seleccionado.")
-        else:
-            df_rng["subtotal"] = (
-                df_rng["cantidad"].astype(float) * df_rng["precio"].astype(float)
-            )
-            total_gastado_rr = float(df_rng["subtotal"].sum())
-
-            col_mrr1, col_mrr2 = st.columns(2)
-            col_mrr1.metric("💰 Total gastado", f"$ {total_gastado_rr:,.2f}")
-            col_mrr2.metric("🧾 Facturas", df_rng["comprobante"].nunique())
-
-            col_brr1, col_brr2 = st.columns(2)
-            with col_brr1:
-                st.markdown("**Por proveedor**")
-                por_prov_rr = (
-                    df_rng.groupby("proveedor_nombre")
-                    .agg(items=("codigo_producto", "count"),
-                         total=("subtotal", "sum"))
-                    .reset_index()
-                    .sort_values("total", ascending=False)
-                )
-                por_prov_rr["total"] = por_prov_rr["total"].apply(
-                    lambda v: f"$ {v:,.2f}"
-                )
-                st.dataframe(
-                    por_prov_rr,
-                    use_container_width=False,
-                    hide_index=True,
-                    column_config={
-                        "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
-                        "items": st.column_config.NumberColumn("Items"),
-                        "total": st.column_config.TextColumn("Total"),
-                    },
-                )
-            with col_brr2:
-                st.markdown("**Por forma de pago**")
-                por_pago_rr = (
-                    df_rng.groupby("condicion_pago")
-                    .agg(items=("codigo_producto", "count"),
-                         total=("subtotal", "sum"))
-                    .reset_index()
-                    .sort_values("total", ascending=False)
-                )
-                por_pago_rr["total"] = por_pago_rr["total"].apply(
-                    lambda v: f"$ {v:,.2f}"
-                )
-                st.dataframe(
-                    por_pago_rr,
-                    use_container_width=False,
-                    hide_index=True,
-                    column_config={
-                        "condicion_pago": st.column_config.TextColumn("Forma de pago"),
-                        "items": st.column_config.NumberColumn("Items"),
-                        "total": st.column_config.TextColumn("Total"),
-                    },
-                )
-
-            # Precio promedio por producto (cada codigo/unidad por si mismo, sin conversiones)
-            st.markdown("**Precio promedio por producto**")
-            por_prod_rr = (
-                df_rng.groupby(["codigo_producto", "producto_nombre"])
-                .agg(cantidad=("cantidad", "sum"), gastado=("subtotal", "sum"))
-                .reset_index()
-            )
-            por_prod_rr["precio_prom"] = (
-                por_prod_rr["gastado"] / por_prod_rr["cantidad"]
-            )
-            por_prod_rr = por_prod_rr.sort_values("producto_nombre")
-            disp_rr = por_prod_rr.copy()
-            disp_rr["cantidad"] = disp_rr["cantidad"].apply(
-                lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
-            )
-            disp_rr["gastado"] = disp_rr["gastado"].apply(lambda v: f"$ {v:,.2f}")
-            disp_rr["precio_prom"] = disp_rr["precio_prom"].apply(
-                lambda v: f"$ {v:,.2f}"
-            )
-            st.dataframe(
-                disp_rr[["codigo_producto", "producto_nombre", "cantidad",
-                          "precio_prom", "gastado"]],
-                use_container_width=False,
-                hide_index=True,
-                column_config={
-                    "codigo_producto": st.column_config.TextColumn("Código"),
-                    "producto_nombre": st.column_config.TextColumn("Producto"),
-                    "cantidad": st.column_config.TextColumn("Cantidad"),
-                    "precio_prom": st.column_config.TextColumn("Precio prom."),
-                    "gastado": st.column_config.TextColumn("Gastado"),
-                },
-            )
-
-            st.caption(
-                f"📅 Rango: {fecha_desde_rr} → {fecha_hasta_rr} · "
-                f"{len(df_rng)} líneas"
-            )
-
-if False:  # Analitica oculta — para volver: cambiar a 'with tab_desglose_rango:'
-    st.markdown("### 📐 Desglose por unidad (con conversiones)")
-    st.caption(
-        "Para cada producto: precio promedio en TODAS las unidades de su familia "
-        "(usando las relaciones de compuestos). Ej: si compraste 1 caja de ACELGA, "
-        "te muestra el precio equivalente en ATADO, KG, UNIDAD, etc."
-    )
-
-    df_dr = db.cargar_compras()
-    if df_dr.empty:
-        st.info("Todavía no hay compras cargadas.")
-    else:
-        cfg_dr = db.cargar_config()
-        def_desde_dr = date.today() - timedelta(days=30)
-        def_hasta_dr = date.today()
-        if cfg_dr.get("dr_fecha_desde"):
-            try:
-                def_desde_dr = pd.to_datetime(cfg_dr["dr_fecha_desde"]).date()
-            except Exception:
-                pass
-        if cfg_dr.get("dr_fecha_hasta"):
-            try:
-                def_hasta_dr = pd.to_datetime(cfg_dr["dr_fecha_hasta"]).date()
-            except Exception:
-                pass
-
-        with st.form("form_desglose_rango", border=False):
-            aplicar_dr = st.form_submit_button(
-                "🔄 Aplicar", type="primary", use_container_width=True
-            )
-            col_dr1, col_dr2 = st.columns([1, 1])
-            with col_dr1:
-                fecha_desde_dr = st.date_input(
-                    "Desde",
-                    value=def_desde_dr,
-                    key="dr_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_dr2:
-                fecha_hasta_dr = st.date_input(
-                    "Hasta",
-                    value=def_hasta_dr,
-                    key="dr_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if aplicar_dr:
-            try:
-                db.guardar_config({
-                    "dr_fecha_desde": str(fecha_desde_dr),
-                    "dr_fecha_hasta": str(fecha_hasta_dr),
-                })
-            except Exception:
-                pass
-
-        df_dr["fecha_dt"] = pd.to_datetime(df_dr["fecha"], errors="coerce")
-        mask_dr = (
-            (df_dr["fecha_dt"] >= pd.to_datetime(fecha_desde_dr))
-            & (df_dr["fecha_dt"] <= pd.to_datetime(fecha_hasta_dr))
-        )
-        df_rng_dr = df_dr[mask_dr].copy()
-
-        if df_rng_dr.empty:
-            st.warning("No hay compras en el rango seleccionado.")
-        else:
-            df_rng_dr["subtotal"] = (
-                df_rng_dr["cantidad"].astype(float) * df_rng_dr["precio"].astype(float)
-            )
-
-            grafo_dr = construir_grafo_conversion(compuestos)
-            prod_temp_dr = productos.copy()
-            partes_pr_dr = (
-                prod_temp_dr["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
-            )
-            prod_temp_dr["base"] = partes_pr_dr[0].str.strip()
-            prod_temp_dr["unidad"] = (
-                partes_pr_dr[1].fillna("").str.strip()
-                if 1 in partes_pr_dr.columns
-                else ""
-            )
-
-            df_prom_dr = df_rng_dr.copy()
-            map_prod_full_dr = dict(
-                zip(productos["codigo"].astype(str), productos["producto"].astype(str))
-            )
-            df_prom_dr["producto_full"] = (
-                df_prom_dr["codigo_producto"].astype(str).map(map_prod_full_dr)
-                .fillna(df_prom_dr["producto_nombre"])
-            )
-            partes_pr_src_dr = (
-                df_prom_dr["producto_full"].str.rsplit(" - ", n=1, expand=True)
-            )
-            df_prom_dr["base"] = partes_pr_src_dr[0].str.strip()
-
-            filas_prom_dr = []
-            for base in df_prom_dr["base"].dropna().unique():
-                lineas_base = df_prom_dr[df_prom_dr["base"] == base]
-                if lineas_base.empty:
-                    continue
-                gastado_total = float(lineas_base["subtotal"].sum())
-
-                familia = prod_temp_dr[prod_temp_dr["base"] == base]
-                if familia.empty:
-                    continue
-
-                codigos_familia = familia["codigo"].astype(str).tolist()
-                componentes = componentes_conectados(codigos_familia, grafo_dr)
-                codigos_comprados = set(lineas_base["codigo_producto"].astype(str))
-
-                comp_relevante = None
-                for comp in componentes:
-                    if comp & codigos_comprados:
-                        comp_relevante = comp
-                        break
-                if not comp_relevante:
-                    continue
-
-                productos_comp = familia[
-                    familia["codigo"].astype(str).isin(comp_relevante)
-                ]
-                unidades_unicas = list(
-                    dict.fromkeys(productos_comp["unidad"].tolist())
-                )
-
-                for unidad in unidades_unicas:
-                    if not unidad:
-                        continue
-                    codigo_destino = str(
-                        productos_comp[productos_comp["unidad"] == unidad]
-                        .iloc[0]["codigo"]
+        gastos_sorted = sorted(gastos_saved, key=lambda g: g.get("fecha") or "", reverse=True)
+        st.markdown(f"**{len(gastos_sorted)} gastos guardados**")
+        for g in gastos_sorted:
+            nro = g.get("nro_comprobante") or "—"
+            proveedor = g.get("proveedor") or "—"
+            fecha = g.get("fecha") or "—"
+            total = g.get("total") or 0
+            cond_pago = g.get("tipo_comprobante") or ""
+            pago_badge = " · 💳 **pago pendiente**" if g.get("pago_pendiente") else ""
+            detalles = g.get("detalles") or []
+            with st.container(border=True):
+                c_info, c_total = st.columns([5, 1.5])
+                with c_info:
+                    st.markdown(
+                        f"**#{nro}** — {proveedor} · 📅 {fecha}"
+                        + (f" · {cond_pago}" if cond_pago else "")
+                        + f" · {len(detalles)} ítem{'s' if len(detalles) != 1 else ''}"
+                        + pago_badge
                     )
-                    cantidad_total = 0.0
-                    for _, linea in lineas_base.iterrows():
-                        cod_origen = str(linea["codigo_producto"])
-                        factor = convertir(grafo_dr, cod_origen, codigo_destino)
-                        if factor is None:
-                            continue
-                        cantidad_total += float(linea["cantidad"]) * factor
-                    if cantidad_total <= 0:
-                        continue
-                    filas_prom_dr.append({
-                        "base": base,
-                        "unidad": unidad,
-                        "cantidad": cantidad_total,
-                        "gastado": gastado_total,
-                        "precio_promedio": gastado_total / cantidad_total,
-                    })
-
-            if filas_prom_dr:
-                bases_orden_dr = sorted(set(f["base"] for f in filas_prom_dr))
-                for base in bases_orden_dr:
-                    filas_base_dr = [f for f in filas_prom_dr if f["base"] == base]
-                    gastado_base_dr = filas_base_dr[0]["gastado"]
-                    with st.expander(
-                        f"**{base}** — $ {gastado_base_dr:,.2f}",
-                        expanded=False,
-                    ):
-                        cols_h = st.columns([1, 1.2, 1.2])
-                        cols_h[0].markdown("**Unidad**")
-                        cols_h[1].markdown("**Cantidad**")
-                        cols_h[2].markdown("**Precio prom.**")
-                        for f in filas_base_dr:
-                            cols = st.columns([1, 1.2, 1.2])
-                            cols[0].markdown(f"**{f['unidad']}**")
-                            cant_str = (
-                                f"{f['cantidad']:,.3f}".rstrip("0").rstrip(".")
-                            )
-                            cols[1].markdown(cant_str)
-                            cols[2].markdown(f"$ {f['precio_promedio']:,.2f}")
-            else:
-                st.caption("Sin datos para calcular precios promedio.")
-
-            st.caption(
-                f"📅 Rango: {fecha_desde_dr} → {fecha_hasta_dr} · "
-                f"{len(df_rng_dr)} líneas"
-            )
-
-if False:  # Analitica oculta — para volver: cambiar a 'with tab_hist_precios:'
-    st.markdown("### 📊 Histórico de precios promedio")
-    st.caption(
-        "Para cada producto, ver el precio promedio ponderado en el rango elegido. "
-        "Las compras se agrupan por producto y unidad."
-    )
-
-    df_compras_hp = db.cargar_compras()
-    if df_compras_hp.empty:
-        st.info("Todavía no hay compras cargadas.")
-    else:
-        cfg_hp = db.cargar_config()
-        def_desde_hp = date.today() - timedelta(days=30)
-        def_hasta_hp = date.today()
-        if cfg_hp.get("hp_fecha_desde"):
-            try:
-                def_desde_hp = pd.to_datetime(cfg_hp["hp_fecha_desde"]).date()
-            except Exception:
-                pass
-        if cfg_hp.get("hp_fecha_hasta"):
-            try:
-                def_hasta_hp = pd.to_datetime(cfg_hp["hp_fecha_hasta"]).date()
-            except Exception:
-                pass
-
-        with st.form("form_hist_precios", border=False):
-            aplicar_hp = st.form_submit_button(
-                "🔄 Aplicar", type="primary", use_container_width=True
-            )
-            col_hp1, col_hp2 = st.columns([1, 1])
-            with col_hp1:
-                fecha_desde_hp = st.date_input(
-                    "Desde",
-                    value=def_desde_hp,
-                    key="hp_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_hp2:
-                fecha_hasta_hp = st.date_input(
-                    "Hasta",
-                    value=def_hasta_hp,
-                    key="hp_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if aplicar_hp:
-            try:
-                db.guardar_config({
-                    "hp_fecha_desde": str(fecha_desde_hp),
-                    "hp_fecha_hasta": str(fecha_hasta_hp),
-                })
-            except Exception:
-                pass
-
-        df_compras_hp["fecha_dt"] = pd.to_datetime(df_compras_hp["fecha"], errors="coerce")
-        mask_hp = (
-            (df_compras_hp["fecha_dt"] >= pd.to_datetime(fecha_desde_hp)) &
-            (df_compras_hp["fecha_dt"] <= pd.to_datetime(fecha_hasta_hp))
-        )
-        df_rango_hp = df_compras_hp[mask_hp].copy()
-
-        if df_rango_hp.empty:
-            st.warning("No hay compras en el rango seleccionado.")
-        else:
-            df_rango_hp["subtotal"] = (
-                df_rango_hp["cantidad"].astype(float) * df_rango_hp["precio"].astype(float)
-            )
-
-            # Agrupar por (codigo, producto_nombre) sin conversiones — cada
-            # producto/unidad por si mismo.
-            por_prod_hp = (
-                df_rango_hp.groupby(["codigo_producto", "producto_nombre"])
-                .agg(
-                    cantidad=("cantidad", "sum"),
-                    gastado=("subtotal", "sum"),
-                    precio_min=("precio", "min"),
-                    precio_max=("precio", "max"),
-                )
-                .reset_index()
-            )
-            por_prod_hp["precio_prom"] = por_prod_hp["gastado"] / por_prod_hp["cantidad"]
-            por_prod_hp = por_prod_hp.sort_values("producto_nombre")
-
-            prods_disp_hp = por_prod_hp["producto_nombre"].dropna().unique().tolist()
-            filtro_prod_hp = st.multiselect(
-                "Producto",
-                options=sorted(prods_disp_hp),
-                key="hp_filtro_prod_sel",
-            )
-            if filtro_prod_hp:
-                por_prod_hp = por_prod_hp[
-                    por_prod_hp["producto_nombre"].isin(filtro_prod_hp)
-                ].reset_index(drop=True)
-
-            st.caption(
-                f"📅 Rango: {fecha_desde_hp} → {fecha_hasta_hp} · "
-                f"{len(df_rango_hp)} compras · "
-                f"{len(por_prod_hp)} productos"
-            )
-
-            disp_hp = por_prod_hp.copy()
-            disp_hp["cantidad"] = disp_hp["cantidad"].apply(
-                lambda v: f"{v:,.3f}".rstrip("0").rstrip(".")
-            )
-            disp_hp["gastado"] = disp_hp["gastado"].apply(lambda v: f"$ {v:,.2f}")
-            disp_hp["precio_min"] = disp_hp["precio_min"].apply(lambda v: f"$ {v:,.2f}")
-            disp_hp["precio_max"] = disp_hp["precio_max"].apply(lambda v: f"$ {v:,.2f}")
-            disp_hp["precio_prom"] = disp_hp["precio_prom"].apply(lambda v: f"$ {v:,.2f}")
-            st.dataframe(
-                disp_hp[["codigo_producto", "producto_nombre", "cantidad",
-                          "precio_min", "precio_prom", "precio_max", "gastado"]],
-                use_container_width=False,
-                hide_index=True,
-                column_config={
-                    "codigo_producto": st.column_config.TextColumn("Código"),
-                    "producto_nombre": st.column_config.TextColumn("Producto"),
-                    "cantidad": st.column_config.TextColumn("Cantidad"),
-                    "precio_min": st.column_config.TextColumn("Mín"),
-                    "precio_prom": st.column_config.TextColumn("Promedio"),
-                    "precio_max": st.column_config.TextColumn("Máx"),
-                    "gastado": st.column_config.TextColumn("Gastado"),
-                },
-            )
-
-            # Evolucion diaria de un producto especifico
-            productos_disp_hp = sorted(por_prod_hp["producto_nombre"].unique().tolist())
-            if productos_disp_hp:
-                sel_hp = st.selectbox(
-                    "📈 Ver evolución diaria de:",
-                    options=["(elegir)"] + productos_disp_hp,
-                    key="hp_evol_sel",
-                )
-                if sel_hp != "(elegir)":
-                    df_evol = df_rango_hp[df_rango_hp["producto_nombre"] == sel_hp].copy()
-                    df_evol_agg = (
-                        df_evol.groupby(df_evol["fecha_dt"].dt.date)
-                        .apply(lambda g: g["subtotal"].sum() / g["cantidad"].sum())
-                        .reset_index(name="precio_prom")
-                    )
-                    df_evol_agg.columns = ["fecha", "precio_prom"]
-                    df_evol_agg = df_evol_agg.set_index("fecha")
-                    st.line_chart(df_evol_agg)
-
-if False:  # Analitica oculta — para volver: cambiar a 'with tab_detalle_compras:'
-    st.markdown("### 📋 Detalle compras")
-    st.caption(
-        "Listado completo de compras: qué día, qué producto, qué proveedor, cuánto te cobró."
-    )
-
-    df_compras_dc = db.cargar_compras()
-    if df_compras_dc.empty:
-        st.info("Todavía no hay compras cargadas.")
-    else:
-        cfg_dc = db.cargar_config()
-        def_desde_dc = date.today() - timedelta(days=30)
-        def_hasta_dc = date.today()
-        if cfg_dc.get("dc_fecha_desde"):
-            try:
-                def_desde_dc = pd.to_datetime(cfg_dc["dc_fecha_desde"]).date()
-            except Exception:
-                pass
-        if cfg_dc.get("dc_fecha_hasta"):
-            try:
-                def_hasta_dc = pd.to_datetime(cfg_dc["dc_fecha_hasta"]).date()
-            except Exception:
-                pass
-
-        with st.form("form_detalle_compras", border=False):
-            aplicar_dc = st.form_submit_button(
-                "🔄 Aplicar", type="primary", use_container_width=True
-            )
-            col_dc1, col_dc2 = st.columns([1, 1])
-            with col_dc1:
-                fecha_desde_dc = st.date_input(
-                    "Desde",
-                    value=def_desde_dc,
-                    key="dc_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_dc2:
-                fecha_hasta_dc = st.date_input(
-                    "Hasta",
-                    value=def_hasta_dc,
-                    key="dc_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if aplicar_dc:
-            try:
-                db.guardar_config({
-                    "dc_fecha_desde": str(fecha_desde_dc),
-                    "dc_fecha_hasta": str(fecha_hasta_dc),
-                })
-            except Exception:
-                pass
-
-        df_compras_dc["fecha_dt"] = pd.to_datetime(
-            df_compras_dc["fecha"], errors="coerce"
-        )
-        mask_dc = (
-            (df_compras_dc["fecha_dt"] >= pd.to_datetime(fecha_desde_dc))
-            & (df_compras_dc["fecha_dt"] <= pd.to_datetime(fecha_hasta_dc))
-        )
-        df_rango_dc = df_compras_dc[mask_dc].copy()
-
-        if df_rango_dc.empty:
-            st.warning("No hay compras en el rango seleccionado.")
-        else:
-            df_rango_dc["subtotal"] = (
-                df_rango_dc["cantidad"].astype(float)
-                * df_rango_dc["precio"].astype(float)
-            )
-
-            # Filtros opcionales
-            col_f1, col_f2, col_f3 = st.columns(3)
-            with col_f1:
-                provs_disp = sorted(df_rango_dc["proveedor_nombre"].dropna().unique().tolist())
-                filtro_prov = st.multiselect(
-                    "Proveedor", options=provs_disp, key="dc_filtro_prov"
-                )
-            with col_f2:
-                prods_disp_dc = sorted(
-                    df_rango_dc["producto_nombre"].dropna().unique().tolist()
-                )
-                filtro_prod_dc = st.multiselect(
-                    "Producto", options=prods_disp_dc, key="dc_filtro_prod_sel",
-                )
-            with col_f3:
-                pagos_disp = sorted(df_rango_dc["condicion_pago"].dropna().unique().tolist())
-                filtro_pago = st.multiselect(
-                    "Forma de pago", options=pagos_disp, key="dc_filtro_pago"
-                )
-
-            if filtro_prov:
-                df_rango_dc = df_rango_dc[
-                    df_rango_dc["proveedor_nombre"].isin(filtro_prov)
-                ]
-            if filtro_prod_dc:
-                df_rango_dc = df_rango_dc[
-                    df_rango_dc["producto_nombre"].isin(filtro_prod_dc)
-                ]
-            if filtro_pago:
-                df_rango_dc = df_rango_dc[
-                    df_rango_dc["condicion_pago"].isin(filtro_pago)
-                ]
-
-            # Ordenar por fecha desc, luego proveedor
-            df_rango_dc = df_rango_dc.sort_values(
-                ["fecha", "proveedor_nombre", "producto_nombre"],
-                ascending=[False, True, True],
-            )
-
-            total_filtrado = float(df_rango_dc["subtotal"].sum())
-            st.caption(
-                f"📅 Rango: {fecha_desde_dc} → {fecha_hasta_dc} · "
-                f"{len(df_rango_dc)} líneas · "
-                f"**Total filtrado: $ {total_filtrado:,.2f}**"
-            )
-
-            disp_dc = df_rango_dc.copy()
-            disp_dc["cantidad"] = disp_dc["cantidad"].apply(lambda v: f"{v:,.2f}")
-            disp_dc["precio"] = disp_dc["precio"].apply(lambda v: f"$ {v:,.2f}")
-            disp_dc["subtotal"] = disp_dc["subtotal"].apply(lambda v: f"$ {v:,.2f}")
-            st.dataframe(
-                disp_dc[[
-                    "fecha", "proveedor_nombre", "codigo_producto",
-                    "producto_nombre", "cantidad", "precio", "subtotal",
-                    "condicion_pago", "comprobante",
-                ]],
-                use_container_width=False,
-                hide_index=True,
-                column_config={
-                    "fecha": st.column_config.TextColumn("Fecha"),
-                    "proveedor_nombre": st.column_config.TextColumn("Proveedor"),
-                    "codigo_producto": st.column_config.TextColumn("Código"),
-                    "producto_nombre": st.column_config.TextColumn("Producto"),
-                    "cantidad": st.column_config.TextColumn("Cantidad"),
-                    "precio": st.column_config.TextColumn("Precio unit."),
-                    "subtotal": st.column_config.TextColumn("Subtotal"),
-                    "condicion_pago": st.column_config.TextColumn("Cond. pago"),
-                    "comprobante": st.column_config.TextColumn("Comprobante"),
-                },
-            )
+                with c_total:
+                    st.markdown(f"**$ {total:,.2f}**")
+                if detalles:
+                    with st.expander("Ver ítems"):
+                        filas_det = [
+                            {
+                                "Código": d.get("cod_item", ""),
+                                "Ítem": d.get("item", ""),
+                                "Cantidad": d.get("ctd", 0),
+                                "Precio unit.": d.get("precio_uni", 0),
+                                "% Desc.": d.get("porc_desc", 0),
+                                "% IVA": d.get("porc_iva", 0),
+                                "Observaciones": d.get("comentarios", ""),
+                            }
+                            for d in detalles
+                        ]
+                        st.dataframe(pd.DataFrame(filas_det), use_container_width=True, hide_index=True)
 
 with tab_mapeo:
     ts_mapeo_ph = st.empty()
