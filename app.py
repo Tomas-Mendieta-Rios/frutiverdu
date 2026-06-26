@@ -1350,19 +1350,6 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
     )
 
 with tab_balance:
-    st.subheader("📊 Balance")
-
-    hoy_bal = date.today()
-    col_bal1, col_bal2 = st.columns(2)
-    with col_bal1:
-        bal_desde = st.date_input(
-            "Desde", value=hoy_bal.replace(day=1), key="bal_desde", format="YYYY-MM-DD"
-        )
-    with col_bal2:
-        bal_hasta = st.date_input(
-            "Hasta", value=hoy_bal, key="bal_hasta", format="YYYY-MM-DD"
-        )
-
     def _parse_wix_total(v):
         try:
             import re as _re
@@ -1388,13 +1375,6 @@ with tab_balance:
 
     def _pesos(v):
         return f"{int(round(float(v or 0))):,}".replace(",", ".")
-
-    def _en_rango(fecha_str):
-        try:
-            f = pd.to_datetime(str(fecha_str or "")).date()
-            return bal_desde <= f <= bal_hasta
-        except Exception:
-            return False
 
     with st.spinner("Cargando datos..."):
         facturas_bal        = db.cargar_facturas()
@@ -1522,6 +1502,18 @@ with tab_balance:
                                     st.markdown(f"### $ {_pesos(_wix_monto(_p))}")
 
     with tab_bal_resumen:
+        _hoy_bal = date.today()
+        _cb1, _cb2 = st.columns(2)
+        bal_desde = _cb1.date_input("Desde", value=_hoy_bal.replace(day=1), key="bal_desde", format="YYYY-MM-DD")
+        bal_hasta = _cb2.date_input("Hasta", value=_hoy_bal,                key="bal_hasta", format="YYYY-MM-DD")
+
+        def _en_rango(fecha_str):
+            try:
+                f = pd.to_datetime(str(fecha_str or "")).date()
+                return bal_desde <= f <= bal_hasta
+            except Exception:
+                return False
+
         # Filtrar por rango
         facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
         facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
