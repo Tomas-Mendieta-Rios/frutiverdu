@@ -3834,12 +3834,11 @@ with tab_dux_rubros:
                         st.error("❌ DUX devolvió una respuesta inválida para rubros.")
 
                     if data_r is not None:
-                        st.caption(f"Respuesta DUX rubros: `{str(data_r)[:300]}`")
                         items_r = data_r if isinstance(data_r, list) else data_r.get("results", [])
                         registros_r = [
-                            {"id": r.get("id"), "nombre": str(r.get("nombre", "") or "").strip()}
+                            {"id": r.get("id_rubro"), "nombre": str(r.get("rubro", "") or "").strip()}
                             for r in (items_r or [])
-                            if r.get("id") is not None
+                            if r.get("id_rubro") is not None and r.get("eliminado", "N") == "N"
                         ]
                         db.guardar_rubros(registros_r)
                         st.success(f"✅ {len(registros_r)} rubros sincronizados.")
@@ -3892,14 +3891,17 @@ with tab_dux_rubros:
                         items_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
                         registros_sr = []
                         for sr in (items_sr or []):
-                            if sr.get("id") is None:
+                            sid = sr.get("id_subrubro") or sr.get("id")
+                            if sid is None:
+                                continue
+                            if sr.get("eliminado", "N") != "N":
                                 continue
                             rubro_obj = sr.get("rubro") or {}
                             registros_sr.append({
-                                "id": sr.get("id"),
-                                "nombre": str(sr.get("nombre", "") or "").strip(),
-                                "rubro_id": rubro_obj.get("id"),
-                                "rubro_nombre": str(rubro_obj.get("nombre", "") or "").strip(),
+                                "id": sid,
+                                "nombre": str(sr.get("subrubro") or sr.get("nombre", "") or "").strip(),
+                                "rubro_id": rubro_obj.get("id_rubro") or rubro_obj.get("id"),
+                                "rubro_nombre": str(rubro_obj.get("rubro") or rubro_obj.get("nombre", "") or "").strip(),
                             })
                         db.guardar_subrubros(registros_sr)
                         st.success(f"✅ {len(registros_sr)} subrubros sincronizados.")
