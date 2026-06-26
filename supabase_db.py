@@ -511,6 +511,10 @@ def cargar_pedidos_wix():
                     "translated": it.get("product_name_translated"),
                     "original": it.get("product_name_original"),
                 },
+                "price": {
+                    "formattedAmount": it.get("price_formatted"),
+                    "amount": it.get("price_amount"),
+                },
             })
 
     pedidos = []
@@ -555,6 +559,10 @@ def cargar_pedidos_wix():
             "priceSummary": {
                 "total": {"formattedAmount": r.get("total_formatted")},
             },
+            "paymentStatus": r.get("payment_status"),
+            "fulfillmentStatus": r.get("fulfillment_status"),
+            "buyerNote": r.get("buyer_note"),
+            "updatedDate": r.get("updated_date"),
         })
     return pedidos
 
@@ -592,6 +600,7 @@ def guardar_pedidos_wix(pedidos):
             "number": str(p.get("number") or ""),
             "status": str(p.get("status") or ""),
             "created_date": str(p.get("createdDate") or p.get("created_date") or ""),
+            "updated_date": str(p.get("updatedDate") or p.get("updated_date") or ""),
             "billing_first_name": str(bi.get("firstName") or ""),
             "billing_last_name": str(bi.get("lastName") or ""),
             "billing_phone": str(bi.get("phone") or ""),
@@ -605,6 +614,9 @@ def guardar_pedidos_wix(pedidos):
             "shipping_subdivision": str(si_addr.get("subdivision") or ""),
             "buyer_email": str(buyer_email),
             "total_formatted": str(total_formatted),
+            "payment_status": str(p.get("paymentStatus") or ""),
+            "fulfillment_status": str(p.get("fulfillmentStatus") or ""),
+            "buyer_note": str(p.get("buyerNote") or ""),
         })
 
         items_por_order[oid] = [
@@ -615,6 +627,8 @@ def guardar_pedidos_wix(pedidos):
                 "product_name_translated": str((li.get("productName") or {}).get("translated") or ""),
                 "product_name_original": str((li.get("productName") or {}).get("original") or ""),
                 "quantity": _to_float(li.get("quantity")),
+                "price_formatted": str((li.get("price") or {}).get("formattedAmount") or ""),
+                "price_amount": _to_float((li.get("price") or {}).get("amount")),
             }
             for li in (p.get("lineItems") or [])
         ]

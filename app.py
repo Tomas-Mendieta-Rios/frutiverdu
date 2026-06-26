@@ -380,6 +380,7 @@ def _slim_wix_order(o):
                     "translated": ((li or {}).get("productName") or {}).get("translated"),
                     "original": ((li or {}).get("productName") or {}).get("original"),
                 },
+                "price": (li or {}).get("price") or {},
             }
             for li in (o.get("lineItems") or [])
         ],
@@ -413,6 +414,10 @@ def _slim_wix_order(o):
                 "formattedAmount": ((o.get("priceSummary", {}) or {}).get("total", {}) or {}).get("formattedAmount"),
             },
         },
+        "paymentStatus": o.get("paymentStatus"),
+        "fulfillmentStatus": o.get("fulfillmentStatus"),
+        "buyerNote": o.get("buyerNote"),
+        "updatedDate": o.get("updatedDate"),
     }
 
 
@@ -3565,26 +3570,42 @@ with tab_wix:
                             fecha_default_entrega = date.today() + timedelta(days=1)
 
                     es_cancelado = str(o.get("status", "")).upper() == "CANCELED"
+                    _pay_badges = {
+                        "PAID": "🟢 Pagado",
+                        "UNPAID": "🔴 Sin pagar",
+                        "PENDING": "🟡 Pago pendiente",
+                        "PARTIALLY_REFUNDED": "🟠 Parcialmente reembolsado",
+                        "FULLY_REFUNDED": "⚫ Reembolsado",
+                    }
+                    _ful_badges = {
+                        "FULFILLED": "✅ Entregado",
+                        "NOT_FULFILLED": "⏳ No entregado",
+                        "PARTIALLY_FULFILLED": "🔶 Entrega parcial",
+                    }
+                    pay_badge = _pay_badges.get(str(o.get("paymentStatus") or "").upper(), "")
+                    ful_badge = _ful_badges.get(str(o.get("fulfillmentStatus") or "").upper(), "")
+                    buyer_note = o.get("buyerNote") or ""
                     with st.container(border=True):
                         c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
                         with c_info:
-                            # Fecha de registro del pedido en Wix
                             f_reg_wix = _fecha_wix(o)
                             registro_badge = ""
                             if f_reg_wix and f_reg_wix != pd.Timestamp.min:
-                                registro_badge = (
-                                    f" · 📅 registrado {f_reg_wix.date()}"
-                                )
+                                registro_badge = f" · 📅 {f_reg_wix.date()}"
                             cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
+                            badges_line = " · ".join(b for b in [pay_badge, ful_badge] if b)
                             st.markdown(
                                 f"**#{nro}** — {cliente} · {len(items)} ítems · "
                                 f"**{total}**{registro_badge}{cancelado_badge}"
+                                + (f" · {badges_line}" if badges_line else "")
                             )
                             detalles = []
                             if direccion:
                                 detalles.append(f"📍 {direccion}")
                             if email:
                                 detalles.append(f"✉️ {email}")
+                            if buyer_note:
+                                detalles.append(f"💬 {buyer_note}")
                             if detalles:
                                 st.caption(" · ".join(detalles))
                         if not es_cancelado:
@@ -3616,10 +3637,12 @@ with tab_wix:
                                         or nombre_obj.get("translated")
                                         or ""
                                     )
+                                    price_obj = it.get("price") or {}
                                     filas.append(
                                         {
                                             "producto": nombre,
                                             "cantidad": it.get("quantity", 0),
+                                            "precio unit.": price_obj.get("formattedAmount") or "",
                                         }
                                     )
                                 st.dataframe(
