@@ -4010,51 +4010,51 @@ with tab_eg_gastos:
     st.caption(f"🕒 Última sync: **{db.ultima_carga('gastos') or '?'}**")
 
     # Display gastos guardados
-        try:
-            gastos_saved = db.cargar_gastos()
-        except Exception as e:
-            st.error(msg_error_sheets("leer gastos", e))
-            gastos_saved = []
+    try:
+        gastos_saved = db.cargar_gastos()
+    except Exception as e:
+        st.error(msg_error_sheets("leer gastos", e))
+        gastos_saved = []
 
-        if not gastos_saved:
-            st.info("Todavía no hay gastos. Apretá **Sincronizar**.")
-        else:
-            gastos_sorted = sorted(gastos_saved, key=lambda g: g.get("fecha") or "", reverse=True)
-            st.markdown(f"**{len(gastos_sorted)} gastos guardados**")
-            for g in gastos_sorted:
-                nro = g.get("nro_comprobante") or "—"
-                proveedor = g.get("proveedor") or "—"
-                fecha = g.get("fecha") or "—"
-                total = g.get("total") or 0
-                cond_pago = g.get("tipo_comprobante") or ""
-                pago_badge = " · 💳 **pago pendiente**" if g.get("pago_pendiente") else ""
-                detalles = g.get("detalles") or []
-                with st.container(border=True):
-                    c_info, c_total = st.columns([5, 1.5])
-                    with c_info:
-                        st.markdown(
-                            f"**#{nro}** — {proveedor} · 📅 {fecha}"
-                            + (f" · {cond_pago}" if cond_pago else "")
-                            + f" · {len(detalles)} ítem{'s' if len(detalles) != 1 else ''}"
-                            + pago_badge
-                        )
-                    with c_total:
-                        st.markdown(f"**$ {total:,.2f}**")
-                    if detalles:
-                        with st.expander("Ver ítems"):
-                            filas_det = [
-                                {
-                                    "Código": d.get("cod_item", ""),
-                                    "Ítem": d.get("item", ""),
-                                    "Cantidad": d.get("ctd", 0),
-                                    "Precio unit.": d.get("precio_uni", 0),
-                                    "% Desc.": d.get("porc_desc", 0),
-                                    "% IVA": d.get("porc_iva", 0),
-                                    "Observaciones": d.get("comentarios", ""),
-                                }
-                                for d in detalles
-                            ]
-                            st.dataframe(pd.DataFrame(filas_det), use_container_width=True, hide_index=True)
+    if not gastos_saved:
+        st.info("Todavía no hay gastos. Andá a **🔄 Sincronizar**.")
+    else:
+        gastos_sorted = sorted(gastos_saved, key=lambda g: g.get("fecha") or "", reverse=True)
+        st.markdown(f"**{len(gastos_sorted)} gastos guardados**")
+        for g in gastos_sorted:
+            nro = g.get("nro_comprobante") or "—"
+            proveedor = g.get("proveedor") or "—"
+            fecha = g.get("fecha") or "—"
+            total = g.get("total") or 0
+            cond_pago = g.get("tipo_comprobante") or ""
+            pago_badge = " · 💳 **pago pendiente**" if g.get("pago_pendiente") else ""
+            detalles = g.get("detalles") or []
+            with st.container(border=True):
+                c_info, c_total = st.columns([5, 1.5])
+                with c_info:
+                    st.markdown(
+                        f"**#{nro}** — {proveedor} · 📅 {fecha}"
+                        + (f" · {cond_pago}" if cond_pago else "")
+                        + f" · {len(detalles)} ítem{'s' if len(detalles) != 1 else ''}"
+                        + pago_badge
+                    )
+                with c_total:
+                    st.markdown(f"**$ {total:,.2f}**")
+                if detalles:
+                    with st.expander("Ver ítems"):
+                        filas_det = [
+                            {
+                                "Código": d.get("cod_item", ""),
+                                "Ítem": d.get("item", ""),
+                                "Cantidad": d.get("ctd", 0),
+                                "Precio unit.": d.get("precio_uni", 0),
+                                "% Desc.": d.get("porc_desc", 0),
+                                "% IVA": d.get("porc_iva", 0),
+                                "Observaciones": d.get("comentarios", ""),
+                            }
+                            for d in detalles
+                        ]
+                        st.dataframe(pd.DataFrame(filas_det), use_container_width=True, hide_index=True)
 
 with tab_mapeo:
     ts_mapeo_ph = st.empty()
