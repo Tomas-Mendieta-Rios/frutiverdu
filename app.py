@@ -3816,8 +3816,9 @@ with tab_dux_rubros:
         if sincronizar_rubros:
             url_r = f"{base_url}/rubros"
             headers_r = {"accept": "application/json", "authorization": token}
+            params_r = {"id_empresa": id_empresa_default}
             try:
-                resp_r = requests.get(url_r, headers=headers_r, timeout=30)
+                resp_r = requests.get(url_r, headers=headers_r, params=params_r, timeout=30)
             except requests.RequestException as e:
                 st.error(msg_error_red("DUX", e))
                 resp_r = None
@@ -3833,6 +3834,7 @@ with tab_dux_rubros:
                         st.error("❌ DUX devolvió una respuesta inválida para rubros.")
 
                     if data_r is not None:
+                        st.caption(f"Respuesta DUX rubros: `{str(data_r)[:300]}`")
                         items_r = data_r if isinstance(data_r, list) else data_r.get("results", [])
                         registros_r = [
                             {"id": r.get("id"), "nombre": str(r.get("nombre", "") or "").strip()}
@@ -3868,8 +3870,9 @@ with tab_dux_rubros:
         if sincronizar_subrubros:
             url_sr = f"{base_url}/subrubros"
             headers_sr = {"accept": "application/json", "authorization": token}
+            params_sr = {"id_empresa": id_empresa_default}
             try:
-                resp_sr = requests.get(url_sr, headers=headers_sr, timeout=30)
+                resp_sr = requests.get(url_sr, headers=headers_sr, params=params_sr, timeout=30)
             except requests.RequestException as e:
                 st.error(msg_error_red("DUX", e))
                 resp_sr = None
@@ -3885,6 +3888,7 @@ with tab_dux_rubros:
                         st.error("❌ DUX devolvió una respuesta inválida para subrubros.")
 
                     if data_sr is not None:
+                        st.caption(f"Respuesta DUX subrubros: `{str(data_sr)[:300]}`")
                         items_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
                         registros_sr = []
                         for sr in (items_sr or []):
