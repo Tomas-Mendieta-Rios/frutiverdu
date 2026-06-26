@@ -1439,8 +1439,8 @@ with tab_balance:
 
     # Categorizar Wix
     wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID"]
-    wix_pendientes    = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "UNPAID"]
     wix_anulados      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "FULLY_REFUNDED"]
+    wix_pendientes    = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() not in ("PAID", "FULLY_REFUNDED")]
     wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED"]
 
     # Totales
@@ -1482,14 +1482,13 @@ with tab_balance:
             with c2:
                 st.markdown(f"**$ {_pesos(total)}**")
 
-    with st.expander(f"Ver facturas ({len(facturas_vig) + len(facturas_anul)})"):
-        for _label, _lista in [
-            ("✅ Cobrado", fac_cobradas),
-            ("⏳ Pendiente", fac_pendientes),
-            ("❌ Anulado", facturas_anul),
-        ]:
-            if _lista:
-                st.markdown(f"**{_label}** ({len(_lista)})")
+    for _label, _lista in [
+        ("✅ Cobrado", fac_cobradas),
+        ("⏳ Pendiente", fac_pendientes),
+        ("❌ Anulado", facturas_anul),
+    ]:
+        if _lista:
+            with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
                 for f in sorted(_lista, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
                     _render_factura(f)
 
@@ -1516,15 +1515,14 @@ with tab_balance:
             with c2:
                 st.markdown(f"**$ {_pesos(total)}**")
 
-    with st.expander(f"Ver pedidos Wix ({len(ped_wix_f)})"):
-        for _label, _lista in [
-            ("✅ Cobrado", wix_cobradas),
-            ("⏳ Pendiente", wix_pendientes),
-            ("❌ Anulado", wix_anulados),
-            ("🚚 No entregado", wix_no_entregados),
-        ]:
-            if _lista:
-                st.markdown(f"**{_label}** ({len(_lista)})")
+    for _label, _lista in [
+        ("✅ Cobrado", wix_cobradas),
+        ("⏳ Pendiente", wix_pendientes),
+        ("❌ Anulado", wix_anulados),
+        ("🚚 No entregado", wix_no_entregados),
+    ]:
+        if _lista:
+            with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
                 for p in sorted(_lista, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
                     _render_pedido_wix(p)
 
