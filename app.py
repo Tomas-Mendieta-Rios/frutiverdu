@@ -1441,10 +1441,10 @@ with tab_balance:
     fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
 
     # Categorizar Wix
-    wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID"]
-    wix_anulados      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "FULLY_REFUNDED"]
-    wix_pendientes    = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() not in ("PAID", "FULLY_REFUNDED")]
-    wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED"]
+    wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+    wix_anulados      = [p for p in ped_wix_f if str(p.get("status") or "").upper() == "CANCELED"]
+    wix_pendientes    = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED" and str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+    wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
 
     # Totales
     total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
@@ -1509,12 +1509,21 @@ with tab_balance:
         nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
         fecha  = str(p.get("createdDate") or "")[:10]
         total  = _wix_monto(p)
+        pay    = str(p.get("paymentStatus") or "").upper()
         ful    = str(p.get("fulfillmentStatus") or "").upper()
-        ful_badge = " 🚚" if ful == "NOT_FULFILLED" else ""
+        status = str(p.get("status") or "").upper()
+        if status == "CANCELED":
+            badge = " ❌"
+        elif pay == "PAID":
+            badge = " ✅"
+        elif ful == "FULFILLED":
+            badge = " ⏳"
+        else:
+            badge = " 🚚"
         with st.container(border=True):
             c1, c2 = st.columns([5, 1.5])
             with c1:
-                st.markdown(f"**#{nro}**{ful_badge} — {nombre} · 📅 {fecha}")
+                st.markdown(f"**#{nro}**{badge} — {nombre} · 📅 {fecha}")
             with c2:
                 st.markdown(f"**$ {_pesos(total)}**")
 
