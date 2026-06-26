@@ -150,7 +150,6 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
         "base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services"
     )
     id_empresa = int(dux_cfg.get("id_empresa", 4245))
-    id_sucursal = int(dux_cfg.get("id_sucursal", 1))
 
     if not token:
         return None
@@ -170,7 +169,6 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
     for _ in range(max_pages):
         params = {
             "id_empresa": id_empresa,
-            "id_sucursal": id_sucursal,
             "fecha_desde": pd.to_datetime(fecha_desde).strftime("%Y-%m-%d"),
             "fecha_hasta": pd.to_datetime(fecha_hasta).strftime("%Y-%m-%d"),
             "incluir_detalle": "true",
@@ -201,11 +199,10 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
                     continue
                 cantidades[cod] = cantidades.get(cod, 0.0) + ctd
 
-        paging = d.get("paginacion", {}) or {}
-        if not paging.get("hay_mas"):
+        if len(datos) < page_size:
             break
         offset += page_size
-        time.sleep(2)  # respetar rate limit DUX entre paginas
+        time.sleep(2)
 
     return {"cantidades": cantidades, "compras": compras_raw}
 
