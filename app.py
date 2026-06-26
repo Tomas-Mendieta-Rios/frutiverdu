@@ -1592,8 +1592,8 @@ with tab_sync:
         for _i, (_label, _fn) in enumerate([
             ("Gastos (DUX)", _sync_gastos),
             ("Compras (DUX)", _sync_compras),
-            ("Facturas (DUX)", _sync_facturas),
             ("Pedidos DUX", _sync_pedidos_dux),
+            ("Facturas (DUX)", _sync_facturas),
             ("Pedidos Wix", _sync_pedidos_wix),
         ]):
             if _i > 0:
