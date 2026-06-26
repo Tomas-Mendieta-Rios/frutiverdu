@@ -841,7 +841,7 @@ def cargar_comprobantes_compra():
     """Lista de comprobantes con su total DUX — para sumar en el balance sin pasar por ítems."""
     client = get_client()
     resp = client.table("comprobantes_compra").select(
-        "id, nro_comprobante, fecha, proveedor, condicion_pago, total"
+        "id, nro_comprobante, fecha, proveedor, condicion_pago, total, estado, pago_pendiente"
     ).execute()
     return resp.data or []
 
