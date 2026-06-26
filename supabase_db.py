@@ -837,6 +837,15 @@ def cargar_compras():
     return pd.DataFrame(records)
 
 
+def cargar_comprobantes_compra():
+    """Lista de comprobantes con su total DUX — para sumar en el balance sin pasar por ítems."""
+    client = get_client()
+    resp = client.table("comprobantes_compra").select(
+        "id, nro_comprobante, fecha, proveedor, condicion_pago, total"
+    ).execute()
+    return resp.data or []
+
+
 def fechas_compras():
     df = cargar_compras()
     if df.empty:

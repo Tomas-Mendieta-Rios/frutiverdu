@@ -1400,10 +1400,11 @@ with tab_balance:
             return False
 
     with st.spinner("Cargando datos..."):
-        facturas_bal     = db.cargar_facturas()
-        pedidos_wix_bal  = db.cargar_pedidos_wix()
-        compras_bal      = db.cargar_compras()
-        gastos_bal       = db.cargar_gastos()
+        facturas_bal        = db.cargar_facturas()
+        pedidos_wix_bal     = db.cargar_pedidos_wix()
+        compras_bal         = db.cargar_compras()
+        comprobantes_bal    = db.cargar_comprobantes_compra()
+        gastos_bal          = db.cargar_gastos()
 
     # Filtrar por rango
     facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
@@ -1413,7 +1414,8 @@ with tab_balance:
         compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
         compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
     else:
-        compras_f = pd.DataFrame(columns=["comprobante_id", "total_comprobante"])
+        compras_f = pd.DataFrame()
+    comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
     gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
 
     # Categorizar facturas DUX
@@ -1436,7 +1438,7 @@ with tab_balance:
     total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
     total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
     total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
-    total_compras     = float(compras_f.drop_duplicates("comprobante_id")["total_comprobante"].sum()) if not compras_f.empty else 0.0
+    total_compras     = sum(float(c.get("total") or 0) for c in comprobantes_f)
     total_gastos      = sum(float(g.get("total") or 0) for g in gastos_f)
 
     total_ingresos = total_facturas + total_wix
