@@ -1468,7 +1468,7 @@ with tab_balance:
     st.markdown(f"### 📈 Ingresos — **$ {_pesos(total_ingresos)}**")
 
     # Facturas DUX
-    st.markdown(f"**🧾 Facturas DUX** — $ {_pesos(total_facturas)} · {len(facturas_vig)}")
+    st.markdown(f"### 🧾 Facturas DUX — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas")
     _c1, _c2, _c3 = st.columns(3)
     _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
     _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
@@ -1503,7 +1503,7 @@ with tab_balance:
                             _render_factura(f)
 
     # Wix
-    st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)}")
+    st.markdown(f"### 🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos")
     _w1, _w2, _w3, _w4 = st.columns(4)
     _w1.metric("✅ Cobrado", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)}")
     _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
