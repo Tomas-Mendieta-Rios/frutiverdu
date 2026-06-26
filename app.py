@@ -1361,6 +1361,9 @@ with tab_balance:
         except (ValueError, TypeError):
             return 0.0
 
+    def _pesos(v):
+        return f"{int(round(float(v or 0))):,}".replace(",", ".")
+
     def _en_rango(fecha_str):
         try:
             f = pd.to_datetime(str(fecha_str or "")).date()
@@ -1396,10 +1399,10 @@ with tab_balance:
 
     # ── INGRESOS ────────────────────────────────────────────────────────────
     st.divider()
-    st.markdown(f"### 📈 Ingresos — **$ {total_ingresos:,.2f}**")
+    st.markdown(f"### 📈 Ingresos — **$ {_pesos(total_ingresos)}**")
 
     # Facturas DUX
-    st.markdown(f"**🧾 Facturas DUX** — $ {total_facturas:,.2f} · {len(facturas_f)} facturas")
+    st.markdown(f"**🧾 Facturas DUX** — $ {_pesos(total_facturas)} · {len(facturas_f)} facturas")
     with st.expander(f"Ver facturas ({len(facturas_f)})"):
         for f in sorted(facturas_f, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
             comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
@@ -1412,7 +1415,7 @@ with tab_balance:
                 with c1:
                     st.markdown(f"**{comp}** — {cli} · 📅 {fecha} · {len(items)} ítem{'s' if len(items)!=1 else ''}")
                 with c2:
-                    st.markdown(f"**$ {total:,.2f}**")
+                    st.markdown(f"**$ {_pesos(total)}**")
                 if items:
                     with st.expander("Ver ítems"):
                         st.dataframe(pd.DataFrame([{
@@ -1423,7 +1426,7 @@ with tab_balance:
                         } for it in items]), use_container_width=True, hide_index=True)
 
     # Wix
-    st.markdown(f"**🌐 Wix** — $ {total_wix:,.2f} · {len(ped_wix_f)} pedidos")
+    st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos")
     with st.expander(f"Ver pedidos Wix ({len(ped_wix_f)})"):
         for p in sorted(ped_wix_f, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
             nro    = p.get("number") or p.get("id") or "—"
@@ -1431,26 +1434,19 @@ with tab_balance:
             nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
             fecha  = str(p.get("createdDate") or "")[:10]
             total  = _parse_wix_total((p.get("priceSummary") or {}).get("total", {}).get("formattedAmount"))
-            items  = p.get("lineItems") or []
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:
-                    st.markdown(f"**#{nro}** — {nombre} · 📅 {fecha} · {len(items)} ítem{'s' if len(items)!=1 else ''}")
+                    st.markdown(f"**#{nro}** — {nombre} · 📅 {fecha}")
                 with c2:
-                    st.markdown(f"**$ {total:,.2f}**")
-                if items:
-                    with st.expander("Ver ítems"):
-                        st.dataframe(pd.DataFrame([{
-                            "Producto": (it.get("productName") or {}).get("translated") or "",
-                            "Cant.": float(it.get("quantity") or 0),
-                        } for it in items]), use_container_width=True, hide_index=True)
+                    st.markdown(f"**$ {_pesos(total)}**")
 
     # ── EGRESOS ─────────────────────────────────────────────────────────────
     st.divider()
-    st.markdown(f"### 📉 Egresos — **$ {total_egresos:,.2f}**")
+    st.markdown(f"### 📉 Egresos — **$ {_pesos(total_egresos)}**")
 
     # Compras
-    st.markdown(f"**💰 Compras** — $ {total_compras:,.2f}")
+    st.markdown(f"**💰 Compras** — $ {_pesos(total_compras)}")
     with st.expander(f"Ver compras ({len(compras_f) if not compras_f.empty else 0} líneas)"):
         if compras_f.empty:
             st.caption("Sin compras en el período.")
@@ -1464,7 +1460,7 @@ with tab_balance:
                     with c1:
                         st.markdown(f"**#{nro_c or '—'}** — {prov_c or '—'} · 📅 {fecha_c}")
                     with c2:
-                        st.markdown(f"**$ {total_c:,.2f}**")
+                        st.markdown(f"**$ {_pesos(total_c)}**")
                     with st.expander("Ver ítems"):
                         st.dataframe(df_g[["codigo_producto","producto_nombre","cantidad","precio","subtotal"]].rename(columns={
                             "codigo_producto":"Código","producto_nombre":"Producto",
@@ -1472,7 +1468,7 @@ with tab_balance:
                         }), use_container_width=True, hide_index=True)
 
     # Gastos
-    st.markdown(f"**📄 Gastos** — $ {total_gastos:,.2f}")
+    st.markdown(f"**📄 Gastos** — $ {_pesos(total_gastos)}")
     with st.expander(f"Ver gastos ({len(gastos_f)})"):
         if not gastos_f:
             st.caption("Sin gastos en el período.")
@@ -1488,7 +1484,7 @@ with tab_balance:
                     with c1:
                         st.markdown(f"**#{nro_g}** — {prov_g} · 📅 {fecha_g} · {len(items_g)} ítem{'s' if len(items_g)!=1 else ''}")
                     with c2:
-                        st.markdown(f"**$ {total_g:,.2f}**")
+                        st.markdown(f"**$ {_pesos(total_g)}**")
                     if items_g:
                         with st.expander("Ver ítems"):
                             st.dataframe(pd.DataFrame([{
@@ -1501,7 +1497,7 @@ with tab_balance:
     st.divider()
     color = "green" if resultado >= 0 else "red"
     signo = "+" if resultado >= 0 else ""
-    st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {resultado:,.2f}**]")
+    st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
 
 with tab_ingresos:
     with tab_ing_facturas:
