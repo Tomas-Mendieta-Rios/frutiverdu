@@ -475,6 +475,12 @@ def guardar_pedidos_dux(pedidos):
     if not order_rows:
         return
 
+    # Deduplicar por order_id antes del upsert: Postgres rechaza el batch si
+    # el mismo order_id aparece dos veces (ON CONFLICT no puede afectar la misma
+    # fila dos veces en una sola sentencia).
+    dedup = {r["order_id"]: r for r in order_rows}
+    order_rows = list(dedup.values())
+
     client.table("pedidos_dux").upsert(order_rows, on_conflict="order_id").execute()
 
     for oid, items in items_por_order.items():
@@ -635,6 +641,9 @@ def guardar_pedidos_wix(pedidos):
 
     if not order_rows:
         return
+
+    dedup = {r["order_id"]: r for r in order_rows}
+    order_rows = list(dedup.values())
 
     client.table("pedidos_wix").upsert(order_rows, on_conflict="order_id").execute()
 
