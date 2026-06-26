@@ -1357,9 +1357,26 @@ with tab_balance:
 
     def _parse_wix_total(v):
         try:
-            return float(str(v or "0").replace("$", "").replace(",", "").replace(" ", "").strip())
+            import re as _re
+            s = _re.sub(r"[^\d.,]", "", str(v or "0"))
+            if not s:
+                return 0.0
+            if "," in s and "." in s:
+                if s.rfind(",") > s.rfind("."):
+                    s = s.replace(".", "").replace(",", ".")
+                else:
+                    s = s.replace(",", "")
+            elif "," in s:
+                s = s.replace(",", "." if (len(s) - s.rfind(",") - 1) <= 2 else "")
+            return float(s)
         except (ValueError, TypeError):
             return 0.0
+
+    def _wix_monto(p):
+        v = float(p.get("total_amount") or 0)
+        if v == 0:
+            v = _parse_wix_total((p.get("priceSummary") or {}).get("total", {}).get("formattedAmount"))
+        return v
 
     def _pesos(v):
         return f"{int(round(float(v or 0))):,}".replace(",", ".")
@@ -1389,7 +1406,7 @@ with tab_balance:
 
     # Totales
     total_facturas = sum(float(f.get("total") or 0) for f in facturas_f)
-    total_wix      = sum(float(p.get("total_amount") or 0) for p in ped_wix_f)
+    total_wix      = sum(_wix_monto(p) for p in ped_wix_f)
     total_compras  = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
     total_gastos   = sum(float(g.get("total") or 0) for g in gastos_f)
 
@@ -1433,7 +1450,7 @@ with tab_balance:
             bi     = (p.get("billingInfo") or {}).get("contactDetails") or {}
             nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
             fecha  = str(p.get("createdDate") or "")[:10]
-            total  = float(p.get("total_amount") or 0)
+            total  = _wix_monto(p)
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:

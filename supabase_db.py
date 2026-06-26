@@ -647,7 +647,15 @@ def guardar_pedidos_wix(pedidos):
     dedup = {r["order_id"]: r for r in order_rows}
     order_rows = list(dedup.values())
 
-    client.table("pedidos_wix").upsert(order_rows, on_conflict="order_id").execute()
+    try:
+        client.table("pedidos_wix").upsert(order_rows, on_conflict="order_id").execute()
+    except Exception as _e:
+        if "total_amount" in str(_e) and "PGRST204" in str(_e):
+            for _r in order_rows:
+                _r.pop("total_amount", None)
+            client.table("pedidos_wix").upsert(order_rows, on_conflict="order_id").execute()
+        else:
+            raise
 
     for oid, items in items_por_order.items():
         client.table("pedidos_wix_items").delete().eq("order_id", oid).execute()
