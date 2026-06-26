@@ -892,6 +892,7 @@ def guardar_compras_sync(compras):
             "estado": str(c.get("estado") or "EMITIDA"),
             "fecha": str(c.get("fecha") or ""),
             "fecha_vencimiento": str(c.get("fecha_vencimiento") or ""),
+            "pago_pendiente": bool(c.get("pago_pendiente") or _to_float(montos.get("monto_pendiente")) > 0),
             "monto_exento": _to_float(montos.get("monto_exento")),
             "monto_gravado": _to_float(montos.get("monto_gravado")),
             "monto_iva": _to_float(montos.get("monto_iva")),

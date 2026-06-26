@@ -1,0 +1,1 @@
+ALTER TABLE comprobantes_compra ADD COLUMN IF NOT EXISTS pago_pendiente BOOLEAN DEFAULT FALSE;
