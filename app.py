@@ -1124,6 +1124,7 @@ def _sync_compras(fecha_desde, fecha_hasta):
         prov_nombre = str(prov.get("razon_social") or "")
         nro_comp = str(compra.get("nro_comprobante") or "")
         cond_pago = str(compra.get("condicion_pago") or "")
+        total_comp = float(compra.get("total") or 0)
         for item in (compra.get("items", []) or []):
             cod = str(item.get("cod_item") or "")
             rows_sync.append({
@@ -1133,6 +1134,7 @@ def _sync_compras(fecha_desde, fecha_hasta):
                 "cantidad": float(item.get("ctd_recepcionada") or item.get("ctd") or 0),
                 "precio": float(item.get("precio_uni") or 0),
                 "condicion_pago": cond_pago, "comprobante": nro_comp,
+                "total_comprobante": total_comp,
             })
     db.guardar_compras_sync(rows_sync)
     return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes sincronizados ({len(rows_sync)} ítems)."
@@ -1433,7 +1435,7 @@ with tab_balance:
         compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
         compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
     else:
-        compras_f = pd.DataFrame()
+        compras_f = pd.DataFrame(columns=["comprobante_id", "total_comprobante"])
     gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
 
     # Categorizar facturas DUX
@@ -1456,7 +1458,7 @@ with tab_balance:
     total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
     total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
     total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
-    total_compras     = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
+    total_compras     = float(compras_f.drop_duplicates("comprobante_id")["total_comprobante"].sum()) if not compras_f.empty else 0.0
     total_gastos      = sum(float(g.get("total") or 0) for g in gastos_f)
 
     total_ingresos = total_facturas + total_wix

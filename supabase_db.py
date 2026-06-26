@@ -809,11 +809,12 @@ def guardar_proveedores(df):
 # ---------------- COMPRAS ----------------
 
 def cargar_compras():
-    """Devuelve un DataFrame plano con la misma estructura que antes para compatibilidad con app.py."""
+    """Devuelve un DataFrame plano por ítem. Incluye comprobante_id y total_comprobante
+    (total DUX del comprobante, repetido por ítem) para calcular totales correctos en el balance."""
     client = get_client()
     resp = client.table("items_compra").select(
-        "codigo_producto, producto_nombre, cantidad, precio, "
-        "comprobantes_compra(nro_comprobante, fecha, proveedor_id, proveedor_nombre, condicion_pago)"
+        "comprobante_id, codigo_producto, producto_nombre, cantidad, precio, "
+        "comprobantes_compra(nro_comprobante, fecha, proveedor_id, proveedor_nombre, condicion_pago, total)"
     ).execute()
     rows = resp.data or []
     if not rows:
@@ -831,6 +832,8 @@ def cargar_compras():
             "precio": float(it.get("precio") or 0),
             "condicion_pago": str(cab.get("condicion_pago") or ""),
             "comprobante": str(cab.get("nro_comprobante") or ""),
+            "comprobante_id": it.get("comprobante_id"),
+            "total_comprobante": float(cab.get("total") or 0),
         })
     return pd.DataFrame(records)
 
@@ -936,6 +939,7 @@ def guardar_compras_sync(rows):
             "proveedor_id": prov_id,
             "proveedor_nombre": str(first.get("proveedor_nombre") or ""),
             "condicion_pago": str(first.get("condicion_pago") or ""),
+            "total": float(first.get("total_comprobante") or 0),
         }
         ins = client.table("comprobantes_compra").insert(cab).execute()
         comp_id = ins.data[0]["id"]
