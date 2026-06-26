@@ -691,6 +691,7 @@ def guardar_facturas(facturas):
             "monto_desc": _to_float(f.get("monto_desc")),
             "total": _to_float(f.get("total")),
             "anulada": str(f.get("anulada") or "N"),
+            "con_cobro": bool(f.get("con_cobro", False)),
             "nro_cae_cai": str(f.get("nro_cae_cai") or ""),
             "url_factura": str(f.get("url_factura") or ""),
         })
@@ -761,6 +762,7 @@ def cargar_facturas():
             "monto_desc": r.get("monto_desc"),
             "total": r.get("total"),
             "anulada": r.get("anulada"),
+            "con_cobro": bool(r.get("con_cobro", False)),
             "nro_cae_cai": r.get("nro_cae_cai"),
             "url_factura": r.get("url_factura"),
             "detalles": items_por_factura.get(fid, []),

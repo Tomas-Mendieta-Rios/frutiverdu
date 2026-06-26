@@ -1244,38 +1244,66 @@ def _sync_facturas(fecha_desde, fecha_hasta):
     url_f = f"{_base_url}/facturas"
     headers_f = {"accept": "application/json", "authorization": _token}
     page_size = 50
-    all_facturas = []
-    offset = 0
-    while True:
-        params_f = {
-            "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
-            "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
-            "idEmpresa": _id_empresa,
-            "idSucursal": _id_sucursal,
-            "offset": offset,
-            "limit": page_size,
-        }
-        try:
-            r = requests.get(url_f, params=params_f, headers=headers_f, timeout=30)
-        except requests.RequestException as e:
-            return False, 0, msg_error_red("DUX (facturas)", e)
-        if r.status_code != 200:
-            return False, 0, msg_error_http("DUX (facturas)", r.status_code, r.text)
-        try:
-            d = r.json()
-        except ValueError:
-            return False, 0, "❌ DUX devolvió una respuesta inválida (facturas)."
-        if isinstance(d, dict) and "message" in d and "results" not in d:
-            return False, 0, f"❌ DUX (facturas): {d['message']}"
-        results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
-        if not results:
-            break
-        all_facturas.extend(results)
-        total = (d.get("paging") or {}).get("total", 0) if isinstance(d, dict) else 0
-        offset += page_size
-        if offset >= total or len(results) < page_size:
-            break
-        time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+    def _fetch_facturas(extra_params=None):
+        results_all = []
+        offset = 0
+        while True:
+            params_f = {
+                "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+                "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+                "idEmpresa": _id_empresa,
+                "idSucursal": _id_sucursal,
+                "offset": offset,
+                "limit": page_size,
+            }
+            if extra_params:
+                params_f.update(extra_params)
+            try:
+                r = requests.get(url_f, params=params_f, headers=headers_f, timeout=30)
+            except requests.RequestException as e:
+                return None, msg_error_red("DUX (facturas)", e)
+            if r.status_code != 200:
+                return None, msg_error_http("DUX (facturas)", r.status_code, r.text)
+            try:
+                d = r.json()
+            except ValueError:
+                return None, "❌ DUX devolvió una respuesta inválida (facturas)."
+            if isinstance(d, dict) and "message" in d and "results" not in d:
+                return None, f"❌ DUX (facturas): {d['message']}"
+            results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
+            if not results:
+                break
+            results_all.extend(results)
+            total = (d.get("paging") or {}).get("total", 0) if isinstance(d, dict) else 0
+            offset += page_size
+            if offset >= total or len(results) < page_size:
+                break
+            time.sleep(DUX_RATE_LIMIT_SECONDS)
+        return results_all, None
+
+    # Todas las facturas vigentes
+    all_facturas, err = _fetch_facturas({"anuladas": False})
+    if err:
+        return False, 0, err
+
+    time.sleep(DUX_RATE_LIMIT_SECONDS)
+
+    # IDs de facturas cobradas
+    cobradas, err2 = _fetch_facturas({"anuladas": False, "conCobro": True})
+    if err2:
+        cobradas = []
+    cobradas_ids = {str(f.get("id") or "") for f in (cobradas or [])}
+
+    # Facturas anuladas
+    time.sleep(DUX_RATE_LIMIT_SECONDS)
+    anuladas, _ = _fetch_facturas({"anuladas": True})
+    all_facturas.extend(anuladas or [])
+
+    # Marcar con_cobro
+    for f in all_facturas:
+        f["con_cobro"] = str(f.get("id") or "") in cobradas_ids
+
     db.guardar_facturas(all_facturas)
     return True, len(all_facturas), f"✅ {len(all_facturas)} facturas sincronizadas."
 
@@ -1395,20 +1423,36 @@ with tab_balance:
         gastos_bal       = db.cargar_gastos()
 
     # Filtrar por rango
-    facturas_f = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
-    ped_wix_f  = [p for p in pedidos_wix_bal  if _en_rango(p.get("createdDate"))]
+    facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
+    facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
+    ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
     if not compras_bal.empty:
         compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
         compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
     else:
         compras_f = pd.DataFrame()
-    gastos_f   = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
+    gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
+
+    # Categorizar facturas por con_cobro (campo del API de DUX)
+    fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro")]
+    fac_facturadas = [f for f in facturas_vig if not f.get("con_cobro")]
+
+    # Categorizar Wix por paymentStatus y fulfillmentStatus
+    wix_cobradas   = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID"]
+    wix_pendientes = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() != "PAID"]
+    wix_entregadas = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED"]
 
     # Totales
-    total_facturas = sum(float(f.get("total") or 0) for f in facturas_f)
-    total_wix      = sum(_wix_monto(p) for p in ped_wix_f)
-    total_compras  = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
-    total_gastos   = sum(float(g.get("total") or 0) for g in gastos_f)
+    total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
+    total_fac_cobr    = sum(float(f.get("total") or 0) for f in fac_cobradas)
+    total_fac_fact    = sum(float(f.get("total") or 0) for f in fac_facturadas)
+    total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
+    total_wix         = sum(_wix_monto(p) for p in ped_wix_f)
+    total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
+    total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
+    total_wix_entr    = sum(_wix_monto(p) for p in wix_entregadas)
+    total_compras     = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
+    total_gastos      = sum(float(g.get("total") or 0) for g in gastos_f)
 
     total_ingresos = total_facturas + total_wix
     total_egresos  = total_compras + total_gastos
@@ -1419,31 +1463,31 @@ with tab_balance:
     st.markdown(f"### 📈 Ingresos — **$ {_pesos(total_ingresos)}**")
 
     # Facturas DUX
-    st.markdown(f"**🧾 Facturas DUX** — $ {_pesos(total_facturas)} · {len(facturas_f)} facturas")
-    with st.expander(f"Ver facturas ({len(facturas_f)})"):
-        for f in sorted(facturas_f, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-            comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
-            cli   = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
-            fecha = str(f.get("fecha_comp") or "")[:12]
-            total = float(f.get("total") or 0)
-            items = f.get("detalles") or []
+    st.markdown(f"**🧾 Facturas DUX** — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas")
+    _c1, _c2, _c3 = st.columns(3)
+    _c1.metric("✅ Cobradas", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)} fact.")
+    _c2.metric("📋 Facturadas", f"$ {_pesos(total_fac_fact)}", f"{len(fac_facturadas)} fact.")
+    _c3.metric("❌ Anuladas", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)} fact.")
+    with st.expander(f"Ver facturas ({len(facturas_vig)})"):
+        for f in sorted(facturas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+            comp   = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
+            cli    = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
+            fecha  = str(f.get("fecha_comp") or "")[:12]
+            total  = float(f.get("total") or 0)
+            badge  = " ✅" if f.get("con_cobro") else " 📋"
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:
-                    st.markdown(f"**{comp}** — {cli} · 📅 {fecha} · {len(items)} ítem{'s' if len(items)!=1 else ''}")
+                    st.markdown(f"**{comp}**{badge} — {cli} · 📅 {fecha}")
                 with c2:
                     st.markdown(f"**$ {_pesos(total)}**")
-                if items:
-                    with st.expander("Ver ítems"):
-                        st.dataframe(pd.DataFrame([{
-                            "Código": it.get("cod_item",""),
-                            "Producto": it.get("item",""),
-                            "Cant.": float(it.get("ctd") or 0),
-                            "Precio unit.": float(it.get("precio_uni") or 0),
-                        } for it in items]), use_container_width=True, hide_index=True)
 
     # Wix
     st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos")
+    _w1, _w2, _w3 = st.columns(3)
+    _w1.metric("✅ Cobradas", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)} ped.")
+    _w2.metric("⏳ Pendientes pago", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)} ped.")
+    _w3.metric("📦 Entregadas", f"$ {_pesos(total_wix_entr)}", f"{len(wix_entregadas)} ped.")
     with st.expander(f"Ver pedidos Wix ({len(ped_wix_f)})"):
         for p in sorted(ped_wix_f, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
             nro    = p.get("number") or p.get("id") or "—"
@@ -1451,10 +1495,14 @@ with tab_balance:
             nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
             fecha  = str(p.get("createdDate") or "")[:10]
             total  = _wix_monto(p)
+            pay    = str(p.get("paymentStatus") or "").upper()
+            ful    = str(p.get("fulfillmentStatus") or "").upper()
+            pay_badge = " ✅" if pay == "PAID" else " ⏳"
+            ful_badge = " 📦" if ful == "FULFILLED" else " 🚚"
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:
-                    st.markdown(f"**#{nro}** — {nombre} · 📅 {fecha}")
+                    st.markdown(f"**#{nro}**{pay_badge}{ful_badge} — {nombre} · 📅 {fecha}")
                 with c2:
                     st.markdown(f"**$ {_pesos(total)}**")
 
