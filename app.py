@@ -1447,7 +1447,7 @@ with tab_sync:
     st.caption("Trae y guarda Gastos, Compras, Pedidos DUX y Pedidos Wix de una sola vez.")
 
     _hoy_sync = date.today()
-    _m3, _y3 = _hoy_sync.month - 3, _hoy_sync.year
+    _m3, _y3 = _hoy_sync.month - 2, _hoy_sync.year
     if _m3 <= 0:
         _m3 += 12
         _y3 -= 1
@@ -1473,12 +1473,14 @@ with tab_sync:
         )
 
     if sincronizar_todo:
-        for _label, _fn in [
+        for _i, (_label, _fn) in enumerate([
             ("Gastos (DUX)", _sync_gastos),
             ("Compras (DUX)", _sync_compras),
             ("Pedidos DUX", _sync_pedidos_dux),
             ("Pedidos Wix", _sync_pedidos_wix),
-        ]:
+        ]):
+            if _i > 0:
+                time.sleep(DUX_RATE_LIMIT_SECONDS)
             with st.spinner(f"Sincronizando {_label}..."):
                 try:
                     _ok, _n, _msg = _fn(sync_desde, sync_hasta)
