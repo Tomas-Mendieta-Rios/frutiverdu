@@ -218,19 +218,26 @@ def generate_create_table_sql():
     );
     """)
     
-    # Tabla: compras
+    # Tablas: comprobantes_compra + items_compra (reemplaza la tabla compras plana)
     sql_statements.append("""
-    CREATE TABLE IF NOT EXISTS compras (
+    CREATE TABLE IF NOT EXISTS comprobantes_compra (
         id BIGSERIAL PRIMARY KEY,
+        nro_comprobante TEXT,
         fecha TEXT,
         proveedor_id TEXT,
         proveedor_nombre TEXT,
+        condicion_pago TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    """)
+    sql_statements.append("""
+    CREATE TABLE IF NOT EXISTS items_compra (
+        id BIGSERIAL PRIMARY KEY,
+        comprobante_id BIGINT REFERENCES comprobantes_compra(id) ON DELETE CASCADE,
         codigo_producto TEXT,
         producto_nombre TEXT,
-        cantidad TEXT,
-        precio TEXT,
-        condicion_pago TEXT,
-        comprobante TEXT,
+        cantidad NUMERIC,
+        precio NUMERIC,
         created_at TIMESTAMPTZ DEFAULT NOW()
     );
     """)
