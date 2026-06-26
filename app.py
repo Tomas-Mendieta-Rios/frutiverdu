@@ -1198,35 +1198,41 @@ def _sync_pedidos_wix(fecha_desde, fecha_hasta):
         "Authorization": wix_token_s, "wix-account-id": wix_account_s,
         "wix-site-id": wix_site_s, "Content-Type": "application/json",
     }
-    body = {
-        "search": {
-            "filter": {
-                "$and": [
-                    {"createdDate": {"$gte": f"{fecha_desde}T00:00:00.000Z"}},
-                    {"createdDate": {"$lte": f"{fecha_hasta}T23:59:59.999Z"}},
-                ]
-            },
-            "cursorPaging": {"limit": 100},
-        }
+    _filter = {
+        "$and": [
+            {"createdDate": {"$gte": f"{fecha_desde}T00:00:00.000Z"}},
+            {"createdDate": {"$lte": f"{fecha_hasta}T23:59:59.999Z"}},
+        ]
     }
-    try:
-        resp = requests.post(url, json=body, headers=headers, timeout=30)
-    except requests.RequestException as e:
-        return False, 0, msg_error_red("Wix", e)
-    if resp.status_code != 200:
-        return False, 0, msg_error_http("Wix", resp.status_code, resp.text)
-    try:
-        data = resp.json()
-    except ValueError:
-        return False, 0, "❌ Wix devolvió una respuesta inválida."
-    orders = data.get("orders", [])
-    orders_slim = [_slim_wix_order(o) for o in orders]
+    all_orders = []
+    cursor = None
+    while True:
+        paging = {"limit": 100}
+        if cursor:
+            paging["cursor"] = cursor
+        body = {"search": {"filter": _filter, "cursorPaging": paging}}
+        try:
+            resp = requests.post(url, json=body, headers=headers, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("Wix", e)
+        if resp.status_code != 200:
+            return False, 0, msg_error_http("Wix", resp.status_code, resp.text)
+        try:
+            data = resp.json()
+        except ValueError:
+            return False, 0, "❌ Wix devolvió una respuesta inválida."
+        all_orders.extend(data.get("orders", []))
+        meta = data.get("metadata") or data.get("pagingMetadata") or {}
+        cursor = (meta.get("cursors") or {}).get("next") or meta.get("next")
+        if not cursor or not data.get("orders"):
+            break
+    orders_slim = [_slim_wix_order(o) for o in all_orders]
     db.guardar_pedidos_wix(orders_slim)
     try:
         db.guardar_config({"wix_fecha_desde": str(fecha_desde), "wix_fecha_hasta": str(fecha_hasta)})
     except Exception:
         pass
-    return True, len(orders), f"✅ {len(orders)} pedidos Wix sincronizados."
+    return True, len(all_orders), f"✅ {len(all_orders)} pedidos Wix sincronizados."
 
 
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
