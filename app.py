@@ -1465,10 +1465,10 @@ with tab_balance:
 
     # ── INGRESOS ────────────────────────────────────────────────────────────
     st.divider()
-    st.markdown(f"### 📈 Ingresos — **$ {_pesos(total_ingresos)}**")
+    st.markdown(f"<h3 style='color:#27ae60'>📈 Ingresos — $ {_pesos(total_ingresos)}</h3>", unsafe_allow_html=True)
 
     # Facturas DUX
-    st.markdown(f"### 🧾 Facturas DUX — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas")
+    st.markdown(f"<h4 style='color:#27ae60'>🧾 DUX — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas</h4>", unsafe_allow_html=True)
     _c1, _c2, _c3 = st.columns(3)
     _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
     _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
@@ -1503,7 +1503,7 @@ with tab_balance:
                             _render_factura(f)
 
     # Wix
-    st.markdown(f"### 🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos")
+    st.markdown(f"<h4 style='color:#27ae60'>🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos</h4>", unsafe_allow_html=True)
     _w1, _w2, _w3, _w4 = st.columns(4)
     _w1.metric("✅ Cobrado", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)}")
     _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
@@ -1554,10 +1554,10 @@ with tab_balance:
 
     # ── EGRESOS ─────────────────────────────────────────────────────────────
     st.divider()
-    st.markdown(f"### 📉 Egresos — **$ {_pesos(total_egresos)}**")
+    st.markdown(f"<h3 style='color:#e74c3c'>📉 Egresos — $ {_pesos(total_egresos)}</h3>", unsafe_allow_html=True)
 
     # Compras
-    st.markdown(f"**💰 Compras** — $ {_pesos(total_compras)}")
+    st.markdown(f"<h4 style='color:#e74c3c'>💰 Compras — $ {_pesos(total_compras)}</h4>", unsafe_allow_html=True)
     with st.expander(f"Ver compras ({len(compras_f) if not compras_f.empty else 0} líneas)"):
         if compras_f.empty:
             st.caption("Sin compras en el período.")
@@ -1574,7 +1574,7 @@ with tab_balance:
                         st.markdown(f"**$ {_pesos(total_c)}**")
 
     # Gastos
-    st.markdown(f"**📄 Gastos** — $ {_pesos(total_gastos)}")
+    st.markdown(f"<h4 style='color:#e74c3c'>📄 Gastos — $ {_pesos(total_gastos)}</h4>", unsafe_allow_html=True)
     with st.expander(f"Ver gastos ({len(gastos_f)})"):
         if not gastos_f:
             st.caption("Sin gastos en el período.")
