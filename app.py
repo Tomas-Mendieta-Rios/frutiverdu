@@ -1062,6 +1062,168 @@ if st.button(
     st.toast("Datos actualizados", icon="✅")
     st.rerun()
 
+def _sync_gastos(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url_g = f"{_base_url}/v2/gastos"
+    headers_g = {"accept": "application/json", "authorization": f"Bearer {_token}"}
+    page_offset, page_size, all_gastos = 0, 50, []
+    while True:
+        params_g = {
+            "id_empresa": _id_empresa, "id_sucursal": _id_sucursal,
+            "fecha_desde": fecha_desde.strftime("%Y-%m-%d"),
+            "fecha_hasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "incluir_detalle": "true", "offset": page_offset, "limit": page_size,
+        }
+        try:
+            r = requests.get(url_g, params=params_g, headers=headers_g, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("DUX (gastos)", e)
+        if r.status_code != 200:
+            return False, 0, msg_error_http("DUX (gastos)", r.status_code, r.text)
+        try:
+            d = r.json()
+        except ValueError:
+            return False, 0, "❌ DUX devolvió una respuesta inválida (gastos)."
+        if isinstance(d, dict) and "error" in d:
+            return False, 0, f"❌ DUX (gastos): {d['error'].get('mensaje', d['error'])}"
+        page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
+        if not page:
+            break
+        all_gastos.extend(page)
+        paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
+        if not paging.get("hay_mas"):
+            break
+        page_offset += page_size
+        time.sleep(DUX_RATE_LIMIT_SECONDS)
+    db.guardar_gastos(all_gastos)
+    return True, len(all_gastos), f"✅ {len(all_gastos)} gastos sincronizados."
+
+
+def _sync_compras(fecha_desde, fecha_hasta):
+    prod_lookup = {}
+    if not productos.empty:
+        prod_lookup = dict(zip(productos["codigo"].astype(str), productos["producto"]))
+    compras_res = cargar_compras_dux_v2(fecha_desde, fecha_hasta)
+    if compras_res is None:
+        return False, 0, msg_error_http("DUX (compras)", 401)
+    compras_raw = compras_res.get("compras", [])
+    rows_sync = []
+    for compra in compras_raw:
+        fecha_c_val = str(compra.get("fecha") or "")
+        prov = compra.get("proveedor", {}) or {}
+        prov_id = str(prov.get("id_proveedor") or "")
+        prov_nombre = str(prov.get("razon_social") or "")
+        nro_comp = str(compra.get("nro_comprobante") or "")
+        cond_pago = str(compra.get("condicion_pago") or "")
+        for item in (compra.get("items", []) or []):
+            cod = str(item.get("cod_item") or "")
+            rows_sync.append({
+                "fecha": fecha_c_val, "proveedor_id": prov_id,
+                "proveedor_nombre": prov_nombre, "codigo_producto": cod,
+                "producto_nombre": prod_lookup.get(cod, ""),
+                "cantidad": float(item.get("ctd_recepcionada") or item.get("ctd") or 0),
+                "precio": float(item.get("precio_uni") or 0),
+                "condicion_pago": cond_pago, "comprobante": nro_comp,
+            })
+    db.guardar_compras_sync(rows_sync)
+    return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes sincronizados ({len(rows_sync)} ítems)."
+
+
+def _sync_pedidos_dux(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url_p = f"{_base_url}/pedidos"
+    headers_p = {"accept": "application/json", "authorization": _token}
+    page_offset, page_size, all_orders = 0, 50, []
+    while True:
+        params_p = {
+            "idEmpresa": _id_empresa, "idSucursal": _id_sucursal,
+            "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+            "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "offset": page_offset, "limit": page_size,
+        }
+        try:
+            r = requests.get(url_p, params=params_p, headers=headers_p, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("DUX (pedidos)", e)
+        if r.status_code != 200:
+            return False, 0, msg_error_http("DUX (pedidos)", r.status_code, r.text)
+        try:
+            d = r.json()
+        except ValueError:
+            return False, 0, "❌ DUX devolvió una respuesta inválida (pedidos)."
+        if isinstance(d, dict) and "message" in d and "results" not in d:
+            return False, 0, f"❌ DUX (pedidos): {d['message']}"
+        if isinstance(d, dict) and "results" in d:
+            page = d["results"]
+        elif isinstance(d, list):
+            page = d
+        else:
+            page = []
+        if not page:
+            break
+        all_orders.extend(page)
+        if len(page) < page_size:
+            break
+        page_offset += page_size
+        time.sleep(DUX_RATE_LIMIT_SECONDS)
+    db.guardar_pedidos_dux(all_orders)
+    try:
+        db.guardar_config({"dux_fecha_desde": str(fecha_desde), "dux_fecha_hasta": str(fecha_hasta)})
+    except Exception:
+        pass
+    n = len(all_orders)
+    return True, n, f"✅ {n} pedidos DUX sincronizados." if n else (True, 0, "No hay pedidos DUX en ese rango.")
+
+
+def _sync_pedidos_wix(fecha_desde, fecha_hasta):
+    wix_cfg = st.secrets.get("wix", {})
+    wix_token_s = wix_cfg.get("api_key", "")
+    wix_account_s = wix_cfg.get("account_id", "")
+    wix_site_s = wix_cfg.get("site_id", "")
+    url = "https://www.wixapis.com/ecom/v1/orders/search"
+    headers = {
+        "Authorization": wix_token_s, "wix-account-id": wix_account_s,
+        "wix-site-id": wix_site_s, "Content-Type": "application/json",
+    }
+    body = {
+        "search": {
+            "filter": {
+                "$and": [
+                    {"createdDate": {"$gte": f"{fecha_desde}T00:00:00.000Z"}},
+                    {"createdDate": {"$lte": f"{fecha_hasta}T23:59:59.999Z"}},
+                ]
+            },
+            "cursorPaging": {"limit": 100},
+        }
+    }
+    try:
+        resp = requests.post(url, json=body, headers=headers, timeout=30)
+    except requests.RequestException as e:
+        return False, 0, msg_error_red("Wix", e)
+    if resp.status_code != 200:
+        return False, 0, msg_error_http("Wix", resp.status_code, resp.text)
+    try:
+        data = resp.json()
+    except ValueError:
+        return False, 0, "❌ Wix devolvió una respuesta inválida."
+    orders = data.get("orders", [])
+    orders_slim = [_slim_wix_order(o) for o in orders]
+    db.guardar_pedidos_wix(orders_slim)
+    try:
+        db.guardar_config({"wix_fecha_desde": str(fecha_desde), "wix_fecha_hasta": str(fecha_hasta)})
+    except Exception:
+        pass
+    return True, len(orders), f"✅ {len(orders)} pedidos Wix sincronizados."
+
+
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
 # NOTA: la pestania de Analitica esta oculta (los bloques 'with tab_X:'
 # correspondientes estan reemplazados por 'if False:' mas abajo).
@@ -1073,6 +1235,7 @@ if st.button(
     tab_grupo_pedidos,
     tab_grupo_diario,
     tab_balance,
+    tab_sync,
     tab_grupo_config,
 ) = st.tabs(
     [
@@ -1081,6 +1244,7 @@ if st.button(
         "📋 Pedidos",
         "📦 Diario",
         "📊 Balance",
+        "🔄 Sincronizar",
         "⚙️ Configuración",
     ]
 )
@@ -1277,6 +1441,53 @@ with tab_balance:
     color = "green" if resultado >= 0 else "red"
     signo = "+" if resultado >= 0 else ""
     st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {resultado:,.2f}**]")
+
+with tab_sync:
+    st.subheader("🔄 Sincronizar")
+    st.caption("Trae y guarda Gastos, Compras, Pedidos DUX y Pedidos Wix de una sola vez.")
+
+    _hoy_sync = date.today()
+    _m3, _y3 = _hoy_sync.month - 3, _hoy_sync.year
+    if _m3 <= 0:
+        _m3 += 12
+        _y3 -= 1
+    _sync_desde_default = _hoy_sync.replace(year=_y3, month=_m3)
+    _m1, _y1 = _hoy_sync.month + 1, _hoy_sync.year
+    if _m1 > 12:
+        _m1 -= 12
+        _y1 += 1
+    _sync_hasta_default = _hoy_sync.replace(year=_y1, month=_m1)
+
+    with st.form("form_sync_central", border=False):
+        col_s1, col_s2 = st.columns([1, 1])
+        with col_s1:
+            sync_desde = st.date_input(
+                "Desde", value=_sync_desde_default, key="sync_central_desde", format="YYYY-MM-DD"
+            )
+        with col_s2:
+            sync_hasta = st.date_input(
+                "Hasta", value=_sync_hasta_default, key="sync_central_hasta", format="YYYY-MM-DD"
+            )
+        sincronizar_todo = st.form_submit_button(
+            "🔄 Sincronizar todo", type="primary", use_container_width=True
+        )
+
+    if sincronizar_todo:
+        for _label, _fn in [
+            ("Gastos (DUX)", _sync_gastos),
+            ("Compras (DUX)", _sync_compras),
+            ("Pedidos DUX", _sync_pedidos_dux),
+            ("Pedidos Wix", _sync_pedidos_wix),
+        ]:
+            with st.spinner(f"Sincronizando {_label}..."):
+                try:
+                    _ok, _n, _msg = _fn(sync_desde, sync_hasta)
+                except Exception as _e:
+                    _ok, _msg = False, msg_error_sheets(_label, _e)
+            if _ok:
+                st.success(_msg)
+            else:
+                st.error(_msg)
 
 with tab_grupo_config:
     (
@@ -2921,152 +3132,14 @@ with tab_dux:
             "bajo `[dux] token = \"...\"`."
         )
     else:
-        id_empresa = id_empresa_default
-        id_sucursal = id_sucursal_default
-
         all_orders_saved = []
         selecciones_dux = db.cargar_selecciones("dux")
-        config_app = db.cargar_config()
-        # Rango persistido en Sheets (config); fallback a hoy
-        fecha_desde_default = date.today() - timedelta(days=7)
-        fecha_hasta_default = date.today()
-        if config_app.get("dux_fecha_desde"):
-            try:
-                fecha_desde_default = pd.to_datetime(config_app["dux_fecha_desde"]).date()
-            except Exception:
-                pass
-        if config_app.get("dux_fecha_hasta"):
-            try:
-                fecha_hasta_default = pd.to_datetime(config_app["dux_fecha_hasta"]).date()
-            except Exception:
-                pass
         try:
             all_orders_saved = db.cargar_pedidos_dux()
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos DUX", e))
 
-        # Timestamp arriba (placeholder para actualizar tras el sync sin refresh)
-        ts_ped_ph = st.empty()
-        ts_ped_ph.caption(
-            f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**"
-        )
-
-        # Sync por rango manual (con date pickers). Permite incluir fechas
-        # futuras si tu papa carga pedidos por adelantado. El merge en
-        # _guardar_pedidos asegura que los pedidos viejos sobrevivan.
-        with st.form("form_dux_sync", clear_on_submit=False, border=False):
-            consultar = st.form_submit_button(
-                "🔄 Sincronizar pedidos desde DUX",
-                type="primary",
-                use_container_width=True,
-            )
-            col_d1, col_d2 = st.columns([1, 1])
-            with col_d1:
-                fecha_desde = st.date_input(
-                    "Fecha desde",
-                    value=fecha_desde_default,
-                    key="dux_fecha_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_d2:
-                fecha_hasta = st.date_input(
-                    "Fecha hasta",
-                    value=fecha_hasta_default,
-                    key="dux_fecha_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if consultar:
-            url_p = f"{base_url}/pedidos"
-            headers_p = {"accept": "application/json", "authorization": token}
-            page_offset = 0
-            page_size = 50
-            all_orders = []
-            error_corte = False
-
-            with st.spinner("Consultando DUX..."):
-                while True:
-                    params_p = {
-                        "idEmpresa": int(id_empresa),
-                        "idSucursal": int(id_sucursal),
-                        "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
-                        "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
-                        "offset": page_offset,
-                        "limit": page_size,
-                    }
-                    try:
-                        r = requests.get(
-                            url_p, params=params_p, headers=headers_p, timeout=30
-                        )
-                    except requests.RequestException as e:
-                        st.error(msg_error_red("DUX", e))
-                        error_corte = True
-                        break
-
-                    if r.status_code != 200:
-                        st.error(msg_error_http("DUX", r.status_code, r.text))
-                        error_corte = True
-                        break
-
-                    try:
-                        d = r.json()
-                    except ValueError:
-                        st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
-                        error_corte = True
-                        break
-
-                    if isinstance(d, dict) and "message" in d and "results" not in d:
-                        st.error(f"❌ DUX dice: {d['message']}. Avisale a Tomás si no se arregla.")
-                        error_corte = True
-                        break
-
-                    if isinstance(d, dict) and "results" in d:
-                        page = d["results"]
-                    elif isinstance(d, list):
-                        page = d
-                    else:
-                        page = []
-
-                    if not page:
-                        break
-
-                    all_orders.extend(page)
-                    if len(page) < page_size:
-                        break
-                    page_offset += page_size
-                    time.sleep(DUX_RATE_LIMIT_SECONDS)
-
-            if not error_corte:
-                try:
-                    db.guardar_pedidos_dux(all_orders)
-                    # Actualizar el caption "Ultima sync" al toque (sin refresh)
-                    try:
-                        ts_ped_ph.caption(
-                            f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**"
-                        )
-                    except Exception:
-                        pass
-                except Exception as e:
-                    st.error(msg_error_sheets("guardar pedidos DUX", e))
-
-                # Persistir rango en Sheets (config) para que sobreviva reinicios
-                try:
-                    db.guardar_config(
-                        {
-                            "dux_fecha_desde": str(fecha_desde),
-                            "dux_fecha_hasta": str(fecha_hasta),
-                        }
-                    )
-                except Exception:
-                    pass
-
-                all_orders_saved = db.cargar_pedidos_dux()
-                if all_orders:
-                    st.success(
-                        f"✅ {len(all_orders)} pedidos guardados."
-                    )
-                else:
-                    st.warning("No hay pedidos pendientes en ese rango.")
+        st.caption(f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**")
 
         if all_orders_saved:
             n_asignados = sum(1 for v in selecciones_dux.values() if v)
@@ -3370,116 +3443,7 @@ with tab_wix:
             st.error(msg_error_sheets("leer pedidos Wix", e))
             wix_orders_saved = []
 
-        config_app_wix = db.cargar_config()
-        fecha_desde_default = date.today() - timedelta(days=3)
-        fecha_hasta_default = date.today()
-        if config_app_wix.get("wix_fecha_desde"):
-            try:
-                fecha_desde_default = pd.to_datetime(config_app_wix["wix_fecha_desde"]).date()
-            except Exception:
-                pass
-        if config_app_wix.get("wix_fecha_hasta"):
-            try:
-                fecha_hasta_default = pd.to_datetime(config_app_wix["wix_fecha_hasta"]).date()
-            except Exception:
-                pass
-
-        # Timestamp arriba del boton Sincronizar
-        ts_wix_ph = st.empty()
-        ts_wix_ph.caption(
-            f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**"
-        )
-
-        # Sync por rango manual (con date pickers). Permite incluir fechas
-        # futuras. El merge en _guardar_pedidos asegura que los pedidos
-        # viejos sobrevivan.
-        with st.form("form_wix_sync", clear_on_submit=False, border=False):
-            consultar_wix = st.form_submit_button(
-                "🔄 Sincronizar pedidos desde Wix",
-                type="primary",
-                use_container_width=True,
-            )
-            col_w1, col_w2 = st.columns([1, 1])
-            with col_w1:
-                wix_desde = st.date_input(
-                    "Fecha desde",
-                    value=fecha_desde_default,
-                    key="wix_fecha_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_w2:
-                wix_hasta = st.date_input(
-                    "Fecha hasta",
-                    value=fecha_hasta_default,
-                    key="wix_fecha_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if consultar_wix:
-            url = "https://www.wixapis.com/ecom/v1/orders/search"
-            headers = {
-                "Authorization": wix_token,
-                "wix-account-id": wix_account,
-                "wix-site-id": wix_site,
-                "Content-Type": "application/json",
-            }
-            body = {
-                "search": {
-                    "filter": {
-                        "$and": [
-                            {"createdDate": {"$gte": f"{wix_desde}T00:00:00.000Z"}},
-                            {"createdDate": {"$lte": f"{wix_hasta}T23:59:59.999Z"}},
-                        ]
-                    },
-                    "cursorPaging": {"limit": 100},
-                }
-            }
-
-            try:
-                with st.spinner("Consultando Wix..."):
-                    resp = requests.post(url, json=body, headers=headers, timeout=30)
-            except requests.RequestException as e:
-                st.error(msg_error_red("Wix", e))
-                resp = None
-
-            if resp is not None:
-                if resp.status_code != 200:
-                    st.error(msg_error_http("Wix", resp.status_code, resp.text))
-                else:
-                    try:
-                        data = resp.json()
-                    except ValueError:
-                        st.error("❌ Wix devolvió una respuesta inválida. Probá de nuevo.")
-                        data = None
-
-                    if data is not None:
-                        orders = data.get("orders", [])
-                        # Recortar campos no usados para no superar el limite de 50k chars/celda de Sheets
-                        orders_slim = [_slim_wix_order(o) for o in orders]
-                        try:
-                            db.guardar_pedidos_wix(orders_slim)
-                            # Actualizar el caption "Ultima sync" al toque
-                            try:
-                                ts_wix_ph.caption(
-                                    f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**"
-                                )
-                            except Exception:
-                                pass
-                        except Exception as e:
-                            st.error(msg_error_sheets("guardar pedidos Wix", e))
-
-                        try:
-                            db.guardar_config(
-                                {
-                                    "wix_fecha_desde": str(wix_desde),
-                                    "wix_fecha_hasta": str(wix_hasta),
-                                }
-                            )
-                        except Exception:
-                            pass
-
-                        wix_orders_saved = db.cargar_pedidos_wix()
-                        st.success(f"✅ {len(orders)} pedidos guardados.")
+        st.caption(f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**")
 
         orders_saved = wix_orders_saved or []
         selecciones = db.cargar_selecciones("wix")
@@ -3981,75 +3945,7 @@ with tab_proveedores:
     ts_prov_ph.caption(f"🕒 Última actualización: **{ts_prov or '?'}**")
 
 with tab_eg_compras:
-    ts_compras_ph = st.empty()
-
-    # --- Sync desde DUX ---
-    dux_cfg_c = st.secrets.get("dux", {})
-    token_c = dux_cfg_c.get("token", "")
-    if token_c:
-        hoy_c = date.today()
-        with st.form("form_compras_sync", clear_on_submit=False, border=False):
-            sincronizar_compras = st.form_submit_button(
-                "🔄 Sincronizar compras desde DUX",
-                type="primary",
-                use_container_width=True,
-            )
-            col_c1, col_c2 = st.columns([1, 1])
-            with col_c1:
-                fecha_desde_c = st.date_input(
-                    "Fecha desde",
-                    value=hoy_c.replace(day=1),
-                    key="compras_sync_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_c2:
-                fecha_hasta_c = st.date_input(
-                    "Fecha hasta",
-                    value=hoy_c,
-                    key="compras_sync_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if sincronizar_compras:
-            with st.spinner("Consultando compras en DUX..."):
-                compras_res = cargar_compras_dux_v2(fecha_desde_c, fecha_hasta_c)
-            if compras_res is None:
-                st.error(msg_error_http("DUX", 401))
-            else:
-                compras_raw_sync = compras_res.get("compras", [])
-                prod_lookup = {}
-                if not productos.empty:
-                    prod_lookup = dict(zip(productos["codigo"].astype(str), productos["producto"]))
-
-                rows_sync = []
-                for compra in compras_raw_sync:
-                    fecha_c_val = str(compra.get("fecha") or "")
-                    prov = compra.get("proveedor", {}) or {}
-                    prov_id = str(prov.get("id_proveedor") or "")
-                    prov_nombre = str(prov.get("razon_social") or "")
-                    nro_comp = str(compra.get("nro_comprobante") or "")
-                    cond_pago = str(compra.get("condicion_pago") or "")
-                    for item in (compra.get("items", []) or []):
-                        cod = str(item.get("cod_item") or "")
-                        rows_sync.append({
-                            "fecha": fecha_c_val,
-                            "proveedor_id": prov_id,
-                            "proveedor_nombre": prov_nombre,
-                            "codigo_producto": cod,
-                            "producto_nombre": prod_lookup.get(cod, ""),
-                            "cantidad": float(item.get("ctd_recepcionada") or item.get("ctd") or 0),
-                            "precio": float(item.get("precio_uni") or 0),
-                            "condicion_pago": cond_pago,
-                            "comprobante": nro_comp,
-                        })
-
-                try:
-                    db.guardar_compras_sync(rows_sync)
-                    st.success(f"✅ {len(compras_raw_sync)} comprobantes sincronizados ({len(rows_sync)} ítems).")
-                except Exception as e:
-                    st.error(msg_error_sheets("guardar compras", e))
-
-        st.divider()
+    st.caption(f"🕒 Última sync: **{db.ultima_carga('compras_sync') or '?'}**")
 
     # Visualización de compras sincronizadas
     try:
@@ -4111,113 +4007,9 @@ with tab_eg_compras:
                     st.dataframe(pd.DataFrame(filas_items), use_container_width=True, hide_index=True)
 
 with tab_eg_gastos:
-    dux_cfg = st.secrets.get("dux", {})
-    token = dux_cfg.get("token", "")
-    base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
-    id_empresa = dux_cfg.get("id_empresa", 3455)
-    id_sucursal = dux_cfg.get("id_sucursal", 3)
+    st.caption(f"🕒 Última sync: **{db.ultima_carga('gastos') or '?'}**")
 
-    if not token:
-        st.error("Falta configurar el token de DUX en Streamlit Secrets.")
-    else:
-        ts_gastos_ph = st.empty()
-        ts_gastos_ph.caption(f"🕒 Última sync: **{db.ultima_carga('gastos') or 'nunca'}**")
-
-        hoy = date.today()
-        fecha_desde_default_g = hoy.replace(day=1)
-
-        with st.form("form_gastos_sync", clear_on_submit=False, border=False):
-            sincronizar_gastos = st.form_submit_button(
-                "🔄 Sincronizar gastos desde DUX",
-                type="primary",
-                use_container_width=True,
-            )
-            col_g1, col_g2 = st.columns([1, 1])
-            with col_g1:
-                fecha_desde_g = st.date_input(
-                    "Fecha desde",
-                    value=fecha_desde_default_g,
-                    key="gastos_fecha_desde",
-                    format="YYYY-MM-DD",
-                )
-            with col_g2:
-                fecha_hasta_g = st.date_input(
-                    "Fecha hasta",
-                    value=hoy,
-                    key="gastos_fecha_hasta",
-                    format="YYYY-MM-DD",
-                )
-
-        if sincronizar_gastos:
-            url_g = f"{base_url}/v2/gastos"
-            headers_g = {"accept": "application/json", "authorization": f"Bearer {token}"}
-            page_offset = 0
-            page_size = 50
-            all_gastos = []
-            error_corte = False
-
-            with st.spinner("Consultando gastos en DUX..."):
-                while True:
-                    params_g = {
-                        "id_empresa": int(id_empresa),
-                        "id_sucursal": int(id_sucursal),
-                        "fecha_desde": fecha_desde_g.strftime("%Y-%m-%d"),
-                        "fecha_hasta": fecha_hasta_g.strftime("%Y-%m-%d"),
-                        "incluir_detalle": "true",
-                        "offset": page_offset,
-                        "limit": page_size,
-                    }
-                    try:
-                        r = requests.get(url_g, params=params_g, headers=headers_g, timeout=30)
-                    except requests.RequestException as e:
-                        st.error(msg_error_red("DUX", e))
-                        error_corte = True
-                        break
-
-                    if r.status_code != 200:
-                        st.error(msg_error_http("DUX", r.status_code, r.text))
-                        error_corte = True
-                        break
-
-                    try:
-                        d = r.json()
-                    except ValueError:
-                        st.error("❌ DUX devolvió una respuesta inválida. Probá de nuevo.")
-                        error_corte = True
-                        break
-
-                    if isinstance(d, dict) and "error" in d:
-                        st.error(f"❌ DUX dice: {d['error'].get('mensaje', d['error'])}. Avisale a Tomás si no se arregla.")
-                        error_corte = True
-                        break
-
-                    page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
-
-                    if not page:
-                        break
-
-                    all_gastos.extend(page)
-
-                    paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
-                    if not paging.get("hay_mas"):
-                        break
-                    page_offset += page_size
-                    time.sleep(DUX_RATE_LIMIT_SECONDS)
-
-            if not error_corte:
-                try:
-                    db.guardar_gastos(all_gastos)
-                    try:
-                        ts_gastos_ph.caption(
-                            f"🕒 Última sync: **{db.ultima_carga('gastos') or '?'}**"
-                        )
-                    except Exception:
-                        pass
-                    st.success(f"✅ {len(all_gastos)} gastos sincronizados.")
-                except Exception as e:
-                    st.error(msg_error_sheets("guardar gastos", e))
-
-        # Display gastos guardados
+    # Display gastos guardados
         try:
             gastos_saved = db.cargar_gastos()
         except Exception as e:
