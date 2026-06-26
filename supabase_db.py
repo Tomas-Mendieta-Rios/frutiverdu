@@ -893,11 +893,17 @@ def guardar_compras_sync(compras):
             "fecha": str(c.get("fecha") or ""),
             "fecha_vencimiento": str(c.get("fecha_vencimiento") or ""),
             "pago_pendiente": bool(c.get("pago_pendiente") or _to_float(montos.get("monto_pendiente")) > 0),
+            "forma_pago": str(c.get("forma_pago") or ""),
+            "provincia": str(c.get("provincia") or ""),
+            "estado_recepcion": str(c.get("estado_recepcion") or ""),
+            "fecha_imputacion_contable": str(c.get("fecha_imputacion_contable") or ""),
             "monto_exento": _to_float(montos.get("monto_exento")),
             "monto_gravado": _to_float(montos.get("monto_gravado")),
             "monto_iva": _to_float(montos.get("monto_iva")),
             "monto_desc": _to_float(montos.get("monto_descuento")),
-            "total": _to_float(c.get("total")),
+            "monto_pendiente": _to_float(montos.get("monto_pendiente")),
+            "monto_percepciones": _to_float(montos.get("monto_percepciones")),
+            "total": _to_float(montos.get("total")),
             "json": c,
         })
 
