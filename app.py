@@ -1470,19 +1470,28 @@ with tab_balance:
     _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
     _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
     _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
-    with st.expander(f"Ver facturas ({len(facturas_vig)})"):
-        for f in sorted(facturas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-            comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
-            cli   = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
-            fecha = str(f.get("fecha_comp") or "")[:12]
-            total = float(f.get("total") or 0)
-            badge = " ✅" if f.get("con_cobro") else " ⏳"
-            with st.container(border=True):
-                c1, c2 = st.columns([5, 1.5])
-                with c1:
-                    st.markdown(f"**{comp}**{badge} — {cli} · 📅 {fecha}")
-                with c2:
-                    st.markdown(f"**$ {_pesos(total)}**")
+    def _render_factura(f):
+        comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
+        cli   = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
+        fecha = str(f.get("fecha_comp") or "")[:12]
+        total = float(f.get("total") or 0)
+        with st.container(border=True):
+            c1, c2 = st.columns([5, 1.5])
+            with c1:
+                st.markdown(f"**{comp}** — {cli} · 📅 {fecha}")
+            with c2:
+                st.markdown(f"**$ {_pesos(total)}**")
+
+    with st.expander(f"Ver facturas ({len(facturas_vig) + len(facturas_anul)})"):
+        for _label, _lista in [
+            ("✅ Cobrado", fac_cobradas),
+            ("⏳ Pendiente", fac_pendientes),
+            ("❌ Anulado", facturas_anul),
+        ]:
+            if _lista:
+                st.markdown(f"**{_label}** ({len(_lista)})")
+                for f in sorted(_lista, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                    _render_factura(f)
 
     # Wix
     st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)}")
@@ -1491,23 +1500,33 @@ with tab_balance:
     _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
     _w3.metric("❌ Anulado", f"$ {_pesos(total_wix_anul)}", f"{len(wix_anulados)}")
     _w4.metric("🚚 No entregado", f"$ {_pesos(total_wix_no_ent)}", f"{len(wix_no_entregados)}")
+
+    def _render_pedido_wix(p):
+        nro    = p.get("number") or p.get("id") or "—"
+        bi     = (p.get("billingInfo") or {}).get("contactDetails") or {}
+        nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
+        fecha  = str(p.get("createdDate") or "")[:10]
+        total  = _wix_monto(p)
+        ful    = str(p.get("fulfillmentStatus") or "").upper()
+        ful_badge = " 🚚" if ful == "NOT_FULFILLED" else ""
+        with st.container(border=True):
+            c1, c2 = st.columns([5, 1.5])
+            with c1:
+                st.markdown(f"**#{nro}**{ful_badge} — {nombre} · 📅 {fecha}")
+            with c2:
+                st.markdown(f"**$ {_pesos(total)}**")
+
     with st.expander(f"Ver pedidos Wix ({len(ped_wix_f)})"):
-        for p in sorted(ped_wix_f, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
-            nro    = p.get("number") or p.get("id") or "—"
-            bi     = (p.get("billingInfo") or {}).get("contactDetails") or {}
-            nombre = f"{bi.get('firstName','') or ''} {bi.get('lastName','') or ''}".strip() or "—"
-            fecha  = str(p.get("createdDate") or "")[:10]
-            total  = _wix_monto(p)
-            pay    = str(p.get("paymentStatus") or "").upper()
-            ful    = str(p.get("fulfillmentStatus") or "").upper()
-            pay_badge = " ✅" if pay == "PAID" else (" ❌" if pay == "FULLY_REFUNDED" else " ⏳")
-            ful_badge = " 🚚" if ful == "NOT_FULFILLED" else ""
-            with st.container(border=True):
-                c1, c2 = st.columns([5, 1.5])
-                with c1:
-                    st.markdown(f"**#{nro}**{pay_badge}{ful_badge} — {nombre} · 📅 {fecha}")
-                with c2:
-                    st.markdown(f"**$ {_pesos(total)}**")
+        for _label, _lista in [
+            ("✅ Cobrado", wix_cobradas),
+            ("⏳ Pendiente", wix_pendientes),
+            ("❌ Anulado", wix_anulados),
+            ("🚚 No entregado", wix_no_entregados),
+        ]:
+            if _lista:
+                st.markdown(f"**{_label}** ({len(_lista)})")
+                for p in sorted(_lista, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
+                    _render_pedido_wix(p)
 
     # ── EGRESOS ─────────────────────────────────────────────────────────────
     st.divider()
