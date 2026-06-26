@@ -1410,8 +1410,10 @@ with tab_balance:
         _pp1.metric("💰 Compras",  f"$ {_pesos(_total_pend_comp)}", f"{len(_comp_pend_hist)} comprobantes")
         _pp2.metric("📄 Gastos",   f"$ {_pesos(_total_pend_gas)}",  f"{len(_gas_pend_hist)} gastos")
 
-        if _comp_pend_hist:
-            with st.expander(f"💰 Compras pendientes ({len(_comp_pend_hist)}) — $ {_pesos(_total_pend_comp)}"):
+        with st.expander(f"💰 Compras pendientes ({len(_comp_pend_hist)}) — $ {_pesos(_total_pend_comp)}"):
+            if not _comp_pend_hist:
+                st.caption("Sin compras pendientes en el rango seleccionado.")
+            else:
                 _by_prov = {}
                 for _c in _comp_pend_hist:
                     _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
@@ -1428,8 +1430,10 @@ with tab_balance:
                                 with _x2:
                                     st.markdown(f"### $ {_pesos(float(_c.get('total') or 0))}")
 
-        if _gas_pend_hist:
-            with st.expander(f"📄 Gastos pendientes ({len(_gas_pend_hist)}) — $ {_pesos(_total_pend_gas)}"):
+        with st.expander(f"📄 Gastos pendientes ({len(_gas_pend_hist)}) — $ {_pesos(_total_pend_gas)}"):
+            if not _gas_pend_hist:
+                st.caption("Sin gastos pendientes en el rango seleccionado.")
+            else:
                 _by_prov = {}
                 for _g in _gas_pend_hist:
                     _by_prov.setdefault(_g.get("proveedor") or "—", []).append(_g)
@@ -1461,8 +1465,10 @@ with tab_balance:
         _dd2.metric("🌐 Wix (pedidos)",   f"$ {_pesos(_total_deud_wix)}", f"{len(_wix_deud)} pedidos")
 
         # DUX deudores
-        if _fac_deud:
-            with st.expander(f"🧾 DUX sin cobrar ({len(_fac_deud)}) — $ {_pesos(_total_deud_dux)}"):
+        with st.expander(f"🧾 DUX sin cobrar ({len(_fac_deud)}) — $ {_pesos(_total_deud_dux)}"):
+            if not _fac_deud:
+                st.caption("Sin facturas pendientes de cobro en el rango seleccionado.")
+            else:
                 _by_cli = {}
                 for _f in _fac_deud:
                     _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
@@ -1481,8 +1487,10 @@ with tab_balance:
                                     st.markdown(f"### $ {_pesos(float(_f.get('total') or 0))}")
 
         # Wix deudores
-        if _wix_deud:
-            with st.expander(f"🌐 Wix sin cobrar ({len(_wix_deud)}) — $ {_pesos(_total_deud_wix)}"):
+        with st.expander(f"🌐 Wix sin cobrar ({len(_wix_deud)}) — $ {_pesos(_total_deud_wix)}"):
+            if not _wix_deud:
+                st.caption("Sin pedidos pendientes de cobro en el rango seleccionado.")
+            else:
                 _by_cli = {}
                 for _p in _wix_deud:
                     _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
