@@ -714,7 +714,15 @@ def guardar_facturas(facturas):
 
     dedup = {r["factura_id"]: r for r in rows}
     rows = list(dedup.values())
-    client.table("facturas").upsert(rows, on_conflict="factura_id").execute()
+    try:
+        client.table("facturas").upsert(rows, on_conflict="factura_id").execute()
+    except Exception as _e:
+        if "con_cobro" in str(_e) and "PGRST204" in str(_e):
+            for _r in rows:
+                _r.pop("con_cobro", None)
+            client.table("facturas").upsert(rows, on_conflict="factura_id").execute()
+        else:
+            raise
 
     for fid, items in items_por_factura.items():
         client.table("facturas_items").delete().eq("factura_id", fid).execute()
