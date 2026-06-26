@@ -896,7 +896,7 @@ def guardar_compras_sync(compras):
             "monto_gravado": _to_float(montos.get("monto_gravado")),
             "monto_iva": _to_float(montos.get("monto_iva")),
             "monto_desc": _to_float(montos.get("monto_descuento")),
-            "total": _to_float(montos.get("total")),
+            "total": _to_float(c.get("total")),
             "json": c,
         })
 
