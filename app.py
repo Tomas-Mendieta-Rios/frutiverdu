@@ -3887,21 +3887,17 @@ with tab_dux_rubros:
                         st.error("❌ DUX devolvió una respuesta inválida para subrubros.")
 
                     if data_sr is not None:
-                        st.caption(f"Respuesta DUX subrubros: `{str(data_sr)[:300]}`")
                         items_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
                         registros_sr = []
                         for sr in (items_sr or []):
-                            sid = sr.get("id_subrubro") or sr.get("id")
+                            sid = sr.get("id_sub_rubro")
                             if sid is None:
                                 continue
-                            if sr.get("eliminado", "N") != "N":
-                                continue
-                            rubro_obj = sr.get("rubro") or {}
                             registros_sr.append({
                                 "id": sid,
-                                "nombre": str(sr.get("subrubro") or sr.get("nombre", "") or "").strip(),
-                                "rubro_id": rubro_obj.get("id_rubro") or rubro_obj.get("id"),
-                                "rubro_nombre": str(rubro_obj.get("rubro") or rubro_obj.get("nombre", "") or "").strip(),
+                                "nombre": str(sr.get("sub_rubro", "") or "").strip(),
+                                "rubro_id": sr.get("id_rubro"),
+                                "rubro_nombre": str(sr.get("rubro", "") or "").strip(),
                             })
                         db.guardar_subrubros(registros_sr)
                         st.success(f"✅ {len(registros_sr)} subrubros sincronizados.")
