@@ -1433,24 +1433,26 @@ with tab_balance:
         compras_f = pd.DataFrame()
     gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
 
-    # Categorizar facturas por con_cobro (campo del API de DUX)
+    # Categorizar facturas DUX
     fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro")]
-    fac_facturadas = [f for f in facturas_vig if not f.get("con_cobro")]
+    fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
 
-    # Categorizar Wix por paymentStatus y fulfillmentStatus
-    wix_cobradas   = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID"]
-    wix_pendientes = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() != "PAID"]
-    wix_entregadas = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED"]
+    # Categorizar Wix
+    wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID"]
+    wix_pendientes    = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "UNPAID"]
+    wix_anulados      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "FULLY_REFUNDED"]
+    wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED"]
 
     # Totales
     total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
     total_fac_cobr    = sum(float(f.get("total") or 0) for f in fac_cobradas)
-    total_fac_fact    = sum(float(f.get("total") or 0) for f in fac_facturadas)
+    total_fac_pend    = sum(float(f.get("total") or 0) for f in fac_pendientes)
     total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
     total_wix         = sum(_wix_monto(p) for p in ped_wix_f)
     total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
     total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
-    total_wix_entr    = sum(_wix_monto(p) for p in wix_entregadas)
+    total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
+    total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
     total_compras     = float(compras_f["subtotal"].sum()) if not compras_f.empty else 0.0
     total_gastos      = sum(float(g.get("total") or 0) for g in gastos_f)
 
@@ -1463,18 +1465,18 @@ with tab_balance:
     st.markdown(f"### 📈 Ingresos — **$ {_pesos(total_ingresos)}**")
 
     # Facturas DUX
-    st.markdown(f"**🧾 Facturas DUX** — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas")
+    st.markdown(f"**🧾 Facturas DUX** — $ {_pesos(total_facturas)} · {len(facturas_vig)}")
     _c1, _c2, _c3 = st.columns(3)
-    _c1.metric("✅ Cobradas", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)} fact.")
-    _c2.metric("📋 Facturadas", f"$ {_pesos(total_fac_fact)}", f"{len(fac_facturadas)} fact.")
-    _c3.metric("❌ Anuladas", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)} fact.")
+    _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
+    _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
+    _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
     with st.expander(f"Ver facturas ({len(facturas_vig)})"):
         for f in sorted(facturas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-            comp   = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
-            cli    = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
-            fecha  = str(f.get("fecha_comp") or "")[:12]
-            total  = float(f.get("total") or 0)
-            badge  = " ✅" if f.get("con_cobro") else " 📋"
+            comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
+            cli   = f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—"
+            fecha = str(f.get("fecha_comp") or "")[:12]
+            total = float(f.get("total") or 0)
+            badge = " ✅" if f.get("con_cobro") else " ⏳"
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:
@@ -1483,11 +1485,12 @@ with tab_balance:
                     st.markdown(f"**$ {_pesos(total)}**")
 
     # Wix
-    st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos")
-    _w1, _w2, _w3 = st.columns(3)
-    _w1.metric("✅ Cobradas", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)} ped.")
-    _w2.metric("⏳ Pendientes pago", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)} ped.")
-    _w3.metric("📦 Entregadas", f"$ {_pesos(total_wix_entr)}", f"{len(wix_entregadas)} ped.")
+    st.markdown(f"**🌐 Wix** — $ {_pesos(total_wix)} · {len(ped_wix_f)}")
+    _w1, _w2, _w3, _w4 = st.columns(4)
+    _w1.metric("✅ Cobrado", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)}")
+    _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
+    _w3.metric("❌ Anulado", f"$ {_pesos(total_wix_anul)}", f"{len(wix_anulados)}")
+    _w4.metric("🚚 No entregado", f"$ {_pesos(total_wix_no_ent)}", f"{len(wix_no_entregados)}")
     with st.expander(f"Ver pedidos Wix ({len(ped_wix_f)})"):
         for p in sorted(ped_wix_f, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
             nro    = p.get("number") or p.get("id") or "—"
@@ -1497,8 +1500,8 @@ with tab_balance:
             total  = _wix_monto(p)
             pay    = str(p.get("paymentStatus") or "").upper()
             ful    = str(p.get("fulfillmentStatus") or "").upper()
-            pay_badge = " ✅" if pay == "PAID" else " ⏳"
-            ful_badge = " 📦" if ful == "FULFILLED" else " 🚚"
+            pay_badge = " ✅" if pay == "PAID" else (" ❌" if pay == "FULLY_REFUNDED" else " ⏳")
+            ful_badge = " 🚚" if ful == "NOT_FULFILLED" else ""
             with st.container(border=True):
                 c1, c2 = st.columns([5, 1.5])
                 with c1:
