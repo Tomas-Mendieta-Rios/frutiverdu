@@ -93,9 +93,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         default=20.0,
     )
     VAR_W  = max_var_w + 2.0
-    S_W    = 6.0
-    P_W    = 6.0
-    T_W    = 7.0
+    S_W    = 7.5
+    P_W    = 7.5
+    T_W    = 8.5
     E_W    = 6.0
     PROV_W = 13.0
     C_W    = 6.0
