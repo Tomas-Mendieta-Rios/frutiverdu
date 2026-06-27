@@ -66,8 +66,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     from fpdf import FPDF
 
     PAGE_W, PAGE_H = 210, 297   # A4
-    MARGIN = 4
-    GAP = 5
+    MARGIN = 3
+    GAP = 3
     COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2
 
     HDR_H = 4.0
@@ -79,7 +79,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN
     available_h = BOTTOM - HDR_Y - HDR_H
-    total_units = max(n_bases * 1.5 + n_variants, 1)   # evitar división por cero
+    total_units = max(n_bases * 1.25 + n_variants, 1)
     ROW_H = min(5.5, (available_h * 2) / total_units)
     BASE_H = ROW_H * 1.25
     fsize = ROW_H * 1.9
