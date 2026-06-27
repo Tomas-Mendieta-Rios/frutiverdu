@@ -125,12 +125,13 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         pdf.set_fill_color(200, 200, 200)
         pdf.set_text_color(0, 0, 0)
         pdf.set_xy(x, HDR_Y)
-        pdf.cell(VAR_W, HDR_H, "Variante", border=1, fill=True)
+        pdf.cell(VAR_W, HDR_H, "Variante", border="LTB", fill=True)
         for lbl, w in [("S", S_W), ("P", P_W), ("T", T_W)]:
-            pdf.cell(w, HDR_H, lbl, border=1, align="C", fill=True)
+            pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
         pdf.set_fill_color(240, 240, 220)
-        for lbl, w in [("E", E_W), ("PROV", PROV_W), ("C", C_W), ("P", BP_W), ("V", BV_W), ("T", BT_W)]:
-            pdf.cell(w, HDR_H, lbl, border=1, align="C", fill=True)
+        for lbl, w in [("E", E_W), ("PROV", PROV_W), ("C", C_W), ("P", BP_W), ("V", BV_W)]:
+            pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
+        pdf.cell(BT_W, HDR_H, "T", border=1, align="C", fill=True)
 
     draw_subheader(MARGIN)
     draw_subheader(MARGIN + COL_W + GAP)
@@ -204,21 +205,21 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
             ac = float(row.get("a_comprar", 0) or 0)
             pdf.set_text_color(0, 0, 0)
             pdf.set_xy(x, y)
-            pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border=1)
-            pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border=1)
-            pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border=1)
+            pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border="LTB")
+            pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border="LTB")
+            pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border="LTB")
             # T: rojo = falta comprar (ac>0), verde = ok/sobra (ac<=0)
             if ac > 0.001:
-                pdf.set_text_color(200, 0, 0)    # rojo: falta, muestra negativo
+                pdf.set_text_color(200, 0, 0)
             elif ac < -0.001:
-                pdf.set_text_color(0, 140, 0)    # verde: sobra, muestra positivo
+                pdf.set_text_color(0, 140, 0)
             else:
                 pdf.set_text_color(150, 150, 150)
-            pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border=1)
-            # columnas en blanco
+            pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border="LTB")
             pdf.set_text_color(0, 0, 0)
-            for w in [E_W, PROV_W, C_W, BP_W, BV_W, BT_W]:
-                pdf.cell(w, ROW_H, "", border=1)
+            for w in [E_W, PROV_W, C_W, BP_W, BV_W]:
+                pdf.cell(w, ROW_H, "", border="LTB")
+            pdf.cell(BT_W, ROW_H, "", border=1)
             y += ROW_H
 
         cur_y[cur_col] = y
