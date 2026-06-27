@@ -80,7 +80,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     BOTTOM = PAGE_H - MARGIN
     available_h = BOTTOM - HDR_Y - HDR_H
     total_units = max(n_bases * 1.5 + n_variants, 1)   # evitar división por cero
-    ROW_H = min(5.2, (available_h * 2) / total_units)
+    ROW_H = max(4.5, min(5.5, (available_h * 2) / total_units))
     BASE_H = ROW_H * 1.25
     fsize = max(7.5, ROW_H * 1.9)
 
@@ -92,16 +92,16 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         (_tmp_pdf.get_string_width(f"  {v}") for v in df_raw["Variante"].astype(str)),
         default=20.0,
     )
-    FIXED_W = 7.5 + 7.5 + 8.5 + 6.0 + 13.0 + 6.0 + 14.0 + 6.0 + 8.0  # S+P+T+E+PROV+C+BP+BV+BT_min
-    VAR_W  = min(max_var_w + 2.0, COL_W - FIXED_W)    # clamp para que BT_W no sea negativo
     S_W    = 7.5
     P_W    = 7.5
     T_W    = 8.5
     E_W    = 6.0
     PROV_W = 13.0
-    C_W    = 6.0
+    C_W    = 7.5
     BP_W   = 14.0
-    BV_W   = 6.0
+    BV_W   = 7.5
+    FIXED_W = S_W + P_W + T_W + E_W + PROV_W + C_W + BP_W + BV_W + 8.0  # +8 = BT_min
+    VAR_W  = min(max_var_w + 1.0, COL_W - FIXED_W)    # clamp para que BT_W no sea negativo
     BT_W   = COL_W - VAR_W - S_W - P_W - T_W - E_W - PROV_W - C_W - BP_W - BV_W
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
@@ -162,6 +162,16 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
 
         if cur_col == 0 and cur_y[0] + gh > BOTTOM:
             cur_col = 1
+        if cur_col == 1 and cur_y[1] + gh > BOTTOM:
+            pdf.add_page()
+            pdf.set_font("Helvetica", "", 7)
+            pdf.set_xy(MARGIN, MARGIN)
+            pdf.cell(PAGE_W - 2 * MARGIN, HDR_SECTION, f"Entrega: {fechas_str}   |   Stock: {fecha_stock}", align="C")
+            draw_subheader(MARGIN)
+            draw_subheader(MARGIN + COL_W + GAP)
+            cur_y[0] = DATA_Y
+            cur_y[1] = DATA_Y
+            cur_col = 0
 
         x = MARGIN + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
