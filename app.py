@@ -81,7 +81,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     BOTTOM = PAGE_H - MARGIN_V
     available_h = BOTTOM - HDR_Y - HDR_H
     n_rubros = df_raw["Rubro"].nunique() if "Rubro" in df_raw.columns else 0
-    total_units = max(n_bases + n_variants + n_rubros * 2, 1)
+    total_units = max(n_bases + n_variants + n_rubros, 1)
     ROW_H = min(5.5, (available_h * 2.0) / total_units)
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
@@ -159,6 +159,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _has_rubro = "Rubro" in df_raw.columns
     _all_groups = []
     _seen_bases = []
+    _prev_rubro_gh = None
     for _, df_base in df_raw.groupby("Base", sort=False):
         base_name = df_base["Base"].iloc[0]
         if base_name in _seen_bases:
@@ -171,7 +172,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             .drop(columns="_p")
         )
         rubro = df_s["Rubro"].iloc[0] if _has_rubro else ""
-        _all_groups.append((base_name, df_s, BASE_H + len(df_s) * ROW_H, rubro))
+        sep_h = BASE_H if (rubro and rubro != _prev_rubro_gh) else 0
+        _all_groups.append((base_name, df_s, sep_h + BASE_H + len(df_s) * ROW_H, rubro))
+        _prev_rubro_gh = rubro
 
     _total_h = sum(gh for _, _, gh, _ in _all_groups)
 
@@ -213,7 +216,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.set_xy(x, y)
             pdf.cell(COL_W, BASE_H, rubro, border=1, fill=True, align="C")
             y += BASE_H
-            cur_y[cur_col] += BASE_H
             _prev_rubro[cur_col] = rubro
 
         # color del nombre base según peor variante
