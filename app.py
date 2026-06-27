@@ -146,10 +146,27 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         .drop(columns="_p")
     )
 
+    def truncar(txt, max_w):
+        while len(txt) > 1 and pdf.get_string_width(txt) > max_w:
+            txt = txt[:-1]
+        return txt
+
     pdf.set_font("Helvetica", "", fsize)
+    bases_orden = list(dict.fromkeys(df_sorted["Base"].tolist()))
+
     for _, row in df_sorted.iterrows():
         ac = float(row.get("a_comprar", 0) or 0)
-        label = f"  {row.get('Base', '')} - {row.get('Variante', '')}"
+        base = row.get("Base", "")
+        variante = row.get("Variante", "")
+        raw_label = f"  {base} - {variante}" if variante else f"  {base}"
+        label = truncar(raw_label, VAR_W - 1)
+
+        # fondo alternado por grupo de producto
+        grupo_idx = bases_orden.index(base)
+        if grupo_idx % 2 == 0:
+            pdf.set_fill_color(255, 255, 255)
+        else:
+            pdf.set_fill_color(245, 245, 245)
 
         if cur_col == 0 and cur_y[0] + ROW_H > BOTTOM:
             cur_col = 1
@@ -157,7 +174,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         x = MARGIN + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
 
-        # color de fila según a_comprar
         if ac > 0.001:
             txt_rgb = (200, 0, 0)
         elif ac < -0.001:
@@ -167,13 +183,14 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
 
         pdf.set_text_color(*txt_rgb)
         pdf.set_xy(x, y)
-        pdf.cell(VAR_W, ROW_H, label, border=1)
-        pdf.cell(S_W,   ROW_H, fmt(row.get("stock", 0)),  align="C", border=1)
-        pdf.cell(P_W,   ROW_H, fmt(row.get("pedido", 0)), align="C", border=1)
-        pdf.cell(T_W,   ROW_H, fmt_t(ac),                 align="C", border=1)
+        pdf.cell(VAR_W, ROW_H, label,                      border=1, fill=True)
+        pdf.cell(S_W,   ROW_H, fmt(row.get("stock", 0)),   align="C", border=1, fill=True)
+        pdf.cell(P_W,   ROW_H, fmt(row.get("pedido", 0)),  align="C", border=1, fill=True)
+        pdf.cell(T_W,   ROW_H, fmt_t(ac),                  align="C", border=1, fill=True)
         pdf.set_text_color(0, 0, 0)
+        pdf.set_fill_color(255, 255, 255)
         for w in [E_W, PROV_W, C_W, BP_W, BV_W, BT_W]:
-            pdf.cell(w, ROW_H, "", border=1)
+            pdf.cell(w, ROW_H, "", border=1, fill=True)
 
         cur_y[cur_col] = y + ROW_H
 
