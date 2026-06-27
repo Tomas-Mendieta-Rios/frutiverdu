@@ -210,7 +210,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             base_label = "X"
         elif (acs < -0.001).any():
             base_rgb = (0, 140, 0)
-            base_label = "v"
+            base_label = "/"
         else:
             base_rgb = (100, 100, 100)
             base_label = "~"
