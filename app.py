@@ -80,7 +80,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     BOTTOM = PAGE_H - MARGIN
     available_h = BOTTOM - HDR_Y - HDR_H
     total_units = max(n_bases * 1.5 + n_variants, 1)   # evitar división por cero
-    ROW_H = max(4.5, min(5.5, (available_h * 2) / total_units))
+    ROW_H = min(5.5, (available_h * 2) / total_units)
     BASE_H = ROW_H * 1.25
     fsize = max(7.5, ROW_H * 1.9)
 
@@ -162,16 +162,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
 
         if cur_col == 0 and cur_y[0] + gh > BOTTOM:
             cur_col = 1
-        if cur_col == 1 and cur_y[1] + gh > BOTTOM:
-            pdf.add_page()
-            pdf.set_font("Helvetica", "", 7)
-            pdf.set_xy(MARGIN, MARGIN)
-            pdf.cell(PAGE_W - 2 * MARGIN, HDR_SECTION, f"Entrega: {fechas_str}   |   Stock: {fecha_stock}", align="C")
-            draw_subheader(MARGIN)
-            draw_subheader(MARGIN + COL_W + GAP)
-            cur_y[0] = DATA_Y
-            cur_y[1] = DATA_Y
-            cur_col = 0
 
         x = MARGIN + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
