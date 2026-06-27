@@ -62,11 +62,11 @@ def _prio_unidad(s):
     return 99
 
 
-def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
+def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, formato="A4"):
     from fpdf import FPDF
 
-    PAGE_W, PAGE_H = 210, 297   # A4
-    MARGIN_H = 3
+    PAGE_W, PAGE_H = (210, 297) if formato == "A4" else (216, 356)  # A4 o Oficio
+    MARGIN_H = 4
     MARGIN_V = 2
     GAP = 2
     COL_W = (PAGE_W - 2 * MARGIN_H - GAP) / 2
@@ -1740,16 +1740,11 @@ with tab_comprar:
     # Botón PDF
     if not _raw_view.empty:
         try:
-            _pdf_bytes = _generar_pdf_comprar(
-                _raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel
-            )
-            pdf_btn_ph.download_button(
-                "📄 Exportar PDF",
-                data=_pdf_bytes,
-                file_name=f"comprar_{date.today()}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
+            _pdf_a4     = _generar_pdf_comprar(_raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "A4")
+            _pdf_oficio = _generar_pdf_comprar(_raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "oficio")
+            _col_a4, _col_of = pdf_btn_ph.columns(2)
+            _col_a4.download_button("📄 PDF A4",     data=_pdf_a4,     file_name=f"comprar_a4_{date.today()}.pdf",     mime="application/pdf", use_container_width=True)
+            _col_of.download_button("📄 PDF Oficio", data=_pdf_oficio, file_name=f"comprar_oficio_{date.today()}.pdf", mime="application/pdf", use_container_width=True)
         except Exception as _pdf_err:
             pdf_btn_ph.warning(f"No se pudo generar el PDF: {_pdf_err}")
 
