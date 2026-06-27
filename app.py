@@ -80,7 +80,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN_V
     available_h = BOTTOM - HDR_Y - HDR_H
-    total_units = max(n_bases + n_variants, 1)
+    n_rubros = df_raw["Rubro"].nunique() if "Rubro" in df_raw.columns else 0
+    total_units = max(n_bases + n_variants + n_rubros * 2, 1)
     ROW_H = min(5.5, (available_h * 2.0) / total_units)
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
@@ -154,22 +155,29 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         f = float(v) if v is not None else 0.0
         return f"{f:.1f}" if abs(f) > 0.001 else "-"
 
-    # Pre-calcular grupos y split balanceado
+    # Pre-calcular grupos respetando orden rubro → base del df
+    _has_rubro = "Rubro" in df_raw.columns
     _all_groups = []
-    for base_name, df_base in df_raw.groupby("Base", sort=True):
+    _seen_bases = []
+    for _, df_base in df_raw.groupby("Base", sort=False):
+        base_name = df_base["Base"].iloc[0]
+        if base_name in _seen_bases:
+            continue
+        _seen_bases.append(base_name)
         df_s = (
             df_base
             .assign(_p=lambda d: d["Variante"].map(_prio_unidad))
             .sort_values("_p")
             .drop(columns="_p")
         )
-        _all_groups.append((base_name, df_s, BASE_H + len(df_s) * ROW_H))
+        rubro = df_s["Rubro"].iloc[0] if _has_rubro else ""
+        _all_groups.append((base_name, df_s, BASE_H + len(df_s) * ROW_H, rubro))
 
-    _total_h = sum(gh for _, _, gh in _all_groups)
+    _total_h = sum(gh for _, _, gh, _ in _all_groups)
 
     # Greedy split: llenar col0 hasta el límite
     _col1_start, _cum = len(_all_groups), 0
-    for _i, (_, _, gh) in enumerate(_all_groups):
+    for _i, (_, _, gh, _) in enumerate(_all_groups):
         if _cum + gh > available_h:
             _col1_start = _i
             break
@@ -179,22 +187,34 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _col1_h = _total_h - _cum
     if _col1_h > available_h:
         ROW_H *= available_h / _col1_h
-        BASE_H = ROW_H * 1.25
+        BASE_H = ROW_H
         fsize = ROW_H * 1.9
-        _all_groups = [(bn, ds, BASE_H + len(ds) * ROW_H) for bn, ds, _ in _all_groups]
-        _total_h = sum(gh for _, _, gh in _all_groups)
+        _all_groups = [(bn, ds, BASE_H + len(ds) * ROW_H, rb) for bn, ds, _, rb in _all_groups]
+        _total_h = sum(gh for _, _, gh, _ in _all_groups)
         _col1_start, _cum = len(_all_groups), 0
-        for _i, (_, _, gh) in enumerate(_all_groups):
+        for _i, (_, _, gh, _) in enumerate(_all_groups):
             if _cum + gh > available_h:
                 _col1_start = _i
                 break
             _cum += gh
 
-    for _idx, (base_name, df_s, gh) in enumerate(_all_groups):
+    _prev_rubro = [None, None]  # rubro anterior por columna
+    for _idx, (base_name, df_s, gh, rubro) in enumerate(_all_groups):
         cur_col = 0 if _idx < _col1_start else 1
 
         x = MARGIN_H + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
+
+        # Separador de rubro cuando cambia
+        if rubro and rubro != _prev_rubro[cur_col]:
+            pdf.set_font("Helvetica", "B", max(5.0, fsize * 0.85))
+            pdf.set_fill_color(60, 60, 60)
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_xy(x, y)
+            pdf.cell(COL_W, BASE_H, f"  {rubro}", border=1, fill=True)
+            y += BASE_H
+            cur_y[cur_col] += BASE_H
+            _prev_rubro[cur_col] = rubro
 
         # color del nombre base según peor variante
         acs = df_s["a_comprar"].astype(float)
@@ -1736,6 +1756,14 @@ with tab_comprar:
         _split_raw = _raw_view["producto"].apply(_split_producto_raw)
         _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
         _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
+
+        # Enriquecer con rubro desde catálogo de productos
+        _ORDEN_RUBROS = ["HOJAS", "VERDURAS", "FRUTAS", "HIERBAS", "HONGOS", "BROTES", "AJIES", "CONDIMENTOS", "OTROS"]
+        _cod_rubro = dict(zip(productos["codigo"].astype(str), productos.get("rubro", pd.Series([""] * len(productos))).fillna("").str.upper()))
+        _raw_view["Rubro"] = _raw_view["codigo"].astype(str).map(_cod_rubro).fillna("")
+        _rubro_order = {r: i for i, r in enumerate(_ORDEN_RUBROS)}
+        _raw_view["_rubro_idx"] = _raw_view["Rubro"].map(lambda r: _rubro_order.get(r, len(_ORDEN_RUBROS)))
+        _raw_view = _raw_view.sort_values(["_rubro_idx", "Base"]).drop(columns="_rubro_idx")
 
     # Botón PDF
     if not _raw_view.empty:
