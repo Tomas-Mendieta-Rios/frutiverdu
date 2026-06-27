@@ -68,27 +68,39 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     PAGE_W, PAGE_H = 216, 356   # oficio
     MARGIN = 6
     GAP = 5
-    COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2
-    HDR_H = 4.0
+    COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2   # ~99.5 mm
 
-    # Header chico: solo fechas
-    fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
-    HDR_SECTION = 5.0   # una sola línea de fechas
+    # Anchos de columnas dentro de cada columna del PDF
+    # Calculado: Variante + S + P + T + Extra + PRV + P + V + T = COL_W
+    VAR_W  = 28.0
+    DAT_W  = 7.5    # S, P, T calculados
+    BLK_S  = 6.5    # Extra, P, V (blank pequeño)
+    BLK_L  = 10.5   # PRV, T (blank más ancho)
+    # 28 + 3*7.5 + 6.5 + 10.5 + 6.5 + 6.5 + 10.5 = 28+22.5+6.5+10.5+6.5+6.5+10.5 = 91 → ajustar
+    # Rebalancear: VAR=28, S=7, P=7, T=7, Extra=7, PRV=13, P=7, V=7, T=15 = 98 ✓
+    S_W    = 7.0
+    P_W    = 7.0
+    T_W    = 7.0
+    EX_W   = 7.0
+    PRV_W  = 13.0
+    BP_W   = 7.0
+    BV_W   = 7.0
+    BT_W   = COL_W - VAR_W - S_W - P_W - T_W - EX_W - PRV_W - BP_W - BV_W  # resto
+
+    HDR_H = 4.0
+    HDR_SECTION = 5.0
     HDR_Y = MARGIN + HDR_SECTION
 
-    # Calcular ROW_H dinámicamente para que todo entre en una página
+    # ROW_H dinámico para que todo entre en una página
     n_bases = df_raw["Base"].nunique()
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN
     available_h = BOTTOM - HDR_Y - HDR_H
-    # BASE_H = ROW_H * 1.25; gap entre grupos = ROW_H * 0.25
-    # total = n_bases * ROW_H*1.25 + n_variants * ROW_H + n_bases * ROW_H*0.25
     total_units = n_bases * 1.5 + n_variants
     ROW_H = min(4.5, (available_h * 2) / total_units)
     BASE_H = ROW_H * 1.25
 
-    V_W = COL_W * 0.54
-    N_W = (COL_W - V_W) / 3
+    fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
 
     pdf = FPDF(orientation="P", unit="mm", format=(PAGE_W, PAGE_H))
     pdf.set_auto_page_break(auto=False)
@@ -105,12 +117,16 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
 
     # ── Sub-cabeceras ────────────────────────────────────────────────────
     def draw_subheader(x):
-        pdf.set_font("Helvetica", "B", 6.5)
+        pdf.set_font("Helvetica", "B", 6.0)
         pdf.set_fill_color(200, 200, 200)
+        pdf.set_text_color(0, 0, 0)
         pdf.set_xy(x, HDR_Y)
-        pdf.cell(V_W, HDR_H, "Producto / Variante", border=1, fill=True)
-        for lbl in ["S", "P", "T"]:
-            pdf.cell(N_W, HDR_H, lbl, border=1, align="C", fill=True)
+        pdf.cell(VAR_W, HDR_H, "Variante", border=1, fill=True)
+        for lbl, w in [("S", S_W), ("P", P_W), ("T", T_W)]:
+            pdf.cell(w, HDR_H, lbl, border=1, align="C", fill=True)
+        pdf.set_fill_color(240, 240, 220)
+        for lbl, w in [("Extra", EX_W), ("PRV", PRV_W), ("P", BP_W), ("V", BV_W), ("T", BT_W)]:
+            pdf.cell(w, HDR_H, lbl, border=1, align="C", fill=True)
 
     draw_subheader(MARGIN)
     draw_subheader(MARGIN + COL_W + GAP)
@@ -119,9 +135,17 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     cur_y = [DATA_Y, DATA_Y]
     cur_col = 0
 
+    def fmt_t(v):
+        f = float(v) if v is not None else 0.0
+        if abs(f) < 0.001:
+            return "-"
+        return f"{f:.1f}"   # con signo negativo si aplica
+
     def fmt(v):
         f = float(v) if v is not None else 0.0
-        return f"{abs(f):.1f}" if abs(f) > 0.001 else "-"
+        return f"{f:.1f}" if abs(f) > 0.001 else "-"
+
+    fsize = max(5.5, ROW_H * 1.5)
 
     for base_name, df_base in df_raw.groupby("Base", sort=True):
         df_s = (
@@ -138,18 +162,44 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         x = MARGIN + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
 
+        # color del nombre base según peor variante
+        acs = df_s["a_comprar"].astype(float)
+        if (acs > 0.001).any():
+            base_rgb = (200, 0, 0)
+        elif (acs < -0.001).any():
+            base_rgb = (0, 140, 0)
+        else:
+            base_rgb = (100, 100, 100)
+
         pdf.set_font("Helvetica", "B", max(6.0, ROW_H * 1.6))
         pdf.set_fill_color(230, 230, 230)
+        pdf.set_text_color(*base_rgb)
         pdf.set_xy(x, y)
         pdf.cell(COL_W, BASE_H, f"  {base_name}", fill=True, border="B")
+        pdf.set_text_color(0, 0, 0)
         y += BASE_H
 
-        pdf.set_font("Helvetica", "", max(5.5, ROW_H * 1.5))
+        # variantes
+        pdf.set_font("Helvetica", "", fsize)
         for _, row in df_s.iterrows():
+            ac = float(row.get("a_comprar", 0) or 0)
+            pdf.set_text_color(0, 0, 0)
             pdf.set_xy(x, y)
-            pdf.cell(V_W, ROW_H, f"  {row.get('Variante', '')}", border="B")
-            for key in ["stock", "pedido", "a_comprar"]:
-                pdf.cell(N_W, ROW_H, fmt(row.get(key, 0)), align="C", border="B")
+            pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border="B")
+            pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border="B")
+            pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border="B")
+            # T calculado con color
+            if ac > 0.001:
+                pdf.set_text_color(200, 0, 0)
+            elif ac < -0.001:
+                pdf.set_text_color(0, 140, 0)
+            else:
+                pdf.set_text_color(150, 150, 150)
+            pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border="B")
+            # columnas en blanco
+            pdf.set_text_color(0, 0, 0)
+            for w in [EX_W, PRV_W, BP_W, BV_W, BT_W]:
+                pdf.cell(w, ROW_H, "", border="B")
             y += ROW_H
 
         cur_y[cur_col] = y + ROW_H * 0.25
