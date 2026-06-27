@@ -80,9 +80,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN_V
     available_h = BOTTOM - HDR_Y - HDR_H
-    total_units = max(n_bases * 1.25 + n_variants, 1)
+    total_units = max(n_bases + n_variants, 1)
     ROW_H = min(5.5, (available_h * 2.0) / total_units)
-    BASE_H = ROW_H * 1.25
+    BASE_H = ROW_H
     fsize = ROW_H * 1.9
 
     # VAR_W ajustado al texto más largo de las variantes
