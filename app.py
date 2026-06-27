@@ -151,6 +151,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         f = float(v) if v is not None else 0.0
         return f"{f:.1f}" if abs(f) > 0.001 else "-"
 
+    # Pre-calcular grupos y split balanceado
+    _all_groups = []
     for base_name, df_base in df_raw.groupby("Base", sort=True):
         df_s = (
             df_base
@@ -158,10 +160,18 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
             .sort_values("_p")
             .drop(columns="_p")
         )
-        gh = BASE_H + len(df_s) * ROW_H
+        _all_groups.append((base_name, df_s, BASE_H + len(df_s) * ROW_H))
 
-        if cur_col == 0 and cur_y[0] + gh > BOTTOM:
-            cur_col = 1
+    _total_h = sum(gh for _, _, gh in _all_groups)
+    _col1_start, _cum = len(_all_groups), 0
+    for _i, (_, _, gh) in enumerate(_all_groups):
+        _cum += gh
+        if _cum >= _total_h / 2:
+            _col1_start = _i + 1
+            break
+
+    for _idx, (base_name, df_s, gh) in enumerate(_all_groups):
+        cur_col = 0 if _idx < _col1_start else 1
 
         x = MARGIN + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
