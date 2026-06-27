@@ -113,13 +113,13 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_fill_color(200, 200, 200)
         pdf.set_text_color(0, 0, 0)
         pdf.set_xy(x, HDR_Y)
-        pdf.cell(VAR_W, HDR_H, "Variante", border="LTB", fill=True)
-        for lbl, w in [("S", S_W), ("P", P_W), ("T", T_W)]:
+        pdf.cell(VAR_W, HDR_H, "VAR", border="LTB", fill=True)
+        for lbl, w in [("STO", S_W), ("PED", P_W), ("CALC", T_W)]:
             pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
         pdf.set_fill_color(240, 240, 220)
-        for lbl, w in [("E", E_W), ("PROV", PROV_W), ("C", C_W), ("P", BP_W), ("V", BV_W)]:
+        for lbl, w in [("EST", E_W), ("PROV", PROV_W), ("CANT", C_W), ("PRECI", BP_W), ("VAC", BV_W)]:
             pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
-        pdf.cell(BT_W, HDR_H, "T", border=1, align="C", fill=True)
+        pdf.cell(BT_W, HDR_H, "$", border=1, align="C", fill=True)
 
     draw_subheader(MARGIN_H)
     draw_subheader(MARGIN_H + COL_W + GAP)
