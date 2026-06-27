@@ -82,7 +82,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     total_units = n_bases * 1.5 + n_variants
     ROW_H = min(4.5, (available_h * 2) / total_units)
     BASE_H = ROW_H * 1.25
-    fsize = max(5.5, ROW_H * 1.5)
+    fsize = max(6.5, ROW_H * 1.7)
 
     # VAR_W ajustado al texto más largo de las variantes
     _tmp_pdf = FPDF()
@@ -139,10 +139,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     cur_col = 0
 
     def fmt_t(v):
+        # Negativo = falta comprar (rojo), positivo = sobra (verde)
         f = float(v) if v is not None else 0.0
-        if abs(f) < 0.001:
+        display = -f
+        if abs(display) < 0.001:
             return "-"
-        return f"{f:.1f}"   # con signo negativo si aplica
+        return f"{display:.1f}"
 
     def fmt(v):
         f = float(v) if v is not None else 0.0
@@ -189,11 +191,11 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
             pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border=1)
             pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border=1)
             pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border=1)
-            # T calculado con color
+            # T: rojo = falta comprar (ac>0), verde = ok/sobra (ac<=0)
             if ac > 0.001:
-                pdf.set_text_color(200, 0, 0)
+                pdf.set_text_color(200, 0, 0)    # rojo: falta, muestra negativo
             elif ac < -0.001:
-                pdf.set_text_color(0, 140, 0)
+                pdf.set_text_color(0, 140, 0)    # verde: sobra, muestra positivo
             else:
                 pdf.set_text_color(150, 150, 150)
             pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border=1)
