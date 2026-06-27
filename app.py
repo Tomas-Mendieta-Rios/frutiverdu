@@ -79,7 +79,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN
     available_h = BOTTOM - HDR_Y - HDR_H
-    total_units = n_bases * 1.5 + n_variants
+    total_units = max(n_bases * 1.5 + n_variants, 1)   # evitar división por cero
     ROW_H = min(4.5, (available_h * 2) / total_units)
     BASE_H = ROW_H * 1.25
     fsize = max(6.5, ROW_H * 1.7)
@@ -92,7 +92,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         (_tmp_pdf.get_string_width(f"  {v}") for v in df_raw["Variante"].astype(str)),
         default=20.0,
     )
-    VAR_W  = max_var_w + 2.0
+    FIXED_W = 7.5 + 7.5 + 8.5 + 6.0 + 13.0 + 6.0 + 14.0 + 6.0 + 8.0  # S+P+T+E+PROV+C+BP+BV+BT_min
+    VAR_W  = min(max_var_w + 2.0, COL_W - FIXED_W)    # clamp para que BT_W no sea negativo
     S_W    = 7.5
     P_W    = 7.5
     T_W    = 8.5
