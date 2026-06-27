@@ -86,25 +86,10 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
 
-    # VAR_W ajustado al texto más largo de las variantes
-    _tmp_pdf = FPDF()
-    _tmp_pdf.add_page()
-    _tmp_pdf.set_font("Helvetica", "", fsize)
-    max_var_w = max(
-        (_tmp_pdf.get_string_width(f"  {v}") for v in df_raw["Variante"].astype(str)),
-        default=20.0,
-    )
-    S_W    = 8.5
-    P_W    = 8.5
-    T_W    = 9.5
-    E_W    = 6.0
-    PROV_W = 13.0
-    C_W    = 7.5
-    BP_W   = 14.0
-    BV_W   = 7.5
-    FIXED_W = S_W + P_W + T_W + E_W + PROV_W + C_W + BP_W + BV_W + 8.0  # +8 = BT_min
-    VAR_W  = min(max_var_w + 2.5, COL_W - FIXED_W)    # clamp para que BT_W no sea negativo
-    BT_W   = COL_W - VAR_W - S_W - P_W - T_W - E_W - PROV_W - C_W - BP_W - BV_W
+    # Columnas uniformes: VAR fijo, el resto igual entre sí
+    VAR_W = 13.0
+    UNI_W = (COL_W - VAR_W) / 9
+    S_W = P_W = T_W = E_W = PROV_W = C_W = BP_W = BV_W = BT_W = UNI_W
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
 
@@ -222,18 +207,18 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         acs = df_s["a_comprar"].astype(float)
         if (acs > 0.001).any():
             base_rgb = (200, 0, 0)
-            base_label = "(COMPRAR)"
+            base_label = "X"
         elif (acs < -0.001).any():
             base_rgb = (0, 140, 0)
-            base_label = "(SOBRA)"
+            base_label = "v"
         else:
             base_rgb = (100, 100, 100)
-            base_label = "(JUSTO)"
+            base_label = "~"
 
         pdf.set_font("Helvetica", "B", fsize)
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
-        LABEL_W = 17.0
+        LABEL_W = 7.0
         pdf.set_xy(x, y)
         pdf.cell(COL_W - LABEL_W, BASE_H, f"  {base_name}", align="L", fill=True, border="LTB")
         pdf.cell(LABEL_W, BASE_H, f"{base_label} ", align="R", fill=True, border="RTB")
