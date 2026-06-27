@@ -86,10 +86,13 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
 
-    # Columnas uniformes: VAR fijo, el resto igual entre sí
-    VAR_W = 13.0
-    UNI_W = (COL_W - VAR_W) / 9
-    S_W = P_W = T_W = E_W = PROV_W = C_W = BP_W = BV_W = BT_W = UNI_W
+    # Dos anchos: anchas (VAR, PROV, PRE, $) y angostas (STO, PED, CALC, EST, CANT, VAC)
+    # COL_W = 4*W_W + 6*N_W, con W_W = N_W * 1.5
+    N_W = COL_W / (4 * 1.5 + 6)   # angosta
+    W_W = N_W * 1.5                # ancha
+    VAR_W = W_W
+    S_W = P_W = T_W = E_W = C_W = BV_W = N_W   # angostas: STO PED CALC EST CANT VAC
+    PROV_W = BP_W = BT_W = W_W                  # anchas: PROV PRE $
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
 
@@ -117,7 +120,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         for lbl, w in [("STO", S_W), ("PED", P_W), ("CALC", T_W)]:
             pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
         pdf.set_fill_color(240, 240, 220)
-        for lbl, w in [("EST", E_W), ("PROV", PROV_W), ("CANT", C_W), ("PRECI", BP_W), ("VAC", BV_W)]:
+        for lbl, w in [("EST", E_W), ("PROV", PROV_W), ("CANT", C_W), ("PRE", BP_W), ("VAC", BV_W)]:
             pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
         pdf.cell(BT_W, HDR_H, "$", border=1, align="C", fill=True)
 
