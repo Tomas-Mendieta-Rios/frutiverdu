@@ -62,6 +62,155 @@ def _prio_unidad(s):
     return 99
 
 
+def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
+    from fpdf import FPDF
+
+    PAGE_W, PAGE_H = 216, 356   # oficio
+    MARGIN = 6
+    GAP = 5
+    COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2   # ~99.5 mm
+
+    HDR_H = 4.0
+    HDR_SECTION = 5.0
+    HDR_Y = MARGIN + HDR_SECTION
+
+    # ROW_H dinámico para que todo entre en una página
+    n_bases = df_raw["Base"].nunique()
+    n_variants = len(df_raw)
+    BOTTOM = PAGE_H - MARGIN
+    available_h = BOTTOM - HDR_Y - HDR_H
+    total_units = max(n_bases * 1.5 + n_variants, 1)   # evitar división por cero
+    ROW_H = min(4.5, (available_h * 2) / total_units)
+    BASE_H = ROW_H * 1.25
+    fsize = max(6.5, ROW_H * 1.7)
+
+    # VAR_W ajustado al texto más largo de las variantes
+    _tmp_pdf = FPDF()
+    _tmp_pdf.add_page()
+    _tmp_pdf.set_font("Helvetica", "", fsize)
+    max_var_w = max(
+        (_tmp_pdf.get_string_width(f"  {v}") for v in df_raw["Variante"].astype(str)),
+        default=20.0,
+    )
+    FIXED_W = 7.5 + 7.5 + 8.5 + 6.0 + 13.0 + 6.0 + 14.0 + 6.0 + 8.0  # S+P+T+E+PROV+C+BP+BV+BT_min
+    VAR_W  = min(max_var_w + 2.0, COL_W - FIXED_W)    # clamp para que BT_W no sea negativo
+    S_W    = 7.5
+    P_W    = 7.5
+    T_W    = 8.5
+    E_W    = 6.0
+    PROV_W = 13.0
+    C_W    = 6.0
+    BP_W   = 14.0
+    BV_W   = 6.0
+    BT_W   = COL_W - VAR_W - S_W - P_W - T_W - E_W - PROV_W - C_W - BP_W - BV_W
+
+    fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
+
+    pdf = FPDF(orientation="P", unit="mm", format=(PAGE_W, PAGE_H))
+    pdf.set_auto_page_break(auto=False)
+    pdf.add_page()
+
+    # ── Encabezado ───────────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_xy(MARGIN, MARGIN)
+    pdf.cell(
+        PAGE_W - 2 * MARGIN, HDR_SECTION,
+        f"Entrega: {fechas_str}   |   Stock: {fecha_stock}",
+        align="C",
+    )
+
+    # ── Sub-cabeceras ────────────────────────────────────────────────────
+    def draw_subheader(x):
+        pdf.set_font("Helvetica", "B", 6.0)
+        pdf.set_fill_color(200, 200, 200)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_xy(x, HDR_Y)
+        pdf.cell(VAR_W, HDR_H, "Variante", border=1, fill=True)
+        for lbl, w in [("S", S_W), ("P", P_W), ("T", T_W)]:
+            pdf.cell(w, HDR_H, lbl, border=1, align="C", fill=True)
+        pdf.set_fill_color(240, 240, 220)
+        for lbl, w in [("E", E_W), ("PROV", PROV_W), ("C", C_W), ("P", BP_W), ("V", BV_W), ("T", BT_W)]:
+            pdf.cell(w, HDR_H, lbl, border=1, align="C", fill=True)
+
+    draw_subheader(MARGIN)
+    draw_subheader(MARGIN + COL_W + GAP)
+
+    DATA_Y = HDR_Y + HDR_H
+    cur_y = [DATA_Y, DATA_Y]
+    cur_col = 0
+
+    def fmt_t(v):
+        # Negativo = falta comprar (rojo), positivo = sobra (verde)
+        f = float(v) if v is not None else 0.0
+        display = -f
+        if abs(display) < 0.001:
+            return "-"
+        return f"{display:.1f}"
+
+    def fmt(v):
+        f = float(v) if v is not None else 0.0
+        return f"{f:.1f}" if abs(f) > 0.001 else "-"
+
+    for base_name, df_base in df_raw.groupby("Base", sort=True):
+        df_s = (
+            df_base
+            .assign(_p=lambda d: d["Variante"].map(_prio_unidad))
+            .sort_values("_p")
+            .drop(columns="_p")
+        )
+        gh = BASE_H + len(df_s) * ROW_H
+
+        if cur_col == 0 and cur_y[0] + gh > BOTTOM:
+            cur_col = 1
+
+        x = MARGIN + cur_col * (COL_W + GAP)
+        y = cur_y[cur_col]
+
+        # color del nombre base según peor variante
+        acs = df_s["a_comprar"].astype(float)
+        if (acs > 0.001).any():
+            base_rgb = (200, 0, 0)
+        elif (acs < -0.001).any():
+            base_rgb = (0, 140, 0)
+        else:
+            base_rgb = (100, 100, 100)
+
+        pdf.set_font("Helvetica", "B", max(6.0, ROW_H * 1.6))
+        pdf.set_fill_color(230, 230, 230)
+        pdf.set_text_color(*base_rgb)
+        pdf.set_xy(x, y)
+        pdf.cell(COL_W, BASE_H, base_name, align="C", fill=True, border=1)
+        pdf.set_text_color(0, 0, 0)
+        y += BASE_H
+
+        # variantes
+        pdf.set_font("Helvetica", "", fsize)
+        for _, row in df_s.iterrows():
+            ac = float(row.get("a_comprar", 0) or 0)
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_xy(x, y)
+            pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border=1)
+            pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border=1)
+            pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border=1)
+            # T: rojo = falta comprar (ac>0), verde = ok/sobra (ac<=0)
+            if ac > 0.001:
+                pdf.set_text_color(200, 0, 0)    # rojo: falta, muestra negativo
+            elif ac < -0.001:
+                pdf.set_text_color(0, 140, 0)    # verde: sobra, muestra positivo
+            else:
+                pdf.set_text_color(150, 150, 150)
+            pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border=1)
+            # columnas en blanco
+            pdf.set_text_color(0, 0, 0)
+            for w in [E_W, PROV_W, C_W, BP_W, BV_W, BT_W]:
+                pdf.cell(w, ROW_H, "", border=1)
+            y += ROW_H
+
+        cur_y[cur_col] = y
+
+    return bytes(pdf.output())
+
+
 def obtener_ultimo_comprobante_dux():
     """Consulta /compras a DUX y devuelve el mayor numero de comprobante (int)
     de los ultimos 5 dias. Pagina hasta agotar resultados.
@@ -1347,6 +1496,8 @@ with tab_comprar:
         f"🕒 Última actualización: **{ts_actualizar_ultimo or '?'}**"
     )
 
+    pdf_btn_ph = st.empty()
+
     if str(fecha_stock_sel) not in (fechas_stock_disp or []):
         st.warning(
             f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
@@ -1531,12 +1682,46 @@ with tab_comprar:
         | (_raw["estimado"].astype(float) > 0)
         | (_raw["stock"].astype(float) > 0)
     ].copy()
+    # Preparar datos para el expander y el PDF
+    if not _raw_view.empty:
+        _raw_view = _raw_view.rename(columns={"cantidad": "pedido"}).sort_values("producto")
+        _raw_view["a_comprar"] = (
+            _raw_view["pedido"].astype(float)
+            + _raw_view["estimado"].astype(float)
+            - _raw_view["stock"].astype(float)
+        )
+
+        def _split_producto_raw(p):
+            s = str(p)
+            if " - " in s:
+                base, var = s.rsplit(" - ", 1)
+                return base.strip(), var.strip()
+            return s, ""
+
+        _split_raw = _raw_view["producto"].apply(_split_producto_raw)
+        _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
+        _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
+
+    # Botón PDF
+    if not _raw_view.empty:
+        try:
+            _pdf_bytes = _generar_pdf_comprar(
+                _raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel
+            )
+            pdf_btn_ph.download_button(
+                "📄 Exportar PDF",
+                data=_pdf_bytes,
+                file_name=f"comprar_{date.today()}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        except Exception as _pdf_err:
+            pdf_btn_ph.warning(f"No se pudo generar el PDF: {_pdf_err}")
+
     with st.expander(
         f"🔍 Ver total a comprar **SIN** desglozar ({len(_raw_view)})",
         expanded=False,
     ):
-        # Aclaracion compacta sobre como se decide el color del producto base
-        # a partir de sus variantes (regla de prioridad).
         st.caption(
             "ℹ️ El color del producto sigue la **peor variante**: "
             "si una está en :red[**rojo**] → todo rojo. "
@@ -1547,13 +1732,6 @@ with tab_comprar:
         if _raw_view.empty:
             st.caption("Sin datos.")
         else:
-            _raw_view = _raw_view.rename(columns={"cantidad": "pedido"}).sort_values("producto")
-            _raw_view["a_comprar"] = (
-                _raw_view["pedido"].astype(float)
-                + _raw_view["estimado"].astype(float)
-                - _raw_view["stock"].astype(float)
-            )
-
             def _color_ac(v):
                 if v > 0.001:
                     return "color: #d11; font-weight: bold;"
@@ -1561,23 +1739,6 @@ with tab_comprar:
                     return "color: #1a8a1a; font-weight: bold;"
                 return "color: #666;"
 
-            # Partir producto en base / variante (mismo patron que Stock tab).
-            def _split_producto_raw(p):
-                s = str(p)
-                if " - " in s:
-                    base, var = s.rsplit(" - ", 1)
-                    return base.strip(), var.strip()
-                return s, ""
-
-            _split_raw = _raw_view["producto"].apply(_split_producto_raw)
-            _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
-            _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
-
-            # Decidir color del expander segun prioridad rojo > gris > verde.
-            # Mismo criterio que _color_ac:
-            #   a_comprar > 0.001  -> rojo  (falta comprar)
-            #   a_comprar < -0.001 -> verde (sobra)
-            #   else               -> gris  (balanceado)
             def _color_base(df):
                 vals = df["a_comprar"].astype(float)
                 if (vals > 0.001).any():
