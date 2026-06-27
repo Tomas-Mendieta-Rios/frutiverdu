@@ -86,11 +86,11 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
 
-    # Dos anchos: anchas (VAR, PROV, PRE, $) y angostas (STO, PED, CALC, EST, CANT, VAC)
-    # COL_W = 4*W_W + 6*N_W, con W_W = N_W * 1.8
-    N_W = COL_W / (4 * 1.8 + 6)   # angosta
-    W_W = N_W * 1.8                # ancha
-    VAR_W = W_W
+    # VAR más ancha que el resto del grupo ancho; PROV PRE $ = W_W; angostas = N_W
+    # COL_W = VAR_W + 3*W_W + 6*N_W, con W_W = N_W*1.8, VAR_W = N_W*2.4
+    N_W = COL_W / (2.4 + 3 * 1.8 + 6)  # angosta
+    W_W = N_W * 1.8                      # ancha (PROV PRE $)
+    VAR_W = N_W * 2.4                    # variante (más ancha)
     S_W = P_W = T_W = E_W = C_W = BV_W = N_W   # angostas: STO PED CALC EST CANT VAC
     PROV_W = BP_W = BT_W = W_W                  # anchas: PROV PRE $
 
@@ -174,13 +174,18 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             break
         _cum += gh
 
-    # Si col1 se pasa, escalar ROW_H justo lo necesario y recomputar
+    # Si col1 se pasa, escalar ROW_H justo lo necesario y recomputar (preservando sep_h)
     _col1_h = _total_h - _cum
     if _col1_h > available_h:
         ROW_H *= available_h / _col1_h
         BASE_H = ROW_H
         fsize = ROW_H * 1.9
-        _all_groups = [(bn, ds, BASE_H + len(ds) * ROW_H, rb) for bn, ds, _, rb in _all_groups]
+        _prev_r2, _new_groups = None, []
+        for bn, ds, _, rb in _all_groups:
+            _sh = BASE_H if (rb and rb != _prev_r2) else 0
+            _new_groups.append((bn, ds, _sh + BASE_H + len(ds) * ROW_H, rb))
+            _prev_r2 = rb
+        _all_groups = _new_groups
         _total_h = sum(gh for _, _, gh, _ in _all_groups)
         _col1_start, _cum = len(_all_groups), 0
         for _i, (_, _, gh, _) in enumerate(_all_groups):
