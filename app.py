@@ -1493,6 +1493,8 @@ with tab_comprar:
         f"🕒 Última actualización: **{ts_actualizar_ultimo or '?'}**"
     )
 
+    pdf_btn_ph = st.empty()
+
     if str(fecha_stock_sel) not in (fechas_stock_disp or []):
         st.warning(
             f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
@@ -1703,7 +1705,7 @@ with tab_comprar:
             _pdf_bytes = _generar_pdf_comprar(
                 _raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel
             )
-            st.download_button(
+            pdf_btn_ph.download_button(
                 "📄 Exportar PDF",
                 data=_pdf_bytes,
                 file_name=f"comprar_{date.today()}.pdf",
@@ -1711,7 +1713,7 @@ with tab_comprar:
                 use_container_width=True,
             )
         except Exception as _pdf_err:
-            st.warning(f"No se pudo generar el PDF: {_pdf_err}")
+            pdf_btn_ph.warning(f"No se pudo generar el PDF: {_pdf_err}")
 
     with st.expander(
         f"🔍 Ver total a comprar **SIN** desglozar ({len(_raw_view)})",
