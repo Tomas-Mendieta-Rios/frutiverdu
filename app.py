@@ -203,7 +203,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
                 pdf.cell(w, ROW_H, "", border=1)
             y += ROW_H
 
-        cur_y[cur_col] = y + ROW_H * 0.25
+        cur_y[cur_col] = y
 
     return bytes(pdf.output())
 
