@@ -67,11 +67,11 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
 
     PAGE_W, PAGE_H = 210, 297   # A4
     MARGIN = 3
-    GAP = 3
+    GAP = 2
     COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2
 
     HDR_H = 4.0
-    HDR_SECTION = 4.5
+    HDR_SECTION = 3.0
     HDR_Y = MARGIN + HDR_SECTION
 
     # ROW_H dinámico para que todo entre en una página
