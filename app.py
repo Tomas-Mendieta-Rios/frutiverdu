@@ -109,6 +109,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     pdf = FPDF(orientation="P", unit="mm", format=(PAGE_W, PAGE_H))
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
+    pdf.set_line_width(0.1)
 
     # ── Encabezado ───────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "", 7)
@@ -166,8 +167,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     _total_h = sum(gh for _, _, gh in _all_groups)
     _col1_start, _cum = len(_all_groups), 0
     for _i, (_, _, gh) in enumerate(_all_groups):
-        if _cum + gh > _total_h / 2 or _cum + gh > available_h:
-            _col1_start = _i   # el grupo que cruza el límite va a col 1
+        if _cum + gh > available_h:
+            _col1_start = _i
             break
         _cum += gh
 
