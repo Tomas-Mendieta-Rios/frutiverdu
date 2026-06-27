@@ -118,7 +118,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     pdf.set_xy(MARGIN_H, MARGIN_V)
     pdf.cell(
         PAGE_W - 2 * MARGIN_H, HDR_SECTION,
-        f"Entrega: {fechas_str}   |   Stock: {fecha_stock}",
+        f"Entrega: {fechas_str}     Stock: {fecha_stock}",
         align="C",
     )
 
