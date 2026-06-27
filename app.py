@@ -189,22 +189,22 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
                 break
             _cum += gh
 
-    _prev_rubro = [None, None]  # rubro anterior por columna
+    _prev_rubro = None  # rubro anterior global (no repetir al cambiar columna)
     for _idx, (base_name, df_s, gh, rubro) in enumerate(_all_groups):
         cur_col = 0 if _idx < _col1_start else 1
 
         x = MARGIN_H + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
 
-        # Separador de rubro cuando cambia
-        if rubro and rubro != _prev_rubro[cur_col]:
+        # Separador de rubro solo si cambia (global, no por columna)
+        if rubro and rubro != _prev_rubro:
             pdf.set_font("Helvetica", "B", fsize)
             pdf.set_fill_color(255, 255, 255)
             pdf.set_text_color(0, 0, 0)
             pdf.set_xy(x, y)
             pdf.cell(COL_W, BASE_H, rubro, border=1, fill=True, align="C")
             y += BASE_H
-            _prev_rubro[cur_col] = rubro
+            _prev_rubro = rubro
 
         # color del nombre base según peor variante
         acs = df_s["a_comprar"].astype(float)
