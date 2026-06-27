@@ -199,8 +199,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         # Separador de rubro cuando cambia
         if rubro and rubro != _prev_rubro[cur_col]:
             pdf.set_font("Helvetica", "B", fsize)
-            pdf.set_fill_color(60, 60, 60)
-            pdf.set_text_color(255, 255, 255)
+            pdf.set_fill_color(255, 255, 255)
+            pdf.set_text_color(0, 0, 0)
             pdf.set_xy(x, y)
             pdf.cell(COL_W, BASE_H, rubro, border=1, fill=True, align="C")
             y += BASE_H
