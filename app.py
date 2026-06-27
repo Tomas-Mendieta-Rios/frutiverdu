@@ -66,34 +66,42 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     from fpdf import FPDF
 
     PAGE_W, PAGE_H = 216, 356   # oficio
-    MARGIN = 7
-    GAP = 4
-    NCOLS = 3
-    COL_W = (PAGE_W - 2 * MARGIN - GAP * (NCOLS - 1)) / NCOLS  # ~62 mm
-    V_W = 33.0
-    N_W = (COL_W - V_W) / 3   # columnas S, P, T
-    ROW_H = 4.0
-    BASE_H = 5.0
-    HDR_H = 4.5
+    MARGIN = 6
+    GAP = 5
+    COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2
+    HDR_H = 4.0
+
+    # Header chico: solo fechas
+    fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
+    HDR_SECTION = 5.0   # una sola línea de fechas
+    HDR_Y = MARGIN + HDR_SECTION
+
+    # Calcular ROW_H dinámicamente para que todo entre en una página
+    n_bases = df_raw["Base"].nunique()
+    n_variants = len(df_raw)
+    BOTTOM = PAGE_H - MARGIN
+    available_h = BOTTOM - HDR_Y - HDR_H
+    # BASE_H = ROW_H * 1.25; gap entre grupos = ROW_H * 0.25
+    # total = n_bases * ROW_H*1.25 + n_variants * ROW_H + n_bases * ROW_H*0.25
+    total_units = n_bases * 1.5 + n_variants
+    ROW_H = min(4.5, (available_h * 2) / total_units)
+    BASE_H = ROW_H * 1.25
+
+    V_W = COL_W * 0.54
+    N_W = (COL_W - V_W) / 3
 
     pdf = FPDF(orientation="P", unit="mm", format=(PAGE_W, PAGE_H))
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
 
-    # ── Título ───────────────────────────────────────────────────────────
-    pdf.set_font("Helvetica", "B", 12)
+    # ── Encabezado ───────────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "", 7)
     pdf.set_xy(MARGIN, MARGIN)
-    pdf.cell(PAGE_W - 2 * MARGIN, 6, "Total a Comprar", align="C")
-    pdf.set_font("Helvetica", "", 7.5)
-    pdf.set_xy(MARGIN, MARGIN + 7)
-    fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
     pdf.cell(
-        PAGE_W - 2 * MARGIN, 4,
+        PAGE_W - 2 * MARGIN, HDR_SECTION,
         f"Entrega: {fechas_str}   |   Stock: {fecha_stock}",
         align="C",
     )
-
-    HDR_Y = MARGIN + 14
 
     # ── Sub-cabeceras ────────────────────────────────────────────────────
     def draw_subheader(x):
@@ -104,12 +112,11 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         for lbl in ["S", "P", "T"]:
             pdf.cell(N_W, HDR_H, lbl, border=1, align="C", fill=True)
 
-    for i in range(NCOLS):
-        draw_subheader(MARGIN + i * (COL_W + GAP))
+    draw_subheader(MARGIN)
+    draw_subheader(MARGIN + COL_W + GAP)
 
     DATA_Y = HDR_Y + HDR_H
-    BOTTOM = PAGE_H - MARGIN
-    cur_y = [DATA_Y] * NCOLS
+    cur_y = [DATA_Y, DATA_Y]
     cur_col = 0
 
     def fmt(v):
@@ -125,22 +132,19 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         )
         gh = BASE_H + len(df_s) * ROW_H
 
-        # Avanzar a la siguiente columna si no hay espacio
-        while cur_col < NCOLS - 1 and cur_y[cur_col] + gh > BOTTOM:
-            cur_col += 1
+        if cur_col == 0 and cur_y[0] + gh > BOTTOM:
+            cur_col = 1
 
         x = MARGIN + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
 
-        # nombre base
-        pdf.set_font("Helvetica", "B", 7)
+        pdf.set_font("Helvetica", "B", max(6.0, ROW_H * 1.6))
         pdf.set_fill_color(230, 230, 230)
         pdf.set_xy(x, y)
         pdf.cell(COL_W, BASE_H, f"  {base_name}", fill=True, border="B")
         y += BASE_H
 
-        # variantes
-        pdf.set_font("Helvetica", "", 6.5)
+        pdf.set_font("Helvetica", "", max(5.5, ROW_H * 1.5))
         for _, row in df_s.iterrows():
             pdf.set_xy(x, y)
             pdf.cell(V_W, ROW_H, f"  {row.get('Variante', '')}", border="B")
@@ -148,7 +152,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
                 pdf.cell(N_W, ROW_H, fmt(row.get(key, 0)), align="C", border="B")
             y += ROW_H
 
-        cur_y[cur_col] = y + 1
+        cur_y[cur_col] = y + ROW_H * 0.25
 
     return bytes(pdf.output())
 
