@@ -114,7 +114,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     pdf.set_line_width(0.1)
 
     # ── Encabezado ───────────────────────────────────────────────────────
-    pdf.set_font("Helvetica", "", 7)
+    pdf.set_font("Helvetica", "", fsize)
     pdf.set_xy(MARGIN_H, MARGIN_V)
     pdf.cell(
         PAGE_W - 2 * MARGIN_H, HDR_SECTION,
@@ -124,7 +124,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
     # ── Sub-cabeceras ────────────────────────────────────────────────────
     def draw_subheader(x):
-        pdf.set_font("Helvetica", "B", 6.0)
+        pdf.set_font("Helvetica", "B", fsize)
         pdf.set_fill_color(200, 200, 200)
         pdf.set_text_color(0, 0, 0)
         pdf.set_xy(x, HDR_Y)
@@ -207,7 +207,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
         # Separador de rubro cuando cambia
         if rubro and rubro != _prev_rubro[cur_col]:
-            pdf.set_font("Helvetica", "B", max(5.0, fsize * 0.85))
+            pdf.set_font("Helvetica", "B", fsize)
             pdf.set_fill_color(60, 60, 60)
             pdf.set_text_color(255, 255, 255)
             pdf.set_xy(x, y)
@@ -228,7 +228,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             base_rgb = (100, 100, 100)
             base_label = "(JUSTO)"
 
-        pdf.set_font("Helvetica", "B", ROW_H * 1.8)
+        pdf.set_font("Helvetica", "B", fsize)
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
         LABEL_W = 17.0
