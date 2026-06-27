@@ -166,10 +166,10 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     _total_h = sum(gh for _, _, gh in _all_groups)
     _col1_start, _cum = len(_all_groups), 0
     for _i, (_, _, gh) in enumerate(_all_groups):
-        _cum += gh
-        if _cum >= _total_h / 2:
-            _col1_start = _i + 1
+        if _cum + gh > _total_h / 2 or _cum + gh > available_h:
+            _col1_start = _i   # el grupo que cruza el límite va a col 1
             break
+        _cum += gh
 
     for _idx, (base_name, df_s, gh) in enumerate(_all_groups):
         cur_col = 0 if _idx < _col1_start else 1
