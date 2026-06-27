@@ -80,7 +80,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     BOTTOM = PAGE_H - MARGIN
     available_h = BOTTOM - HDR_Y - HDR_H
     total_units = max(n_bases * 1.25 + n_variants, 1)
-    ROW_H = min(5.5, (available_h * 2) / total_units)
+    ROW_H = min(5.5, (available_h * 1.85) / total_units)
     BASE_H = ROW_H * 1.25
     fsize = ROW_H * 1.9
 
