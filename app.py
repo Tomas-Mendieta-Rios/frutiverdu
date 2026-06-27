@@ -65,7 +65,7 @@ def _prio_unidad(s):
 def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     from fpdf import FPDF
 
-    PAGE_W, PAGE_H = 216, 356   # oficio
+    PAGE_W, PAGE_H = 210, 297   # A4
     MARGIN = 6
     GAP = 5
     COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2   # ~99.5 mm
@@ -170,16 +170,19 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         acs = df_s["a_comprar"].astype(float)
         if (acs > 0.001).any():
             base_rgb = (200, 0, 0)
+            base_label = "(COMPRAR)"
         elif (acs < -0.001).any():
             base_rgb = (0, 140, 0)
+            base_label = "(SOBRA)"
         else:
             base_rgb = (100, 100, 100)
+            base_label = "(JUSTO)"
 
         pdf.set_font("Helvetica", "B", max(6.0, ROW_H * 1.6))
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
         pdf.set_xy(x, y)
-        pdf.cell(COL_W, BASE_H, base_name, align="C", fill=True, border=1)
+        pdf.cell(COL_W, BASE_H, f"{base_name} {base_label}", align="C", fill=True, border=1)
         pdf.set_text_color(0, 0, 0)
         y += BASE_H
 
