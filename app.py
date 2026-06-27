@@ -99,7 +99,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     E_W    = 6.0
     PROV_W = 13.0
     C_W    = 6.0
-    BP_W   = 10.0
+    BP_W   = 14.0
     BV_W   = 6.0
     BT_W   = COL_W - VAR_W - S_W - P_W - T_W - E_W - PROV_W - C_W - BP_W - BV_W
 
