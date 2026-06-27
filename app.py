@@ -94,9 +94,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         (_tmp_pdf.get_string_width(f"  {v}") for v in df_raw["Variante"].astype(str)),
         default=20.0,
     )
-    S_W    = 7.5
-    P_W    = 7.5
-    T_W    = 8.5
+    S_W    = 8.5
+    P_W    = 8.5
+    T_W    = 9.5
     E_W    = 6.0
     PROV_W = 13.0
     C_W    = 7.5
@@ -211,7 +211,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.set_fill_color(60, 60, 60)
             pdf.set_text_color(255, 255, 255)
             pdf.set_xy(x, y)
-            pdf.cell(COL_W, BASE_H, f"  {rubro}", border=1, fill=True)
+            pdf.cell(COL_W, BASE_H, rubro, border=1, fill=True, align="C")
             y += BASE_H
             cur_y[cur_col] += BASE_H
             _prev_rubro[cur_col] = rubro
@@ -233,7 +233,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_text_color(*base_rgb)
         LABEL_W = 17.0
         pdf.set_xy(x, y)
-        pdf.cell(COL_W - LABEL_W, BASE_H, base_name, align="C", fill=True, border="LTB")
+        pdf.cell(COL_W - LABEL_W, BASE_H, f"  {base_name}", align="L", fill=True, border="LTB")
         pdf.cell(LABEL_W, BASE_H, f"{base_label} ", align="R", fill=True, border="RTB")
         pdf.set_text_color(0, 0, 0)
         y += BASE_H
