@@ -210,18 +210,18 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         acs = df_s["a_comprar"].astype(float)
         if (acs > 0.001).any():
             base_rgb = (200, 0, 0)
-            base_label = "X"
+            base_label = "COMPRAR"
         elif (acs < -0.001).any():
             base_rgb = (0, 140, 0)
-            base_label = "/"
+            base_label = "SOBRA"
         else:
             base_rgb = (100, 100, 100)
-            base_label = "~"
+            base_label = "JUSTO"
 
         pdf.set_font("Helvetica", "B", fsize)
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
-        LABEL_W = 7.0
+        LABEL_W = 14.0
         pdf.set_xy(x, y)
         pdf.cell(COL_W - LABEL_W, BASE_H, f"  {base_name}", align="L", fill=True, border="LTB")
         pdf.cell(LABEL_W, BASE_H, f"{base_label} ", align="R", fill=True, border="RTB")
