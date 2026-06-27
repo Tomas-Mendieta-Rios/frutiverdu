@@ -70,18 +70,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     GAP = 5
     COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2   # ~99.5 mm
 
-    # Anchos: Variante | S | P | T | E | PROV | C | P | V | T
-    VAR_W  = 24.0
-    S_W    = 6.0
-    P_W    = 6.0
-    T_W    = 7.0
-    E_W    = 6.0
-    PROV_W = 13.0
-    C_W    = 6.0
-    BP_W   = 6.0
-    BV_W   = 6.0
-    BT_W   = COL_W - VAR_W - S_W - P_W - T_W - E_W - PROV_W - C_W - BP_W - BV_W
-
     HDR_H = 4.0
     HDR_SECTION = 5.0
     HDR_Y = MARGIN + HDR_SECTION
@@ -94,6 +82,26 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     total_units = n_bases * 1.5 + n_variants
     ROW_H = min(4.5, (available_h * 2) / total_units)
     BASE_H = ROW_H * 1.25
+    fsize = max(5.5, ROW_H * 1.5)
+
+    # VAR_W ajustado al texto más largo de las variantes
+    _tmp_pdf = FPDF()
+    _tmp_pdf.add_page()
+    _tmp_pdf.set_font("Helvetica", "", fsize)
+    max_var_w = max(
+        (_tmp_pdf.get_string_width(f"  {v}") for v in df_raw["Variante"].astype(str)),
+        default=20.0,
+    )
+    VAR_W  = max_var_w + 2.0
+    S_W    = 6.0
+    P_W    = 6.0
+    T_W    = 7.0
+    E_W    = 6.0
+    PROV_W = 13.0
+    C_W    = 6.0
+    BP_W   = 10.0
+    BV_W   = 6.0
+    BT_W   = COL_W - VAR_W - S_W - P_W - T_W - E_W - PROV_W - C_W - BP_W - BV_W
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
 
@@ -140,8 +148,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         f = float(v) if v is not None else 0.0
         return f"{f:.1f}" if abs(f) > 0.001 else "-"
 
-    fsize = max(5.5, ROW_H * 1.5)
-
     for base_name, df_base in df_raw.groupby("Base", sort=True):
         df_s = (
             df_base
@@ -170,7 +176,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
         pdf.set_xy(x, y)
-        pdf.cell(COL_W, BASE_H, f"  {base_name}", fill=True, border=1)
+        pdf.cell(COL_W, BASE_H, base_name, align="C", fill=True, border=1)
         pdf.set_text_color(0, 0, 0)
         y += BASE_H
 
