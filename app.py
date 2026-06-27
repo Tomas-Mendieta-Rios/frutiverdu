@@ -87,9 +87,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     fsize = ROW_H * 1.9
 
     # Dos anchos: anchas (VAR, PROV, PRE, $) y angostas (STO, PED, CALC, EST, CANT, VAC)
-    # COL_W = 4*W_W + 6*N_W, con W_W = N_W * 1.5
-    N_W = COL_W / (4 * 1.5 + 6)   # angosta
-    W_W = N_W * 1.5                # ancha
+    # COL_W = 4*W_W + 6*N_W, con W_W = N_W * 1.8
+    N_W = COL_W / (4 * 1.8 + 6)   # angosta
+    W_W = N_W * 1.8                # ancha
     VAR_W = W_W
     S_W = P_W = T_W = E_W = C_W = BV_W = N_W   # angostas: STO PED CALC EST CANT VAC
     PROV_W = BP_W = BT_W = W_W                  # anchas: PROV PRE $
@@ -112,7 +112,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
     # ── Sub-cabeceras ────────────────────────────────────────────────────
     def draw_subheader(x):
-        pdf.set_font("Helvetica", "B", fsize)
+        pdf.set_font("Helvetica", "B", fsize * 0.8)
         pdf.set_fill_color(200, 200, 200)
         pdf.set_text_color(0, 0, 0)
         pdf.set_xy(x, HDR_Y)
@@ -189,22 +189,22 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
                 break
             _cum += gh
 
-    _prev_rubro = [None, None]  # rubro anterior por columna
+    _prev_rubro = None  # global: no repetir separador al cambiar columna
     for _idx, (base_name, df_s, gh, rubro) in enumerate(_all_groups):
         cur_col = 0 if _idx < _col1_start else 1
 
         x = MARGIN_H + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
 
-        # Separador de rubro cuando cambia
-        if rubro and rubro != _prev_rubro[cur_col]:
+        # Separador de rubro solo cuando cambia (global, no por columna)
+        if rubro and rubro != _prev_rubro:
             pdf.set_font("Helvetica", "B", fsize)
             pdf.set_fill_color(255, 255, 255)
             pdf.set_text_color(0, 0, 0)
             pdf.set_xy(x, y)
             pdf.cell(COL_W, BASE_H, rubro, border=1, fill=True, align="C")
             y += BASE_H
-            _prev_rubro[cur_col] = rubro
+            _prev_rubro = rubro
 
         # color del nombre base según peor variante
         acs = df_s["a_comprar"].astype(float)
