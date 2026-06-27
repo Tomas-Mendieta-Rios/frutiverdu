@@ -82,7 +82,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     total_units = max(n_bases * 1.5 + n_variants, 1)   # evitar división por cero
     ROW_H = min(5.5, (available_h * 2) / total_units)
     BASE_H = ROW_H * 1.25
-    fsize = max(7.5, ROW_H * 1.9)
+    fsize = ROW_H * 1.9
 
     # VAR_W ajustado al texto más largo de las variantes
     _tmp_pdf = FPDF()
@@ -178,7 +178,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
             base_rgb = (100, 100, 100)
             base_label = "(JUSTO)"
 
-        pdf.set_font("Helvetica", "B", max(7.0, ROW_H * 1.8))
+        pdf.set_font("Helvetica", "B", ROW_H * 1.8)
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
         LABEL_W = 17.0
