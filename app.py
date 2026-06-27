@@ -66,21 +66,22 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     from fpdf import FPDF
 
     PAGE_W, PAGE_H = 210, 297   # A4
-    MARGIN = 3
+    MARGIN_H = 3
+    MARGIN_V = 2
     GAP = 2
-    COL_W = (PAGE_W - 2 * MARGIN - GAP) / 2
+    COL_W = (PAGE_W - 2 * MARGIN_H - GAP) / 2
 
     HDR_H = 4.0
     HDR_SECTION = 3.0
-    HDR_Y = MARGIN + HDR_SECTION
+    HDR_Y = MARGIN_V + HDR_SECTION
 
     # ROW_H dinámico para que todo entre en una página
     n_bases = df_raw["Base"].nunique()
     n_variants = len(df_raw)
-    BOTTOM = PAGE_H - MARGIN
+    BOTTOM = PAGE_H - MARGIN_V
     available_h = BOTTOM - HDR_Y - HDR_H
     total_units = max(n_bases * 1.25 + n_variants, 1)
-    ROW_H = min(5.5, (available_h * 1.85) / total_units)
+    ROW_H = min(5.5, (available_h * 2.0) / total_units)
     BASE_H = ROW_H * 1.25
     fsize = ROW_H * 1.9
 
@@ -101,7 +102,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
     BP_W   = 14.0
     BV_W   = 7.5
     FIXED_W = S_W + P_W + T_W + E_W + PROV_W + C_W + BP_W + BV_W + 8.0  # +8 = BT_min
-    VAR_W  = min(max_var_w + 1.0, COL_W - FIXED_W)    # clamp para que BT_W no sea negativo
+    VAR_W  = min(max_var_w + 2.5, COL_W - FIXED_W)    # clamp para que BT_W no sea negativo
     BT_W   = COL_W - VAR_W - S_W - P_W - T_W - E_W - PROV_W - C_W - BP_W - BV_W
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
@@ -113,9 +114,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
 
     # ── Encabezado ───────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "", 7)
-    pdf.set_xy(MARGIN, MARGIN)
+    pdf.set_xy(MARGIN_H, MARGIN_V)
     pdf.cell(
-        PAGE_W - 2 * MARGIN, HDR_SECTION,
+        PAGE_W - 2 * MARGIN_H, HDR_SECTION,
         f"Entrega: {fechas_str}   |   Stock: {fecha_stock}",
         align="C",
     )
@@ -134,8 +135,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
             pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
         pdf.cell(BT_W, HDR_H, "T", border=1, align="C", fill=True)
 
-    draw_subheader(MARGIN)
-    draw_subheader(MARGIN + COL_W + GAP)
+    draw_subheader(MARGIN_H)
+    draw_subheader(MARGIN_H + COL_W + GAP)
 
     DATA_Y = HDR_Y + HDR_H
     cur_y = [DATA_Y, DATA_Y]
@@ -165,6 +166,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
         _all_groups.append((base_name, df_s, BASE_H + len(df_s) * ROW_H))
 
     _total_h = sum(gh for _, _, gh in _all_groups)
+
+    # Greedy split: llenar col0 hasta el límite
     _col1_start, _cum = len(_all_groups), 0
     for _i, (_, _, gh) in enumerate(_all_groups):
         if _cum + gh > available_h:
@@ -172,10 +175,25 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado):
             break
         _cum += gh
 
+    # Si col1 se pasa, escalar ROW_H justo lo necesario y recomputar
+    _col1_h = _total_h - _cum
+    if _col1_h > available_h:
+        ROW_H *= available_h / _col1_h
+        BASE_H = ROW_H * 1.25
+        fsize = ROW_H * 1.9
+        _all_groups = [(bn, ds, BASE_H + len(ds) * ROW_H) for bn, ds, _ in _all_groups]
+        _total_h = sum(gh for _, _, gh in _all_groups)
+        _col1_start, _cum = len(_all_groups), 0
+        for _i, (_, _, gh) in enumerate(_all_groups):
+            if _cum + gh > available_h:
+                _col1_start = _i
+                break
+            _cum += gh
+
     for _idx, (base_name, df_s, gh) in enumerate(_all_groups):
         cur_col = 0 if _idx < _col1_start else 1
 
-        x = MARGIN + cur_col * (COL_W + GAP)
+        x = MARGIN_H + cur_col * (COL_W + GAP)
         y = cur_y[cur_col]
 
         # color del nombre base según peor variante
