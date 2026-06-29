@@ -163,14 +163,18 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _all_groups.append((base_name, df_s, sep_h + BASE_H + len(df_s) * ROW_H, rubro))
         _prev_rubro_gh = rubro
 
-    # Greedy split en hasta 4 slots (2 páginas × 2 columnas)
+    # Split balanceado en 4 slots (divide el contenido en cuartos iguales)
     def _do_split(groups):
-        splits, cum, n = [], 0, 0
+        total = sum(gh for _, _, gh, _ in groups)
+        if total <= 0:
+            return [len(groups), len(groups), len(groups)]
+        target = total / 4
+        splits, cum, slot = [], 0, 0
         for i, (_, _, gh, _) in enumerate(groups):
-            if cum + gh > available_h and n < 3:
-                splits.append(i); n += 1; cum = gh
-            else:
-                cum += gh
+            cum += gh
+            if cum >= target * (slot + 1) and slot < 3:
+                splits.append(i + 1)
+                slot += 1
         while len(splits) < 3:
             splits.append(len(groups))
         return splits  # [col1_start, col2_start, col3_start]
@@ -178,10 +182,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _s = _do_split(_all_groups)
     _c1, _c2, _c3 = _s[0], _s[1], _s[2]
 
-    # Si el último slot se pasa, escalar ROW_H y recomputar
-    _last_h = sum(gh for _, _, gh, _ in _all_groups[_c3:])
-    if _last_h > available_h:
-        ROW_H *= available_h / _last_h
+    # Si algún slot se pasa de available_h, escalar ROW_H y recomputar
+    def _col_h(s, e):
+        return sum(gh for _, _, gh, _ in _all_groups[s:e])
+    _max_col_h = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
+    if _max_col_h > available_h:
+        ROW_H *= available_h / _max_col_h
         BASE_H = ROW_H
         fsize = ROW_H * 1.9
         _prev_r2, _new_groups = None, []
@@ -1815,7 +1821,9 @@ with tab_comprar:
     _filas_pdf = []
     for _, _prod in productos.iterrows():
         _cod  = str(_prod["codigo"])
-        _nom  = str(_prod.get("producto", ""))
+        _nom  = str(_prod.get("producto", "") or "").strip()
+        if not _nom or _nom.lower() in ("nan", "none"):
+            continue
         if " - " in _nom:
             _base, _var = _nom.rsplit(" - ", 1)
             _base, _var = _base.strip(), _var.strip()
