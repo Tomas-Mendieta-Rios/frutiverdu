@@ -1833,7 +1833,7 @@ with tab_comprar:
         _raw_view = _raw_view.sort_values(["_rubro_idx", "Base"]).drop(columns="_rubro_idx")
 
     # PDF: TODOS los productos del catálogo, agrupados por categoria_planilla
-    _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "HONGOS", "OTROS"]
+    _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
     _cod_cat   = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
     _ped_map   = {}
     _est_map   = {}
