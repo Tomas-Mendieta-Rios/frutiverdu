@@ -3393,7 +3393,7 @@ with tab_dux_productos:
         try:
             df_csv_actual = db.cargar_productos()
             if not df_csv_actual.empty:
-                st.caption(f"{len(df_csv_actual)} productos en Sheets. Podés asignar la categoría de planilla y guardar.")
+                st.caption(f"{len(df_csv_actual)} productos en Sheets.")
 
                 _cats_opts = [""] + db.cargar_categorias_planilla()["nombre"].tolist()
 
@@ -3401,12 +3401,10 @@ with tab_dux_productos:
                 df_show = df_csv_actual[cols_mostrar].copy().sort_values("producto").reset_index(drop=True)
                 df_show["categoria_planilla"] = df_show["categoria_planilla"].fillna("")
 
-                opciones_dxp = df_show["producto"].astype(str).tolist()
-                filtro_prod_dxp = st.multiselect("Filtrar producto", options=opciones_dxp, key="dxp_filtro_prod_sel")
-                df_show_filt = df_show[df_show["producto"].astype(str).isin(filtro_prod_dxp)].reset_index(drop=True) if filtro_prod_dxp else df_show
+                _dxp_guardar = st.button("💾 Guardar categorías asignadas", key="dxp_guardar_cats")
 
                 _dxp_edited = st.data_editor(
-                    df_show_filt,
+                    df_show,
                     use_container_width=True,
                     hide_index=True,
                     key="dxp_editor",
@@ -3423,8 +3421,7 @@ with tab_dux_productos:
                     },
                 )
 
-                if st.button("💾 Guardar categorías asignadas", key="dxp_guardar_cats"):
-                    # Mergear cambios de vuelta al df completo
+                if _dxp_guardar:
                     _df_full = df_csv_actual.copy()
                     _df_full["categoria_planilla"] = _df_full["categoria_planilla"].fillna("")
                     _idx_map = dict(zip(_dxp_edited["codigo"].astype(str), _dxp_edited["categoria_planilla"].fillna("")))
