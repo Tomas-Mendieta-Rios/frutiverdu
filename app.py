@@ -1842,6 +1842,9 @@ with tab_comprar:
         _nom  = str(_prod.get("producto", "") or "").strip()
         if not _nom or _nom.lower() in ("nan", "none"):
             continue
+        _cat = _cod_cat.get(_cod, "").strip()
+        if not _cat or _cat.lower() in ("nan", "none"):
+            continue
         if " - " in _nom:
             _base, _var = _nom.rsplit(" - ", 1)
             _base, _var = _base.strip(), _var.strip()
@@ -1855,7 +1858,7 @@ with tab_comprar:
             "Base": _base, "Variante": _var,
             "pedido": _ped, "estimado": _est,
             "stock": _stk, "a_comprar": _ped + _est - _stk,
-            "Rubro": _cod_cat.get(_cod, "") or "OTROS",
+            "Rubro": _cat,
         })
 
     _raw_view_pdf = pd.DataFrame(_filas_pdf)
