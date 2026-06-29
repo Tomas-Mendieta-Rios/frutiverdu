@@ -101,7 +101,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _n_slots = 4
 
     BASE_H = ROW_H
-    fsize = ROW_H * 1.9
+    fsize = ROW_H * 1.9        # encabezados (VAR/STO/etc. y título)
+    fsize_data = fsize + 1.0   # filas de datos (base + variantes)
 
     # VAR más ancha que el resto del grupo ancho; PROV PRE $ = W_W; angostas = N_W
     # COL_W = VAR_W + 3*W_W + 6*N_W, con W_W = N_W*1.8, VAR_W = N_W*2.4
@@ -266,7 +267,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         else:
             base_rgb = (100, 100, 100); base_label = "JUSTO"
 
-        pdf.set_font("Helvetica", "B", fsize)
+        pdf.set_font("Helvetica", "B", fsize_data)
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
         LABEL_W = 20.0
@@ -277,7 +278,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
         # Nombre de categoría superpuesto centrado en la fila base (primera de cada rubro)
         if is_first_rubro:
-            pdf.set_font("Helvetica", "B", fsize * 1.1)
+            pdf.set_font("Helvetica", "B", fsize_data * 1.1)
             pdf.set_text_color(60, 60, 60)
             pdf.set_xy(x, y)
             pdf.cell(COL_W - LABEL_W, BASE_H, rubro, align="C", fill=False, border=0)
@@ -285,7 +286,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
         y += BASE_H
 
-        pdf.set_font("Helvetica", "", fsize)
+        pdf.set_font("Helvetica", "", fsize_data)
         for _, row in df_s.iterrows():
             ac = float(row.get("a_comprar", 0) or 0)
             pdf.set_text_color(0, 0, 0)
