@@ -52,7 +52,7 @@ SCOPES = [
 ]
 
 SCHEMA = {
-    "productos": ["codigo", "producto", "unidad_medida", "descripcion", "rubro"],
+    "productos": ["codigo", "producto", "unidad_medida", "descripcion", "rubro", "categoria_planilla"],
     "compuestos": [
         "codigo_origen",
         "producto_origen",
@@ -142,6 +142,7 @@ SCHEMA = {
         "componente_base",
     ],
     "config": ["key", "value"],
+    "categorias_planilla": ["nombre", "orden"],
 }
 
 
@@ -242,9 +243,9 @@ def cargar_productos():
     df = leer_tabla("productos")
     if not df.empty:
         df["codigo"] = df["codigo"].astype(str)
-    # Defensive: si la tabla en Sheets es vieja (sin 'rubro'), agregar vacio.
-    if "rubro" not in df.columns:
-        df["rubro"] = ""
+    for col in ("rubro", "categoria_planilla"):
+        if col not in df.columns:
+            df[col] = ""
     return df
 
 
@@ -929,3 +930,23 @@ def cargar_stock_teorico_detalle():
         "dux_contados": _parse("dux_contados", []),
         "wix_contados": _parse("wix_contados", []),
     }
+
+
+# ---------------- CATEGORIAS PLANILLA ----------------
+
+_CATEGORIAS_DEFAULT = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
+
+
+def cargar_categorias_planilla():
+    df = leer_tabla("categorias_planilla")
+    if df.empty:
+        df = pd.DataFrame({
+            "nombre": _CATEGORIAS_DEFAULT,
+            "orden": list(range(1, len(_CATEGORIAS_DEFAULT) + 1)),
+        })
+    df["orden"] = pd.to_numeric(df["orden"], errors="coerce").fillna(0).astype(int)
+    return df.sort_values("orden").reset_index(drop=True)
+
+
+def guardar_categorias_planilla(df):
+    escribir_tabla("categorias_planilla", df)
