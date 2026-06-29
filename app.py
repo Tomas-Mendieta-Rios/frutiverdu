@@ -203,22 +203,22 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _s = _do_split(_all_groups)
     _c1, _c2, _c3 = _s[0], _s[1], _s[2]
 
-    # Si algún slot se pasa de available_h, escalar ROW_H y recomputar
+    # Escalar ROW_H para que la columna más alta llene exactamente available_h
     def _col_h(s, e):
         return sum(gh for _, _, gh, _ in _all_groups[s:e])
     _max_col_h = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
-    if _max_col_h > available_h:
-        ROW_H *= available_h / _max_col_h
-        BASE_H = ROW_H
-        fsize = ROW_H * 1.9
-        _prev_r2, _new_groups = None, []
-        for bn, ds, _, rb in _all_groups:
-            _sh = BASE_H if (rb and rb != _prev_r2) else 0
-            _new_groups.append((bn, ds, _sh + BASE_H + len(ds) * ROW_H, rb))
-            _prev_r2 = rb
-        _all_groups = _new_groups
-        _s = _do_split(_all_groups)
-        _c1, _c2, _c3 = _s[0], _s[1], _s[2]
+    if _max_col_h > 0 and abs(_max_col_h - available_h) > 0.5:
+        new_rh = ROW_H * available_h / _max_col_h
+        if new_rh <= 5.5:  # no escalar si las filas se vuelven demasiado grandes
+            ROW_H = new_rh
+            BASE_H = ROW_H
+            fsize = ROW_H * 1.9
+            _new_groups = []
+            for bn, ds, _, rb in _all_groups:
+                _new_groups.append((bn, ds, BASE_H + len(ds) * ROW_H, rb))
+            _all_groups = _new_groups
+            _s = _do_split(_all_groups)
+            _c1, _c2, _c3 = _s[0], _s[1], _s[2]
 
     _page2_added = False
     _prev_rubro = None  # global: no repetir separador al cambiar columna/página
