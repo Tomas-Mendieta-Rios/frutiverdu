@@ -1767,6 +1767,7 @@ with tab_comprar:
         )
         _raw["stock"] = _raw["codigo"].map(_stk_map).fillna(0.0).astype(float)
     else:
+        _stk_map = {}
         _raw["stock"] = 0.0
     _raw_view = _raw[
         (_raw["cantidad"].astype(float) > 0)
@@ -1793,7 +1794,7 @@ with tab_comprar:
         _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
         _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
 
-        # Enriquecer con rubro desde catálogo de productos
+        # Enriquecer _raw_view con rubro DUX (solo para UI, no para PDF)
         _ORDEN_RUBROS = ["HOJAS", "VERDURAS", "FRUTAS", "HIERBAS", "HONGOS", "BROTES", "AJIES", "CONDIMENTOS", "OTROS"]
         _cod_rubro = dict(zip(productos["codigo"].astype(str), productos.get("rubro", pd.Series([""] * len(productos))).fillna("").str.upper()))
         _raw_view["Rubro"] = _raw_view["codigo"].astype(str).map(_cod_rubro).fillna("")
@@ -1801,11 +1802,46 @@ with tab_comprar:
         _raw_view["_rubro_idx"] = _raw_view["Rubro"].map(lambda r: _rubro_order.get(r, len(_ORDEN_RUBROS)))
         _raw_view = _raw_view.sort_values(["_rubro_idx", "Base"]).drop(columns="_rubro_idx")
 
+    # PDF: TODOS los productos del catálogo, agrupados por categoria_planilla
+    _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "HONGOS", "OTROS"]
+    _cod_cat   = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
+    _ped_map   = {}
+    _est_map   = {}
+    if not _raw.empty:
+        _ped_map = dict(zip(_raw["codigo"].astype(str), _raw["cantidad"].astype(float)))
+        _est_map = dict(zip(_raw["codigo"].astype(str), _raw["estimado"].astype(float)))
+    _stk_map_pdf = _stk_map if (stock_actual is not None and not stock_actual.empty) else {}
+
+    _filas_pdf = []
+    for _, _prod in productos.iterrows():
+        _cod  = str(_prod["codigo"])
+        _nom  = str(_prod.get("producto", ""))
+        if " - " in _nom:
+            _base, _var = _nom.rsplit(" - ", 1)
+            _base, _var = _base.strip(), _var.strip()
+        else:
+            _base, _var = _nom, ""
+        _ped = _ped_map.get(_cod, 0.0)
+        _est = _est_map.get(_cod, 0.0)
+        _stk = _stk_map_pdf.get(_cod, 0.0)
+        _filas_pdf.append({
+            "codigo": _cod, "producto": _nom,
+            "Base": _base, "Variante": _var,
+            "pedido": _ped, "estimado": _est,
+            "stock": _stk, "a_comprar": _ped + _est - _stk,
+            "Rubro": _cod_cat.get(_cod, "") or "OTROS",
+        })
+
+    _raw_view_pdf = pd.DataFrame(_filas_pdf)
+    _cat_ord = {c: i for i, c in enumerate(_ORDEN_CATS)}
+    _raw_view_pdf["_ci"] = _raw_view_pdf["Rubro"].map(lambda r: _cat_ord.get(r, len(_ORDEN_CATS)))
+    _raw_view_pdf = _raw_view_pdf.sort_values(["_ci", "Base"]).drop(columns="_ci").reset_index(drop=True)
+
     # Botón PDF
-    if not _raw_view.empty:
+    if not _raw_view_pdf.empty:
         try:
-            _pdf_a4     = _generar_pdf_comprar(_raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "A4")
-            _pdf_oficio = _generar_pdf_comprar(_raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "oficio")
+            _pdf_a4     = _generar_pdf_comprar(_raw_view_pdf, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "A4")
+            _pdf_oficio = _generar_pdf_comprar(_raw_view_pdf, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "oficio")
             _col_a4, _col_of = pdf_btn_ph.columns(2)
             _col_a4.download_button("📄 PDF A4",     data=_pdf_a4,     file_name=f"comprar_a4_{date.today()}.pdf",     mime="application/pdf", use_container_width=True)
             _col_of.download_button("📄 PDF Oficio", data=_pdf_oficio, file_name=f"comprar_oficio_{date.today()}.pdf", mime="application/pdf", use_container_width=True)
