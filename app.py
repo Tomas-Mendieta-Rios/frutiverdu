@@ -72,7 +72,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     GAP = 2
     COL_W = (PAGE_W - 2 * MARGIN_H - GAP) / 2
 
-    HDR_H = 4.0
+    HDR_H = 3.0
     HDR_SECTION = 3.0
     HDR_Y = MARGIN_V + HDR_SECTION
 
