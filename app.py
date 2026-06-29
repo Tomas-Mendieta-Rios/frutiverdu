@@ -259,9 +259,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         sin_mov = (peds.abs() < 0.001).all() and (ests.abs() < 0.001).all() and (stks.abs() < 0.001).all()
 
         if (acs > 0.001).any():
-            base_rgb = (200, 0, 0); base_label = "ATENCION"
+            base_rgb = (185, 0, 0); base_label = "ATENCION"
         elif (acs < -0.001).any():
-            base_rgb = (0, 140, 0); base_label = "SOBRA"
+            base_rgb = (0, 115, 0); base_label = "SOBRA"
         elif sin_mov:
             base_rgb = (160, 160, 160); base_label = "SIN MOVIMIENTO"
         else:
@@ -294,8 +294,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border="LTB")
             pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border="LTB")
             pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border="LTB")
-            if ac > 0.001:   pdf.set_text_color(200, 0, 0)
-            elif ac < -0.001: pdf.set_text_color(0, 140, 0)
+            if ac > 0.001:   pdf.set_text_color(185, 0, 0)
+            elif ac < -0.001: pdf.set_text_color(0, 115, 0)
             else:             pdf.set_text_color(150, 150, 150)
             pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border="LTB")
             pdf.set_text_color(0, 0, 0)
