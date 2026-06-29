@@ -75,14 +75,14 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     HDR_SECTION = 3.0
     HDR_Y = MARGIN_V + HDR_SECTION
 
-    # ROW_H dinámico para que todo entre en una página
+    # ROW_H dinámico para hasta 2 páginas (4 slots de columna)
     n_bases = df_raw["Base"].nunique()
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN_V
     available_h = BOTTOM - HDR_Y - HDR_H
     n_rubros = df_raw["Rubro"].nunique() if "Rubro" in df_raw.columns else 0
     total_units = max(n_bases + n_variants + n_rubros, 1)
-    ROW_H = min(5.5, (available_h * 2.0) / total_units)
+    ROW_H = min(5.5, (available_h * 4.0) / total_units)
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
 
@@ -128,8 +128,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     draw_subheader(MARGIN_H + COL_W + GAP)
 
     DATA_Y = HDR_Y + HDR_H
-    cur_y = [DATA_Y, DATA_Y]
-    cur_col = 0
+    cur_y = [DATA_Y, DATA_Y, DATA_Y, DATA_Y]  # slots 0-3 (2 páginas × 2 columnas)
 
     def fmt_t(v):
         # Negativo = falta comprar (rojo), positivo = sobra (verde)
@@ -164,20 +163,25 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _all_groups.append((base_name, df_s, sep_h + BASE_H + len(df_s) * ROW_H, rubro))
         _prev_rubro_gh = rubro
 
-    _total_h = sum(gh for _, _, gh, _ in _all_groups)
+    # Greedy split en hasta 4 slots (2 páginas × 2 columnas)
+    def _do_split(groups):
+        splits, cum, n = [], 0, 0
+        for i, (_, _, gh, _) in enumerate(groups):
+            if cum + gh > available_h and n < 3:
+                splits.append(i); n += 1; cum = gh
+            else:
+                cum += gh
+        while len(splits) < 3:
+            splits.append(len(groups))
+        return splits  # [col1_start, col2_start, col3_start]
 
-    # Greedy split: llenar col0 hasta el límite
-    _col1_start, _cum = len(_all_groups), 0
-    for _i, (_, _, gh, _) in enumerate(_all_groups):
-        if _cum + gh > available_h:
-            _col1_start = _i
-            break
-        _cum += gh
+    _s = _do_split(_all_groups)
+    _c1, _c2, _c3 = _s[0], _s[1], _s[2]
 
-    # Si col1 se pasa, escalar ROW_H justo lo necesario y recomputar (preservando sep_h)
-    _col1_h = _total_h - _cum
-    if _col1_h > available_h:
-        ROW_H *= available_h / _col1_h
+    # Si el último slot se pasa, escalar ROW_H y recomputar
+    _last_h = sum(gh for _, _, gh, _ in _all_groups[_c3:])
+    if _last_h > available_h:
+        ROW_H *= available_h / _last_h
         BASE_H = ROW_H
         fsize = ROW_H * 1.9
         _prev_r2, _new_groups = None, []
@@ -186,22 +190,36 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             _new_groups.append((bn, ds, _sh + BASE_H + len(ds) * ROW_H, rb))
             _prev_r2 = rb
         _all_groups = _new_groups
-        _total_h = sum(gh for _, _, gh, _ in _all_groups)
-        _col1_start, _cum = len(_all_groups), 0
-        for _i, (_, _, gh, _) in enumerate(_all_groups):
-            if _cum + gh > available_h:
-                _col1_start = _i
-                break
-            _cum += gh
+        _s = _do_split(_all_groups)
+        _c1, _c2, _c3 = _s[0], _s[1], _s[2]
 
-    _prev_rubro = None  # global: no repetir separador al cambiar columna
+    _page2_added = False
+    _prev_rubro = None  # global: no repetir separador al cambiar columna/página
+
     for _idx, (base_name, df_s, gh, rubro) in enumerate(_all_groups):
-        cur_col = 0 if _idx < _col1_start else 1
+        if _idx < _c1:   slot = 0
+        elif _idx < _c2: slot = 1
+        elif _idx < _c3: slot = 2
+        else:            slot = 3
 
-        x = MARGIN_H + cur_col * (COL_W + GAP)
-        y = cur_y[cur_col]
+        # Agregar página 2 la primera vez que llegamos al slot 2 ó 3
+        if slot >= 2 and not _page2_added:
+            pdf.add_page()
+            pdf.set_line_width(0.1)
+            pdf.set_font("Helvetica", "", fsize)
+            pdf.set_xy(MARGIN_H, MARGIN_V)
+            pdf.cell(PAGE_W - 2 * MARGIN_H, HDR_SECTION,
+                f"Entrega: {fechas_str}     Stock: {fecha_stock}", align="C")
+            draw_subheader(MARGIN_H)
+            draw_subheader(MARGIN_H + COL_W + GAP)
+            cur_y[2] = DATA_Y
+            cur_y[3] = DATA_Y
+            _page2_added = True
 
-        # Separador de rubro solo cuando cambia (global, no por columna)
+        x = MARGIN_H + (slot % 2) * (COL_W + GAP)
+        y = cur_y[slot]
+
+        # Separador de rubro solo cuando cambia
         if rubro and rubro != _prev_rubro:
             pdf.set_font("Helvetica", "B", fsize)
             pdf.set_fill_color(255, 255, 255)
@@ -211,17 +229,14 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             y += BASE_H
             _prev_rubro = rubro
 
-        # color del nombre base según peor variante
+        # Color del nombre base según peor variante
         acs = df_s["a_comprar"].astype(float)
         if (acs > 0.001).any():
-            base_rgb = (200, 0, 0)
-            base_label = "COMPRAR"
+            base_rgb = (200, 0, 0); base_label = "COMPRAR"
         elif (acs < -0.001).any():
-            base_rgb = (0, 140, 0)
-            base_label = "SOBRA"
+            base_rgb = (0, 140, 0); base_label = "SOBRA"
         else:
-            base_rgb = (100, 100, 100)
-            base_label = "JUSTO"
+            base_rgb = (100, 100, 100); base_label = "JUSTO"
 
         pdf.set_font("Helvetica", "B", fsize)
         pdf.set_fill_color(230, 230, 230)
@@ -233,7 +248,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_text_color(0, 0, 0)
         y += BASE_H
 
-        # variantes
         pdf.set_font("Helvetica", "", fsize)
         for _, row in df_s.iterrows():
             ac = float(row.get("a_comprar", 0) or 0)
@@ -242,13 +256,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border="LTB")
             pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border="LTB")
             pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border="LTB")
-            # T: rojo = falta comprar (ac>0), verde = ok/sobra (ac<=0)
-            if ac > 0.001:
-                pdf.set_text_color(200, 0, 0)
-            elif ac < -0.001:
-                pdf.set_text_color(0, 140, 0)
-            else:
-                pdf.set_text_color(150, 150, 150)
+            if ac > 0.001:   pdf.set_text_color(200, 0, 0)
+            elif ac < -0.001: pdf.set_text_color(0, 140, 0)
+            else:             pdf.set_text_color(150, 150, 150)
             pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border="LTB")
             pdf.set_text_color(0, 0, 0)
             for w in [E_W, PROV_W, C_W, BP_W, BV_W]:
@@ -256,7 +266,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.cell(BT_W, ROW_H, "", border=1)
             y += ROW_H
 
-        cur_y[cur_col] = y
+        cur_y[slot] = y
 
     return bytes(pdf.output())
 
