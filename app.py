@@ -76,33 +76,56 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     HDR_SECTION = 3.0
     HDR_Y = MARGIN_V + HDR_SECTION
 
-    # ROW_H dinámico: 1 página (2 slots) o 2 páginas (4 slots), siempre llenando hasta el fondo
-    n_bases = df_raw["Base"].nunique()
-    n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN_V_BOTTOM
     available_h = BOTTOM - HDR_Y - HDR_H
-    total_units = max(n_bases + n_variants, 1)
 
+    # Paso 1: construir grupos para conocer el total real de unidades (bases + variantes)
+    _has_rubro = "Rubro" in df_raw.columns
+    _all_groups = []
+    _seen_bases = []
+    for _, df_base in df_raw.groupby("Base", sort=False):
+        base_name = df_base["Base"].iloc[0]
+        if base_name in _seen_bases:
+            continue
+        _seen_bases.append(base_name)
+        df_s = (
+            df_base
+            .assign(_p=lambda d: d["Variante"].map(_prio_unidad))
+            .sort_values("_p")
+            .drop(columns="_p")
+        )
+        rubro = df_base["Rubro"].iloc[0] if _has_rubro else ""
+        _all_groups.append((base_name, df_s, 0, rubro))  # gh=0 placeholder
+
+    # Garantizar orden correcto (rubro → base)
+    _seen_r_ord = {}
+    for _, _, _, rb in _all_groups:
+        if rb and rb not in _seen_r_ord:
+            _seen_r_ord[rb] = len(_seen_r_ord)
+    _all_groups.sort(key=lambda g: (_seen_r_ord.get(g[3], 999), g[0]))
+
+    # Paso 2: total real de unidades (suma de 1 base + variantes por grupo)
+    _real_units = sum(1 + len(ds) for _, ds, _, _ in _all_groups)
+    total_units = max(_real_units, 1)
+
+    # Paso 3: ROW_H según número de páginas necesarias
     MAX_ROW_H = 5.5
-    rh_1p = 2 * available_h / total_units  # ROW_H para llenar 1 página exacta
-    rh_2p = 4 * available_h / total_units  # ROW_H para llenar 2 páginas exactas
+    rh_1p = 2 * available_h / total_units
+    rh_2p = 4 * available_h / total_units
 
     if rh_1p >= MAX_ROW_H:
-        # pocos productos: 1 página, filas grandes (pueden no llenar del todo)
-        ROW_H = MAX_ROW_H
-        _n_slots = 2
+        ROW_H = MAX_ROW_H;  _n_slots = 2
     elif rh_2p >= MAX_ROW_H:
-        # cabe en 1 página con filas < MAX_ROW_H, llenar exactamente
-        ROW_H = rh_1p
-        _n_slots = 2
+        ROW_H = rh_1p;      _n_slots = 2
     else:
-        # necesita 2 páginas, llenar exactamente
-        ROW_H = rh_2p
-        _n_slots = 4
+        ROW_H = rh_2p;      _n_slots = 4
 
     BASE_H = ROW_H
-    fsize = ROW_H * 1.9        # encabezados (VAR/STO/etc. y título)
-    fsize_data = fsize + 1.0   # filas de datos (base + variantes)
+    fsize = ROW_H * 1.9
+    fsize_data = fsize + 1.0
+
+    # Paso 4: calcular gh real con ROW_H definitivo
+    _all_groups = [(bn, ds, BASE_H + len(ds) * ROW_H, rb) for bn, ds, _, rb in _all_groups]
 
     # VAR más ancha que el resto del grupo ancho; PROV PRE $ = W_W; angostas = N_W
     # COL_W = VAR_W + 3*W_W + 6*N_W, con W_W = N_W*1.8, VAR_W = N_W*2.4
@@ -148,42 +171,18 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     DATA_Y = HDR_Y + HDR_H
     cur_y = [DATA_Y, DATA_Y, DATA_Y, DATA_Y]  # slots 0-3 (2 páginas × 2 columnas)
 
-    def fmt_t(v):
-        # Negativo = falta comprar (rojo), positivo = sobra (verde)
-        f = float(v) if v is not None else 0.0
-        display = -f
-        if abs(display) < 0.001:
+    def _fmt_num(f):
+        if abs(f) < 0.001:
             return "-"
-        return f"{display:.1f}"
+        i = round(f, 1)
+        return str(int(i)) if i == int(i) else f"{i:.1f}"
+
+    def fmt_t(v):
+        f = float(v) if v is not None else 0.0
+        return _fmt_num(-f)
 
     def fmt(v):
-        f = float(v) if v is not None else 0.0
-        return f"{f:.1f}" if abs(f) > 0.001 else "-"
-
-    # Pre-calcular grupos respetando orden rubro → base del df
-    _has_rubro = "Rubro" in df_raw.columns
-    _all_groups = []
-    _seen_bases = []
-    for _, df_base in df_raw.groupby("Base", sort=False):
-        base_name = df_base["Base"].iloc[0]
-        if base_name in _seen_bases:
-            continue
-        _seen_bases.append(base_name)
-        df_s = (
-            df_base
-            .assign(_p=lambda d: d["Variante"].map(_prio_unidad))
-            .sort_values("_p")
-            .drop(columns="_p")
-        )
-        rubro = df_base["Rubro"].iloc[0] if _has_rubro else ""
-        _all_groups.append((base_name, df_s, BASE_H + len(df_s) * ROW_H, rubro))
-
-    # Garantizar orden correcto (rubro → base) sin importar interleaving en df_raw
-    _seen_r_ord = {}
-    for _, _, _, rb in _all_groups:
-        if rb and rb not in _seen_r_ord:
-            _seen_r_ord[rb] = len(_seen_r_ord)
-    _all_groups.sort(key=lambda g: (_seen_r_ord.get(g[3], 999), g[0]))
+        return _fmt_num(float(v) if v is not None else 0.0)
 
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
     def _do_split(groups):
@@ -214,6 +213,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             ROW_H = new_rh
             BASE_H = ROW_H
             fsize = ROW_H * 1.9
+            fsize_data = fsize + 1.0
             _new_groups = []
             for bn, ds, _, rb in _all_groups:
                 _new_groups.append((bn, ds, BASE_H + len(ds) * ROW_H, rb))
