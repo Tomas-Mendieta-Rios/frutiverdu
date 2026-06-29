@@ -67,24 +67,65 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
     PAGE_W, PAGE_H = (210, 297) if formato == "A4" else (216, 356)  # A4 o Oficio
     MARGIN_H = 5
-    MARGIN_V = 4
+    MARGIN_V = 3
+    MARGIN_V_BOTTOM = 2
     GAP = 2
     COL_W = (PAGE_W - 2 * MARGIN_H - GAP) / 2
 
-    HDR_H = 4.0
+    HDR_H = 3.0
     HDR_SECTION = 3.0
     HDR_Y = MARGIN_V + HDR_SECTION
 
-    # ROW_H dinámico para que todo entre en una página
-    n_bases = df_raw["Base"].nunique()
-    n_variants = len(df_raw)
-    BOTTOM = PAGE_H - MARGIN_V
+    BOTTOM = PAGE_H - MARGIN_V_BOTTOM
     available_h = BOTTOM - HDR_Y - HDR_H
-    n_rubros = df_raw["Rubro"].nunique() if "Rubro" in df_raw.columns else 0
-    total_units = max(n_bases + n_variants + n_rubros, 1)
-    ROW_H = min(5.5, (available_h * 2.0) / total_units)
+
+    # Paso 1: construir grupos para conocer el total real de unidades (bases + variantes)
+    _has_rubro = "Rubro" in df_raw.columns
+    _all_groups = []
+    _seen_bases = []
+    for _, df_base in df_raw.groupby("Base", sort=False):
+        base_name = df_base["Base"].iloc[0]
+        if base_name in _seen_bases:
+            continue
+        _seen_bases.append(base_name)
+        df_s = (
+            df_base
+            .assign(_p=lambda d: d["Variante"].map(_prio_unidad))
+            .sort_values("_p")
+            .drop(columns="_p")
+        )
+        rubro = df_base["Rubro"].iloc[0] if _has_rubro else ""
+        _all_groups.append((base_name, df_s, 0, rubro))  # gh=0 placeholder
+
+    # Garantizar orden correcto (rubro → base)
+    _seen_r_ord = {}
+    for _, _, _, rb in _all_groups:
+        if rb and rb not in _seen_r_ord:
+            _seen_r_ord[rb] = len(_seen_r_ord)
+    _all_groups.sort(key=lambda g: (_seen_r_ord.get(g[3], 999), g[0]))
+
+    # Paso 2: total real de unidades (suma de 1 base + variantes por grupo)
+    _real_units = sum(1 + len(ds) for _, ds, _, _ in _all_groups)
+    total_units = max(_real_units, 1)
+
+    # Paso 3: ROW_H según número de páginas necesarias
+    MAX_ROW_H = 5.5
+    rh_1p = 2 * available_h / total_units
+    rh_2p = 4 * available_h / total_units
+
+    if rh_1p >= MAX_ROW_H:
+        ROW_H = MAX_ROW_H;  _n_slots = 2
+    elif rh_2p >= MAX_ROW_H:
+        ROW_H = rh_1p;      _n_slots = 2
+    else:
+        ROW_H = rh_2p;      _n_slots = 4
+
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
+    fsize_data = fsize + 1.0
+
+    # Paso 4: calcular gh real con ROW_H definitivo
+    _all_groups = [(bn, ds, BASE_H + len(ds) * ROW_H, rb) for bn, ds, _, rb in _all_groups]
 
     # VAR más ancha que el resto del grupo ancho; PROV PRE $ = W_W; angostas = N_W
     # COL_W = VAR_W + 3*W_W + 6*N_W, con W_W = N_W*1.8, VAR_W = N_W*2.4
@@ -128,113 +169,124 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     draw_subheader(MARGIN_H + COL_W + GAP)
 
     DATA_Y = HDR_Y + HDR_H
-    cur_y = [DATA_Y, DATA_Y]
-    cur_col = 0
+    cur_y = [DATA_Y, DATA_Y, DATA_Y, DATA_Y]  # slots 0-3 (2 páginas × 2 columnas)
+
+    def _fmt_num(f):
+        if abs(f) < 0.001:
+            return "-"
+        i = round(f, 1)
+        return str(int(i)) if i == int(i) else f"{i:.1f}"
 
     def fmt_t(v):
-        # Negativo = falta comprar (rojo), positivo = sobra (verde)
         f = float(v) if v is not None else 0.0
-        display = -f
-        if abs(display) < 0.001:
-            return "-"
-        return f"{display:.1f}"
+        return _fmt_num(-f)
 
     def fmt(v):
-        f = float(v) if v is not None else 0.0
-        return f"{f:.1f}" if abs(f) > 0.001 else "-"
+        return _fmt_num(float(v) if v is not None else 0.0)
 
-    # Pre-calcular grupos respetando orden rubro → base del df
-    _has_rubro = "Rubro" in df_raw.columns
-    _all_groups = []
-    _seen_bases = []
-    _prev_rubro_gh = None
-    for _, df_base in df_raw.groupby("Base", sort=False):
-        base_name = df_base["Base"].iloc[0]
-        if base_name in _seen_bases:
-            continue
-        _seen_bases.append(base_name)
-        df_s = (
-            df_base
-            .assign(_p=lambda d: d["Variante"].map(_prio_unidad))
-            .sort_values("_p")
-            .drop(columns="_p")
-        )
-        rubro = df_s["Rubro"].iloc[0] if _has_rubro else ""
-        sep_h = BASE_H if (rubro and rubro != _prev_rubro_gh) else 0
-        _all_groups.append((base_name, df_s, sep_h + BASE_H + len(df_s) * ROW_H, rubro))
-        _prev_rubro_gh = rubro
+    # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
+    def _do_split(groups):
+        total = sum(gh for _, _, gh, _ in groups)
+        if total <= 0:
+            return [len(groups), len(groups), len(groups)]
+        target = total / _n_slots
+        splits, cum, slot = [], 0, 0
+        for i, (_, _, gh, _) in enumerate(groups):
+            cum += gh
+            if cum >= target * (slot + 1) and slot < _n_slots - 1:
+                splits.append(i + 1)
+                slot += 1
+        while len(splits) < 3:
+            splits.append(len(groups))
+        return splits  # [c1, c2, c3]
 
-    _total_h = sum(gh for _, _, gh, _ in _all_groups)
+    _s = _do_split(_all_groups)
+    _c1, _c2, _c3 = _s[0], _s[1], _s[2]
 
-    # Greedy split: llenar col0 hasta el límite
-    _col1_start, _cum = len(_all_groups), 0
-    for _i, (_, _, gh, _) in enumerate(_all_groups):
-        if _cum + gh > available_h:
-            _col1_start = _i
-            break
-        _cum += gh
+    # Escalar ROW_H para que la columna más alta llene exactamente available_h
+    def _col_h(s, e):
+        return sum(gh for _, _, gh, _ in _all_groups[s:e])
+    _max_col_h = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
+    if _max_col_h > 0 and abs(_max_col_h - available_h) > 0.5:
+        new_rh = ROW_H * available_h / _max_col_h
+        if new_rh <= 5.5:  # no escalar si las filas se vuelven demasiado grandes
+            ROW_H = new_rh
+            BASE_H = ROW_H
+            fsize = ROW_H * 1.9
+            fsize_data = fsize + 1.0
+            _new_groups = []
+            for bn, ds, _, rb in _all_groups:
+                _new_groups.append((bn, ds, BASE_H + len(ds) * ROW_H, rb))
+            _all_groups = _new_groups
+            _s = _do_split(_all_groups)
+            _c1, _c2, _c3 = _s[0], _s[1], _s[2]
 
-    # Si col1 se pasa, escalar ROW_H justo lo necesario y recomputar (preservando sep_h)
-    _col1_h = _total_h - _cum
-    if _col1_h > available_h:
-        ROW_H *= available_h / _col1_h
-        BASE_H = ROW_H
-        fsize = ROW_H * 1.9
-        _prev_r2, _new_groups = None, []
-        for bn, ds, _, rb in _all_groups:
-            _sh = BASE_H if (rb and rb != _prev_r2) else 0
-            _new_groups.append((bn, ds, _sh + BASE_H + len(ds) * ROW_H, rb))
-            _prev_r2 = rb
-        _all_groups = _new_groups
-        _total_h = sum(gh for _, _, gh, _ in _all_groups)
-        _col1_start, _cum = len(_all_groups), 0
-        for _i, (_, _, gh, _) in enumerate(_all_groups):
-            if _cum + gh > available_h:
-                _col1_start = _i
-                break
-            _cum += gh
+    _page2_added = False
+    _prev_rubro = None  # global: no repetir separador al cambiar columna/página
 
-    _prev_rubro = None  # global: no repetir separador al cambiar columna
     for _idx, (base_name, df_s, gh, rubro) in enumerate(_all_groups):
-        cur_col = 0 if _idx < _col1_start else 1
+        if _idx < _c1:   slot = 0
+        elif _idx < _c2: slot = 1
+        elif _idx < _c3: slot = 2
+        else:            slot = 3
 
-        x = MARGIN_H + cur_col * (COL_W + GAP)
-        y = cur_y[cur_col]
+        # Agregar página 2 la primera vez que llegamos al slot 2 ó 3 (solo en modo 2 páginas)
+        if slot >= 2 and _n_slots >= 4 and not _page2_added:
+            pdf.add_page()
+            pdf.set_line_width(0.1)
+            pdf.set_font("Helvetica", "", fsize)
+            pdf.set_xy(MARGIN_H, MARGIN_V)
+            pdf.cell(PAGE_W - 2 * MARGIN_H, HDR_SECTION,
+                f"Entrega: {fechas_str}     Stock: {fecha_stock}", align="C")
+            draw_subheader(MARGIN_H)
+            draw_subheader(MARGIN_H + COL_W + GAP)
+            cur_y[2] = DATA_Y
+            cur_y[3] = DATA_Y
+            _page2_added = True
 
-        # Separador de rubro solo cuando cambia (global, no por columna)
-        if rubro and rubro != _prev_rubro:
-            pdf.set_font("Helvetica", "B", fsize)
-            pdf.set_fill_color(255, 255, 255)
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_xy(x, y)
-            pdf.cell(COL_W, BASE_H, rubro, border=1, fill=True, align="C")
-            y += BASE_H
+        x = MARGIN_H + (slot % 2) * (COL_W + GAP)
+        y = cur_y[slot]
+
+        is_first_rubro = rubro and rubro != _prev_rubro
+        if is_first_rubro:
             _prev_rubro = rubro
 
-        # color del nombre base según peor variante
-        acs = df_s["a_comprar"].astype(float)
-        if (acs > 0.001).any():
-            base_rgb = (200, 0, 0)
-            base_label = "COMPRAR"
-        elif (acs < -0.001).any():
-            base_rgb = (0, 140, 0)
-            base_label = "SOBRA"
-        else:
-            base_rgb = (100, 100, 100)
-            base_label = "JUSTO"
+        # Color del nombre base según peor variante
+        acs  = df_s["a_comprar"].astype(float)
+        peds = df_s["pedido"].astype(float)
+        ests = df_s["estimado"].astype(float)
+        stks = df_s["stock"].astype(float)
+        sin_mov = (peds.abs() < 0.001).all() and (ests.abs() < 0.001).all() and (stks.abs() < 0.001).all()
 
-        pdf.set_font("Helvetica", "B", fsize)
+        if (acs > 0.001).any():
+            base_rgb = (185, 0, 0); base_label = "ATENCION"
+        elif (acs < -0.001).any():
+            base_rgb = (0, 115, 0); base_label = "SOBRA"
+        elif sin_mov:
+            base_rgb = (160, 160, 160); base_label = "SIN MOVIMIENTO"
+        else:
+            base_rgb = (100, 100, 100); base_label = "JUSTO"
+
+        pdf.set_font("Helvetica", "B", fsize_data)
         pdf.set_fill_color(230, 230, 230)
         pdf.set_text_color(*base_rgb)
-        LABEL_W = 14.0
+        LABEL_W = 20.0
         pdf.set_xy(x, y)
         pdf.cell(COL_W - LABEL_W, BASE_H, f"  {base_name}", align="L", fill=True, border="LTB")
         pdf.cell(LABEL_W, BASE_H, f"{base_label} ", align="R", fill=True, border="RTB")
         pdf.set_text_color(0, 0, 0)
+
+        # Nombre de categoría superpuesto centrado en la fila base (primera de cada rubro)
+        if is_first_rubro:
+            pdf.set_font("Helvetica", "B", fsize_data * 1.1)
+            pdf.set_text_color(60, 60, 60)
+            pdf.set_xy(x, y)
+            pdf.cell(COL_W - LABEL_W, BASE_H, rubro, align="C", fill=False, border=0)
+            pdf.set_text_color(0, 0, 0)
+
         y += BASE_H
 
-        # variantes
-        pdf.set_font("Helvetica", "", fsize)
+        pdf.set_font("Helvetica", "", fsize_data)
         for _, row in df_s.iterrows():
             ac = float(row.get("a_comprar", 0) or 0)
             pdf.set_text_color(0, 0, 0)
@@ -242,13 +294,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.cell(VAR_W, ROW_H, f"  {row.get('Variante', '')}", border="LTB")
             pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", border="LTB")
             pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", border="LTB")
-            # T: rojo = falta comprar (ac>0), verde = ok/sobra (ac<=0)
-            if ac > 0.001:
-                pdf.set_text_color(200, 0, 0)
-            elif ac < -0.001:
-                pdf.set_text_color(0, 140, 0)
-            else:
-                pdf.set_text_color(150, 150, 150)
+            if ac > 0.001:   pdf.set_text_color(185, 0, 0)
+            elif ac < -0.001: pdf.set_text_color(0, 115, 0)
+            else:             pdf.set_text_color(150, 150, 150)
             pdf.cell(T_W, ROW_H, fmt_t(ac), align="C", border="LTB")
             pdf.set_text_color(0, 0, 0)
             for w in [E_W, PROV_W, C_W, BP_W, BV_W]:
@@ -256,7 +304,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.cell(BT_W, ROW_H, "", border=1)
             y += ROW_H
 
-        cur_y[cur_col] = y
+        cur_y[slot] = y
 
     return bytes(pdf.output())
 
@@ -1312,6 +1360,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
 
 with tab_grupo_config:
     (
+        tab_categorias,
         tab_mapeo,
         tab_packs,
         tab_mixes,
@@ -1322,6 +1371,7 @@ with tab_grupo_config:
         tab_probar,
     ) = st.tabs(
         [
+            "Categorías",
             "Mapeo Wix↔DUX",
             "Packs Wix",
             "Mixes DUX",
@@ -1332,6 +1382,35 @@ with tab_grupo_config:
             "Probar conversión",
         ]
     )
+
+with tab_categorias:
+    st.subheader("Categorías de planilla")
+    _cats = db.cargar_categorias_planilla()
+
+    # ── Tabla existente ──────────────────────────────────────────────────
+    st.markdown("**Categorías actuales** (editá nombre u orden y presioná Guardar)")
+    _cats_edit = st.data_editor(
+        _cats,
+        use_container_width=True,
+        num_rows="dynamic",
+        column_config={
+            "nombre": st.column_config.TextColumn("Nombre", width="large"),
+            "orden": st.column_config.NumberColumn("Orden", min_value=0, step=1, width="small"),
+        },
+        key="cats_editor",
+        hide_index=True,
+    )
+
+    _col_save, _col_reset = st.columns([1, 4])
+    if _col_save.button("💾 Guardar categorías", use_container_width=True):
+        _cats_save = _cats_edit.copy()
+        _cats_save = _cats_save[_cats_save["nombre"].notna() & (_cats_save["nombre"].astype(str).str.strip() != "")]
+        _cats_save["nombre"] = _cats_save["nombre"].astype(str).str.strip().str.upper()
+        _cats_save["orden"] = pd.to_numeric(_cats_save["orden"], errors="coerce").fillna(0).astype(int)
+        _cats_save = _cats_save.sort_values("orden").drop_duplicates("nombre").reset_index(drop=True)
+        db.guardar_categorias_planilla(_cats_save)
+        st.success("Categorías guardadas.")
+        st.rerun()
 
 with tab_editar:
     ts_comp_ph = st.empty()
@@ -1726,6 +1805,7 @@ with tab_comprar:
         )
         _raw["stock"] = _raw["codigo"].map(_stk_map).fillna(0.0).astype(float)
     else:
+        _stk_map = {}
         _raw["stock"] = 0.0
     _raw_view = _raw[
         (_raw["cantidad"].astype(float) > 0)
@@ -1752,7 +1832,7 @@ with tab_comprar:
         _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
         _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
 
-        # Enriquecer con rubro desde catálogo de productos
+        # Enriquecer _raw_view con rubro DUX (solo para UI, no para PDF)
         _ORDEN_RUBROS = ["HOJAS", "VERDURAS", "FRUTAS", "HIERBAS", "HONGOS", "BROTES", "AJIES", "CONDIMENTOS", "OTROS"]
         _cod_rubro = dict(zip(productos["codigo"].astype(str), productos.get("rubro", pd.Series([""] * len(productos))).fillna("").str.upper()))
         _raw_view["Rubro"] = _raw_view["codigo"].astype(str).map(_cod_rubro).fillna("")
@@ -1760,11 +1840,51 @@ with tab_comprar:
         _raw_view["_rubro_idx"] = _raw_view["Rubro"].map(lambda r: _rubro_order.get(r, len(_ORDEN_RUBROS)))
         _raw_view = _raw_view.sort_values(["_rubro_idx", "Base"]).drop(columns="_rubro_idx")
 
+    # PDF: TODOS los productos del catálogo, agrupados por categoria_planilla
+    _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
+    _cod_cat   = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
+    _ped_map   = {}
+    _est_map   = {}
+    if not _raw.empty:
+        _ped_map = dict(zip(_raw["codigo"].astype(str), _raw["cantidad"].astype(float)))
+        _est_map = dict(zip(_raw["codigo"].astype(str), _raw["estimado"].astype(float)))
+    _stk_map_pdf = _stk_map if (stock_actual is not None and not stock_actual.empty) else {}
+
+    _filas_pdf = []
+    for _, _prod in productos.iterrows():
+        _cod  = str(_prod["codigo"])
+        _nom  = str(_prod.get("producto", "") or "").strip()
+        if not _nom or _nom.lower() in ("nan", "none"):
+            continue
+        _cat = _cod_cat.get(_cod, "").strip()
+        if not _cat or _cat.lower() in ("nan", "none"):
+            continue
+        if " - " in _nom:
+            _base, _var = _nom.rsplit(" - ", 1)
+            _base, _var = _base.strip(), _var.strip()
+        else:
+            _base, _var = _nom, ""
+        _ped = _ped_map.get(_cod, 0.0)
+        _est = _est_map.get(_cod, 0.0)
+        _stk = _stk_map_pdf.get(_cod, 0.0)
+        _filas_pdf.append({
+            "codigo": _cod, "producto": _nom,
+            "Base": _base, "Variante": _var,
+            "pedido": _ped, "estimado": _est,
+            "stock": _stk, "a_comprar": _ped + _est - _stk,
+            "Rubro": _cat,
+        })
+
+    _raw_view_pdf = pd.DataFrame(_filas_pdf)
+    _cat_ord = {c: i for i, c in enumerate(_ORDEN_CATS)}
+    _raw_view_pdf["_ci"] = _raw_view_pdf["Rubro"].map(lambda r: _cat_ord.get(r, len(_ORDEN_CATS)))
+    _raw_view_pdf = _raw_view_pdf.sort_values(["_ci", "Base"]).drop(columns="_ci").reset_index(drop=True)
+
     # Botón PDF
-    if not _raw_view.empty:
+    if not _raw_view_pdf.empty:
         try:
-            _pdf_a4     = _generar_pdf_comprar(_raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "A4")
-            _pdf_oficio = _generar_pdf_comprar(_raw_view, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "oficio")
+            _pdf_a4     = _generar_pdf_comprar(_raw_view_pdf, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "A4")
+            _pdf_oficio = _generar_pdf_comprar(_raw_view_pdf, fechas_entrega, fecha_stock_sel, dia_estimado_sel, "oficio")
             _col_a4, _col_of = pdf_btn_ph.columns(2)
             _col_a4.download_button("📄 PDF A4",     data=_pdf_a4,     file_name=f"comprar_a4_{date.today()}.pdf",     mime="application/pdf", use_container_width=True)
             _col_of.download_button("📄 PDF Oficio", data=_pdf_oficio, file_name=f"comprar_oficio_{date.today()}.pdf", mime="application/pdf", use_container_width=True)
@@ -3277,6 +3397,7 @@ with tab_dux_productos:
                                 "unidad_medida": unidad,
                                 "descripcion": "",
                                 "rubro": rubro_nombre,
+                                "categoria_planilla": "",
                             }
                         )
 
@@ -3285,6 +3406,15 @@ with tab_dux_productos:
                         .sort_values("codigo")
                         .reset_index(drop=True)
                     )
+
+                    # Preservar categoria_planilla asignada manualmente
+                    try:
+                        _df_prev = db.cargar_productos()
+                        if not _df_prev.empty and "categoria_planilla" in _df_prev.columns:
+                            _cat_map = dict(zip(_df_prev["codigo"].astype(str), _df_prev["categoria_planilla"].fillna("")))
+                            df_nuevo["categoria_planilla"] = df_nuevo["codigo"].astype(str).map(_cat_map).fillna("")
+                    except Exception:
+                        pass
 
                     db.guardar_productos(df_nuevo)
 
@@ -3298,34 +3428,46 @@ with tab_dux_productos:
         try:
             df_csv_actual = db.cargar_productos()
             if not df_csv_actual.empty:
-                cols_mostrar = [
-                    c
-                    for c in ["codigo", "producto", "unidad_medida", "rubro"]
-                    if c in df_csv_actual.columns
-                ]
                 st.caption(f"{len(df_csv_actual)} productos en Sheets.")
 
-                df_show = df_csv_actual[cols_mostrar].sort_values("producto").reset_index(drop=True)
-                opciones_dxp = df_show["producto"].astype(str).tolist()
-                filtro_prod_dxp = st.multiselect(
-                    "Producto",
-                    options=opciones_dxp,
-                    key="dxp_filtro_prod_sel",
-                )
-                if filtro_prod_dxp:
-                    df_show = df_show[
-                        df_show["producto"].astype(str).isin(filtro_prod_dxp)
-                    ].reset_index(drop=True)
+                _cats_opts = [""] + db.cargar_categorias_planilla()["nombre"].tolist()
 
-                st.dataframe(
+                cols_mostrar = [c for c in ["codigo", "producto", "unidad_medida", "rubro", "categoria_planilla"] if c in df_csv_actual.columns]
+                df_show = df_csv_actual[cols_mostrar].copy().sort_values("producto").reset_index(drop=True)
+                df_show["categoria_planilla"] = df_show["categoria_planilla"].fillna("")
+
+                _dxp_guardar = st.button("💾 Guardar categorías asignadas", key="dxp_guardar_cats")
+
+                _dxp_edited = st.data_editor(
                     df_show,
-                    use_container_width=False,
+                    use_container_width=True,
                     hide_index=True,
+                    key="dxp_editor",
+                    column_config={
+                        "codigo":           st.column_config.TextColumn("Código",    disabled=True),
+                        "producto":         st.column_config.TextColumn("Producto",  disabled=True),
+                        "unidad_medida":    st.column_config.TextColumn("Unidad",    disabled=True),
+                        "rubro":            st.column_config.TextColumn("Rubro DUX", disabled=True),
+                        "categoria_planilla": st.column_config.SelectboxColumn(
+                            "Categoría planilla",
+                            options=_cats_opts,
+                            width="medium",
+                        ),
+                    },
                 )
+
+                if _dxp_guardar:
+                    _df_full = df_csv_actual.copy()
+                    _df_full["categoria_planilla"] = _df_full["categoria_planilla"].fillna("")
+                    _idx_map = dict(zip(_dxp_edited["codigo"].astype(str), _dxp_edited["categoria_planilla"].fillna("")))
+                    _df_full["categoria_planilla"] = _df_full.apply(
+                        lambda r: _idx_map.get(str(r["codigo"]), r["categoria_planilla"]), axis=1
+                    )
+                    db.guardar_productos(_df_full)
+                    st.success("Categorías guardadas.")
+                    st.rerun()
             else:
-                st.info(
-                    "Todavía no hay productos en Sheets. Apretá **Sincronizar**."
-                )
+                st.info("Todavía no hay productos en Sheets. Apretá **Sincronizar**.")
         except Exception as e:
             st.error(msg_error_sheets("leer productos", e))
 
