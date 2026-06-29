@@ -81,8 +81,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN_V_BOTTOM
     available_h = BOTTOM - HDR_Y - HDR_H
-    n_rubros = df_raw["Rubro"].nunique() if "Rubro" in df_raw.columns else 0
-    total_units = max(n_bases + n_variants + n_rubros, 1)
+    total_units = max(n_bases + n_variants, 1)
 
     MAX_ROW_H = 5.5
     rh_1p = 2 * available_h / total_units  # ROW_H para llenar 1 página exacta
@@ -164,7 +163,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _has_rubro = "Rubro" in df_raw.columns
     _all_groups = []
     _seen_bases = []
-    _prev_rubro_gh = None
     for _, df_base in df_raw.groupby("Base", sort=False):
         base_name = df_base["Base"].iloc[0]
         if base_name in _seen_bases:
@@ -176,10 +174,15 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             .sort_values("_p")
             .drop(columns="_p")
         )
-        rubro = df_s["Rubro"].iloc[0] if _has_rubro else ""
-        sep_h = BASE_H if (rubro and rubro != _prev_rubro_gh) else 0
-        _all_groups.append((base_name, df_s, sep_h + BASE_H + len(df_s) * ROW_H, rubro))
-        _prev_rubro_gh = rubro
+        rubro = df_base["Rubro"].iloc[0] if _has_rubro else ""
+        _all_groups.append((base_name, df_s, BASE_H + len(df_s) * ROW_H, rubro))
+
+    # Garantizar orden correcto (rubro → base) sin importar interleaving en df_raw
+    _seen_r_ord = {}
+    for _, _, _, rb in _all_groups:
+        if rb and rb not in _seen_r_ord:
+            _seen_r_ord[rb] = len(_seen_r_ord)
+    _all_groups.sort(key=lambda g: (_seen_r_ord.get(g[3], 999), g[0]))
 
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
     def _do_split(groups):
@@ -243,14 +246,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         x = MARGIN_H + (slot % 2) * (COL_W + GAP)
         y = cur_y[slot]
 
-        # Separador de rubro solo cuando cambia
-        if rubro and rubro != _prev_rubro:
-            pdf.set_font("Helvetica", "B", fsize)
-            pdf.set_fill_color(255, 255, 255)
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_xy(x, y)
-            pdf.cell(COL_W, BASE_H, rubro, border=1, fill=True, align="C")
-            y += BASE_H
+        is_first_rubro = rubro and rubro != _prev_rubro
+        if is_first_rubro:
             _prev_rubro = rubro
 
         # Color del nombre base según peor variante
@@ -270,6 +267,15 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.cell(COL_W - LABEL_W, BASE_H, f"  {base_name}", align="L", fill=True, border="LTB")
         pdf.cell(LABEL_W, BASE_H, f"{base_label} ", align="R", fill=True, border="RTB")
         pdf.set_text_color(0, 0, 0)
+
+        # Nombre de categoría superpuesto centrado en la fila base (primera de cada rubro)
+        if is_first_rubro:
+            pdf.set_font("Helvetica", "I", fsize * 0.8)
+            pdf.set_text_color(80, 80, 80)
+            pdf.set_xy(x, y)
+            pdf.cell(COL_W - LABEL_W, BASE_H, rubro, align="C", fill=False, border=0)
+            pdf.set_text_color(0, 0, 0)
+
         y += BASE_H
 
         pdf.set_font("Helvetica", "", fsize)
