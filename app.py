@@ -68,6 +68,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     PAGE_W, PAGE_H = (210, 297) if formato == "A4" else (216, 356)  # A4 o Oficio
     MARGIN_H = 5
     MARGIN_V = 4
+    MARGIN_V_BOTTOM = 1
     GAP = 2
     COL_W = (PAGE_W - 2 * MARGIN_H - GAP) / 2
 
@@ -78,7 +79,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     # ROW_H dinámico para hasta 2 páginas (4 slots de columna)
     n_bases = df_raw["Base"].nunique()
     n_variants = len(df_raw)
-    BOTTOM = PAGE_H - MARGIN_V
+    BOTTOM = PAGE_H - MARGIN_V_BOTTOM
     available_h = BOTTOM - HDR_Y - HDR_H
     n_rubros = df_raw["Rubro"].nunique() if "Rubro" in df_raw.columns else 0
     total_units = max(n_bases + n_variants + n_rubros, 1)
