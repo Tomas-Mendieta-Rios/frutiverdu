@@ -270,8 +270,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
         # Nombre de categoría superpuesto centrado en la fila base (primera de cada rubro)
         if is_first_rubro:
-            pdf.set_font("Helvetica", "I", fsize * 0.8)
-            pdf.set_text_color(80, 80, 80)
+            pdf.set_font("Helvetica", "B", fsize * 1.1)
+            pdf.set_text_color(60, 60, 60)
             pdf.set_xy(x, y)
             pdf.cell(COL_W - LABEL_W, BASE_H, rubro, align="C", fill=False, border=0)
             pdf.set_text_color(0, 0, 0)
