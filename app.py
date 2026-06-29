@@ -76,14 +76,31 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     HDR_SECTION = 3.0
     HDR_Y = MARGIN_V + HDR_SECTION
 
-    # ROW_H dinámico para hasta 2 páginas (4 slots de columna)
+    # ROW_H dinámico: 1 página (2 slots) o 2 páginas (4 slots), siempre llenando hasta el fondo
     n_bases = df_raw["Base"].nunique()
     n_variants = len(df_raw)
     BOTTOM = PAGE_H - MARGIN_V_BOTTOM
     available_h = BOTTOM - HDR_Y - HDR_H
     n_rubros = df_raw["Rubro"].nunique() if "Rubro" in df_raw.columns else 0
     total_units = max(n_bases + n_variants + n_rubros, 1)
-    ROW_H = min(5.5, (available_h * 4.0) / total_units)
+
+    MAX_ROW_H = 5.5
+    rh_1p = 2 * available_h / total_units  # ROW_H para llenar 1 página exacta
+    rh_2p = 4 * available_h / total_units  # ROW_H para llenar 2 páginas exactas
+
+    if rh_1p >= MAX_ROW_H:
+        # pocos productos: 1 página, filas grandes (pueden no llenar del todo)
+        ROW_H = MAX_ROW_H
+        _n_slots = 2
+    elif rh_2p >= MAX_ROW_H:
+        # cabe en 1 página con filas < MAX_ROW_H, llenar exactamente
+        ROW_H = rh_1p
+        _n_slots = 2
+    else:
+        # necesita 2 páginas, llenar exactamente
+        ROW_H = rh_2p
+        _n_slots = 4
+
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
 
@@ -164,21 +181,21 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _all_groups.append((base_name, df_s, sep_h + BASE_H + len(df_s) * ROW_H, rubro))
         _prev_rubro_gh = rubro
 
-    # Split balanceado en 4 slots (divide el contenido en cuartos iguales)
+    # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
     def _do_split(groups):
         total = sum(gh for _, _, gh, _ in groups)
         if total <= 0:
             return [len(groups), len(groups), len(groups)]
-        target = total / 4
+        target = total / _n_slots
         splits, cum, slot = [], 0, 0
         for i, (_, _, gh, _) in enumerate(groups):
             cum += gh
-            if cum >= target * (slot + 1) and slot < 3:
+            if cum >= target * (slot + 1) and slot < _n_slots - 1:
                 splits.append(i + 1)
                 slot += 1
         while len(splits) < 3:
             splits.append(len(groups))
-        return splits  # [col1_start, col2_start, col3_start]
+        return splits  # [c1, c2, c3]
 
     _s = _do_split(_all_groups)
     _c1, _c2, _c3 = _s[0], _s[1], _s[2]
@@ -209,8 +226,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         elif _idx < _c3: slot = 2
         else:            slot = 3
 
-        # Agregar página 2 la primera vez que llegamos al slot 2 ó 3
-        if slot >= 2 and not _page2_added:
+        # Agregar página 2 la primera vez que llegamos al slot 2 ó 3 (solo en modo 2 páginas)
+        if slot >= 2 and _n_slots >= 4 and not _page2_added:
             pdf.add_page()
             pdf.set_line_width(0.1)
             pdf.set_font("Helvetica", "", fsize)
