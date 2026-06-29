@@ -934,7 +934,7 @@ def cargar_stock_teorico_detalle():
 
 # ---------------- CATEGORIAS PLANILLA ----------------
 
-_CATEGORIAS_DEFAULT = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
+_CATEGORIAS_DEFAULT = ["VERDURAS", "HORTALIZAS", "HIERBAS", "HONGOS", "OTROS"]
 
 
 def cargar_categorias_planilla():
