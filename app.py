@@ -347,8 +347,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
                 f"Entrega: {fechas_str}     Stock: {fecha_stock}", align="C")
             draw_subheader(MARGIN_H)
             draw_subheader(MARGIN_H + COL_W + GAP)
-            cur_y[2] = DATA_Y
-            cur_y[3] = DATA_Y
+            cur_y[2] = HDR_Y + ROW_H   # usa ROW_H ya escalado
+            cur_y[3] = HDR_Y + ROW_H
             _page2_added = True
 
         x = MARGIN_H + (slot % 2) * (COL_W + GAP)
@@ -370,23 +370,22 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         group_bg = (255, 255, 255) if _row_parity[slot] % 2 == 0 else (238, 238, 238)
         _row_parity[slot] += 1
 
-        # PROD tall cell — borde grueso, mismo color de grupo que las variantes
+        # PROD tall cell — borde L/T/B (no right); el rectángulo del grupo cerrará el right)
         _nam_display = _NAM_EXCEPTIONS.get(base_name, base_name)
-        pdf.set_line_width(0.3)
+        pdf.set_line_width(0.1)
         pdf.set_fill_color(*group_bg)
         pdf.set_xy(x, y)
-        pdf.cell(NAM_W, total_group_h, "", fill=True, border=1)
+        pdf.cell(NAM_W, total_group_h, "", fill=True, border="LTB")
         pdf.set_xy(x, y + (total_group_h - ROW_H) / 2)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "B", fsize_data)
         pdf.cell(NAM_W, ROW_H, _nam_display, align="C", fill=False, border=0)
 
-        # Filas de variante (a la derecha de STA+PROD) — borde fino
-        pdf.set_line_width(0.1)
+        # Filas de variante (a la derecha de PROD)
         pdf.set_font("Helvetica", "", fsize_data)
         row_y = y
         for _, row in df_s.iterrows():
-            bg = group_bg   # todas las variantes del grupo mismo color
+            bg = group_bg
             ac = float(row.get("a_comprar", 0) or 0)
             if ac > 0.001:    t_rgb = (185, 0, 0)
             elif ac < -0.001: t_rgb = (0, 115, 0)
@@ -403,6 +402,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             for w in [E_W, PROV_W, C_W, PRI_W, VAC_W, TOT_W]:
                 pdf.cell(w, ROW_H, "", fill=True, border=1)
             row_y += ROW_H
+
+        # Rectángulo grueso alrededor del grupo completo (cubre todas las columnas)
+        pdf.set_line_width(0.3)
+        pdf.set_draw_color(0, 0, 0)
+        pdf.rect(x, y, COL_W, total_group_h)
+        pdf.set_line_width(0.1)
 
         y = row_y
         cur_y[slot] = y
