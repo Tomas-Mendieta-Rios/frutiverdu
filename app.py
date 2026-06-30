@@ -139,12 +139,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _prev_rb_sep = rb
     _all_groups = _new_groups
 
-    # NAM_W: máx 7 caps Helvetica B (tope del diccionario de abreviaciones)
-    NAM_W = fsize_data * 0.353 * 0.60 * 7 + 1.0
-    # Restantes 10 columnas en 13.8 u (sin columna STA)
-    N_W = (COL_W - NAM_W) / 13.8
+    # NAM_W: máx 6 caps Helvetica B (tope del diccionario de abreviaciones)
+    NAM_W = fsize_data * 0.353 * 0.60 * 6 + 1.0
+    # Restantes 10 columnas en 15.0 u (S/P/T más anchas +1 char)
+    N_W = (COL_W - NAM_W) / 15.0
     VRN_W  = N_W * 0.9
-    S_W = P_W = T_W = N_W * 1.5
+    S_W = P_W = T_W = N_W * 1.9
     E_W = C_W = VAC_W = N_W
     PROV_W = PRI_W = TOT_W = N_W * 1.8
 
@@ -177,6 +177,10 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         for lbl, w in [("E", E_W), ("PRO", PROV_W), ("V", C_W), ("$", PRI_W), ("", VAC_W)]:
             pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
         pdf.cell(TOT_W, ROW_H, "$T", border=1, align="C", fill=True)
+        # rectángulo grueso alrededor de todo el encabezado
+        pdf.set_line_width(0.3)
+        pdf.rect(x, HDR_Y, COL_W, ROW_H)
+        pdf.set_line_width(0.1)
 
     draw_subheader(MARGIN_H)
     draw_subheader(MARGIN_H + COL_W + GAP)
@@ -198,93 +202,110 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         return _fmt_num(float(v) if v is not None else 0.0)
 
     _NAM_EXCEPTIONS: dict[str, str] = {
-        # FRUTAS  (máx 7 chars)
-        "ARANDANO":                 "ARANDAN",
-        "FRAMBUESAS":               "FRAMBUE",
-        "FRUTILLAS":                "FRUTILL",
+        # FRUTAS  (máx 6 chars)
+        "ARANDANO":                 "ARANDA",
+        "BONIATO":                  "BONIAT",
+        "CABUTIA":                  "CABUTI",
+        "CIRUELA":                  "CIRUEL",
+        "DAMASCO":                  "DAMASC",
+        "DURAZNO":                  "DURAZN",
+        "FRAMBUESAS":               "FRAMBU",
+        "FRUTILLAS":                "FRUTIL",
         "FRUTOS ROJOS":             "FRUT R",
-        "HIGOS FRESCOS":            "HIGOS F",
+        "HIGOS FRESCOS":            "HIGO F",
         "MANDARINA":                "MANDAR",
         "MANZANA ROJA":             "MANZ R",
-        "MANZANA ROJA PREMIUM":     "MANZ RP",
-        "MANZANA VERDE":            "MAN VDE",
-        "MANZANA VERDE PREMIUM":    "MAN VDP",
-        "MARACUYA":                 "MARACUY",
-        "MEMBRILLO":                "MEMBRIL",
+        "MANZANA ROJA PREMIUM":     "MANZ P",
+        "MANZANA VERDE":            "MAN VD",
+        "MANZANA VERDE PREMIUM":    "MAN VP",
+        "MARACUYA":                 "MARACU",
+        "MEMBRILLO":                "MEMBRL",
         "NARANJA JUGO":             "NAR J",
         "NARANJA OMBLIGO":          "NAR O",
-        "PERA PREMIUM":             "PERA PR",
+        "PERA PREMIUM":             "PERA P",
+        "PLATANO":                  "PLATAN",
         "UVAS BLANCAS":             "UVAS B",
         "UVAS NEGRAS":              "UVAS N",
         "UVAS ROJAS":               "UVAS R",
         # HIERBAS
-        "ALBAHACA":                 "ALBAHAC",
-        "CIBOULETTE":               "CIBOULT",
+        "ALBAHACA":                 "ALBAHA",
+        "CIBOULETTE":               "CIBOUL",
         "CILANTRO":                 "CILANT",
         "FLORES JAMAICA":           "FLOR J",
-        "HIERBA BUENA":             "HIERB B",
-        "HIERBAS AROMATICAS":       "HIERB A",
-        "LEMONGRASS":               "LEMON G",
+        "HIERBA BUENA":             "HERB B",
+        "HIERBAS AROMATICAS":       "HERB A",
+        "LEMONGRASS":               "LEMONG",
         "OREGANO FRESCO":           "OREG F",
         "OREGANO DESHIDRATADO":     "OREG D",
         # HORTALIZAS
-        "CEBOLLA MORADA":           "CEB MOR",
+        "CEBOLLA MORADA":           "CEB MO",
+        "CHAUCHA":                  "CHAUCH",
+        "COLIFLOR":                 "COLIFL",
+        "ESPINACA":                 "ESPINA",
+        "GIRASOL":                  "GIRASO",
         "HINOJO BULBO":             "HINO B",
-        "MANDIOCA":                 "MANDIOC",
+        "MANDIOCA":                 "MANDIO",
         "PAPA CEPILLADA":           "PAPA C",
         "PAPA LAVADA":              "PAPA L",
         "PAPA NEGRA":               "PAPA N",
         "PAPINES ANDINOS":          "PAPINS",
-        "PAK CHOI":                 "PAK CHO",
-        "PEPINILLO":                "PEPILLO",
-        "ZANAHORIA":                "ZANAHOR",
+        "PAK CHOI":                 "PAK CH",
+        "PEPINILLO":                "PEPILL",
+        "RADICHETA":                "RADICH",
+        "REMOLACHA":                "REMOLA",
+        "ZANAHORIA":                "ZANAHO",
+        "ZAPALLO":                  "ZAPALO",
+        "ZAPALLITO":                "ZAPLIT",
+        "ZUCCHINI":                 "ZUCHIN",
         # VERDURAS
-        "AJI HABANERO":             "AJI HAB",
+        "AJI HABANERO":             "AJI HA",
         "ALCAUCILES":               "ALCAU",
         "BERENJENA":                "BERENJ",
-        "ESPARRAGO":                "ESPARRA",
-        "JALAPENO ROJO":            "JALAP R",
-        "JALAPENO VERDE":           "JALAP V",
+        "ESPARRAGO":                "ESPARA",
+        "GIRGOLA":                  "GIRGOL",
+        "JALAPENO ROJO":            "JALP R",
+        "JALAPENO VERDE":           "JALP V",
         "JENGIBRE":                 "JENG",
-        "LECHUGA CAPUCHINA":        "LECH CA",
-        "LECHUGA CRIOLLA":          "LECH CR",
-        "LECHUGA FRANCESA":         "LECH FR",
-        "LECHUGA MANTECOSA":        "LECH MT",
-        "LECHUGA MORADA":           "LECH MO",
+        "LECHUGA CAPUCHINA":        "LCH CA",
+        "LECHUGA CRIOLLA":          "LCH CR",
+        "LECHUGA FRANCESA":         "LCH FR",
+        "LECHUGA MANTECOSA":        "LCH MT",
+        "LECHUGA MORADA":           "LCH MO",
         "MORRON AMARILLO":          "MORR A",
         "MORRON ROJO":              "MORR R",
         "MORRON VERDE":             "MORR V",
-        "PIMIENTA":                 "PIMIENT",
-        "PIMENTON":                 "PIMENTN",
+        "PEREJIL":                  "PEREJI",
+        "PIMIENTA":                 "PIMIEN",
+        "PIMENTON":                 "PIMENT",
         "PORTOBELLO":               "PORTOB",
-        "PROVENZA":                 "PROVENZ",
-        "PROVENZAL":                "PROVENZ",
+        "PROVENZA":                 "PROVEN",
+        "PROVENZAL":                "PROVEN",
         "REPOLLO BLANCO":           "REPO B",
         "REPOLLO ROJO":             "REPO R",
         "TOMATE CHERRY":            "TOM CH",
         "TOMATE PERITA":            "TOM PR",
-        "TOMATE REDONDO":           "TOM RED",
-        "TOMATE RELIQUIA":          "TOM REL",
+        "TOMATE REDONDO":           "TOM RD",
+        "TOMATE RELIQUIA":          "TOM RL",
         "ZAPALLO PLOMO":            "ZAP PL",
         # OTROS
-        "ACEITE DE OLIVA":          "ACE OLV",
-        "ADOBO PARA PIZZA":         "ADOBO P",
-        "AJI EN VINAGRE":           "AJI VIN",
+        "ACEITE DE OLIVA":          "ACE OL",
+        "ADOBO PARA PIZZA":         "ADOBO",
+        "AJI EN VINAGRE":           "AJI VI",
         "ANCO CORTADO":             "ANCO C",
-        "BROTES ALFALFA":           "BROT AL",
-        "BROTES ARVEJA":            "BROT AR",
+        "BROTES ALFALFA":           "BR ALF",
+        "BROTES ARVEJA":            "BR ARV",
         "BROTES RABANITO":          "BROT R",
         "BROTES SOJA":              "BROT S",
         "CHAMPINONES":              "CHAMPI",
-        "CHIMICHURRI DESHIDRATADO": "CHIMI D",
+        "CHIMICHURRI DESHIDRATADO": "CHIM D",
         "CLAVO DE OLOR":            "CLAVO",
         "CONDIMENTO ARROZ":         "COND A",
         "ECHALOTE":                 "ECHAL",
         "FLORES COMESTIBLES":       "FLOR C",
         "NUEZ MOSCADA":             "NUEZ M",
-        "REPOLLITOS DE BRUSELAS":   "REP BRS",
-        "TOMATE SECO":              "TOM SEC",
-        "TOMATE TRITURADO":         "TOM TRI",
+        "REPOLLITOS DE BRUSELAS":   "REP BR",
+        "TOMATE SECO":              "TOM SE",
+        "TOMATE TRITURADO":         "TOM TR",
         "VERDURAS SOPA":            "SOPA",
     }
 
@@ -356,12 +377,14 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
         # Fila separador de rubro (fondo blanco, texto negro)
         if sep_h > 0:
+            pdf.set_line_width(0.3)
             pdf.set_fill_color(255, 255, 255)
             pdf.set_text_color(0, 0, 0)
             pdf.set_font("Helvetica", "B", fsize)
             pdf.set_xy(x, y)
             pdf.cell(COL_W, sep_h, rubro, align="C", fill=True, border=1)
             y += sep_h
+            pdf.set_line_width(0.1)
 
         # STA y PROD como celdas altas (rowspan) que cubren todas las variantes
         total_group_h = len(df_s) * ROW_H
