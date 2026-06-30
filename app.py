@@ -199,24 +199,66 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     def fmt(v):
         return _fmt_num(float(v) if v is not None else 0.0)
 
-    # Abreviaciones manuales — agregar aquí si el resultado automático no convence
     _NAM_EXCEPTIONS: dict[str, str] = {
-        # "NOMBRE COMPLETO EN MAYUS": "ABREV DESEADA",
+        # FRUTAS
+        "HIGOS FRESCOS":            "HIGOS FRESC",
+        "MANZANA ROJA PREMIUM":     "MANZ ROJA P",
+        "MANZANA VERDE":            "MANZ VERDE",
+        "MANZANA VERDE PREMIUM":    "MANZ VDE P",
+        "NARANJA OMBLIGO":          "NAR OMBLIGO",
+        # HIERBAS
+        "FLORES JAMAICA":           "FLOR JAMAIC",
+        "HIERBAS AROMATICAS":       "HIER AROMAT",
+        "OREGANO FRESCO":           "OREG FRESCO",
+        # HORTALIZAS
+        "CEBOLLA MORADA":           "CEB MORADA",
+        "PAPA CEPILLADA":           "PAPA CEPILL",
+        "PAPINES ANDINOS":          "PAPI ANDIN",
+        # OTROS
+        "ACEITE DE OLIVA":          "ACEITE OLIV",
+        "ADOBO PARA PIZZA":         "ADOBO PIZZA",
+        "AJI EN VINAGRE":           "AJI VINAGRE",
+        "BROTES ALFALFA":           "BROT ALFALF",
+        "BROTES ARVEJA":            "BROT ARVEJA",
+        "BROTES RABANITO":          "BROT RABAN",
+        "CHIMICHURRI DESHIDRATADO": "CHIMI DESH",
+        "CLAVO DE OLOR":            "CLAVO OLOR",
+        "CONDIMENTO ARROZ":         "COND ARROZ",
+        "FLORES COMESTIBLES":       "FLOR COMEST",
+        "OREGANO DESHIDRATADO":     "OREG DESH",
+        "REPOLLITOS DE BRUSELAS":   "REPOL BRUS",
+        "TOMATE TRITURADO":         "TOM TRITU",
+        "VERDURAS SOPA":            "VERD SOPA",
+        # VERDURAS
+        "JALAPENO ROJO":            "JALAP ROJO",
+        "JALAPENO VERDE":           "JALAP VERDE",
+        "LECHUGA CAPUCHINA":        "LECH CAPUCH",
+        "LECHUGA CRIOLLA":          "LECH CRIOLL",
+        "LECHUGA FRANCESA":         "LECH FRANC",
+        "LECHUGA MANTECOSA":        "LECH MANT",
+        "LECHUGA MORADA":           "LECH MORADA",
+        "MORRON AMARILLO":          "MORR AMAR",
+        "REPOLLO BLANCO":           "REPO BLANCO",
+        "TOMATE CHERRY":            "TOM CHERRY",
+        "TOMATE PERITA":            "TOM PERITA",
+        "TOMATE REDONDO":           "TOM REDON",
+        "TOMATE RELIQUIA":          "TOM RELIQ",
+        "ZAPALLO PLOMO":            "ZAP PLOMO",
     }
 
-    def _abreviar(nombre: str, max_len: int = 15) -> str:
-        """Primera palabra (máx 7 chars) + iniciales de palabras adicionales."""
+    def _abreviar(nombre: str, max_len: int = 12) -> str:
+        """Primeras 4 letras de la primera palabra + inicial de cada palabra adicional."""
         if len(nombre) <= max_len:
             return nombre
         SKIP = {"DE", "DEL", "LA", "LAS", "LOS", "EL", "Y", "A"}
         words = nombre.split()
         if len(words) == 1:
             return nombre[:max_len - 1] + "."
-        result = words[0][:7]
-        suffix = "".join(w[0] for w in words[1:] if w not in SKIP)
-        if suffix:
-            result += " " + suffix
-        return result if len(result) <= max_len else result[:max_len - 1] + "."
+        result = words[0][:4]
+        initials = " ".join(w[0] for w in words[1:] if w not in SKIP)
+        if initials:
+            result += " " + initials
+        return result
 
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
     def _do_split(groups):
