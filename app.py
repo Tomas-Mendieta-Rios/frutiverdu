@@ -139,8 +139,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _prev_rb_sep = rb
     _all_groups = _new_groups
 
-    # NAM_W: máx 6 caps Helvetica B (tope del diccionario de abreviaciones)
-    NAM_W = fsize_data * 0.353 * 0.60 * 6 + 1.0
+    # NAM_W: máx 7 caps Helvetica B (tope del diccionario de abreviaciones)
+    NAM_W = fsize_data * 0.353 * 0.60 * 7 + 1.0
     # Restantes 10 columnas en 15.0 u (S/P/T más anchas +1 char)
     N_W = (COL_W - NAM_W) / 15.0
     VRN_W  = N_W * 0.9
