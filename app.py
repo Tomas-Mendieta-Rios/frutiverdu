@@ -139,11 +139,10 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _prev_rb_sep = rb
     _all_groups = _new_groups
 
-    # NAM_W: máx 7 caps Helvetica B (nuevo tope del diccionario de abreviaciones)
+    # NAM_W: máx 7 caps Helvetica B (tope del diccionario de abreviaciones)
     NAM_W = fsize_data * 0.353 * 0.60 * 7 + 1.0
-    # Las otras 11 columnas se distribuyen en 14.5 u (VRN/S/P/T más anchas)
-    N_W = (COL_W - NAM_W) / 14.5
-    STA_W  = N_W * 0.7
+    # Restantes 10 columnas en 13.8 u (sin columna STA)
+    N_W = (COL_W - NAM_W) / 13.8
     VRN_W  = N_W * 0.9
     S_W = P_W = T_W = N_W * 1.5
     E_W = C_W = VAC_W = N_W
@@ -171,7 +170,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_fill_color(200, 200, 200)
         pdf.set_text_color(0, 0, 0)
         pdf.set_xy(x, HDR_Y)
-        pdf.cell(STA_W, ROW_H, "", border="LTB", fill=True, align="C")
         pdf.cell(NAM_W, ROW_H, "PROD", border="LTB", fill=True, align="C")
         for lbl, w in [("V", VRN_W), ("S", S_W), ("P", P_W), ("T", T_W)]:
             pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
@@ -356,22 +354,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         x = MARGIN_H + (slot % 2) * (COL_W + GAP)
         y = cur_y[slot]
 
-        # Determinar estado del grupo (peor variante)
-        acs  = df_s["a_comprar"].astype(float)
-        peds = df_s["pedido"].astype(float)
-        ests = df_s["estimado"].astype(float)
-        stks = df_s["stock"].astype(float)
-        sin_mov = (peds.abs() < 0.001).all() and (ests.abs() < 0.001).all() and (stks.abs() < 0.001).all()
-
-        if (acs > 0.001).any():
-            base_rgb = (185, 0, 0);   base_short = "A"
-        elif (acs < -0.001).any():
-            base_rgb = (0, 115, 0);   base_short = "S"
-        elif sin_mov:
-            base_rgb = (160, 160, 160); base_short = "-"
-        else:
-            base_rgb = (100, 100, 100); base_short = "J"
-
         # Fila separador de rubro (fondo blanco, texto negro)
         if sep_h > 0:
             pdf.set_fill_color(255, 255, 255)
@@ -388,22 +370,13 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         group_bg = (255, 255, 255) if _row_parity[slot] % 2 == 0 else (238, 238, 238)
         _row_parity[slot] += 1
 
-        # STA tall cell — borde más grueso para delimitar el grupo
+        # PROD tall cell — borde grueso, mismo color de grupo que las variantes
+        _nam_display = _NAM_EXCEPTIONS.get(base_name, base_name)
         pdf.set_line_width(0.3)
         pdf.set_fill_color(*group_bg)
         pdf.set_xy(x, y)
-        pdf.cell(STA_W, total_group_h, "", fill=True, border=1)
-        pdf.set_xy(x, y + (total_group_h - ROW_H) / 2)
-        pdf.set_text_color(*base_rgb)
-        pdf.set_font("Helvetica", "B", fsize_data)
-        pdf.cell(STA_W, ROW_H, base_short, align="C", fill=False, border=0)
-
-        # PROD tall cell — mismo color de grupo que las variantes
-        _nam_display = _NAM_EXCEPTIONS.get(base_name, base_name)
-        pdf.set_fill_color(*group_bg)
-        pdf.set_xy(x + STA_W, y)
         pdf.cell(NAM_W, total_group_h, "", fill=True, border=1)
-        pdf.set_xy(x + STA_W, y + (total_group_h - ROW_H) / 2)
+        pdf.set_xy(x, y + (total_group_h - ROW_H) / 2)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "B", fsize_data)
         pdf.cell(NAM_W, ROW_H, _nam_display, align="C", fill=False, border=0)
@@ -420,7 +393,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             else:              t_rgb = (150, 150, 150)
 
             pdf.set_fill_color(*bg)
-            pdf.set_xy(x + STA_W + NAM_W, row_y)
+            pdf.set_xy(x + NAM_W, row_y)
             pdf.cell(VRN_W, ROW_H, str(row.get("Variante", ""))[:1], align="C", fill=True, border=1)
             pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", fill=True, border=1)
             pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", fill=True, border=1)
