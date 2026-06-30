@@ -246,20 +246,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         "ZAPALLO PLOMO":            "ZAP PLOMO",
     }
 
-    def _abreviar(nombre: str, max_len: int = 12) -> str:
-        """Primeras 4 letras de la primera palabra + inicial de cada palabra adicional."""
-        if len(nombre) <= max_len:
-            return nombre
-        SKIP = {"DE", "DEL", "LA", "LAS", "LOS", "EL", "Y", "A"}
-        words = nombre.split()
-        if len(words) == 1:
-            return nombre[:max_len - 1] + "."
-        result = words[0][:4]
-        initials = " ".join(w[0] for w in words[1:] if w not in SKIP)
-        if initials:
-            result += " " + initials
-        return result
-
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
     def _do_split(groups):
         total = sum(gh for _, _, gh, *_ in groups)
@@ -338,17 +324,17 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         elif (acs < -0.001).any():
             base_rgb = (0, 115, 0);   base_short = "S"
         elif sin_mov:
-            base_rgb = (160, 160, 160); base_short = "SM"
+            base_rgb = (160, 160, 160); base_short = "(-)"
         else:
             base_rgb = (100, 100, 100); base_short = "J"
 
         # Fila separador de rubro (fondo oscuro, texto blanco)
         if sep_h > 0:
-            pdf.set_fill_color(65, 65, 65)
-            pdf.set_text_color(255, 255, 255)
+            pdf.set_fill_color(255, 255, 255)
+            pdf.set_text_color(0, 0, 0)
             pdf.set_font("Helvetica", "B", fsize_data)
             pdf.set_xy(x, y)
-            pdf.cell(COL_W, sep_h, f"  {rubro}", align="L", fill=True, border=1)
+            pdf.cell(COL_W, sep_h, rubro, align="C", fill=True, border=1)
             y += sep_h
             _row_parity[slot] += 1
 
@@ -365,7 +351,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.cell(STA_W, ROW_H, base_short, align="C", fill=False, border=0)
 
         # PROD tall cell (fondo neutro, nombre centrado verticalmente)
-        _nam_display = _NAM_EXCEPTIONS.get(base_name) or _abreviar(base_name)
+        _nam_display = _NAM_EXCEPTIONS.get(base_name, base_name)
         _fsize_nam = max(fsize_data * 0.82, 5.0)  # fuente más chica solo para el nombre
         pdf.set_fill_color(245, 245, 245)
         pdf.set_xy(x + STA_W, y)
@@ -388,7 +374,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
             pdf.set_fill_color(*bg)
             pdf.set_xy(x + STA_W + NAM_W, row_y)
-            pdf.cell(VRN_W, ROW_H, str(row.get("Variante", "")), align="C", fill=True, border=1)
+            pdf.cell(VRN_W, ROW_H, str(row.get("Variante", ""))[:1], align="C", fill=True, border=1)
             pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", fill=True, border=1)
             pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", fill=True, border=1)
             pdf.set_text_color(*t_rgb)
