@@ -139,15 +139,15 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _prev_rb_sep = rb
     _all_groups = _new_groups
 
-    # STA NAM VRN STO PED T  EST PROV CANT $   VA  $TOT
-    # 0.7 4.0 0.7 1.3 1.3 1.3  1  1.8   1  1.8   1  1.8  → total = 17.7
-    N_W = COL_W / 17.7
-    W_W = N_W * 1.8
-    STA_W = VRN_W = N_W * 0.7          # status y variante (mismo ancho)
-    NAM_W = N_W * 4.0                  # producto
-    S_W = P_W = T_W = N_W * 1.3       # STO PED T (mismo ancho, ~4 chars)
-    E_W = C_W = VAC_W = N_W            # EST CANT VA angostas
-    PROV_W = PRI_W = TOT_W = W_W       # PROV $ $TOT (mismo ancho)
+    # NAM_W: ajustado para que "ECHALOTE" (nombre más ancho, 8 caps Helvetica B) entre justo
+    # Helvetica cap ≈ 60% del tamaño en puntos; 1pt = 0.353mm
+    NAM_W = fsize_data * 0.353 * 0.60 * 8 + 1.0
+    # Las otras 11 columnas se distribuyen en 13.7 unidades proporcionales
+    N_W = (COL_W - NAM_W) / 13.7
+    STA_W = VRN_W = N_W * 0.7
+    S_W = P_W = T_W = N_W * 1.3
+    E_W = C_W = VAC_W = N_W
+    PROV_W = PRI_W = TOT_W = N_W * 1.8
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
 
@@ -173,12 +173,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_xy(x, HDR_Y)
         pdf.cell(STA_W, ROW_H, "", border="LTB", fill=True, align="C")
         pdf.cell(NAM_W, ROW_H, "PROD", border="LTB", fill=True, align="C")
-        for lbl, w in [("V", VRN_W), ("STO", S_W), ("PED", P_W), ("T", T_W)]:
+        for lbl, w in [("V", VRN_W), ("S", S_W), ("P", P_W), ("T", T_W)]:
             pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
         pdf.set_fill_color(240, 240, 220)
-        for lbl, w in [("EST", E_W), ("PROV", PROV_W), ("CANT", C_W), ("$", PRI_W), ("VA", VAC_W)]:
+        for lbl, w in [("E", E_W), ("PRO", PROV_W), ("V", C_W), ("$", PRI_W), ("", VAC_W)]:
             pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
-        pdf.cell(TOT_W, ROW_H, "$TOT", border=1, align="C", fill=True)
+        pdf.cell(TOT_W, ROW_H, "$T", border=1, align="C", fill=True)
 
     draw_subheader(MARGIN_H)
     draw_subheader(MARGIN_H + COL_W + GAP)
@@ -350,7 +350,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         else:
             base_rgb = (100, 100, 100); base_short = "J"
 
-        # Fila separador de rubro (fondo oscuro, texto blanco)
+        # Fila separador de rubro (fondo blanco, texto negro)
         if sep_h > 0:
             pdf.set_fill_color(255, 255, 255)
             pdf.set_text_color(0, 0, 0)
@@ -358,10 +358,13 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.set_xy(x, y)
             pdf.cell(COL_W, sep_h, rubro, align="C", fill=True, border=1)
             y += sep_h
-            _row_parity[slot] += 1
 
         # STA y PROD como celdas altas (rowspan) que cubren todas las variantes
         total_group_h = len(df_s) * ROW_H
+
+        # Color de grupo: todas las variantes del mismo producto comparten un color
+        group_bg = (255, 255, 255) if _row_parity[slot] % 2 == 0 else (238, 238, 238)
+        _row_parity[slot] += 1
 
         # STA tall cell (fondo neutro, texto coloreado centrado)
         pdf.set_fill_color(240, 240, 240)
@@ -386,8 +389,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_font("Helvetica", "", fsize_data)
         row_y = y
         for _, row in df_s.iterrows():
-            bg = (255, 255, 255) if _row_parity[slot] % 2 == 0 else (238, 238, 238)
-            _row_parity[slot] += 1
+            bg = group_bg   # todas las variantes del grupo mismo color
             ac = float(row.get("a_comprar", 0) or 0)
             if ac > 0.001:    t_rgb = (185, 0, 0)
             elif ac < -0.001: t_rgb = (0, 115, 0)
