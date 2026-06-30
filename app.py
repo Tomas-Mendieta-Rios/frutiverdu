@@ -139,16 +139,15 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _prev_rb_sep = rb
     _all_groups = _new_groups
 
-    # STA NAM VRN STO PED T EST PROV CANT $ VAC $TOT
-    # 0.6 3.8 0.6 1.1 1.1  1   1  1.8   1  1.8  1  1.8  → total = 16.6
-    N_W = COL_W / 16.6
+    # STA NAM VRN STO PED T  EST PROV CANT $   VA  $TOT
+    # 0.7 4.0 0.7 1.3 1.3 1.3  1  1.8   1  1.8   1  1.8  → total = 17.7
+    N_W = COL_W / 17.7
     W_W = N_W * 1.8
-    STA_W = N_W * 0.6    # status
-    NAM_W = N_W * 3.8    # product name
-    VRN_W = N_W * 0.6    # variant letter
-    S_W = P_W = N_W * 1.1                         # STO PED un pelín más anchas
-    T_W = E_W = C_W = VAC_W = N_W                 # T EST CANT VAC angostas
-    PROV_W = PRI_W = TOT_W = W_W                  # anchas: PROV $ $TOT
+    STA_W = VRN_W = N_W * 0.7          # status y variante (mismo ancho)
+    NAM_W = N_W * 4.0                  # producto
+    S_W = P_W = T_W = N_W * 1.3       # STO PED T (mismo ancho, ~4 chars)
+    E_W = C_W = VAC_W = N_W            # EST CANT VA angostas
+    PROV_W = PRI_W = TOT_W = W_W       # PROV $ $TOT (mismo ancho)
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
 
@@ -168,23 +167,23 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
     # ── Sub-cabeceras ────────────────────────────────────────────────────
     def draw_subheader(x):
-        pdf.set_font("Helvetica", "B", fsize * 0.8)
+        pdf.set_font("Helvetica", "B", fsize_data)
         pdf.set_fill_color(200, 200, 200)
         pdf.set_text_color(0, 0, 0)
         pdf.set_xy(x, HDR_Y)
-        pdf.cell(STA_W, HDR_H, "", border="LTB", fill=True, align="C")
-        pdf.cell(NAM_W, HDR_H, "PROD", border="LTB", fill=True)
+        pdf.cell(STA_W, ROW_H, "", border="LTB", fill=True, align="C")
+        pdf.cell(NAM_W, ROW_H, "PROD", border="LTB", fill=True, align="C")
         for lbl, w in [("V", VRN_W), ("STO", S_W), ("PED", P_W), ("T", T_W)]:
-            pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
+            pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
         pdf.set_fill_color(240, 240, 220)
         for lbl, w in [("EST", E_W), ("PROV", PROV_W), ("CANT", C_W), ("$", PRI_W), ("VA", VAC_W)]:
-            pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
-        pdf.cell(TOT_W, HDR_H, "$TOT", border=1, align="C", fill=True)
+            pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
+        pdf.cell(TOT_W, ROW_H, "$TOT", border=1, align="C", fill=True)
 
     draw_subheader(MARGIN_H)
     draw_subheader(MARGIN_H + COL_W + GAP)
 
-    DATA_Y = HDR_Y + HDR_H
+    DATA_Y = HDR_Y + ROW_H
     cur_y = [DATA_Y, DATA_Y, DATA_Y, DATA_Y]  # slots 0-3 (2 páginas × 2 columnas)
 
     def _fmt_num(f):
