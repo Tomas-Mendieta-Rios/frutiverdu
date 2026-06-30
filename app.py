@@ -348,8 +348,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     def _col_h(s, e):
         return sum(gh for _, _, gh, *_ in _all_groups[s:e])
     _max_col_h = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
-    if _max_col_h > 0 and abs(_max_col_h - available_h) > 0.5:
-        new_rh = ROW_H * available_h / _max_col_h
+    _data_h = BOTTOM - DATA_Y   # espacio real: cabecera pág1 ya dibujada con ROW_H actual
+    if _max_col_h > 0 and abs(_max_col_h - _data_h) > 0.5:
+        new_rh = ROW_H * _data_h / _max_col_h
         if new_rh <= 5.5:  # no escalar si las filas se vuelven demasiado grandes
             ROW_H = new_rh
             BASE_H = ROW_H
