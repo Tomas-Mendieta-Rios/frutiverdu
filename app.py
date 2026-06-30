@@ -111,7 +111,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         if rb and rb != _prev_rb_cnt:
             _n_seps += 1
         _prev_rb_cnt = rb
-    _real_units = sum(1 + len(ds) for _, ds, _, _ in _all_groups) + _n_seps
+    _real_units = sum(len(ds) for _, ds, _, _ in _all_groups) + _n_seps
     total_units = max(_real_units, 1)
 
     # Paso 3: ROW_H según número de páginas necesarias
@@ -135,7 +135,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _new_groups = []
     for bn, ds, _, rb in _all_groups:
         sep = ROW_H if (rb and rb != _prev_rb_sep) else 0.0
-        _new_groups.append((bn, ds, sep + BASE_H + len(ds) * ROW_H, rb, sep))
+        _new_groups.append((bn, ds, sep + len(ds) * ROW_H, rb, sep))
         _prev_rb_sep = rb
     _all_groups = _new_groups
 
@@ -233,7 +233,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             _new_groups = []
             for bn, ds, _, rb, *_ in _all_groups:
                 sep = ROW_H if (rb and rb != _prev_rb_sep) else 0.0
-                _new_groups.append((bn, ds, sep + BASE_H + len(ds) * ROW_H, rb, sep))
+                _new_groups.append((bn, ds, sep + len(ds) * ROW_H, rb, sep))
                 _prev_rb_sep = rb
             _all_groups = _new_groups
             _s = _do_split(_all_groups)
@@ -291,28 +291,30 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             y += sep_h
             _row_parity[slot] += 1
 
-        # Fila base (nombre del producto + sumas STO/PED/T)
-        bg = (255, 255, 255) if _row_parity[slot] % 2 == 0 else (238, 238, 238)
-        _row_parity[slot] += 1
-        pdf.set_fill_color(*bg)
+        # STA y PROD como celdas altas (rowspan) que cubren todas las variantes
+        total_group_h = len(df_s) * ROW_H
+
+        # STA tall cell (fondo neutro, texto coloreado centrado)
+        pdf.set_fill_color(240, 240, 240)
         pdf.set_xy(x, y)
+        pdf.cell(STA_W, total_group_h, "", fill=True, border=1)
+        pdf.set_xy(x, y + (total_group_h - ROW_H) / 2)
         pdf.set_text_color(*base_rgb)
         pdf.set_font("Helvetica", "B", fsize_data)
-        pdf.cell(STA_W, BASE_H, base_short, align="C", fill=True, border=1)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(NAM_W, BASE_H, f" {base_name}", align="L", fill=True, border=1)
-        pdf.cell(VRN_W, BASE_H, "", align="C", fill=True, border=1)
-        pdf.cell(S_W, BASE_H, fmt(stks.sum()), align="C", fill=True, border=1)
-        pdf.cell(P_W, BASE_H, fmt(peds.sum()), align="C", fill=True, border=1)
-        pdf.set_text_color(*base_rgb)
-        pdf.cell(T_W, BASE_H, fmt_t(acs.sum()), align="C", fill=True, border=1)
-        pdf.set_text_color(0, 0, 0)
-        for w in [E_W, PROV_W, C_W, PRI_W, VAC_W, TOT_W]:
-            pdf.cell(w, BASE_H, "", fill=True, border=1)
-        y += BASE_H
+        pdf.cell(STA_W, ROW_H, base_short, align="C", fill=False, border=0)
 
-        # Filas de variante
+        # PROD tall cell (fondo neutro, nombre centrado verticalmente)
+        pdf.set_fill_color(245, 245, 245)
+        pdf.set_xy(x + STA_W, y)
+        pdf.cell(NAM_W, total_group_h, "", fill=True, border=1)
+        pdf.set_xy(x + STA_W, y + (total_group_h - ROW_H) / 2)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Helvetica", "B", fsize_data)
+        pdf.cell(NAM_W, ROW_H, f" {base_name}", align="L", fill=False, border=0)
+
+        # Filas de variante (a la derecha de STA+PROD)
         pdf.set_font("Helvetica", "", fsize_data)
+        row_y = y
         for _, row in df_s.iterrows():
             bg = (255, 255, 255) if _row_parity[slot] % 2 == 0 else (238, 238, 238)
             _row_parity[slot] += 1
@@ -322,13 +324,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             else:              t_rgb = (150, 150, 150)
 
             pdf.set_fill_color(*bg)
-            pdf.set_xy(x, y)
-            pdf.set_text_color(*base_rgb)
-            pdf.set_font("Helvetica", "B", fsize_data)
-            pdf.cell(STA_W, ROW_H, base_short, align="C", fill=True, border=1)
-            pdf.set_font("Helvetica", "", fsize_data)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(NAM_W, ROW_H, "", fill=True, border=1)
+            pdf.set_xy(x + STA_W + NAM_W, row_y)
             pdf.cell(VRN_W, ROW_H, str(row.get("Variante", "")), align="C", fill=True, border=1)
             pdf.cell(S_W, ROW_H, fmt(row.get("stock", 0)), align="C", fill=True, border=1)
             pdf.cell(P_W, ROW_H, fmt(row.get("pedido", 0)), align="C", fill=True, border=1)
@@ -337,8 +333,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
             pdf.set_text_color(0, 0, 0)
             for w in [E_W, PROV_W, C_W, PRI_W, VAC_W, TOT_W]:
                 pdf.cell(w, ROW_H, "", fill=True, border=1)
-            y += ROW_H
+            row_y += ROW_H
 
+        y = row_y
         cur_y[slot] = y
 
     return bytes(pdf.output())
