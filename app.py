@@ -199,6 +199,25 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     def fmt(v):
         return _fmt_num(float(v) if v is not None else 0.0)
 
+    # Abreviaciones manuales — agregar aquí si el resultado automático no convence
+    _NAM_EXCEPTIONS: dict[str, str] = {
+        # "NOMBRE COMPLETO EN MAYUS": "ABREV DESEADA",
+    }
+
+    def _abreviar(nombre: str, max_len: int = 15) -> str:
+        """Primera palabra (máx 7 chars) + iniciales de palabras adicionales."""
+        if len(nombre) <= max_len:
+            return nombre
+        SKIP = {"DE", "DEL", "LA", "LAS", "LOS", "EL", "Y", "A"}
+        words = nombre.split()
+        if len(words) == 1:
+            return nombre[:max_len - 1] + "."
+        result = words[0][:7]
+        suffix = "".join(w[0] for w in words[1:] if w not in SKIP)
+        if suffix:
+            result += " " + suffix
+        return result if len(result) <= max_len else result[:max_len - 1] + "."
+
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
     def _do_split(groups):
         total = sum(gh for _, _, gh, *_ in groups)
@@ -304,7 +323,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.cell(STA_W, ROW_H, base_short, align="C", fill=False, border=0)
 
         # PROD tall cell (fondo neutro, nombre centrado verticalmente)
-        _nam_display = base_name if len(base_name) <= 18 else base_name[:17].rstrip() + "."
+        _nam_display = _NAM_EXCEPTIONS.get(base_name) or _abreviar(base_name)
         _fsize_nam = max(fsize_data * 0.82, 5.0)  # fuente más chica solo para el nombre
         pdf.set_fill_color(245, 245, 245)
         pdf.set_xy(x + STA_W, y)
