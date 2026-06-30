@@ -67,8 +67,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
     PAGE_W, PAGE_H = (210, 297) if formato == "A4" else (216, 356)  # A4 o Oficio
     MARGIN_H = 5
-    MARGIN_V = 3
-    MARGIN_V_BOTTOM = 2
+    MARGIN_V = 5
+    MARGIN_V_BOTTOM = 4
     GAP = 2
     COL_W = (PAGE_W - 2 * MARGIN_H - GAP) / 2
 
@@ -139,13 +139,13 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _prev_rb_sep = rb
     _all_groups = _new_groups
 
-    # NAM_W: ajustado para que "ECHALOTE" (nombre más ancho, 8 caps Helvetica B) entre justo
-    # Helvetica cap ≈ 60% del tamaño en puntos; 1pt = 0.353mm
-    NAM_W = fsize_data * 0.353 * 0.60 * 8 + 1.0
-    # Las otras 11 columnas se distribuyen en 13.7 unidades proporcionales
-    N_W = (COL_W - NAM_W) / 13.7
-    STA_W = VRN_W = N_W * 0.7
-    S_W = P_W = T_W = N_W * 1.3
+    # NAM_W: máx 7 caps Helvetica B (nuevo tope del diccionario de abreviaciones)
+    NAM_W = fsize_data * 0.353 * 0.60 * 7 + 1.0
+    # Las otras 11 columnas se distribuyen en 14.5 u (VRN/S/P/T más anchas)
+    N_W = (COL_W - NAM_W) / 14.5
+    STA_W  = N_W * 0.7
+    VRN_W  = N_W * 0.9
+    S_W = P_W = T_W = N_W * 1.5
     E_W = C_W = VAC_W = N_W
     PROV_W = PRI_W = TOT_W = N_W * 1.8
 
@@ -188,7 +188,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
     def _fmt_num(f):
         if abs(f) < 0.001:
-            return "-"
+            return ""
         i = round(f, 1)
         return str(int(i)) if i == int(i) else f"{i:.1f}"
 
@@ -200,49 +200,46 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         return _fmt_num(float(v) if v is not None else 0.0)
 
     _NAM_EXCEPTIONS: dict[str, str] = {
-        # FRUTAS
-        "FRUTOS ROJOS":             "FRUTOS R",
+        # FRUTAS  (máx 7 chars)
+        "ARANDANO":                 "ARANDAN",
+        "FRAMBUESAS":               "FRAMBUE",
+        "FRUTILLAS":                "FRUTILL",
+        "FRUTOS ROJOS":             "FRUT R",
         "HIGOS FRESCOS":            "HIGOS F",
+        "MANDARINA":                "MANDAR",
         "MANZANA ROJA":             "MANZ R",
-        "MANZANA ROJA PREMIUM":     "MANZ R P",
-        "MANZANA VERDE":            "MANZ VERDE",
-        "MANZANA VERDE PREMIUM":    "MANZ VDE P",
+        "MANZANA ROJA PREMIUM":     "MANZ RP",
+        "MANZANA VERDE":            "MAN VDE",
+        "MANZANA VERDE PREMIUM":    "MAN VDP",
+        "MARACUYA":                 "MARACUY",
+        "MEMBRILLO":                "MEMBRIL",
         "NARANJA JUGO":             "NAR J",
         "NARANJA OMBLIGO":          "NAR O",
+        "PERA PREMIUM":             "PERA PR",
         "UVAS BLANCAS":             "UVAS B",
+        "UVAS NEGRAS":              "UVAS N",
+        "UVAS ROJAS":               "UVAS R",
         # HIERBAS
-        "FLORES JAMAICA":           "FLOR JAMAIC",
-        "HIERBA BUENA":             "HIERBA B",
-        "HIERBAS AROMATICAS":       "HIERBA A",
+        "ALBAHACA":                 "ALBAHAC",
+        "CIBOULETTE":               "CIBOULT",
+        "CILANTRO":                 "CILANT",
+        "FLORES JAMAICA":           "FLOR J",
+        "HIERBA BUENA":             "HIERB B",
+        "HIERBAS AROMATICAS":       "HIERB A",
         "LEMONGRASS":               "LEMON G",
         "OREGANO FRESCO":           "OREG F",
         "OREGANO DESHIDRATADO":     "OREG D",
         # HORTALIZAS
-        "CEBOLLA MORADA":           "CEB MORADA",
-        "HINOJO BULBO":             "HINO BULBO",
+        "CEBOLLA MORADA":           "CEB MOR",
+        "HINOJO BULBO":             "HINO B",
+        "MANDIOCA":                 "MANDIOC",
         "PAPA CEPILLADA":           "PAPA C",
         "PAPA LAVADA":              "PAPA L",
         "PAPA NEGRA":               "PAPA N",
-        "PAPINES ANDINOS":          "PAPI ANDIN",
-        # OTROS
-        "ACEITE DE OLIVA":          "ACEITE OLIV",
-        "ADOBO PARA PIZZA":         "ADOBO PIZZA",
-        "AJI EN VINAGRE":           "AJI VINAGRE",
-        "ANCO CORTADO":             "ANCO C",
-        "BROTES ALFALFA":           "BROT ALFALF",
-        "BROTES ARVEJA":            "BROT ARVEJA",
-        "BROTES RABANITO":          "BROT RABAN",
-        "BROTES SOJA":              "BROT SOJA",
-        "CHAMPINONES":              "CHAMPI",
-        "CHIMICHURRI DESHIDRATADO": "CHIMI DESH",
-        "CLAVO DE OLOR":            "CLAVO OLOR",
-        "CONDIMENTO ARROZ":         "COND ARROZ",
-        "FLORES COMESTIBLES":       "FLORES C",
-        "NUEZ MOSCADA":             "NUEZ M",
-        "REPOLLITOS DE BRUSELAS":   "REPOL BRUS",
-        "TOMATE SECO":              "TOM SECO",
-        "TOMATE TRITURADO":         "TOM TRITU",
-        "VERDURAS SOPA":            "SOPA",
+        "PAPINES ANDINOS":          "PAPINS",
+        "PAK CHOI":                 "PAK CHO",
+        "PEPINILLO":                "PEPILLO",
+        "ZANAHORIA":                "ZANAHOR",
         # VERDURAS
         "AJI HABANERO":             "AJI HAB",
         "ALCAUCILES":               "ALCAU",
@@ -251,21 +248,46 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         "JALAPENO ROJO":            "JALAP R",
         "JALAPENO VERDE":           "JALAP V",
         "JENGIBRE":                 "JENG",
-        "LECHUGA CAPUCHINA":        "LECH CAPU",
-        "LECHUGA CRIOLLA":          "LECH CRIOLL",
-        "LECHUGA FRANCESA":         "LECH FRA",
-        "LECHUGA MANTECOSA":        "LECH MANT",
-        "LECHUGA MORADA":           "LECH MOR",
+        "LECHUGA CAPUCHINA":        "LECH CA",
+        "LECHUGA CRIOLLA":          "LECH CR",
+        "LECHUGA FRANCESA":         "LECH FR",
+        "LECHUGA MANTECOSA":        "LECH MT",
+        "LECHUGA MORADA":           "LECH MO",
         "MORRON AMARILLO":          "MORR A",
         "MORRON ROJO":              "MORR R",
         "MORRON VERDE":             "MORR V",
+        "PIMIENTA":                 "PIMIENT",
+        "PIMENTON":                 "PIMENTN",
+        "PORTOBELLO":               "PORTOB",
+        "PROVENZA":                 "PROVENZ",
+        "PROVENZAL":                "PROVENZ",
         "REPOLLO BLANCO":           "REPO B",
         "REPOLLO ROJO":             "REPO R",
-        "TOMATE CHERRY":            "TOM CHERRY",
-        "TOMATE PERITA":            "TOM PERITA",
-        "TOMATE REDONDO":           "TOM REDON",
-        "TOMATE RELIQUIA":          "TOM RELIQ",
-        "ZAPALLO PLOMO":            "ZAP PLOMO",
+        "TOMATE CHERRY":            "TOM CH",
+        "TOMATE PERITA":            "TOM PR",
+        "TOMATE REDONDO":           "TOM RED",
+        "TOMATE RELIQUIA":          "TOM REL",
+        "ZAPALLO PLOMO":            "ZAP PL",
+        # OTROS
+        "ACEITE DE OLIVA":          "ACE OLV",
+        "ADOBO PARA PIZZA":         "ADOBO P",
+        "AJI EN VINAGRE":           "AJI VIN",
+        "ANCO CORTADO":             "ANCO C",
+        "BROTES ALFALFA":           "BROT AL",
+        "BROTES ARVEJA":            "BROT AR",
+        "BROTES RABANITO":          "BROT R",
+        "BROTES SOJA":              "BROT S",
+        "CHAMPINONES":              "CHAMPI",
+        "CHIMICHURRI DESHIDRATADO": "CHIMI D",
+        "CLAVO DE OLOR":            "CLAVO",
+        "CONDIMENTO ARROZ":         "COND A",
+        "ECHALOTE":                 "ECHAL",
+        "FLORES COMESTIBLES":       "FLOR C",
+        "NUEZ MOSCADA":             "NUEZ M",
+        "REPOLLITOS DE BRUSELAS":   "REP BRS",
+        "TOMATE SECO":              "TOM SEC",
+        "TOMATE TRITURADO":         "TOM TRI",
+        "VERDURAS SOPA":            "SOPA",
     }
 
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
@@ -366,8 +388,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         group_bg = (255, 255, 255) if _row_parity[slot] % 2 == 0 else (238, 238, 238)
         _row_parity[slot] += 1
 
-        # STA tall cell (fondo neutro, texto coloreado centrado)
-        pdf.set_fill_color(240, 240, 240)
+        # STA tall cell — borde más grueso para delimitar el grupo
+        pdf.set_line_width(0.3)
+        pdf.set_fill_color(*group_bg)
         pdf.set_xy(x, y)
         pdf.cell(STA_W, total_group_h, "", fill=True, border=1)
         pdf.set_xy(x, y + (total_group_h - ROW_H) / 2)
@@ -375,9 +398,9 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_font("Helvetica", "B", fsize_data)
         pdf.cell(STA_W, ROW_H, base_short, align="C", fill=False, border=0)
 
-        # PROD tall cell (fondo neutro, nombre centrado verticalmente)
+        # PROD tall cell — mismo color de grupo que las variantes
         _nam_display = _NAM_EXCEPTIONS.get(base_name, base_name)
-        pdf.set_fill_color(245, 245, 245)
+        pdf.set_fill_color(*group_bg)
         pdf.set_xy(x + STA_W, y)
         pdf.cell(NAM_W, total_group_h, "", fill=True, border=1)
         pdf.set_xy(x + STA_W, y + (total_group_h - ROW_H) / 2)
@@ -385,7 +408,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.set_font("Helvetica", "B", fsize_data)
         pdf.cell(NAM_W, ROW_H, _nam_display, align="C", fill=False, border=0)
 
-        # Filas de variante (a la derecha de STA+PROD)
+        # Filas de variante (a la derecha de STA+PROD) — borde fino
+        pdf.set_line_width(0.1)
         pdf.set_font("Helvetica", "", fsize_data)
         row_y = y
         for _, row in df_s.iterrows():
