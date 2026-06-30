@@ -140,12 +140,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _all_groups = _new_groups
 
     # STA NAM VRN STO PED T EST PROV CANT $ VAC $TOT
-    # 0.5 2.4 0.7  1   1  1   1  1.8   1  1.8  1  1.8  → total = 15.0
-    N_W = COL_W / 15.0
+    # 0.5 4.0 0.5  1   1  1   1  1.8   1  1.8  1  1.8  → total = 16.4
+    N_W = COL_W / 16.4
     W_W = N_W * 1.8
     STA_W = N_W * 0.5    # status (J/A/S/SM)
-    NAM_W = N_W * 2.4    # product name
-    VRN_W = N_W * 0.7    # variant letter
+    NAM_W = N_W * 4.0    # product name (más ancha)
+    VRN_W = N_W * 0.5    # variant letter (angosta, 1-2 chars)
     S_W = P_W = T_W = E_W = C_W = VAC_W = N_W   # angostas: STO PED T EST CANT VAC
     PROV_W = PRI_W = TOT_W = W_W                  # anchas: PROV $ $TOT
 
@@ -304,13 +304,15 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.cell(STA_W, ROW_H, base_short, align="C", fill=False, border=0)
 
         # PROD tall cell (fondo neutro, nombre centrado verticalmente)
+        _nam_display = base_name if len(base_name) <= 18 else base_name[:17].rstrip() + "."
+        _fsize_nam = max(fsize_data * 0.82, 5.0)  # fuente más chica solo para el nombre
         pdf.set_fill_color(245, 245, 245)
         pdf.set_xy(x + STA_W, y)
         pdf.cell(NAM_W, total_group_h, "", fill=True, border=1)
         pdf.set_xy(x + STA_W, y + (total_group_h - ROW_H) / 2)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Helvetica", "B", fsize_data)
-        pdf.cell(NAM_W, ROW_H, f" {base_name}", align="L", fill=False, border=0)
+        pdf.set_font("Helvetica", "B", _fsize_nam)
+        pdf.cell(NAM_W, ROW_H, f" {_nam_display}", align="L", fill=False, border=0)
 
         # Filas de variante (a la derecha de STA+PROD)
         pdf.set_font("Helvetica", "", fsize_data)
