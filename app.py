@@ -237,6 +237,10 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         "LEMONGRASS":               "LEMONG",
         "OREGANO FRESCO":           "OREG F",
         "OREGANO DESHIDRATADO":     "OREG D",
+        "AZAFRAN":                  "AZAFR",
+        "CURCUMA":                  "CURCUM",
+        "PERIFOLIO":                "PERIF",
+        "TOMILLO":                  "TOMIL",
         # HORTALIZAS
         "CEBOLLA MORADA":           "CEB MO",
         "CHAUCHA":                  "CHAUCH",
@@ -257,6 +261,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         "ZAPALLO":                  "ZAPALO",
         "ZAPALLITO":                "ZAPLIT",
         "ZUCCHINI":                 "ZUCHIN",
+        "ARVEJAS":                  "ARVEJA",
+        "BROCOLI":                  "BROCOL",
+        "CEBOLLA":                  "CEBOLL",
+        "CEBOLLON":                 "CEBON",
+        "RABANITO":                 "RABAN",
+        "RADICHIO":                 "RACHIO",
         # VERDURAS
         "AJI HABANERO":             "AJI HA",
         "ALCAUCILES":               "ALCAU",
@@ -287,6 +297,11 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         "TOMATE REDONDO":           "TOM RD",
         "TOMATE RELIQUIA":          "TOM RL",
         "ZAPALLO PLOMO":            "ZAP PL",
+        "AJI PANKA":               "AJI PK",
+        "AJI PICANTE":             "AJI PC",
+        "ALCAPARRAS":              "ALCAP",
+        "ENDIVIAS":                "ENDIV",
+        "ENSALADA":                "ENSALA",
         # OTROS
         "ACEITE DE OLIVA":          "ACE OL",
         "ADOBO PARA PIZZA":         "ADOBO",
@@ -307,6 +322,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         "TOMATE SECO":              "TOM SE",
         "TOMATE TRITURADO":         "TOM TR",
         "VERDURAS SOPA":            "SOPA",
+        "AJINOMOTO":               "AJINOM",
     }
 
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
