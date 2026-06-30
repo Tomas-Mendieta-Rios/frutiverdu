@@ -140,13 +140,14 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     _all_groups = _new_groups
 
     # STA NAM VRN STO PED T EST PROV CANT $ VAC $TOT
-    # 0.5 4.0 0.5  1   1  1   1  1.8   1  1.8  1  1.8  → total = 16.4
-    N_W = COL_W / 16.4
+    # 0.6 3.8 0.6 1.1 1.1  1   1  1.8   1  1.8  1  1.8  → total = 16.6
+    N_W = COL_W / 16.6
     W_W = N_W * 1.8
-    STA_W = N_W * 0.5    # status (J/A/S/SM)
-    NAM_W = N_W * 4.0    # product name (más ancha)
-    VRN_W = N_W * 0.5    # variant letter (angosta, 1-2 chars)
-    S_W = P_W = T_W = E_W = C_W = VAC_W = N_W   # angostas: STO PED T EST CANT VAC
+    STA_W = N_W * 0.6    # status
+    NAM_W = N_W * 3.8    # product name
+    VRN_W = N_W * 0.6    # variant letter
+    S_W = P_W = N_W * 1.1                         # STO PED un pelín más anchas
+    T_W = E_W = C_W = VAC_W = N_W                 # T EST CANT VAC angostas
     PROV_W = PRI_W = TOT_W = W_W                  # anchas: PROV $ $TOT
 
     fechas_str = ", ".join(str(f) for f in fechas_entrega) if fechas_entrega else "-"
@@ -176,7 +177,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         for lbl, w in [("V", VRN_W), ("STO", S_W), ("PED", P_W), ("T", T_W)]:
             pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
         pdf.set_fill_color(240, 240, 220)
-        for lbl, w in [("EST", E_W), ("PROV", PROV_W), ("CANT", C_W), ("$", PRI_W), ("VAC", VAC_W)]:
+        for lbl, w in [("EST", E_W), ("PROV", PROV_W), ("CANT", C_W), ("$", PRI_W), ("VA", VAC_W)]:
             pdf.cell(w, HDR_H, lbl, border="LTB", align="C", fill=True)
         pdf.cell(TOT_W, HDR_H, "$TOT", border=1, align="C", fill=True)
 
@@ -201,44 +202,66 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
     _NAM_EXCEPTIONS: dict[str, str] = {
         # FRUTAS
-        "HIGOS FRESCOS":            "HIGOS FRESC",
-        "MANZANA ROJA PREMIUM":     "MANZ ROJA P",
+        "FRUTOS ROJOS":             "FRUTOS R",
+        "HIGOS FRESCOS":            "HIGOS F",
+        "MANZANA ROJA":             "MANZ R",
+        "MANZANA ROJA PREMIUM":     "MANZ R P",
         "MANZANA VERDE":            "MANZ VERDE",
         "MANZANA VERDE PREMIUM":    "MANZ VDE P",
-        "NARANJA OMBLIGO":          "NAR OMBLIGO",
+        "NARANJA JUGO":             "NAR J",
+        "NARANJA OMBLIGO":          "NAR O",
+        "UVAS BLANCAS":             "UVAS B",
         # HIERBAS
         "FLORES JAMAICA":           "FLOR JAMAIC",
-        "HIERBAS AROMATICAS":       "HIER AROMAT",
-        "OREGANO FRESCO":           "OREG FRESCO",
+        "HIERBA BUENA":             "HIERBA B",
+        "HIERBAS AROMATICAS":       "HIERBA A",
+        "LEMONGRASS":               "LEMON G",
+        "OREGANO FRESCO":           "OREG F",
+        "OREGANO DESHIDRATADO":     "OREG D",
         # HORTALIZAS
         "CEBOLLA MORADA":           "CEB MORADA",
-        "PAPA CEPILLADA":           "PAPA CEPILL",
+        "HINOJO BULBO":             "HINO BULBO",
+        "PAPA CEPILLADA":           "PAPA C",
+        "PAPA LAVADA":              "PAPA L",
+        "PAPA NEGRA":               "PAPA N",
         "PAPINES ANDINOS":          "PAPI ANDIN",
         # OTROS
         "ACEITE DE OLIVA":          "ACEITE OLIV",
         "ADOBO PARA PIZZA":         "ADOBO PIZZA",
         "AJI EN VINAGRE":           "AJI VINAGRE",
+        "ANCO CORTADO":             "ANCO C",
         "BROTES ALFALFA":           "BROT ALFALF",
         "BROTES ARVEJA":            "BROT ARVEJA",
         "BROTES RABANITO":          "BROT RABAN",
+        "BROTES SOJA":              "BROT SOJA",
+        "CHAMPINONES":              "CHAMPI",
         "CHIMICHURRI DESHIDRATADO": "CHIMI DESH",
         "CLAVO DE OLOR":            "CLAVO OLOR",
         "CONDIMENTO ARROZ":         "COND ARROZ",
-        "FLORES COMESTIBLES":       "FLOR COMEST",
-        "OREGANO DESHIDRATADO":     "OREG DESH",
+        "FLORES COMESTIBLES":       "FLORES C",
+        "NUEZ MOSCADA":             "NUEZ M",
         "REPOLLITOS DE BRUSELAS":   "REPOL BRUS",
+        "TOMATE SECO":              "TOM SECO",
         "TOMATE TRITURADO":         "TOM TRITU",
-        "VERDURAS SOPA":            "VERD SOPA",
+        "VERDURAS SOPA":            "SOPA",
         # VERDURAS
-        "JALAPENO ROJO":            "JALAP ROJO",
-        "JALAPENO VERDE":           "JALAP VERDE",
-        "LECHUGA CAPUCHINA":        "LECH CAPUCH",
+        "AJI HABANERO":             "AJI HAB",
+        "ALCAUCILES":               "ALCAU",
+        "BERENJENA":                "BERENJ",
+        "ESPARRAGO":                "ESPARRA",
+        "JALAPENO ROJO":            "JALAP R",
+        "JALAPENO VERDE":           "JALAP V",
+        "JENGIBRE":                 "JENG",
+        "LECHUGA CAPUCHINA":        "LECH CAPU",
         "LECHUGA CRIOLLA":          "LECH CRIOLL",
-        "LECHUGA FRANCESA":         "LECH FRANC",
+        "LECHUGA FRANCESA":         "LECH FRA",
         "LECHUGA MANTECOSA":        "LECH MANT",
-        "LECHUGA MORADA":           "LECH MORADA",
-        "MORRON AMARILLO":          "MORR AMAR",
-        "REPOLLO BLANCO":           "REPO BLANCO",
+        "LECHUGA MORADA":           "LECH MOR",
+        "MORRON AMARILLO":          "MORR A",
+        "MORRON ROJO":              "MORR R",
+        "MORRON VERDE":             "MORR V",
+        "REPOLLO BLANCO":           "REPO B",
+        "REPOLLO ROJO":             "REPO R",
         "TOMATE CHERRY":            "TOM CHERRY",
         "TOMATE PERITA":            "TOM PERITA",
         "TOMATE REDONDO":           "TOM REDON",
@@ -324,7 +347,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         elif (acs < -0.001).any():
             base_rgb = (0, 115, 0);   base_short = "S"
         elif sin_mov:
-            base_rgb = (160, 160, 160); base_short = "(-)"
+            base_rgb = (160, 160, 160); base_short = "-"
         else:
             base_rgb = (100, 100, 100); base_short = "J"
 
@@ -332,7 +355,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         if sep_h > 0:
             pdf.set_fill_color(255, 255, 255)
             pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Helvetica", "B", fsize_data)
+            pdf.set_font("Helvetica", "B", fsize)
             pdf.set_xy(x, y)
             pdf.cell(COL_W, sep_h, rubro, align="C", fill=True, border=1)
             y += sep_h
@@ -352,14 +375,13 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
 
         # PROD tall cell (fondo neutro, nombre centrado verticalmente)
         _nam_display = _NAM_EXCEPTIONS.get(base_name, base_name)
-        _fsize_nam = max(fsize_data * 0.82, 5.0)  # fuente más chica solo para el nombre
         pdf.set_fill_color(245, 245, 245)
         pdf.set_xy(x + STA_W, y)
         pdf.cell(NAM_W, total_group_h, "", fill=True, border=1)
         pdf.set_xy(x + STA_W, y + (total_group_h - ROW_H) / 2)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Helvetica", "B", _fsize_nam)
-        pdf.cell(NAM_W, ROW_H, f" {_nam_display}", align="L", fill=False, border=0)
+        pdf.set_font("Helvetica", "B", fsize_data)
+        pdf.cell(NAM_W, ROW_H, _nam_display, align="C", fill=False, border=0)
 
         # Filas de variante (a la derecha de STA+PROD)
         pdf.set_font("Helvetica", "", fsize_data)
