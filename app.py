@@ -1565,9 +1565,10 @@ with tab_planilla:
         if not _df_prods.empty:
             st.caption(f"{len(_df_prods)} productos.")
             _cats_opts = [""] + db.cargar_categorias_planilla()["nombre"].tolist()
-            _cols_plan = [c for c in ["codigo", "producto", "unidad_medida", "rubro", "categoria_planilla"] if c in _df_prods.columns]
+            _cols_plan = [c for c in ["codigo", "producto", "unidad_medida", "rubro", "categoria_planilla", "mostrar_siempre"] if c in _df_prods.columns]
             _df_plan_show = _df_prods[_cols_plan].copy().sort_values("producto").reset_index(drop=True)
             _df_plan_show["categoria_planilla"] = _df_plan_show["categoria_planilla"].fillna("")
+            _df_plan_show["mostrar_siempre"] = _df_plan_show["mostrar_siempre"].fillna(False).astype(bool)
 
             _planilla_guardar = st.button("💾 Guardar asignaciones", key="planilla_guardar_cats")
 
@@ -1586,15 +1587,25 @@ with tab_planilla:
                         options=_cats_opts,
                         width="medium",
                     ),
+                    "mostrar_siempre": st.column_config.CheckboxColumn(
+                        "Mostrar siempre",
+                        help="Si está marcado, aparece en la PDF aunque no haya tenido movimientos.",
+                        width="small",
+                    ),
                 },
             )
 
             if _planilla_guardar:
                 _df_full_plan = _df_prods.copy()
                 _df_full_plan["categoria_planilla"] = _df_full_plan["categoria_planilla"].fillna("")
+                _df_full_plan["mostrar_siempre"] = _df_full_plan["mostrar_siempre"].fillna(False).astype(bool)
                 _idx_map_plan = dict(zip(_planilla_edited["codigo"].astype(str), _planilla_edited["categoria_planilla"].fillna("")))
+                _mostrar_map_plan = dict(zip(_planilla_edited["codigo"].astype(str), _planilla_edited["mostrar_siempre"].fillna(False).astype(bool)))
                 _df_full_plan["categoria_planilla"] = _df_full_plan.apply(
                     lambda r: _idx_map_plan.get(str(r["codigo"]), r["categoria_planilla"]), axis=1
+                )
+                _df_full_plan["mostrar_siempre"] = _df_full_plan.apply(
+                    lambda r: _mostrar_map_plan.get(str(r["codigo"]), r["mostrar_siempre"]), axis=1
                 )
                 db.guardar_productos(_df_full_plan)
                 st.success("Asignaciones guardadas.")
@@ -2032,9 +2043,10 @@ with tab_comprar:
         _raw_view["_rubro_idx"] = _raw_view["Rubro"].map(lambda r: _rubro_order.get(r, len(_ORDEN_RUBROS)))
         _raw_view = _raw_view.sort_values(["_rubro_idx", "Base"]).drop(columns="_rubro_idx")
 
-    # PDF: TODOS los productos del catálogo, agrupados por categoria_planilla
+    # PDF: productos con movimiento (pedido/estimado/stock) o con mostrar_siempre=True
     _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
-    _cod_cat   = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
+    _cod_cat      = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
+    _cod_mostrar  = dict(zip(productos["codigo"].astype(str), productos.get("mostrar_siempre", pd.Series([False] * len(productos))).fillna(False).astype(bool)))
     _ped_map   = {}
     _est_map   = {}
     if not _raw.empty:
@@ -2051,14 +2063,16 @@ with tab_comprar:
         _cat = _cod_cat.get(_cod, "").strip()
         if not _cat or _cat.lower() in ("nan", "none"):
             continue
+        _ped = _ped_map.get(_cod, 0.0)
+        _est = _est_map.get(_cod, 0.0)
+        _stk = _stk_map_pdf.get(_cod, 0.0)
+        if _ped == 0.0 and _est == 0.0 and _stk == 0.0 and not _cod_mostrar.get(_cod, False):
+            continue
         if " - " in _nom:
             _base, _var = _nom.rsplit(" - ", 1)
             _base, _var = _base.strip(), _var.strip()
         else:
             _base, _var = _nom, ""
-        _ped = _ped_map.get(_cod, 0.0)
-        _est = _est_map.get(_cod, 0.0)
-        _stk = _stk_map_pdf.get(_cod, 0.0)
         _filas_pdf.append({
             "codigo": _cod, "producto": _nom,
             "Base": _base, "Variante": _var,
