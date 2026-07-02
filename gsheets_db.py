@@ -241,11 +241,12 @@ def ultima_carga(clave):
 
 def cargar_productos():
     df = leer_tabla("productos")
-    if not df.empty:
-        df["codigo"] = df["codigo"].astype(str)
-    for col in ("rubro", "categoria_planilla"):
+    # Guard: si la hoja está vacía o corrupta, garantizar columnas base
+    for col in ["codigo", "producto", "unidad_medida", "descripcion", "rubro", "categoria_planilla"]:
         if col not in df.columns:
             df[col] = ""
+    if not df.empty:
+        df["codigo"] = df["codigo"].astype(str)
     if "mostrar_siempre" not in df.columns:
         df["mostrar_siempre"] = False
     else:
