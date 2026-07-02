@@ -2079,7 +2079,7 @@ with tab_comprar:
         _raw_view = _raw_view.sort_values(["_rubro_idx", "Base"]).drop(columns="_rubro_idx")
 
     # PDF: productos con movimiento (pedido/estimado/stock) o con mostrar_siempre=True
-    _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
+    _ORDEN_CATS = db.cargar_categorias_planilla()["nombre"].str.strip().str.upper().tolist()
     _cod_cat      = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
     _cod_mostrar  = dict(zip(productos["codigo"].astype(str), productos.get("mostrar_siempre", pd.Series(["NO"] * len(productos))).map(lambda v: str(v).strip().upper() in ("SI", "SÍ", "TRUE", "1", "YES"))))
     # Mapa base_name → nombre_pdf (desde Sheets, con fallback al dict de abreviaciones)
