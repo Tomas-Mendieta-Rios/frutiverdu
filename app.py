@@ -341,22 +341,47 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         return sum(gh for _, _, gh, *_ in _all_groups[s:e])
     _max_col_h = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
     _data_h = BOTTOM - DATA_Y   # espacio real: cabecera pág1 ya dibujada con ROW_H actual
-    if _max_col_h > 0 and abs(_max_col_h - _data_h) > 0.5:
-        new_rh = ROW_H * _data_h / _max_col_h
-        if new_rh <= 5.5:  # no escalar si las filas se vuelven demasiado grandes
-            ROW_H = new_rh
+
+    def _recompute_groups(rh):
+        _prev = None
+        out = []
+        for bn, ds, _, rb, *_ in _all_groups:
+            sep = rh if (rb and rb != _prev) else 0.0
+            out.append((bn, ds, sep + len(ds) * rh, rb, sep))
+            _prev = rb
+        return out
+
+    def _update_widths():
+        nonlocal NAM_W, N_W, VRN_W, S_W, P_W, T_W, E_W, C_W, VAC_W, PROV_W, PRI_W, TOT_W
+        NAM_W  = fsize_data * 0.353 * 0.60 * 7 + 1.0
+        N_W    = (COL_W - NAM_W) / 15.0
+        VRN_W  = N_W * 0.9
+        S_W = P_W = T_W = N_W * 1.9
+        E_W = C_W = VAC_W = N_W
+        PROV_W = PRI_W = TOT_W = N_W * 1.8
+
+    if _max_col_h > 0 and _max_col_h > _data_h + 0.1:
+        # Primer paso: escalar para que la columna más alta quepa
+        ROW_H = ROW_H * _data_h / _max_col_h
+        BASE_H = ROW_H
+        fsize = ROW_H * 1.9
+        fsize_data = fsize + 1.0
+        _all_groups = _recompute_groups(ROW_H)
+        _s = _do_split(_all_groups)
+        _c1, _c2, _c3 = _s[0], _s[1], _s[2]
+
+        # Segundo paso: el re-split puede crear columnas desiguales → corregir
+        _max_col_h2 = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
+        if _max_col_h2 > _data_h + 0.1:
+            ROW_H = ROW_H * _data_h / _max_col_h2
             BASE_H = ROW_H
             fsize = ROW_H * 1.9
             fsize_data = fsize + 1.0
-            _prev_rb_sep = None
-            _new_groups = []
-            for bn, ds, _, rb, *_ in _all_groups:
-                sep = ROW_H if (rb and rb != _prev_rb_sep) else 0.0
-                _new_groups.append((bn, ds, sep + len(ds) * ROW_H, rb, sep))
-                _prev_rb_sep = rb
-            _all_groups = _new_groups
+            _all_groups = _recompute_groups(ROW_H)
             _s = _do_split(_all_groups)
             _c1, _c2, _c3 = _s[0], _s[1], _s[2]
+
+        _update_widths()
 
     _page2_added = False
     _row_parity = [0, 0, 0, 0]  # contador de fila por slot para alternar blanco/gris
@@ -410,7 +435,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         pdf.cell(NAM_W, total_group_h, "", fill=True, border="LTB")
         pdf.set_xy(x, y + (total_group_h - ROW_H) / 2)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Helvetica", "B", fsize_data)
+        pdf.set_font("Helvetica", "B", fsize_data - 1)
         pdf.cell(NAM_W, ROW_H, _nam_display, align="C", fill=False, border=0)
 
         # Filas de variante (a la derecha de PROD)
