@@ -248,10 +248,10 @@ def cargar_productos():
     if not df.empty:
         df["codigo"] = df["codigo"].astype(str)
     if "mostrar_siempre" not in df.columns:
-        df["mostrar_siempre"] = False
+        df["mostrar_siempre"] = "NO"
     else:
         df["mostrar_siempre"] = df["mostrar_siempre"].map(
-            lambda v: True if str(v).strip().upper() in ("TRUE", "SI", "SÍ", "1", "YES") else False
+            lambda v: "SI" if str(v).strip().upper() in ("TRUE", "SI", "SÍ", "1", "YES") else "NO"
         )
     if "nombre_pdf" not in df.columns:
         df["nombre_pdf"] = ""

@@ -1596,7 +1596,9 @@ with tab_planilla:
                 .reset_index(drop=True)
             )
             _df_base["categoria_planilla"] = _df_base["categoria_planilla"].fillna("")
-            _df_base["mostrar_siempre"] = _df_base["mostrar_siempre"].fillna(False).astype(bool)
+            _df_base["mostrar_siempre"] = _df_base["mostrar_siempre"].map(
+                lambda v: True if str(v).strip().upper() in ("SI", "SÍ", "TRUE", "1", "YES") else False
+            )
             # Pre-llenar nombre_pdf desde _ABREV_DEFAULT si está vacío
             _df_base["nombre_pdf"] = _df_base.apply(
                 lambda r: r["nombre_pdf"] if r["nombre_pdf"] else _ABREV_DEFAULT.get(r["producto"], r["producto"]),
@@ -1629,11 +1631,11 @@ with tab_planilla:
 
             if _planilla_guardar:
                 _base_cat_map     = dict(zip(_planilla_edited["producto"], _planilla_edited["categoria_planilla"].fillna("")))
-                _base_mostrar_map = dict(zip(_planilla_edited["producto"], _planilla_edited["mostrar_siempre"].fillna(False).astype(bool)))
+                _base_mostrar_map = dict(zip(_planilla_edited["producto"], _planilla_edited["mostrar_siempre"].map(lambda v: "SI" if v else "NO")))
                 _base_nom_map     = dict(zip(_planilla_edited["producto"], _planilla_edited["nombre_pdf"].fillna("").astype(str).str.strip()))
                 _df_full_plan = _df_prods.copy()
                 _df_full_plan["categoria_planilla"] = _df_full_plan["_base"].map(_base_cat_map).fillna(_df_full_plan["categoria_planilla"])
-                _df_full_plan["mostrar_siempre"]    = _df_full_plan["_base"].map(_base_mostrar_map).fillna(_df_full_plan["mostrar_siempre"])
+                _df_full_plan["mostrar_siempre"]    = _df_full_plan["_base"].map(_base_mostrar_map).fillna("NO")
                 _df_full_plan["nombre_pdf"]         = _df_full_plan["_base"].map(_base_nom_map).fillna(_df_full_plan["nombre_pdf"])
                 _df_full_plan = _df_full_plan.drop(columns=["_base"])
                 db.guardar_productos(_df_full_plan)
@@ -2078,7 +2080,7 @@ with tab_comprar:
     # PDF: productos con movimiento (pedido/estimado/stock) o con mostrar_siempre=True
     _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
     _cod_cat      = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
-    _cod_mostrar  = dict(zip(productos["codigo"].astype(str), productos.get("mostrar_siempre", pd.Series([False] * len(productos))).fillna(False).astype(bool)))
+    _cod_mostrar  = dict(zip(productos["codigo"].astype(str), productos.get("mostrar_siempre", pd.Series(["NO"] * len(productos))).map(lambda v: str(v).strip().upper() in ("SI", "SÍ", "TRUE", "1", "YES"))))
     # Mapa base_name → nombre_pdf (desde Sheets, con fallback al dict de abreviaciones)
     _nam_pdf_map: dict[str, str] = {}
     for _, _p in productos.iterrows():
