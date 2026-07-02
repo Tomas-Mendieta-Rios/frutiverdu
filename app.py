@@ -360,9 +360,10 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         E_W = C_W = VAC_W = N_W
         PROV_W = PRI_W = TOT_W = N_W * 1.8
 
+    _MIN_ROW_H = 4.0  # piso: menos de 4 mm no se puede leer
     if _max_col_h > 0 and _max_col_h > _data_h + 0.1:
         # Primer paso: escalar para que la columna más alta quepa
-        ROW_H = ROW_H * _data_h / _max_col_h
+        ROW_H = max(_MIN_ROW_H, ROW_H * _data_h / _max_col_h)
         BASE_H = ROW_H
         fsize = ROW_H * 1.9
         fsize_data = fsize + 1.0
@@ -373,7 +374,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         # Segundo paso: el re-split puede crear columnas desiguales → corregir
         _max_col_h2 = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
         if _max_col_h2 > _data_h + 0.1:
-            ROW_H = ROW_H * _data_h / _max_col_h2
+            ROW_H = max(_MIN_ROW_H, ROW_H * _data_h / _max_col_h2)
             BASE_H = ROW_H
             fsize = ROW_H * 1.9
             fsize_data = fsize + 1.0
