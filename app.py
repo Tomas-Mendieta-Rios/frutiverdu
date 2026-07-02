@@ -327,7 +327,12 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         for i, (_, _, gh, *_) in enumerate(groups):
             cum += gh
             if cum >= target * (slot + 1) and slot < _n_slots - 1:
-                splits.append(i + 1)
+                # Elegir el lado que minimiza el desbalance
+                before = cum - gh  # altura acumulada SIN este grupo
+                if (cum - target * (slot + 1)) <= (target * (slot + 1) - before):
+                    splits.append(i + 1)  # este grupo queda en la columna actual
+                else:
+                    splits.append(i)      # este grupo pasa a la siguiente columna
                 slot += 1
         while len(splits) < 3:
             splits.append(len(groups))
