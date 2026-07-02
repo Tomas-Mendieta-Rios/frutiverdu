@@ -1558,30 +1558,39 @@ with tab_planilla:
         st.rerun()
 
     st.divider()
-    st.subheader("Asignar categorías a productos")
+    st.subheader("Configurar planilla")
 
     try:
         _df_prods = db.cargar_productos()
         if not _df_prods.empty:
-            st.caption(f"{len(_df_prods)} productos.")
             _cats_opts = [""] + db.cargar_categorias_planilla()["nombre"].tolist()
-            _cols_plan = [c for c in ["codigo", "producto", "unidad_medida", "rubro", "categoria_planilla", "mostrar_siempre"] if c in _df_prods.columns]
-            _df_plan_show = _df_prods[_cols_plan].copy().sort_values("producto").reset_index(drop=True)
-            _df_plan_show["categoria_planilla"] = _df_plan_show["categoria_planilla"].fillna("")
-            _df_plan_show["mostrar_siempre"] = _df_plan_show["mostrar_siempre"].fillna(False).astype(bool)
 
-            _planilla_guardar = st.button("💾 Guardar asignaciones", key="planilla_guardar_cats")
+            # Una fila por producto base (antes del " - ")
+            _df_prods["_base"] = _df_prods["producto"].apply(
+                lambda n: str(n).rsplit(" - ", 1)[0].strip() if " - " in str(n) else str(n).strip()
+            )
+            _df_base = (
+                _df_prods.sort_values("producto")
+                .groupby("_base", sort=False)
+                .first()
+                .reset_index()[["_base", "categoria_planilla", "mostrar_siempre"]]
+                .rename(columns={"_base": "producto"})
+                .sort_values("producto")
+                .reset_index(drop=True)
+            )
+            _df_base["categoria_planilla"] = _df_base["categoria_planilla"].fillna("")
+            _df_base["mostrar_siempre"] = _df_base["mostrar_siempre"].fillna(False).astype(bool)
+
+            st.caption(f"{len(_df_base)} productos base.")
+            _planilla_guardar = st.button("💾 Guardar", key="planilla_guardar_cats")
 
             _planilla_edited = st.data_editor(
-                _df_plan_show,
+                _df_base,
                 use_container_width=True,
                 hide_index=True,
                 key="planilla_editor",
                 column_config={
-                    "codigo":             st.column_config.TextColumn("Código",           disabled=True),
-                    "producto":           st.column_config.TextColumn("Producto",         disabled=True),
-                    "unidad_medida":      st.column_config.TextColumn("Unidad",           disabled=True),
-                    "rubro":              st.column_config.TextColumn("Rubro DUX",        disabled=True),
+                    "producto":           st.column_config.TextColumn("Producto",        disabled=True),
                     "categoria_planilla": st.column_config.SelectboxColumn(
                         "Categoría planilla",
                         options=_cats_opts,
@@ -1596,19 +1605,14 @@ with tab_planilla:
             )
 
             if _planilla_guardar:
+                _base_cat_map     = dict(zip(_planilla_edited["producto"], _planilla_edited["categoria_planilla"].fillna("")))
+                _base_mostrar_map = dict(zip(_planilla_edited["producto"], _planilla_edited["mostrar_siempre"].fillna(False).astype(bool)))
                 _df_full_plan = _df_prods.copy()
-                _df_full_plan["categoria_planilla"] = _df_full_plan["categoria_planilla"].fillna("")
-                _df_full_plan["mostrar_siempre"] = _df_full_plan["mostrar_siempre"].fillna(False).astype(bool)
-                _idx_map_plan = dict(zip(_planilla_edited["codigo"].astype(str), _planilla_edited["categoria_planilla"].fillna("")))
-                _mostrar_map_plan = dict(zip(_planilla_edited["codigo"].astype(str), _planilla_edited["mostrar_siempre"].fillna(False).astype(bool)))
-                _df_full_plan["categoria_planilla"] = _df_full_plan.apply(
-                    lambda r: _idx_map_plan.get(str(r["codigo"]), r["categoria_planilla"]), axis=1
-                )
-                _df_full_plan["mostrar_siempre"] = _df_full_plan.apply(
-                    lambda r: _mostrar_map_plan.get(str(r["codigo"]), r["mostrar_siempre"]), axis=1
-                )
+                _df_full_plan["categoria_planilla"] = _df_full_plan["_base"].map(_base_cat_map).fillna(_df_full_plan["categoria_planilla"])
+                _df_full_plan["mostrar_siempre"]    = _df_full_plan["_base"].map(_base_mostrar_map).fillna(_df_full_plan["mostrar_siempre"])
+                _df_full_plan = _df_full_plan.drop(columns=["_base"])
                 db.guardar_productos(_df_full_plan)
-                st.success("Asignaciones guardadas.")
+                st.success("Guardado.")
                 st.rerun()
         else:
             st.info("Todavía no hay productos cargados. Sincronizá en la pestaña **DUX Productos**.")
