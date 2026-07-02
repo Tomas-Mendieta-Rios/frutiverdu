@@ -1606,28 +1606,28 @@ with tab_planilla:
             )
 
             st.caption(f"{len(_df_base)} productos base.")
-            _planilla_guardar = st.button("💾 Guardar", key="planilla_guardar_cats")
-
-            _planilla_edited = st.data_editor(
-                _df_base,
-                use_container_width=True,
-                hide_index=True,
-                key="planilla_editor",
-                column_config={
-                    "producto":           st.column_config.TextColumn("Producto",        disabled=True),
-                    "nombre_pdf":         st.column_config.TextColumn("Nombre PDF",      width="small"),
-                    "categoria_planilla": st.column_config.SelectboxColumn(
-                        "Categoría planilla",
-                        options=_cats_opts,
-                        width="medium",
-                    ),
-                    "mostrar_siempre": st.column_config.CheckboxColumn(
-                        "Mostrar siempre",
-                        help="Si está marcado, aparece en la PDF aunque no haya tenido movimientos.",
-                        width="small",
-                    ),
-                },
-            )
+            with st.form("form_configurar_planilla", border=False):
+                _planilla_edited = st.data_editor(
+                    _df_base,
+                    use_container_width=True,
+                    hide_index=True,
+                    key="planilla_editor",
+                    column_config={
+                        "producto":           st.column_config.TextColumn("Producto",        disabled=True),
+                        "nombre_pdf":         st.column_config.TextColumn("Nombre PDF",      width="small"),
+                        "categoria_planilla": st.column_config.SelectboxColumn(
+                            "Categoría planilla",
+                            options=_cats_opts,
+                            width="medium",
+                        ),
+                        "mostrar_siempre": st.column_config.CheckboxColumn(
+                            "Mostrar siempre",
+                            help="Si está marcado, aparece en la PDF aunque no haya tenido movimientos.",
+                            width="small",
+                        ),
+                    },
+                )
+                _planilla_guardar = st.form_submit_button("💾 Guardar", type="primary")
 
             if _planilla_guardar:
                 _base_cat_map     = dict(zip(_planilla_edited["producto"], _planilla_edited["categoria_planilla"].fillna("")))
