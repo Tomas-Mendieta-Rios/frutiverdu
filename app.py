@@ -360,29 +360,22 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         E_W = C_W = VAC_W = N_W
         PROV_W = PRI_W = TOT_W = N_W * 1.8
 
-    _MIN_ROW_H = 4.0  # piso: menos de 4 mm no se puede leer
-    if _max_col_h > 0 and _max_col_h > _data_h + 0.1:
-        # Primer paso: escalar para que la columna más alta quepa
-        ROW_H = max(_MIN_ROW_H, ROW_H * _data_h / _max_col_h)
+    _MIN_ROW_H = 3.5  # piso: menos de 3.5 mm no se puede leer
+    for _pass in range(8):
+        _cur_max = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
+        if _cur_max <= _data_h + 0.1:
+            break
+        _new_rh = ROW_H * _data_h / _cur_max
+        ROW_H = max(_MIN_ROW_H, _new_rh)
         BASE_H = ROW_H
         fsize = ROW_H * 1.9
         fsize_data = fsize + 1.0
         _all_groups = _recompute_groups(ROW_H)
         _s = _do_split(_all_groups)
         _c1, _c2, _c3 = _s[0], _s[1], _s[2]
-
-        # Segundo paso: el re-split puede crear columnas desiguales → corregir
-        _max_col_h2 = max(_col_h(0, _c1), _col_h(_c1, _c2), _col_h(_c2, _c3), _col_h(_c3, len(_all_groups)))
-        if _max_col_h2 > _data_h + 0.1:
-            ROW_H = max(_MIN_ROW_H, ROW_H * _data_h / _max_col_h2)
-            BASE_H = ROW_H
-            fsize = ROW_H * 1.9
-            fsize_data = fsize + 1.0
-            _all_groups = _recompute_groups(ROW_H)
-            _s = _do_split(_all_groups)
-            _c1, _c2, _c3 = _s[0], _s[1], _s[2]
-
-        _update_widths()
+        if _new_rh < _MIN_ROW_H:
+            break  # piso alcanzado, no se puede comprimir más
+    _update_widths()
 
     _page2_added = False
     _row_parity = [0, 0, 0, 0]  # contador de fila por slot para alternar blanco/gris
