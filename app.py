@@ -188,7 +188,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     PAGE_W, PAGE_H = (210, 297) if formato == "A4" else (216, 356)  # A4 o Oficio
     MARGIN_H = 5
     MARGIN_V = 5
-    MARGIN_V_BOTTOM = 4
+    MARGIN_V_BOTTOM = 3
     GAP = 2
     COL_W = (PAGE_W - 2 * MARGIN_H - GAP) / 2
 
