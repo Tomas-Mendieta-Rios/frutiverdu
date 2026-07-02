@@ -12,6 +12,126 @@ import gsheets_db as db
 
 DUX_RATE_LIMIT_SECONDS = 5.5
 
+# Abreviaciones por defecto para el PDF (semilla inicial — se migran a nombre_pdf en Sheets)
+_ABREV_DEFAULT: dict[str, str] = {
+    "ARANDANO":                 "ARANDA",
+    "BONIATO":                  "BONIAT",
+    "CABUTIA":                  "CABUTI",
+    "CIRUELA":                  "CIRUEL",
+    "DAMASCO":                  "DAMASC",
+    "DURAZNO":                  "DURAZN",
+    "FRAMBUESAS":               "FRAMBU",
+    "FRUTILLAS":                "FRUTIL",
+    "FRUTOS ROJOS":             "FRUT R",
+    "HIGOS FRESCOS":            "HIGO F",
+    "MANDARINA":                "MANDAR",
+    "MANZANA ROJA":             "MANZ R",
+    "MANZANA ROJA PREMIUM":     "MANZ P",
+    "MANZANA VERDE":            "MAN VD",
+    "MANZANA VERDE PREMIUM":    "MAN VP",
+    "MARACUYA":                 "MARACU",
+    "MEMBRILLO":                "MEMBRL",
+    "NARANJA JUGO":             "NAR J",
+    "NARANJA OMBLIGO":          "NAR O",
+    "PERA PREMIUM":             "PERA P",
+    "PLATANO":                  "PLATAN",
+    "UVAS BLANCAS":             "UVAS B",
+    "UVAS NEGRAS":              "UVAS N",
+    "UVAS ROJAS":               "UVAS R",
+    "ALBAHACA":                 "ALBAHA",
+    "CIBOULETTE":               "CIBOUL",
+    "CILANTRO":                 "CILANT",
+    "FLORES JAMAICA":           "FLOR J",
+    "HIERBA BUENA":             "HERB B",
+    "HIERBAS AROMATICAS":       "HERB A",
+    "LEMONGRASS":               "LEMONG",
+    "OREGANO FRESCO":           "OREG F",
+    "OREGANO DESHIDRATADO":     "OREG D",
+    "AZAFRAN":                  "AZAFR",
+    "CURCUMA":                  "CURCUM",
+    "PERIFOLIO":                "PERIF",
+    "TOMILLO":                  "TOMIL",
+    "CEBOLLA MORADA":           "CEB MO",
+    "CHAUCHA":                  "CHAUCH",
+    "COLIFLOR":                 "COLIFL",
+    "ESPINACA":                 "ESPINA",
+    "GIRASOL":                  "GIRASO",
+    "HINOJO BULBO":             "HINO B",
+    "MANDIOCA":                 "MANDIO",
+    "PAPA CEPILLADA":           "PAPA C",
+    "PAPA LAVADA":              "PAPA L",
+    "PAPA NEGRA":               "PAPA N",
+    "PAPINES ANDINOS":          "PAPINS",
+    "PAK CHOI":                 "PAK CH",
+    "PEPINILLO":                "PEPILL",
+    "RADICHETA":                "RADICH",
+    "REMOLACHA":                "REMOLA",
+    "ZANAHORIA":                "ZANAHO",
+    "ZAPALLO":                  "ZAPALO",
+    "ZAPALLITO":                "ZAPLIT",
+    "ZUCCHINI":                 "ZUCHIN",
+    "ARVEJAS":                  "ARVEJA",
+    "BROCOLI":                  "BROCOL",
+    "CEBOLLA":                  "CEBOLL",
+    "CEBOLLON":                 "CEBON",
+    "RABANITO":                 "RABAN",
+    "RADICHIO":                 "RACHIO",
+    "AJI HABANERO":             "AJI HA",
+    "ALCAUCILES":               "ALCAU",
+    "BERENJENA":                "BERENJ",
+    "ESPARRAGO":                "ESPARA",
+    "GIRGOLA":                  "GIRGOL",
+    "JALAPENO ROJO":            "JALP R",
+    "JALAPENO VERDE":           "JALP V",
+    "JENGIBRE":                 "JENG",
+    "LECHUGA CAPUCHINA":        "LCH CA",
+    "LECHUGA CRIOLLA":          "LCH CR",
+    "LECHUGA FRANCESA":         "LCH FR",
+    "LECHUGA MANTECOSA":        "LCH MT",
+    "LECHUGA MORADA":           "LCH MO",
+    "MORRON AMARILLO":          "MORR A",
+    "MORRON ROJO":              "MORR R",
+    "MORRON VERDE":             "MORR V",
+    "PEREJIL":                  "PEREJI",
+    "PIMIENTA":                 "PIMIEN",
+    "PIMENTON":                 "PIMENT",
+    "PORTOBELLO":               "PORTOB",
+    "PROVENZA":                 "PROVEN",
+    "PROVENZAL":                "PROVEN",
+    "REPOLLO BLANCO":           "REPO B",
+    "REPOLLO ROJO":             "REPO R",
+    "TOMATE CHERRY":            "TOM CH",
+    "TOMATE PERITA":            "TOM PR",
+    "TOMATE REDONDO":           "TOM RD",
+    "TOMATE RELIQUIA":          "TOM RL",
+    "ZAPALLO PLOMO":            "ZAP PL",
+    "AJI PANKA":                "AJI PK",
+    "AJI PICANTE":              "AJI PC",
+    "ALCAPARRAS":               "ALCAP",
+    "ENDIVIAS":                 "ENDIV",
+    "ENSALADA":                 "ENSALA",
+    "ACEITE DE OLIVA":          "ACE OL",
+    "ADOBO PARA PIZZA":         "ADOBO",
+    "AJI EN VINAGRE":           "AJI VI",
+    "ANCO CORTADO":             "ANCO C",
+    "BROTES ALFALFA":           "BR ALF",
+    "BROTES ARVEJA":            "BR ARV",
+    "BROTES RABANITO":          "BROT R",
+    "BROTES SOJA":              "BROT S",
+    "CHAMPINONES":              "CHAMPI",
+    "CHIMICHURRI DESHIDRATADO": "CHIM D",
+    "CLAVO DE OLOR":            "CLAVO",
+    "CONDIMENTO ARROZ":         "COND A",
+    "ECHALOTE":                 "ECHAL",
+    "FLORES COMESTIBLES":       "FLOR C",
+    "NUEZ MOSCADA":             "NUEZ M",
+    "REPOLLITOS DE BRUSELAS":   "REP BR",
+    "TOMATE SECO":              "TOM SE",
+    "TOMATE TRITURADO":         "TOM TR",
+    "VERDURAS SOPA":            "SOPA",
+    "AJINOMOTO":                "AJINOM",
+}
+
 
 def _parse_num_es(v):
     """Parsea un numero aceptando coma o punto como decimal.
@@ -201,130 +321,6 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     def fmt(v):
         return _fmt_num(float(v) if v is not None else 0.0)
 
-    _NAM_EXCEPTIONS: dict[str, str] = {
-        # FRUTAS  (máx 6 chars)
-        "ARANDANO":                 "ARANDA",
-        "BONIATO":                  "BONIAT",
-        "CABUTIA":                  "CABUTI",
-        "CIRUELA":                  "CIRUEL",
-        "DAMASCO":                  "DAMASC",
-        "DURAZNO":                  "DURAZN",
-        "FRAMBUESAS":               "FRAMBU",
-        "FRUTILLAS":                "FRUTIL",
-        "FRUTOS ROJOS":             "FRUT R",
-        "HIGOS FRESCOS":            "HIGO F",
-        "MANDARINA":                "MANDAR",
-        "MANZANA ROJA":             "MANZ R",
-        "MANZANA ROJA PREMIUM":     "MANZ P",
-        "MANZANA VERDE":            "MAN VD",
-        "MANZANA VERDE PREMIUM":    "MAN VP",
-        "MARACUYA":                 "MARACU",
-        "MEMBRILLO":                "MEMBRL",
-        "NARANJA JUGO":             "NAR J",
-        "NARANJA OMBLIGO":          "NAR O",
-        "PERA PREMIUM":             "PERA P",
-        "PLATANO":                  "PLATAN",
-        "UVAS BLANCAS":             "UVAS B",
-        "UVAS NEGRAS":              "UVAS N",
-        "UVAS ROJAS":               "UVAS R",
-        # HIERBAS
-        "ALBAHACA":                 "ALBAHA",
-        "CIBOULETTE":               "CIBOUL",
-        "CILANTRO":                 "CILANT",
-        "FLORES JAMAICA":           "FLOR J",
-        "HIERBA BUENA":             "HERB B",
-        "HIERBAS AROMATICAS":       "HERB A",
-        "LEMONGRASS":               "LEMONG",
-        "OREGANO FRESCO":           "OREG F",
-        "OREGANO DESHIDRATADO":     "OREG D",
-        "AZAFRAN":                  "AZAFR",
-        "CURCUMA":                  "CURCUM",
-        "PERIFOLIO":                "PERIF",
-        "TOMILLO":                  "TOMIL",
-        # HORTALIZAS
-        "CEBOLLA MORADA":           "CEB MO",
-        "CHAUCHA":                  "CHAUCH",
-        "COLIFLOR":                 "COLIFL",
-        "ESPINACA":                 "ESPINA",
-        "GIRASOL":                  "GIRASO",
-        "HINOJO BULBO":             "HINO B",
-        "MANDIOCA":                 "MANDIO",
-        "PAPA CEPILLADA":           "PAPA C",
-        "PAPA LAVADA":              "PAPA L",
-        "PAPA NEGRA":               "PAPA N",
-        "PAPINES ANDINOS":          "PAPINS",
-        "PAK CHOI":                 "PAK CH",
-        "PEPINILLO":                "PEPILL",
-        "RADICHETA":                "RADICH",
-        "REMOLACHA":                "REMOLA",
-        "ZANAHORIA":                "ZANAHO",
-        "ZAPALLO":                  "ZAPALO",
-        "ZAPALLITO":                "ZAPLIT",
-        "ZUCCHINI":                 "ZUCHIN",
-        "ARVEJAS":                  "ARVEJA",
-        "BROCOLI":                  "BROCOL",
-        "CEBOLLA":                  "CEBOLL",
-        "CEBOLLON":                 "CEBON",
-        "RABANITO":                 "RABAN",
-        "RADICHIO":                 "RACHIO",
-        # VERDURAS
-        "AJI HABANERO":             "AJI HA",
-        "ALCAUCILES":               "ALCAU",
-        "BERENJENA":                "BERENJ",
-        "ESPARRAGO":                "ESPARA",
-        "GIRGOLA":                  "GIRGOL",
-        "JALAPENO ROJO":            "JALP R",
-        "JALAPENO VERDE":           "JALP V",
-        "JENGIBRE":                 "JENG",
-        "LECHUGA CAPUCHINA":        "LCH CA",
-        "LECHUGA CRIOLLA":          "LCH CR",
-        "LECHUGA FRANCESA":         "LCH FR",
-        "LECHUGA MANTECOSA":        "LCH MT",
-        "LECHUGA MORADA":           "LCH MO",
-        "MORRON AMARILLO":          "MORR A",
-        "MORRON ROJO":              "MORR R",
-        "MORRON VERDE":             "MORR V",
-        "PEREJIL":                  "PEREJI",
-        "PIMIENTA":                 "PIMIEN",
-        "PIMENTON":                 "PIMENT",
-        "PORTOBELLO":               "PORTOB",
-        "PROVENZA":                 "PROVEN",
-        "PROVENZAL":                "PROVEN",
-        "REPOLLO BLANCO":           "REPO B",
-        "REPOLLO ROJO":             "REPO R",
-        "TOMATE CHERRY":            "TOM CH",
-        "TOMATE PERITA":            "TOM PR",
-        "TOMATE REDONDO":           "TOM RD",
-        "TOMATE RELIQUIA":          "TOM RL",
-        "ZAPALLO PLOMO":            "ZAP PL",
-        "AJI PANKA":               "AJI PK",
-        "AJI PICANTE":             "AJI PC",
-        "ALCAPARRAS":              "ALCAP",
-        "ENDIVIAS":                "ENDIV",
-        "ENSALADA":                "ENSALA",
-        # OTROS
-        "ACEITE DE OLIVA":          "ACE OL",
-        "ADOBO PARA PIZZA":         "ADOBO",
-        "AJI EN VINAGRE":           "AJI VI",
-        "ANCO CORTADO":             "ANCO C",
-        "BROTES ALFALFA":           "BR ALF",
-        "BROTES ARVEJA":            "BR ARV",
-        "BROTES RABANITO":          "BROT R",
-        "BROTES SOJA":              "BROT S",
-        "CHAMPINONES":              "CHAMPI",
-        "CHIMICHURRI DESHIDRATADO": "CHIM D",
-        "CLAVO DE OLOR":            "CLAVO",
-        "CONDIMENTO ARROZ":         "COND A",
-        "ECHALOTE":                 "ECHAL",
-        "FLORES COMESTIBLES":       "FLOR C",
-        "NUEZ MOSCADA":             "NUEZ M",
-        "REPOLLITOS DE BRUSELAS":   "REP BR",
-        "TOMATE SECO":              "TOM SE",
-        "TOMATE TRITURADO":         "TOM TR",
-        "VERDURAS SOPA":            "SOPA",
-        "AJINOMOTO":               "AJINOM",
-    }
-
     # Split balanceado en _n_slots (2 para 1 página, 4 para 2 páginas)
     def _do_split(groups):
         total = sum(gh for _, _, gh, *_ in groups)
@@ -411,7 +407,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         _row_parity[slot] += 1
 
         # PROD tall cell — borde L/T/B (no right); el rectángulo del grupo cerrará el right)
-        _nam_display = _NAM_EXCEPTIONS.get(base_name, base_name)
+        _nam_display = _nam_pdf_map.get(base_name, "") or base_name
         pdf.set_line_width(0.1)
         pdf.set_fill_color(*group_bg)
         pdf.set_xy(x, y)
@@ -1573,13 +1569,18 @@ with tab_planilla:
                 _df_prods.sort_values("producto")
                 .groupby("_base", sort=False)
                 .first()
-                .reset_index()[["_base", "categoria_planilla", "mostrar_siempre"]]
+                .reset_index()[["_base", "categoria_planilla", "mostrar_siempre", "nombre_pdf"]]
                 .rename(columns={"_base": "producto"})
                 .sort_values("producto")
                 .reset_index(drop=True)
             )
             _df_base["categoria_planilla"] = _df_base["categoria_planilla"].fillna("")
             _df_base["mostrar_siempre"] = _df_base["mostrar_siempre"].fillna(False).astype(bool)
+            # Pre-llenar nombre_pdf desde _ABREV_DEFAULT si está vacío
+            _df_base["nombre_pdf"] = _df_base.apply(
+                lambda r: r["nombre_pdf"] if r["nombre_pdf"] else _ABREV_DEFAULT.get(r["producto"], ""),
+                axis=1,
+            )
 
             st.caption(f"{len(_df_base)} productos base.")
             _planilla_guardar = st.button("💾 Guardar", key="planilla_guardar_cats")
@@ -1591,6 +1592,7 @@ with tab_planilla:
                 key="planilla_editor",
                 column_config={
                     "producto":           st.column_config.TextColumn("Producto",        disabled=True),
+                    "nombre_pdf":         st.column_config.TextColumn("Nombre PDF",      width="small"),
                     "categoria_planilla": st.column_config.SelectboxColumn(
                         "Categoría planilla",
                         options=_cats_opts,
@@ -1607,9 +1609,11 @@ with tab_planilla:
             if _planilla_guardar:
                 _base_cat_map     = dict(zip(_planilla_edited["producto"], _planilla_edited["categoria_planilla"].fillna("")))
                 _base_mostrar_map = dict(zip(_planilla_edited["producto"], _planilla_edited["mostrar_siempre"].fillna(False).astype(bool)))
+                _base_nom_map     = dict(zip(_planilla_edited["producto"], _planilla_edited["nombre_pdf"].fillna("").astype(str).str.strip()))
                 _df_full_plan = _df_prods.copy()
                 _df_full_plan["categoria_planilla"] = _df_full_plan["_base"].map(_base_cat_map).fillna(_df_full_plan["categoria_planilla"])
                 _df_full_plan["mostrar_siempre"]    = _df_full_plan["_base"].map(_base_mostrar_map).fillna(_df_full_plan["mostrar_siempre"])
+                _df_full_plan["nombre_pdf"]         = _df_full_plan["_base"].map(_base_nom_map).fillna(_df_full_plan["nombre_pdf"])
                 _df_full_plan = _df_full_plan.drop(columns=["_base"])
                 db.guardar_productos(_df_full_plan)
                 st.success("Guardado.")
@@ -2051,6 +2055,13 @@ with tab_comprar:
     _ORDEN_CATS = ["VERDURAS", "HORTALIZAS", "HIERBAS", "FRUTAS", "OTROS"]
     _cod_cat      = dict(zip(productos["codigo"].astype(str), productos.get("categoria_planilla", pd.Series([""] * len(productos))).fillna("").str.strip().str.upper()))
     _cod_mostrar  = dict(zip(productos["codigo"].astype(str), productos.get("mostrar_siempre", pd.Series([False] * len(productos))).fillna(False).astype(bool)))
+    # Mapa base_name → nombre_pdf (desde Sheets, con fallback al dict de abreviaciones)
+    _nam_pdf_map: dict[str, str] = {}
+    for _, _p in productos.iterrows():
+        _b = str(_p.get("producto", "") or "").rsplit(" - ", 1)[0].strip()
+        _n = str(_p.get("nombre_pdf", "") or "").strip()
+        if _b and _b not in _nam_pdf_map:
+            _nam_pdf_map[_b] = _n or _ABREV_DEFAULT.get(_b, "")
     _ped_map   = {}
     _est_map   = {}
     if not _raw.empty:

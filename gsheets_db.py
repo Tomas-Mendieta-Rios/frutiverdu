@@ -52,7 +52,7 @@ SCOPES = [
 ]
 
 SCHEMA = {
-    "productos": ["codigo", "producto", "unidad_medida", "descripcion", "rubro", "categoria_planilla", "mostrar_siempre"],
+    "productos": ["codigo", "producto", "unidad_medida", "descripcion", "rubro", "categoria_planilla", "mostrar_siempre", "nombre_pdf"],
     "compuestos": [
         "codigo_origen",
         "producto_origen",
@@ -252,6 +252,10 @@ def cargar_productos():
         df["mostrar_siempre"] = df["mostrar_siempre"].map(
             lambda v: True if str(v).strip().upper() in ("TRUE", "SI", "SÍ", "1", "YES") else False
         )
+    if "nombre_pdf" not in df.columns:
+        df["nombre_pdf"] = ""
+    else:
+        df["nombre_pdf"] = df["nombre_pdf"].fillna("").astype(str).str.strip()
     return df
 
 
