@@ -1720,41 +1720,44 @@ with tab_editar:
 with tab_probar:
     st.info("Elegí un producto y se muestran todas las equivalencias de su familia.")
 
-    producto_prueba = st.selectbox("Producto", opciones, key="probar_producto")
-
-    codigo_prueba = map_label_a_codigo[producto_prueba]
-    producto_nombre = map_label_a_producto[producto_prueba]
-
-    partes_sel = producto_nombre.rsplit(" - ", 1)
-    if len(partes_sel) < 2:
-        st.info("Este producto no tiene una unidad parseable para convertir.")
+    if not opciones:
+        st.warning("No hay productos cargados. Sincronizá en **DUX Productos**.")
     else:
-        base_sel = partes_sel[0].strip()
+        producto_prueba = st.selectbox("Producto", opciones, key="probar_producto")
 
-        productos_fam = productos.copy()
-        partes_fam = productos_fam["producto"].str.rsplit(" - ", n=1, expand=True)
-        productos_fam["base"] = partes_fam[0].str.strip()
+        codigo_prueba = map_label_a_codigo.get(producto_prueba)
+        producto_nombre = map_label_a_producto.get(producto_prueba, "")
 
-        familia = productos_fam[
-            (productos_fam["base"] == base_sel)
-            & (productos_fam["codigo"].astype(str) != str(codigo_prueba))
-        ]
-
-        if familia.empty:
-            st.info(f"No hay otras unidades en la familia **{base_sel}**.")
+        partes_sel = producto_nombre.rsplit(" - ", 1)
+        if len(partes_sel) < 2:
+            st.info("Este producto no tiene una unidad parseable para convertir.")
         else:
-            grafo = construir_grafo_conversion(compuestos)
+            base_sel = partes_sel[0].strip()
 
-            st.markdown(f"### 1 {producto_nombre} equivale a:")
+            productos_fam = productos.copy()
+            partes_fam = productos_fam["producto"].fillna("").str.rsplit(" - ", n=1, expand=True)
+            productos_fam["base"] = partes_fam[0].str.strip() if 0 in partes_fam.columns else ""
 
-            for _, otro in familia.iterrows():
-                factor = convertir(grafo, str(codigo_prueba), str(otro["codigo"]))
-                if factor is None:
-                    st.markdown(
-                        f"- ❓ **{otro['producto']}** — sin relación cargada"
-                    )
-                else:
-                    st.markdown(f"- **{factor:,.3f}** {otro['producto']}")
+            familia = productos_fam[
+                (productos_fam["base"] == base_sel)
+                & (productos_fam["codigo"].astype(str) != str(codigo_prueba))
+            ]
+
+            if familia.empty:
+                st.info(f"No hay otras unidades en la familia **{base_sel}**.")
+            else:
+                grafo = construir_grafo_conversion(compuestos)
+
+                st.markdown(f"### 1 {producto_nombre} equivale a:")
+
+                for _, otro in familia.iterrows():
+                    factor = convertir(grafo, str(codigo_prueba), str(otro["codigo"]))
+                    if factor is None:
+                        st.markdown(
+                            f"- ❓ **{otro['producto']}** — sin relación cargada"
+                        )
+                    else:
+                        st.markdown(f"- **{factor:,.3f}** {otro['producto']}")
 
 with tab_comprar:
 
