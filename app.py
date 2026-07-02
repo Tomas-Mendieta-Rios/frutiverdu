@@ -1506,7 +1506,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
 
 with tab_grupo_config:
     (
-        tab_categorias,
+        tab_planilla,
         tab_mapeo,
         tab_packs,
         tab_mixes,
@@ -1517,7 +1517,7 @@ with tab_grupo_config:
         tab_probar,
     ) = st.tabs(
         [
-            "Categorías",
+            "Planilla",
             "Mapeo Wix↔DUX",
             "Packs Wix",
             "Mixes DUX",
@@ -1529,11 +1529,10 @@ with tab_grupo_config:
         ]
     )
 
-with tab_categorias:
+with tab_planilla:
     st.subheader("Categorías de planilla")
     _cats = db.cargar_categorias_planilla()
 
-    # ── Tabla existente ──────────────────────────────────────────────────
     st.markdown("**Categorías actuales** (editá nombre u orden y presioná Guardar)")
     _cats_edit = st.data_editor(
         _cats,
@@ -1557,6 +1556,53 @@ with tab_categorias:
         db.guardar_categorias_planilla(_cats_save)
         st.success("Categorías guardadas.")
         st.rerun()
+
+    st.divider()
+    st.subheader("Asignar categorías a productos")
+
+    try:
+        _df_prods = db.cargar_productos()
+        if not _df_prods.empty:
+            st.caption(f"{len(_df_prods)} productos.")
+            _cats_opts = [""] + db.cargar_categorias_planilla()["nombre"].tolist()
+            _cols_plan = [c for c in ["codigo", "producto", "unidad_medida", "rubro", "categoria_planilla"] if c in _df_prods.columns]
+            _df_plan_show = _df_prods[_cols_plan].copy().sort_values("producto").reset_index(drop=True)
+            _df_plan_show["categoria_planilla"] = _df_plan_show["categoria_planilla"].fillna("")
+
+            _planilla_guardar = st.button("💾 Guardar asignaciones", key="planilla_guardar_cats")
+
+            _planilla_edited = st.data_editor(
+                _df_plan_show,
+                use_container_width=True,
+                hide_index=True,
+                key="planilla_editor",
+                column_config={
+                    "codigo":             st.column_config.TextColumn("Código",           disabled=True),
+                    "producto":           st.column_config.TextColumn("Producto",         disabled=True),
+                    "unidad_medida":      st.column_config.TextColumn("Unidad",           disabled=True),
+                    "rubro":              st.column_config.TextColumn("Rubro DUX",        disabled=True),
+                    "categoria_planilla": st.column_config.SelectboxColumn(
+                        "Categoría planilla",
+                        options=_cats_opts,
+                        width="medium",
+                    ),
+                },
+            )
+
+            if _planilla_guardar:
+                _df_full_plan = _df_prods.copy()
+                _df_full_plan["categoria_planilla"] = _df_full_plan["categoria_planilla"].fillna("")
+                _idx_map_plan = dict(zip(_planilla_edited["codigo"].astype(str), _planilla_edited["categoria_planilla"].fillna("")))
+                _df_full_plan["categoria_planilla"] = _df_full_plan.apply(
+                    lambda r: _idx_map_plan.get(str(r["codigo"]), r["categoria_planilla"]), axis=1
+                )
+                db.guardar_productos(_df_full_plan)
+                st.success("Asignaciones guardadas.")
+                st.rerun()
+        else:
+            st.info("Todavía no hay productos cargados. Sincronizá en la pestaña **DUX Productos**.")
+    except Exception as e:
+        st.error(msg_error_sheets("leer productos", e))
 
 with tab_editar:
     ts_comp_ph = st.empty()
@@ -3575,43 +3621,20 @@ with tab_dux_productos:
             df_csv_actual = db.cargar_productos()
             if not df_csv_actual.empty:
                 st.caption(f"{len(df_csv_actual)} productos en Sheets.")
-
-                _cats_opts = [""] + db.cargar_categorias_planilla()["nombre"].tolist()
-
-                cols_mostrar = [c for c in ["codigo", "producto", "unidad_medida", "rubro", "categoria_planilla"] if c in df_csv_actual.columns]
+                cols_mostrar = [c for c in ["codigo", "producto", "unidad_medida", "rubro"] if c in df_csv_actual.columns]
                 df_show = df_csv_actual[cols_mostrar].copy().sort_values("producto").reset_index(drop=True)
-                df_show["categoria_planilla"] = df_show["categoria_planilla"].fillna("")
-
-                _dxp_guardar = st.button("💾 Guardar categorías asignadas", key="dxp_guardar_cats")
-
-                _dxp_edited = st.data_editor(
+                st.data_editor(
                     df_show,
                     use_container_width=True,
                     hide_index=True,
                     key="dxp_editor",
                     column_config={
-                        "codigo":           st.column_config.TextColumn("Código",    disabled=True),
-                        "producto":         st.column_config.TextColumn("Producto",  disabled=True),
-                        "unidad_medida":    st.column_config.TextColumn("Unidad",    disabled=True),
-                        "rubro":            st.column_config.TextColumn("Rubro DUX", disabled=True),
-                        "categoria_planilla": st.column_config.SelectboxColumn(
-                            "Categoría planilla",
-                            options=_cats_opts,
-                            width="medium",
-                        ),
+                        "codigo":        st.column_config.TextColumn("Código",    disabled=True),
+                        "producto":      st.column_config.TextColumn("Producto",  disabled=True),
+                        "unidad_medida": st.column_config.TextColumn("Unidad",    disabled=True),
+                        "rubro":         st.column_config.TextColumn("Rubro DUX", disabled=True),
                     },
                 )
-
-                if _dxp_guardar:
-                    _df_full = df_csv_actual.copy()
-                    _df_full["categoria_planilla"] = _df_full["categoria_planilla"].fillna("")
-                    _idx_map = dict(zip(_dxp_edited["codigo"].astype(str), _dxp_edited["categoria_planilla"].fillna("")))
-                    _df_full["categoria_planilla"] = _df_full.apply(
-                        lambda r: _idx_map.get(str(r["codigo"]), r["categoria_planilla"]), axis=1
-                    )
-                    db.guardar_productos(_df_full)
-                    st.success("Categorías guardadas.")
-                    st.rerun()
             else:
                 st.info("Todavía no hay productos en Sheets. Apretá **Sincronizar**.")
         except Exception as e:
