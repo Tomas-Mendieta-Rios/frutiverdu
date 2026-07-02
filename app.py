@@ -1599,7 +1599,7 @@ with tab_planilla:
             _df_base["mostrar_siempre"] = _df_base["mostrar_siempre"].fillna(False).astype(bool)
             # Pre-llenar nombre_pdf desde _ABREV_DEFAULT si está vacío
             _df_base["nombre_pdf"] = _df_base.apply(
-                lambda r: r["nombre_pdf"] if r["nombre_pdf"] else _ABREV_DEFAULT.get(r["producto"], ""),
+                lambda r: r["nombre_pdf"] if r["nombre_pdf"] else _ABREV_DEFAULT.get(r["producto"], r["producto"]),
                 axis=1,
             )
 
