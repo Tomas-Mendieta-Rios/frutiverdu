@@ -1349,8 +1349,8 @@ def completar_relaciones(compuestos_df, productos_df, excepciones=None):
         ]
 
     df = productos_df.copy()
-    partes = df["producto"].str.rsplit(" - ", n=1, expand=True)
-    df["base"] = partes[0].str.strip()
+    partes = df["producto"].fillna("").str.rsplit(" - ", n=1, expand=True)
+    df["base"] = partes[0].str.strip() if 0 in partes.columns else ""
     df["unidad"] = partes[1].fillna("").str.strip() if 1 in partes.columns else ""
     df["prio"] = df["unidad"].map(lambda u: prio.get(u, 99))
     if "descripcion" not in df.columns:
