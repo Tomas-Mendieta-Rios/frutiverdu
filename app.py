@@ -1608,6 +1608,7 @@ with tab_planilla:
 
             st.caption(f"{len(_df_base)} productos base.")
             with st.form("form_configurar_planilla", border=False):
+                _planilla_guardar = st.form_submit_button("💾 Guardar", type="primary")
                 _planilla_edited = st.data_editor(
                     _df_base,
                     use_container_width=True,
@@ -1628,7 +1629,6 @@ with tab_planilla:
                         ),
                     },
                 )
-                _planilla_guardar = st.form_submit_button("💾 Guardar", type="primary")
 
             if _planilla_guardar:
                 _base_cat_map     = dict(zip(_planilla_edited["producto"], _planilla_edited["categoria_planilla"].fillna("")))
