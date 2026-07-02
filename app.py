@@ -239,12 +239,8 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
     rh_1p = 2 * available_h / total_units
     rh_2p = 4 * available_h / total_units
 
-    if rh_1p >= MAX_ROW_H:
-        ROW_H = MAX_ROW_H;  _n_slots = 2
-    elif rh_2p >= MAX_ROW_H:
-        ROW_H = rh_1p;      _n_slots = 2
-    else:
-        ROW_H = rh_2p;      _n_slots = 4
+    ROW_H = min(MAX_ROW_H, rh_1p)
+    _n_slots = 2
 
     BASE_H = ROW_H
     fsize = ROW_H * 1.9
