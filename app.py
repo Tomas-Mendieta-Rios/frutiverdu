@@ -290,7 +290,7 @@ def _generar_pdf_comprar(df_raw, fechas_entrega, fecha_stock, dia_estimado, form
         for lbl, w in [("V", VRN_W), ("S", S_W), ("P", P_W), ("T", T_W)]:
             pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
         pdf.set_fill_color(240, 240, 220)
-        for lbl, w in [("E", E_W), ("PRO", PROV_W), ("V", C_W), ("$", PRI_W), ("", VAC_W)]:
+        for lbl, w in [("E", E_W), ("PRO", PROV_W), ("C", C_W), ("$", PRI_W), ("V", VAC_W)]:
             pdf.cell(w, ROW_H, lbl, border="LTB", align="C", fill=True)
         pdf.cell(TOT_W, ROW_H, "$T", border=1, align="C", fill=True)
         # rectángulo grueso alrededor de todo el encabezado
