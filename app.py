@@ -2120,10 +2120,13 @@ with tab_comprar:
             "Rubro": _cat,
         })
 
-    _raw_view_pdf = pd.DataFrame(_filas_pdf)
+    _raw_view_pdf = pd.DataFrame(_filas_pdf) if _filas_pdf else pd.DataFrame(
+        columns=["codigo", "producto", "Base", "Variante", "pedido", "estimado", "stock", "a_comprar", "Rubro"]
+    )
     _cat_ord = {c: i for i, c in enumerate(_ORDEN_CATS)}
-    _raw_view_pdf["_ci"] = _raw_view_pdf["Rubro"].map(lambda r: _cat_ord.get(r, len(_ORDEN_CATS)))
-    _raw_view_pdf = _raw_view_pdf.sort_values(["_ci", "Base"]).drop(columns="_ci").reset_index(drop=True)
+    if not _raw_view_pdf.empty:
+        _raw_view_pdf["_ci"] = _raw_view_pdf["Rubro"].map(lambda r: _cat_ord.get(r, len(_ORDEN_CATS)))
+        _raw_view_pdf = _raw_view_pdf.sort_values(["_ci", "Base"]).drop(columns="_ci").reset_index(drop=True)
 
     # Botón PDF
     if not _raw_view_pdf.empty:
