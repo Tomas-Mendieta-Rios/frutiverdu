@@ -209,7 +209,7 @@ def escribir_tabla(nombre, df):
             df[c] = ""
     df = df[cols]
     # Convertir TODO a string para preservar ceros a la izquierda en códigos
-    df = df.astype(str).replace({"nan": "", "None": "", "<NA>": ""})
+    df = df.fillna("").astype(str).replace({"nan": "", "None": "", "<NA>": "", "NaN": ""})
     ws = _get_ws(nombre)
     valores = [cols] + df.values.tolist()
     # IMPORTANTE: clear() PRIMERO y después update() — caso contrario, si la tabla
