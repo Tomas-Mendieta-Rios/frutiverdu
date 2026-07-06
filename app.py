@@ -1409,7 +1409,8 @@ pagos_bal        = db.cargar_pagos_proveedores()
         "💰 Mov. de caja",
         "🔄 Sincronizar",
         "⚙️ Configuración",
-    ]
+    ],
+    key="main_tabs",
 )
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
