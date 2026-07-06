@@ -1105,6 +1105,47 @@ def _sync_gastos(fecha_desde, fecha_hasta):
     return True, len(all_gastos), f"✅ {len(all_gastos)} gastos sincronizados."
 
 
+def _sync_pagos_proveedores(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url = f"{_base_url}/v2/pagos-proveedores"
+    headers = {"accept": "application/json", "authorization": f"Bearer {_token}"}
+    page_offset, page_size, all_pagos = 0, 50, []
+    while True:
+        params = {
+            "id_empresa": _id_empresa, "id_sucursal": _id_sucursal,
+            "fecha_desde": fecha_desde.strftime("%Y-%m-%d"),
+            "fecha_hasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "estado": "emitido", "offset": page_offset, "limit": page_size,
+        }
+        try:
+            r = requests.get(url, params=params, headers=headers, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("DUX (pagos proveedores)", e)
+        if r.status_code != 200:
+            return False, 0, msg_error_http("DUX (pagos proveedores)", r.status_code, r.text)
+        try:
+            d = r.json()
+        except ValueError:
+            return False, 0, "❌ DUX devolvió una respuesta inválida (pagos proveedores)."
+        if isinstance(d, dict) and "error" in d:
+            return False, 0, f"❌ DUX (pagos proveedores): {d['error'].get('mensaje', d['error'])}"
+        page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
+        if not page:
+            break
+        all_pagos.extend(page)
+        paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
+        if not paging.get("hay_mas"):
+            break
+        page_offset += page_size
+        time.sleep(DUX_RATE_LIMIT_SECONDS)
+    db.guardar_pagos_proveedores(all_pagos)
+    return True, len(all_pagos), f"✅ {len(all_pagos)} pagos a proveedores sincronizados."
+
+
 def _sync_compras(fecha_desde, fecha_hasta):
     compras_res = cargar_compras_dux_v2(fecha_desde, fecha_hasta)
     if compras_res is None:
@@ -1323,7 +1364,7 @@ tab_hist_precios = None
 tab_detalle_compras = None
 
 with tab_egresos:
-    tab_eg_compras, tab_eg_gastos = st.tabs(["💰 Compras", "📄 Gastos"])
+    tab_eg_compras, tab_eg_gastos, tab_eg_pagos = st.tabs(["💰 Compras", "📄 Gastos", "💳 Pagos proveedores"])
 
 with tab_ingresos:
     tab_ing_facturas, = st.tabs(["🧾 Facturas"])
@@ -1840,6 +1881,7 @@ with tab_sync:
     if sincronizar_todo:
         for _i, (_label, _fn) in enumerate([
             ("Gastos (DUX)", _sync_gastos),
+            ("Pagos proveedores (DUX)", _sync_pagos_proveedores),
             ("Compras (DUX)", _sync_compras),
             ("Pedidos DUX", _sync_pedidos_dux),
             ("Facturas (DUX)", _sync_facturas),
@@ -4564,6 +4606,69 @@ with tab_eg_gastos:
                             for d in detalles
                         ]
                         st.dataframe(pd.DataFrame(filas_det), use_container_width=True, hide_index=True)
+
+with tab_eg_pagos:
+    st.caption(f"🕒 Última sync: **{db.ultima_carga('pagos_proveedores') or '?'}**")
+
+    try:
+        pagos_saved = db.cargar_pagos_proveedores()
+    except Exception as e:
+        st.error(msg_error_sheets("leer pagos proveedores", e))
+        pagos_saved = []
+
+    if not pagos_saved:
+        st.info("Todavía no hay pagos. Andá a **🔄 Sincronizar**.")
+    else:
+        pagos_sorted = sorted(pagos_saved, key=lambda p: p.get("fecha") or "", reverse=True)
+        st.markdown(f"**{len(pagos_sorted)} pagos guardados**")
+        for p in pagos_sorted:
+            nro       = p.get("nro_comprobante") or "—"
+            proveedor = p.get("proveedor") or "—"
+            fecha     = p.get("fecha") or "—"
+            monto     = p.get("monto") or 0
+            forma     = p.get("forma_pago") or ""
+            concepto  = p.get("concepto") or ""
+            lineas    = p.get("lineas_pago") or []
+            imput     = p.get("imputaciones") or []
+            with st.container(border=True):
+                c_info, c_total = st.columns([5, 1.5])
+                with c_info:
+                    st.markdown(
+                        f"**#{nro}** — {proveedor} · 📅 {fecha}"
+                        + (f" · {forma}" if forma else "")
+                        + (f" · {concepto}" if concepto else "")
+                    )
+                with c_total:
+                    st.markdown(f"**$ {monto:,.2f}**")
+                if lineas or imput:
+                    with st.expander("Ver detalle"):
+                        if lineas:
+                            st.caption("Líneas de pago")
+                            st.dataframe(
+                                pd.DataFrame([
+                                    {
+                                        "Tipo": l.get("tipo_valor", ""),
+                                        "Descripción": l.get("descripcion", ""),
+                                        "Referencia": l.get("referencia", ""),
+                                        "Monto": l.get("monto", 0),
+                                    }
+                                    for l in lineas
+                                ]),
+                                use_container_width=True, hide_index=True,
+                            )
+                        if imput:
+                            st.caption("Imputaciones")
+                            st.dataframe(
+                                pd.DataFrame([
+                                    {
+                                        "Tipo comprobante": i.get("tipo_comprobante", ""),
+                                        "Nro comprobante": i.get("nro_comprobante", ""),
+                                        "Monto imputado": i.get("monto_imputado", 0),
+                                    }
+                                    for i in imput
+                                ]),
+                                use_container_width=True, hide_index=True,
+                            )
 
 with tab_mapeo:
     ts_mapeo_ph = st.empty()

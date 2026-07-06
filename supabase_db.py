@@ -1238,6 +1238,129 @@ def guardar_gastos(gastos):
             client.table("gastos_items").insert(items).execute()
 
 
+def cargar_pagos_proveedores():
+    client = get_client()
+    resp = client.table("pagos_proveedores").select("*").execute()
+    if not resp.data:
+        return []
+
+    resp_lineas = client.table("pagos_proveedores_lineas").select("*").execute()
+    lineas_por_pago = {}
+    for l in (resp_lineas.data or []):
+        pid = l.get("pago_id")
+        if pid is not None:
+            lineas_por_pago.setdefault(pid, []).append({
+                "tipo_valor":  l.get("tipo_valor"),
+                "descripcion": l.get("descripcion"),
+                "referencia":  l.get("referencia"),
+                "monto":       l.get("monto"),
+            })
+
+    resp_imput = client.table("pagos_proveedores_imputaciones").select("*").execute()
+    imput_por_pago = {}
+    for i in (resp_imput.data or []):
+        pid = i.get("pago_id")
+        if pid is not None:
+            imput_por_pago.setdefault(pid, []).append({
+                "tipo_comprobante": i.get("tipo_comprobante"),
+                "nro_comprobante":  i.get("nro_comprobante"),
+                "monto_imputado":   i.get("monto_imputado"),
+            })
+
+    pagos = []
+    for r in resp.data:
+        pid = r.get("id")
+        pagos.append({
+            **r,
+            "lineas_pago":  lineas_por_pago.get(pid, []),
+            "imputaciones": imput_por_pago.get(pid, []),
+        })
+    return pagos
+
+
+def guardar_pagos_proveedores(pagos):
+    client = get_client()
+    pago_rows = []
+    lineas_por_pago = {}
+    imput_por_pago = {}
+
+    for p in pagos:
+        pid = p.get("id_pago")
+        if not pid:
+            continue
+
+        prov_obj = p.get("proveedor") or {}
+        proveedor    = prov_obj.get("razon_social", "") if isinstance(prov_obj, dict) else str(prov_obj)
+        id_proveedor = prov_obj.get("id_proveedor")    if isinstance(prov_obj, dict) else None
+
+        caja_obj = p.get("caja") or {}
+        id_caja       = caja_obj.get("id_caja")        if isinstance(caja_obj, dict) else None
+        caja_desc     = caja_obj.get("descripcion", "") if isinstance(caja_obj, dict) else ""
+
+        personal_obj = p.get("personal") or {}
+        id_personal   = personal_obj.get("id_personal") if isinstance(personal_obj, dict) else None
+        personal_nom  = personal_obj.get("nombre", "")  if isinstance(personal_obj, dict) else ""
+
+        pago_rows.append({
+            "id":              int(pid),
+            "id_empresa":      p.get("id_empresa"),
+            "id_sucursal":     p.get("id_sucursal"),
+            "id_proveedor":    id_proveedor,
+            "proveedor":       str(proveedor),
+            "fecha":           str(p.get("fecha") or ""),
+            "nro_comprobante": str(p.get("nro_comprobante") or ""),
+            "forma_pago":      str(p.get("forma_pago") or ""),
+            "monto":           _to_float(p.get("monto")),
+            "moneda":          str(p.get("moneda") or ""),
+            "monto_aplicado":  _to_float(p.get("monto_aplicado")),
+            "retencion":       _to_float(p.get("retencion")),
+            "concepto":        str(p.get("concepto") or ""),
+            "observaciones":   str(p.get("observaciones") or ""),
+            "id_caja":         id_caja,
+            "caja":            str(caja_desc),
+            "id_personal":     id_personal,
+            "personal":        str(personal_nom),
+        })
+
+        lineas_por_pago[int(pid)] = [
+            {
+                "pago_id":     int(pid),
+                "tipo_valor":  str(l.get("tipo_valor") or ""),
+                "descripcion": str(l.get("descripcion") or ""),
+                "referencia":  str(l.get("referencia") or ""),
+                "monto":       _to_float(l.get("monto")),
+            }
+            for l in (p.get("lineas_pago") or [])
+        ]
+
+        imput_por_pago[int(pid)] = [
+            {
+                "pago_id":          int(pid),
+                "id_compra":        i.get("id_compra"),
+                "id_gasto":         i.get("id_gasto"),
+                "tipo_comprobante": str(i.get("tipo_comprobante") or ""),
+                "nro_comprobante":  str(i.get("nro_comprobante") or ""),
+                "monto_imputado":   _to_float(i.get("monto_imputado")),
+            }
+            for i in (p.get("imputaciones") or [])
+        ]
+
+    if not pago_rows:
+        return
+
+    client.table("pagos_proveedores").upsert(pago_rows, on_conflict="id").execute()
+
+    for pid, lineas in lineas_por_pago.items():
+        client.table("pagos_proveedores_lineas").delete().eq("pago_id", pid).execute()
+        if lineas:
+            client.table("pagos_proveedores_lineas").insert(lineas).execute()
+
+    for pid, imput in imput_por_pago.items():
+        client.table("pagos_proveedores_imputaciones").delete().eq("pago_id", pid).execute()
+        if imput:
+            client.table("pagos_proveedores_imputaciones").insert(imput).execute()
+
+
 def cargar_compras_desde_gastos(fecha):
     """Lee compras del día desde gastos sincronizados en Supabase.
     Retorna el mismo formato que cargar_compras_dux_v2 para compatibilidad
