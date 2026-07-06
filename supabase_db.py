@@ -1364,6 +1364,138 @@ def guardar_pagos_proveedores(pagos):
             client.table("pagos_proveedores_imputaciones").insert(imput).execute()
 
 
+def cargar_cobros():
+    client = get_client()
+    resp = client.table("cobros").select("*").execute()
+    if not resp.data:
+        return []
+
+    resp_cobranza = client.table("cobros_cobranza").select("*").execute()
+    cobranza_por_cobro = {}
+    for l in (resp_cobranza.data or []):
+        cid = l.get("cobro_id")
+        if cid is not None:
+            cobranza_por_cobro.setdefault(cid, []).append({
+                "tipo_valor":     l.get("tipo_valor"),
+                "descripcion":    l.get("descripcion"),
+                "referencia":     l.get("referencia"),
+                "monto":          l.get("monto"),
+                "id_tarjeta":     l.get("id_tarjeta"),
+                "id_plan_tarjeta": l.get("id_plan_tarjeta"),
+                "id_terminal":    l.get("id_terminal"),
+                "nro_cupon":      l.get("nro_cupon"),
+                "nro_lote":       l.get("nro_lote"),
+            })
+
+    resp_imput = client.table("cobros_imputaciones").select("*").execute()
+    imput_por_cobro = {}
+    for i in (resp_imput.data or []):
+        cid = i.get("cobro_id")
+        if cid is not None:
+            imput_por_cobro.setdefault(cid, []).append({
+                "id_comp_venta":                i.get("id_comp_venta"),
+                "id_nota_credito_debito_venta": i.get("id_nota_credito_debito_venta"),
+                "tipo_comp":                    i.get("tipo_comp"),
+                "nro_comprobante":              i.get("nro_comprobante"),
+                "monto_imputado":               i.get("monto_imputado"),
+            })
+
+    cobros = []
+    for r in resp.data:
+        cid = r.get("id")
+        cobros.append({
+            **r,
+            "cobranza":     cobranza_por_cobro.get(cid, []),
+            "imputaciones": imput_por_cobro.get(cid, []),
+        })
+    return cobros
+
+
+def guardar_cobros(cobros):
+    client = get_client()
+    cobro_rows = []
+    cobranza_por_cobro = {}
+    imput_por_cobro = {}
+
+    for c in cobros:
+        cid = c.get("id_cobro")
+        if not cid:
+            continue
+
+        cli_obj = c.get("cliente") or {}
+        id_cliente            = cli_obj.get("id_cliente")          if isinstance(cli_obj, dict) else None
+        apellido_razon_social = cli_obj.get("apellido_razon_social", "") if isinstance(cli_obj, dict) else str(cli_obj)
+        nombre_cliente        = cli_obj.get("nombre", "")          if isinstance(cli_obj, dict) else ""
+        tipo_doc              = cli_obj.get("tipo_doc", "")         if isinstance(cli_obj, dict) else ""
+        nro_doc               = cli_obj.get("nro_doc", "")          if isinstance(cli_obj, dict) else ""
+
+        per_obj = c.get("personal") or {}
+        id_personal  = per_obj.get("id_personal") if isinstance(per_obj, dict) else None
+        personal_nom = per_obj.get("nombre", "")  if isinstance(per_obj, dict) else ""
+
+        cobro_rows.append({
+            "id":                    int(cid),
+            "id_empresa":            c.get("id_empresa"),
+            "id_sucursal":           c.get("id_sucursal"),
+            "fecha":                 str(c.get("fecha") or ""),
+            "nro_comprobante":       str(c.get("nro_comprobante") or ""),
+            "tipo_comprobante":      str(c.get("tipo_comprobante") or ""),
+            "monto":                 _to_float(c.get("monto")),
+            "moneda":                str(c.get("moneda") or ""),
+            "observaciones":         str(c.get("observaciones") or ""),
+            "id_cliente":            id_cliente,
+            "cliente":               str(apellido_razon_social),
+            "nombre_cliente":        str(nombre_cliente),
+            "tipo_doc":              str(tipo_doc),
+            "nro_doc":               str(nro_doc),
+            "id_personal":           id_personal,
+            "personal":              str(personal_nom),
+        })
+
+        cobranza_por_cobro[int(cid)] = [
+            {
+                "cobro_id":        int(cid),
+                "tipo_valor":      str(l.get("tipo_valor") or ""),
+                "descripcion":     str(l.get("descripcion") or ""),
+                "referencia":      str(l.get("referencia") or ""),
+                "monto":           _to_float(l.get("monto")),
+                "id_tarjeta":      l.get("id_tarjeta"),
+                "id_plan_tarjeta": l.get("id_plan_tarjeta"),
+                "id_terminal":     l.get("id_terminal"),
+                "nro_cupon":       str(l.get("nro_cupon") or ""),
+                "nro_lote":        str(l.get("nro_lote") or ""),
+            }
+            for l in (c.get("cobranza") or [])
+        ]
+
+        imput_por_cobro[int(cid)] = [
+            {
+                "cobro_id":                      int(cid),
+                "id_comp_venta":                 i.get("id_comp_venta"),
+                "id_nota_credito_debito_venta":  i.get("id_nota_credito_debito_venta"),
+                "tipo_comp":                     str(i.get("tipo_comp") or ""),
+                "nro_comprobante":               str(i.get("nro_comprobante") or ""),
+                "monto_imputado":                _to_float(i.get("monto_imputado")),
+            }
+            for i in (c.get("imputaciones") or [])
+        ]
+
+    if not cobro_rows:
+        return
+
+    client.table("cobros").upsert(cobro_rows, on_conflict="id").execute()
+
+    for cid, lineas in cobranza_por_cobro.items():
+        client.table("cobros_cobranza").delete().eq("cobro_id", cid).execute()
+        if lineas:
+            client.table("cobros_cobranza").insert(lineas).execute()
+
+    for cid, imput in imput_por_cobro.items():
+        client.table("cobros_imputaciones").delete().eq("cobro_id", cid).execute()
+        if imput:
+            client.table("cobros_imputaciones").insert(imput).execute()
+
+
 def cargar_compras_desde_gastos(fecha):
     """Lee compras del día desde gastos sincronizados en Supabase.
     Retorna el mismo formato que cargar_compras_dux_v2 para compatibilidad

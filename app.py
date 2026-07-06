@@ -1329,6 +1329,47 @@ def _sync_facturas(fecha_desde, fecha_hasta):
     return True, len(all_facturas), f"✅ {len(all_facturas)} facturas — {n_cobr} cobradas, {n_anul} anuladas. [{_debug_cobro}]"
 
 
+def _sync_cobros(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    _id_empresa = int(dux_cfg.get("id_empresa", 3455))
+    _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
+    url = f"{_base_url}/v2/cobros"
+    headers = {"accept": "application/json", "authorization": f"Bearer {_token}"}
+    page_offset, page_size, all_cobros = 0, 50, []
+    while True:
+        params = {
+            "id_empresa": _id_empresa, "id_sucursal": _id_sucursal,
+            "fecha_desde": fecha_desde.strftime("%Y-%m-%d"),
+            "fecha_hasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "offset": page_offset, "limit": page_size,
+        }
+        try:
+            r = requests.get(url, params=params, headers=headers, timeout=30)
+        except requests.RequestException as e:
+            return False, 0, msg_error_red("DUX (cobros)", e)
+        if r.status_code != 200:
+            return False, 0, msg_error_http("DUX (cobros)", r.status_code, r.text)
+        try:
+            d = r.json()
+        except ValueError:
+            return False, 0, "❌ DUX devolvió una respuesta inválida (cobros)."
+        if isinstance(d, dict) and "error" in d:
+            return False, 0, f"❌ DUX (cobros): {d['error'].get('mensaje', d['error'])}"
+        page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
+        if not page:
+            break
+        all_cobros.extend(page)
+        paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
+        if not paging.get("hay_mas"):
+            break
+        page_offset += page_size
+        time.sleep(DUX_RATE_LIMIT_SECONDS)
+    db.guardar_cobros(all_cobros)
+    return True, len(all_cobros), f"✅ {len(all_cobros)} cobros sincronizados."
+
+
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
 # NOTA: la pestania de Analitica esta oculta (los bloques 'with tab_X:'
 # correspondientes estan reemplazados por 'if False:' mas abajo).
@@ -1367,7 +1408,7 @@ with tab_egresos:
     tab_eg_compras, tab_eg_gastos, tab_eg_pagos = st.tabs(["💰 Compras", "📄 Gastos", "💳 Pagos proveedores"])
 
 with tab_ingresos:
-    tab_ing_facturas, = st.tabs(["🧾 Facturas"])
+    tab_ing_facturas, tab_ing_cobros = st.tabs(["🧾 Facturas", "💵 Cobros"])
 
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
@@ -1848,6 +1889,62 @@ with tab_ingresos:
                             use_container_width=True, hide_index=True
                         )
 
+with tab_ingresos:
+    with tab_ing_cobros:
+        st.caption(f"🕒 Última sync: **{db.ultima_carga('cobros') or '?'}**")
+        try:
+            cobros_saved = db.cargar_cobros()
+        except Exception as e:
+            st.error(msg_error_sheets("leer cobros", e))
+            cobros_saved = []
+
+        if not cobros_saved:
+            st.info("Todavía no hay cobros. Andá a **🔄 Sincronizar**.")
+        else:
+            cobros_sorted = sorted(cobros_saved, key=lambda c: c.get("fecha") or "", reverse=True)
+            st.markdown(f"**{len(cobros_sorted)} cobros guardados**")
+            for c in cobros_sorted:
+                nro       = c.get("nro_comprobante") or "—"
+                cliente   = c.get("cliente") or "—"
+                fecha     = c.get("fecha") or "—"
+                monto     = c.get("monto") or 0
+                tipo      = c.get("tipo_comprobante") or ""
+                cobranza  = c.get("cobranza") or []
+                imput     = c.get("imputaciones") or []
+                with st.container(border=True):
+                    c_info, c_total = st.columns([5, 1.5])
+                    with c_info:
+                        st.markdown(
+                            f"**#{nro}** — {cliente} · 📅 {fecha}"
+                            + (f" · {tipo}" if tipo else "")
+                        )
+                    with c_total:
+                        st.markdown(f"**$ {monto:,.2f}**")
+                    if cobranza or imput:
+                        with st.expander("Ver detalle"):
+                            if cobranza:
+                                st.caption("Líneas de cobranza")
+                                st.dataframe(
+                                    pd.DataFrame([{
+                                        "Tipo": l.get("tipo_valor", ""),
+                                        "Descripción": l.get("descripcion", ""),
+                                        "Referencia": l.get("referencia", ""),
+                                        "Monto": l.get("monto", 0),
+                                        "Nro Cupón": l.get("nro_cupon", ""),
+                                    } for l in cobranza]),
+                                    use_container_width=True, hide_index=True,
+                                )
+                            if imput:
+                                st.caption("Imputaciones")
+                                st.dataframe(
+                                    pd.DataFrame([{
+                                        "Tipo comp.": i.get("tipo_comp", ""),
+                                        "Nro comprobante": i.get("nro_comprobante", ""),
+                                        "Monto imputado": i.get("monto_imputado", 0),
+                                    } for i in imput]),
+                                    use_container_width=True, hide_index=True,
+                                )
+
 with tab_sync:
     st.subheader("🔄 Sincronizar")
     st.caption("Trae y guarda Gastos, Compras, Pedidos DUX y Pedidos Wix de una sola vez.")
@@ -1885,6 +1982,7 @@ with tab_sync:
             ("Compras (DUX)", _sync_compras),
             ("Pedidos DUX", _sync_pedidos_dux),
             ("Facturas (DUX)", _sync_facturas),
+            ("Cobros (DUX)", _sync_cobros),
             ("Pedidos Wix", _sync_pedidos_wix),
         ]):
             if _i > 0:
