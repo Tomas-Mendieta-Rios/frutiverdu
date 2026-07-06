@@ -1335,12 +1335,15 @@ def guardar_pagos_proveedores(pagos):
 
         imput_por_pago[int(pid)] = [
             {
-                "pago_id":          int(pid),
-                "id_compra":        i.get("id_compra"),
-                "id_gasto":         i.get("id_gasto"),
-                "tipo_comprobante": str(i.get("tipo_comprobante") or ""),
-                "nro_comprobante":  str(i.get("nro_comprobante") or ""),
-                "monto_imputado":   _to_float(i.get("monto_imputado")),
+                "pago_id":                       int(pid),
+                "id_compra":                     i.get("id_compra"),
+                "id_gasto":                      i.get("id_gasto"),
+                "id_comp_compra":                i.get("id_comp_compra"),
+                "id_comp_gasto":                 i.get("id_comp_gasto"),
+                "id_nota_credito_debito_compra":  i.get("id_nota_credito_debito_compra"),
+                "tipo_comprobante":              str(i.get("tipo_comprobante") or ""),
+                "nro_comprobante":               str(i.get("nro_comprobante") or ""),
+                "monto_imputado":                _to_float(i.get("monto_imputado")),
             }
             for i in (p.get("imputaciones") or [])
         ]

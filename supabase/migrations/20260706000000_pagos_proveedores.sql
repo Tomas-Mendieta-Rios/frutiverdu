@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS pagos_proveedores_imputaciones (
     pago_id BIGINT REFERENCES pagos_proveedores(id) ON DELETE CASCADE,
     id_compra BIGINT,
     id_gasto BIGINT,
+    id_comp_compra BIGINT,
+    id_comp_gasto BIGINT,
+    id_nota_credito_debito_compra BIGINT,
     tipo_comprobante TEXT,
     nro_comprobante TEXT,
     monto_imputado NUMERIC DEFAULT 0
