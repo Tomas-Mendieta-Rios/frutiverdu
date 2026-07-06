@@ -323,7 +323,10 @@ if _ahora - st.session_state.get("_ultimo_heartbeat", 0) > HEARTBEAT_INTERVAL:
     except Exception:
         pass
 
-# Detectar otros usuarios activos en los ultimos 10 min
+# Detectar otros usuarios activos en los ultimos 10 min.
+# IMPORTANTE: usar st.empty() en vez de st.warning() condicional para que el
+# árbol de widgets antes de st.tabs() sea siempre estable (mismo nro de slots).
+_warning_otros_ph = st.empty()
 try:
     _cfg_now = db.cargar_config()
     _otros_activos = []
@@ -340,7 +343,7 @@ try:
         if _ahora - _ts_otro < PRESENCIA_WINDOW:
             _otros_activos.append(_nombre)
     if _otros_activos:
-        st.warning(
+        _warning_otros_ph.warning(
             f"⚠️ **{', '.join(_otros_activos)}** también está/n usando la app ahora. "
             "Tené cuidado con los cambios para no pisarse."
         )
