@@ -2106,6 +2106,7 @@ with tab_grupo_config:
         tab_proveedores,
         tab_editar,
         tab_probar,
+        tab_migracion,
     ) = st.tabs(
         [
             "Mapeo Wix↔DUX",
@@ -2117,6 +2118,7 @@ with tab_grupo_config:
             "Proveedores",
             "Relacionar productos",
             "Probar conversión",
+            "📦 Migrar desde Sheets",
         ]
     )
 
@@ -5238,6 +5240,103 @@ with tab_mixes:
     ts_mixes = db.ultima_carga("mixes_dux")
     ts_mixes_ph.caption(f"🕒 Última actualización: **{ts_mixes or '?'}**")
 
+
+
+with tab_migracion:
+    st.subheader("📦 Migrar datos de Google Sheets → Supabase")
+    st.info(
+        "Copia cada tabla desde Google Sheets a Supabase, reemplazando lo que había. "
+        "Hacé click en cada entidad por separado o usá **Migrar todo** para hacerlo de una."
+    )
+
+    try:
+        import gsheets_db as _gdb
+        _gdb_ok = True
+    except Exception as _e_gdb:
+        st.error(f"❌ No se pudo conectar a Google Sheets: {_e_gdb}")
+        _gdb_ok = False
+
+    if _gdb_ok:
+
+        def _mig_run(label, cargar_fn, guardar_fn, count_fn=None):
+            """Lee de Sheets, escribe en Supabase, devuelve (ok, mensaje)."""
+            try:
+                data = cargar_fn()
+                guardar_fn(data)
+                n = count_fn(data) if count_fn else (len(data) if hasattr(data, "__len__") else "?")
+                return True, f"✅ {label}: {n} registros migrados"
+            except Exception as _e:
+                return False, f"❌ {label}: {_e}"
+
+        ENTIDADES = [
+            ("🗺️ Mapeo Wix↔DUX",      _gdb.cargar_mapping_wix_dux, db.guardar_mapping_wix_dux, None),
+            ("📦 Packs Wix",           _gdb.cargar_packs_wix,       db.guardar_packs_wix,       None),
+            ("🔀 Mixes DUX",           _gdb.cargar_mixes_dux,       db.guardar_mixes_dux,
+             lambda d: sum(len(v) for v in d.values())),
+            ("🔗 Compuestos",          _gdb.cargar_compuestos,      db.guardar_compuestos,      None),
+            ("⚙️ Configuración",       None,                        None,                       None),  # handled separately
+        ]
+
+        if st.button("🚀 Migrar todo", type="primary", key="mig_todo"):
+            # Config: filter out ephemeral presencia_* keys
+            _msgs = []
+            for label, cfn, gfn, cnt in ENTIDADES:
+                if cfn is None:
+                    continue
+                ok, msg = _mig_run(label, cfn, gfn, cnt)
+                _msgs.append((ok, msg))
+            # Config separado
+            try:
+                _cfg_sheets = _gdb.cargar_config()
+                _cfg_filtrado = {k: v for k, v in _cfg_sheets.items() if not k.startswith("presencia_")}
+                db.guardar_config(_cfg_filtrado)
+                _msgs.append((True, f"✅ ⚙️ Configuración: {len(_cfg_filtrado)} claves migradas"))
+            except Exception as _e:
+                _msgs.append((False, f"❌ ⚙️ Configuración: {_e}"))
+            for ok, msg in _msgs:
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+
+        st.divider()
+
+        # Botones individuales
+        _e1, _e2 = st.columns(2)
+
+        with _e1:
+            st.markdown("#### 🗺️ Mapeo Wix↔DUX")
+            if st.button("Migrar mapeo", key="mig_mapeo"):
+                ok, msg = _mig_run("Mapeo", _gdb.cargar_mapping_wix_dux, db.guardar_mapping_wix_dux)
+                (st.success if ok else st.error)(msg)
+
+            st.markdown("#### 🔀 Mixes DUX")
+            if st.button("Migrar mixes", key="mig_mixes"):
+                ok, msg = _mig_run("Mixes", _gdb.cargar_mixes_dux, db.guardar_mixes_dux,
+                                   lambda d: sum(len(v) for v in d.values()))
+                (st.success if ok else st.error)(msg)
+
+            st.markdown("#### ⚙️ Configuración")
+            st.caption("Excluye claves de presencia de usuario (efímeras).")
+            if st.button("Migrar configuración", key="mig_config"):
+                try:
+                    _cfg_sheets = _gdb.cargar_config()
+                    _cfg_filtrado = {k: v for k, v in _cfg_sheets.items() if not k.startswith("presencia_")}
+                    db.guardar_config(_cfg_filtrado)
+                    st.success(f"✅ Configuración: {len(_cfg_filtrado)} claves migradas")
+                except Exception as _e:
+                    st.error(f"❌ Configuración: {_e}")
+
+        with _e2:
+            st.markdown("#### 📦 Packs Wix")
+            if st.button("Migrar packs", key="mig_packs"):
+                ok, msg = _mig_run("Packs", _gdb.cargar_packs_wix, db.guardar_packs_wix)
+                (st.success if ok else st.error)(msg)
+
+            st.markdown("#### 🔗 Compuestos (Relacionar productos)")
+            if st.button("Migrar compuestos", key="mig_compuestos"):
+                ok, msg = _mig_run("Compuestos", _gdb.cargar_compuestos, db.guardar_compuestos)
+                (st.success if ok else st.error)(msg)
 
 
 #python -m streamlit run app.py
