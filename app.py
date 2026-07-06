@@ -1468,9 +1468,9 @@ with tab_balance:
     def _pesos(v):
         return f"{int(round(float(v or 0))):,}".replace(",", ".")
 
-    tab_bal_resumen, tab_bal_pendientes, tab_bal_caja = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores", "💰 Movimiento de caja"])
+    _bal_nav = st.radio("", ["📊 Resumen", "💳 Pendientes & Deudores", "💰 Movimiento de caja"], horizontal=True, key="bal_nav", label_visibility="collapsed")
 
-    with tab_bal_pendientes:
+    if _bal_nav == "💳 Pendientes & Deudores":
         # ── Rango de fechas propio ─────────────────────────────────────────
         _pd_col1, _pd_col2 = st.columns(2)
         _pend_desde = _pd_col1.date_input("Desde", value=date(2020, 1, 1), key="pend_desde")
@@ -1594,7 +1594,7 @@ with tab_balance:
                                 with _x2:
                                     st.markdown(f"### $ {_pesos(_wix_monto(_p))}")
 
-    with tab_bal_resumen:
+    elif _bal_nav == "📊 Resumen":
         _hoy_bal = date.today()
         _cb1, _cb2 = st.columns(2)
         bal_desde = _cb1.date_input("Desde", value=_hoy_bal.replace(day=1), key="bal_desde", format="YYYY-MM-DD")
@@ -1836,6 +1836,93 @@ with tab_balance:
         color = "green" if resultado >= 0 else "red"
         signo = "+" if resultado >= 0 else ""
         st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
+
+    elif _bal_nav == "💰 Movimiento de caja":
+        _all_tipos = set()
+        for _c in cobros_bal:
+            for _cob in _c.get("cobranza", []):
+                _tv = _cob.get("tipo_valor")
+                if _tv:
+                    _all_tipos.add(_tv)
+        for _p in pagos_bal:
+            for _lin in _p.get("lineas_pago", []):
+                _tv = _lin.get("tipo_valor")
+                if _tv:
+                    _all_tipos.add(_tv)
+        _tipos_opts = ["Todas"] + sorted(_all_tipos)
+
+        _hoy_caja = date.today()
+        _cc1, _cc2, _cc3 = st.columns(3)
+        _caja_desde = _cc1.date_input("Desde", value=_hoy_caja.replace(day=1), key="caja_desde", format="YYYY-MM-DD")
+        _caja_hasta = _cc2.date_input("Hasta", value=_hoy_caja,                key="caja_hasta", format="YYYY-MM-DD")
+        _tipo_sel   = _cc3.selectbox("Tipo de caja", _tipos_opts,               key="caja_sel")
+
+        _movimientos = []
+        for _c in cobros_bal:
+            try:
+                _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
+            except Exception:
+                continue
+            if not (_caja_desde <= _f <= _caja_hasta):
+                continue
+            for _cob in _c.get("cobranza", []):
+                _tv = _cob.get("tipo_valor") or "—"
+                if _tipo_sel != "Todas" and _tv != _tipo_sel:
+                    continue
+                _movimientos.append({
+                    "fecha":    _f,
+                    "tipo":     "Entrada",
+                    "concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
+                    "caja":     _tv,
+                    "monto":    float(_cob.get("monto") or 0),
+                })
+        for _p in pagos_bal:
+            try:
+                _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
+            except Exception:
+                continue
+            if not (_caja_desde <= _f <= _caja_hasta):
+                continue
+            for _lin in _p.get("lineas_pago", []):
+                _tv = _lin.get("tipo_valor") or "—"
+                if _tipo_sel != "Todas" and _tv != _tipo_sel:
+                    continue
+                _movimientos.append({
+                    "fecha":    _f,
+                    "tipo":     "Salida",
+                    "concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
+                    "caja":     _tv,
+                    "monto":    float(_lin.get("monto") or 0),
+                })
+
+        _movimientos.sort(key=lambda m: m["fecha"], reverse=True)
+
+        _total_entradas = sum(m["monto"] for m in _movimientos if m["tipo"] == "Entrada")
+        _total_salidas  = sum(m["monto"] for m in _movimientos if m["tipo"] == "Salida")
+        _saldo_neto     = _total_entradas - _total_salidas
+        _k1, _k2, _k3  = st.columns(3)
+        _k1.metric("Entradas",   f"$ {_total_entradas:,.0f}")
+        _k2.metric("Salidas",    f"$ {_total_salidas:,.0f}")
+        _k3.metric("Saldo neto", f"$ {_saldo_neto:,.0f}", delta=f"{_saldo_neto:,.0f}")
+
+        if not _movimientos:
+            st.info("No hay movimientos en el período seleccionado.")
+        else:
+            st.dataframe(
+                pd.DataFrame([{
+                    "Fecha":    m["fecha"],
+                    "Tipo":     m["tipo"],
+                    "Caja":     m["caja"],
+                    "Concepto": m["concepto"],
+                    "Monto":    m["monto"],
+                } for m in _movimientos]),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                    "Fecha": st.column_config.DateColumn("Fecha"),
+                },
+            )
 
 with tab_ingresos:
     with tab_ing_facturas:
@@ -5143,93 +5230,6 @@ with tab_mixes:
     ts_mixes = db.ultima_carga("mixes_dux")
     ts_mixes_ph.caption(f"🕒 Última actualización: **{ts_mixes or '?'}**")
 
-
-with tab_bal_caja:
-    _all_tipos = set()
-    for _c in cobros_bal:
-        for _cob in _c.get("cobranza", []):
-            _tv = _cob.get("tipo_valor")
-            if _tv:
-                _all_tipos.add(_tv)
-    for _p in pagos_bal:
-        for _lin in _p.get("lineas_pago", []):
-            _tv = _lin.get("tipo_valor")
-            if _tv:
-                _all_tipos.add(_tv)
-    _tipos_opts = ["Todas"] + sorted(_all_tipos)
-
-    _hoy_caja = date.today()
-    _cc1, _cc2, _cc3 = st.columns(3)
-    _caja_desde = _cc1.date_input("Desde", value=_hoy_caja.replace(day=1), key="caja_desde", format="YYYY-MM-DD")
-    _caja_hasta = _cc2.date_input("Hasta", value=_hoy_caja,                key="caja_hasta", format="YYYY-MM-DD")
-    _tipo_sel   = _cc3.selectbox("Tipo de caja", _tipos_opts,               key="caja_sel")
-
-    _movimientos = []
-    for _c in cobros_bal:
-        try:
-            _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
-        except Exception:
-            continue
-        if not (_caja_desde <= _f <= _caja_hasta):
-            continue
-        for _cob in _c.get("cobranza", []):
-            _tv = _cob.get("tipo_valor") or "—"
-            if _tipo_sel != "Todas" and _tv != _tipo_sel:
-                continue
-            _movimientos.append({
-                "fecha":    _f,
-                "tipo":     "Entrada",
-                "concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
-                "caja":     _tv,
-                "monto":    float(_cob.get("monto") or 0),
-            })
-    for _p in pagos_bal:
-        try:
-            _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
-        except Exception:
-            continue
-        if not (_caja_desde <= _f <= _caja_hasta):
-            continue
-        for _lin in _p.get("lineas_pago", []):
-            _tv = _lin.get("tipo_valor") or "—"
-            if _tipo_sel != "Todas" and _tv != _tipo_sel:
-                continue
-            _movimientos.append({
-                "fecha":    _f,
-                "tipo":     "Salida",
-                "concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
-                "caja":     _tv,
-                "monto":    float(_lin.get("monto") or 0),
-            })
-
-    _movimientos.sort(key=lambda m: m["fecha"], reverse=True)
-
-    _total_entradas = sum(m["monto"] for m in _movimientos if m["tipo"] == "Entrada")
-    _total_salidas  = sum(m["monto"] for m in _movimientos if m["tipo"] == "Salida")
-    _saldo_neto     = _total_entradas - _total_salidas
-    _k1, _k2, _k3  = st.columns(3)
-    _k1.metric("Entradas",   f"$ {_total_entradas:,.0f}")
-    _k2.metric("Salidas",    f"$ {_total_salidas:,.0f}")
-    _k3.metric("Saldo neto", f"$ {_saldo_neto:,.0f}", delta=f"{_saldo_neto:,.0f}")
-
-    if not _movimientos:
-        st.info("No hay movimientos en el período seleccionado.")
-    else:
-        st.dataframe(
-            pd.DataFrame([{
-                "Fecha":    m["fecha"],
-                "Tipo":     m["tipo"],
-                "Caja":     m["caja"],
-                "Concepto": m["concepto"],
-                "Monto":    m["monto"],
-            } for m in _movimientos]),
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
-                "Fecha": st.column_config.DateColumn("Fecha"),
-            },
-        )
 
 
 #python -m streamlit run app.py
