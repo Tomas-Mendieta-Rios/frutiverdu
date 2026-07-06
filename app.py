@@ -1395,6 +1395,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
     tab_grupo_pedidos,
     tab_grupo_diario,
     tab_balance,
+    tab_mov_caja,
     tab_sync,
     tab_grupo_config,
 ) = st.tabs(
@@ -1405,6 +1406,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
         "📋 Pedidos",
         "📦 Diario",
         "📊 Balance",
+        "💰 Mov. de caja",
         "🔄 Sincronizar",
         "⚙️ Configuración",
     ]
@@ -1560,7 +1562,7 @@ with tab_balance:
     def _pesos(v):
         return f"{int(round(float(v or 0))):,}".replace(",", ".")
 
-    _bal_nav = st.radio("", ["📊 Resumen", "💳 Pendientes & Deudores", "💰 Movimiento de caja"], horizontal=True, key="bal_nav", label_visibility="collapsed")
+    _bal_nav = st.radio("", ["📊 Resumen", "💳 Pendientes & Deudores"], horizontal=True, key="bal_nav", label_visibility="collapsed")
 
     if _bal_nav == "💳 Pendientes & Deudores":
         # ── Rango de fechas propio ─────────────────────────────────────────
@@ -1929,8 +1931,8 @@ with tab_balance:
         signo = "+" if resultado >= 0 else ""
         st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
 
-    elif _bal_nav == "💰 Movimiento de caja":
-        _render_movimiento_caja(cobros_bal, pagos_bal)
+with tab_mov_caja:
+    _render_movimiento_caja(cobros_bal, pagos_bal)
 
 with tab_ingresos:
     with tab_ing_facturas:
