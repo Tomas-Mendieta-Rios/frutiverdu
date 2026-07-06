@@ -1464,6 +1464,8 @@ with tab_balance:
         compras_bal         = db.cargar_compras()
         comprobantes_bal    = db.cargar_comprobantes_compra()
         gastos_bal          = db.cargar_gastos()
+        cobros_bal          = db.cargar_cobros()
+        pagos_bal           = db.cargar_pagos_proveedores()
 
     tab_bal_resumen, tab_bal_pendientes, tab_bal_caja = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores", "💰 Movimiento de caja"])
 
@@ -1840,12 +1842,8 @@ with tab_balance:
         _caja_desde = _cc1.date_input("Desde", value=_hoy_caja.replace(day=1), key="caja_desde", format="YYYY-MM-DD")
         _caja_hasta = _cc2.date_input("Hasta", value=_hoy_caja,                key="caja_hasta", format="YYYY-MM-DD")
 
-        try:
-            _cobros_caja  = db.cargar_cobros()
-            _pagos_caja   = db.cargar_pagos_proveedores()
-        except Exception as _e:
-            st.error(f"Error cargando datos: {_e}")
-            _cobros_caja, _pagos_caja = [], []
+        _cobros_caja = cobros_bal
+        _pagos_caja  = pagos_bal
 
         _movimientos = []
         for _c in _cobros_caja:
