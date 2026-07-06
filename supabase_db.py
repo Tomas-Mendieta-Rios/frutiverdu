@@ -1238,6 +1238,7 @@ def guardar_gastos(gastos):
             client.table("gastos_items").insert(items).execute()
 
 
+@st.cache_data(ttl=120)
 def cargar_pagos_proveedores():
     client = get_client()
     resp = client.table("pagos_proveedores").select("*").execute()
@@ -1364,6 +1365,7 @@ def guardar_pagos_proveedores(pagos):
             client.table("pagos_proveedores_imputaciones").insert(imput).execute()
 
 
+@st.cache_data(ttl=120)
 def cargar_cobros():
     client = get_client()
     resp = client.table("cobros").select("*").execute()
