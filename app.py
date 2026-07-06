@@ -1458,14 +1458,13 @@ with tab_balance:
     def _pesos(v):
         return f"{int(round(float(v or 0))):,}".replace(",", ".")
 
-    with st.spinner("Cargando datos..."):
-        facturas_bal        = db.cargar_facturas()
-        pedidos_wix_bal     = db.cargar_pedidos_wix()
-        compras_bal         = db.cargar_compras()
-        comprobantes_bal    = db.cargar_comprobantes_compra()
-        gastos_bal          = db.cargar_gastos()
-        cobros_bal          = db.cargar_cobros()
-        pagos_bal           = db.cargar_pagos_proveedores()
+    facturas_bal        = db.cargar_facturas()
+    pedidos_wix_bal     = db.cargar_pedidos_wix()
+    compras_bal         = db.cargar_compras()
+    comprobantes_bal    = db.cargar_comprobantes_compra()
+    gastos_bal          = db.cargar_gastos()
+    cobros_bal          = db.cargar_cobros()
+    pagos_bal           = db.cargar_pagos_proveedores()
 
     tab_bal_resumen, tab_bal_pendientes, tab_bal_caja = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores", "💰 Movimiento de caja"])
 
