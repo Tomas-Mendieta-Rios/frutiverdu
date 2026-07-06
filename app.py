@@ -1838,15 +1838,13 @@ with tab_balance:
 
     with tab_bal_caja:
         _hoy_caja = date.today()
-        _cc1, _cc2 = st.columns(2)
+        _cc1, _cc2, _cc3 = st.columns(3)
         _caja_desde = _cc1.date_input("Desde", value=_hoy_caja.replace(day=1), key="caja_desde", format="YYYY-MM-DD")
         _caja_hasta = _cc2.date_input("Hasta", value=_hoy_caja,                key="caja_hasta", format="YYYY-MM-DD")
 
-        _cobros_caja = cobros_bal
-        _pagos_caja  = pagos_bal
-
+        # Armar todos los movimientos del período (sin filtro de caja aún)
         _movimientos = []
-        for _c in _cobros_caja:
+        for _c in cobros_bal:
             try:
                 _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
             except Exception:
@@ -1860,7 +1858,7 @@ with tab_balance:
                 "caja":     str(_c.get("caja") or "—"),
                 "monto":    float(_c.get("monto") or 0),
             })
-        for _p in _pagos_caja:
+        for _p in pagos_bal:
             try:
                 _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
             except Exception:
@@ -1875,16 +1873,18 @@ with tab_balance:
                 "monto":    float(_p.get("monto") or 0),
             })
 
+        # Selectbox siempre visible (evita desincronización de widget tree)
+        _cajas_disponibles = sorted(set(m["caja"] for m in _movimientos))
+        _caja_sel = _cc3.selectbox("Caja", ["Todas"] + _cajas_disponibles, key="caja_sel")
+
+        if _caja_sel != "Todas":
+            _movimientos = [m for m in _movimientos if m["caja"] == _caja_sel]
+
+        _movimientos.sort(key=lambda m: m["fecha"], reverse=True)
+
         if not _movimientos:
             st.info("No hay movimientos en el período seleccionado.")
         else:
-            _cajas_disponibles = sorted(set(m["caja"] for m in _movimientos))
-            _caja_sel = st.selectbox("Caja", ["Todas"] + _cajas_disponibles, key="caja_sel")
-            if _caja_sel != "Todas":
-                _movimientos = [m for m in _movimientos if m["caja"] == _caja_sel]
-
-            _movimientos.sort(key=lambda m: m["fecha"], reverse=True)
-
             _total_entradas = sum(m["monto"] for m in _movimientos if m["tipo"] == "Entrada")
             _total_salidas  = sum(m["monto"] for m in _movimientos if m["tipo"] == "Salida")
             _saldo_neto     = _total_entradas - _total_salidas
