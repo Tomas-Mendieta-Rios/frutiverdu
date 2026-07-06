@@ -1370,6 +1370,16 @@ def _sync_cobros(fecha_desde, fecha_hasta):
     return True, len(all_cobros), f"✅ {len(all_cobros)} cobros sincronizados."
 
 
+# Datos de balance cargados aquí (fuera de cualquier tab) para que el árbol
+# de widgets sea siempre consistente y no haya desincronización de tabs.
+facturas_bal     = db.cargar_facturas()
+pedidos_wix_bal  = db.cargar_pedidos_wix()
+compras_bal      = db.cargar_compras()
+comprobantes_bal = db.cargar_comprobantes_compra()
+gastos_bal       = db.cargar_gastos()
+cobros_bal       = db.cargar_cobros()
+pagos_bal        = db.cargar_pagos_proveedores()
+
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
 # NOTA: la pestania de Analitica esta oculta (los bloques 'with tab_X:'
 # correspondientes estan reemplazados por 'if False:' mas abajo).
@@ -1457,14 +1467,6 @@ with tab_balance:
 
     def _pesos(v):
         return f"{int(round(float(v or 0))):,}".replace(",", ".")
-
-    facturas_bal        = db.cargar_facturas()
-    pedidos_wix_bal     = db.cargar_pedidos_wix()
-    compras_bal         = db.cargar_compras()
-    comprobantes_bal    = db.cargar_comprobantes_compra()
-    gastos_bal          = db.cargar_gastos()
-    cobros_bal          = db.cargar_cobros()
-    pagos_bal           = db.cargar_pagos_proveedores()
 
     tab_bal_resumen, tab_bal_pendientes, tab_bal_caja = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores", "💰 Movimiento de caja"])
 
