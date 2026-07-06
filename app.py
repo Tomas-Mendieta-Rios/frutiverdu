@@ -1465,7 +1465,7 @@ with tab_balance:
         comprobantes_bal    = db.cargar_comprobantes_compra()
         gastos_bal          = db.cargar_gastos()
 
-    tab_bal_resumen, tab_bal_pendientes = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores"])
+    tab_bal_resumen, tab_bal_pendientes, tab_bal_caja = st.tabs(["📊 Resumen", "💳 Pendientes & Deudores", "💰 Movimiento de caja"])
 
     with tab_bal_pendientes:
         # ── Rango de fechas propio ─────────────────────────────────────────
@@ -1944,6 +1944,88 @@ with tab_ingresos:
                                     } for i in imput]),
                                     use_container_width=True, hide_index=True,
                                 )
+
+with tab_balance:
+    with tab_bal_caja:
+        _hoy_caja = date.today()
+        _cc1, _cc2 = st.columns(2)
+        _caja_desde = _cc1.date_input("Desde", value=_hoy_caja.replace(day=1), key="caja_desde", format="YYYY-MM-DD")
+        _caja_hasta = _cc2.date_input("Hasta", value=_hoy_caja,                key="caja_hasta", format="YYYY-MM-DD")
+
+        try:
+            _cobros_caja  = db.cargar_cobros()
+            _pagos_caja   = db.cargar_pagos_proveedores()
+        except Exception as _e:
+            st.error(f"Error cargando datos: {_e}")
+            _cobros_caja, _pagos_caja = [], []
+
+        # Armar lista de movimientos unificada
+        _movimientos = []
+        for _c in _cobros_caja:
+            try:
+                _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
+            except Exception:
+                continue
+            if not (_caja_desde <= _f <= _caja_hasta):
+                continue
+            _movimientos.append({
+                "fecha":    _f,
+                "tipo":     "Entrada",
+                "concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
+                "caja":     str(_c.get("caja") or "—"),
+                "monto":    float(_c.get("monto") or 0),
+            })
+
+        for _p in _pagos_caja:
+            try:
+                _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
+            except Exception:
+                continue
+            if not (_caja_desde <= _f <= _caja_hasta):
+                continue
+            _movimientos.append({
+                "fecha":    _f,
+                "tipo":     "Salida",
+                "concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
+                "caja":     str(_p.get("caja") or "—"),
+                "monto":    float(_p.get("monto") or 0),
+            })
+
+        if not _movimientos:
+            st.info("No hay movimientos en el período seleccionado.")
+        else:
+            # Filtro por caja
+            _cajas_disponibles = sorted(set(m["caja"] for m in _movimientos))
+            _caja_sel = st.selectbox("Caja", ["Todas"] + _cajas_disponibles, key="caja_sel")
+            if _caja_sel != "Todas":
+                _movimientos = [m for m in _movimientos if m["caja"] == _caja_sel]
+
+            _movimientos.sort(key=lambda m: m["fecha"], reverse=True)
+
+            _total_entradas = sum(m["monto"] for m in _movimientos if m["tipo"] == "Entrada")
+            _total_salidas  = sum(m["monto"] for m in _movimientos if m["tipo"] == "Salida")
+            _saldo_neto     = _total_entradas - _total_salidas
+
+            _k1, _k2, _k3 = st.columns(3)
+            _k1.metric("Entradas", f"$ {_total_entradas:,.0f}")
+            _k2.metric("Salidas",  f"$ {_total_salidas:,.0f}")
+            _k3.metric("Saldo neto", f"$ {_saldo_neto:,.0f}", delta=f"{_saldo_neto:,.0f}")
+
+            st.dataframe(
+                pd.DataFrame([{
+                    "Fecha":    m["fecha"],
+                    "Tipo":     m["tipo"],
+                    "Caja":     m["caja"],
+                    "Concepto": m["concepto"],
+                    "Monto":    m["monto"],
+                } for m in _movimientos]),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                    "Fecha": st.column_config.DateColumn("Fecha"),
+                },
+            )
 
 with tab_sync:
     st.subheader("🔄 Sincronizar")
