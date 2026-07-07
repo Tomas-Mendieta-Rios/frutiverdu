@@ -2,7 +2,6 @@ import hashlib
 import io
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 
 import requests
@@ -1378,28 +1377,15 @@ def _sync_cobros(fecha_desde, fecha_hasta):
     return True, len(all_cobros), f"✅ {len(all_cobros)} cobros sincronizados."
 
 
-# Datos de balance cargados en paralelo para reducir latencia de arranque.
-# Fuera de cualquier tab para que el árbol de widgets sea siempre consistente.
-_loaders = {
-    "facturas":     db.cargar_facturas,
-    "pedidos_wix":  db.cargar_pedidos_wix,
-    "compras":      db.cargar_compras,
-    "comprobantes": db.cargar_comprobantes_compra,
-    "gastos":       db.cargar_gastos,
-    "cobros":       db.cargar_cobros,
-    "pagos":        db.cargar_pagos_proveedores,
-}
-with ThreadPoolExecutor(max_workers=7) as _pool:
-    _futures = {_pool.submit(fn): name for name, fn in _loaders.items()}
-    _results = {_futures[f]: f.result() for f in as_completed(_futures)}
-
-facturas_bal     = _results["facturas"]
-pedidos_wix_bal  = _results["pedidos_wix"]
-compras_bal      = _results["compras"]
-comprobantes_bal = _results["comprobantes"]
-gastos_bal       = _results["gastos"]
-cobros_bal       = _results["cobros"]
-pagos_bal        = _results["pagos"]
+# Datos de balance cargados aquí (fuera de cualquier tab) para que el árbol
+# de widgets sea siempre consistente y no haya desincronización de tabs.
+facturas_bal     = db.cargar_facturas()
+pedidos_wix_bal  = db.cargar_pedidos_wix()
+compras_bal      = db.cargar_compras()
+comprobantes_bal = db.cargar_comprobantes_compra()
+gastos_bal       = db.cargar_gastos()
+cobros_bal       = db.cargar_cobros()
+pagos_bal        = db.cargar_pagos_proveedores()
 
 # Top-level tabs: agrupados por funcion. Sub-tabs adentro de cada grupo.
 # NOTA: la pestania de Analitica esta oculta (los bloques 'with tab_X:'
