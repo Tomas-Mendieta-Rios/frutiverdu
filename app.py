@@ -1449,9 +1449,23 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
 
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
-    _c1, _c2 = st.columns(2)
-    _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
-    _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
+
+    _all_tipos = set()
+    for _c in cobros:
+        for _cob in _c.get("cobranza", []):
+            _tv = _cob.get("tipo_valor")
+            if _tv:
+                _all_tipos.add(_tv)
+    for _p in pagos:
+        for _lin in _p.get("lineas_pago", []):
+            _tv = _lin.get("tipo_valor")
+            if _tv:
+                _all_tipos.add(_tv)
+
+    _c1, _c2, _c3 = st.columns(3)
+    _desde    = _c1.date_input("Desde",         value=_hoy.replace(day=1),              key="movcaja_desde", format="DD/MM/YYYY")
+    _hasta    = _c2.date_input("Hasta",          value=_hoy,                             key="movcaja_hasta", format="DD/MM/YYYY")
+    _tipo_sel = _c3.selectbox("Tipo de caja",   ["Todas"] + sorted(_all_tipos),          key="movcaja_tipo")
 
     _movimientos = []
     for _c in cobros:
@@ -1462,10 +1476,13 @@ def _render_movimiento_caja(cobros, pagos):
         if not (_desde <= _f <= _hasta):
             continue
         for _cob in _c.get("cobranza", []):
+            _tv = _cob.get("tipo_valor") or "—"
+            if _tipo_sel != "Todas" and _tv != _tipo_sel:
+                continue
             _movimientos.append({
                 "Fecha":    _f,
                 "Tipo":     "Entrada",
-                "Caja":     _cob.get("tipo_valor") or "—",
+                "Caja":     _tv,
                 "Concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
                 "Monto":    float(_cob.get("monto") or 0),
             })
@@ -1477,10 +1494,13 @@ def _render_movimiento_caja(cobros, pagos):
         if not (_desde <= _f <= _hasta):
             continue
         for _lin in _p.get("lineas_pago", []):
+            _tv = _lin.get("tipo_valor") or "—"
+            if _tipo_sel != "Todas" and _tv != _tipo_sel:
+                continue
             _movimientos.append({
                 "Fecha":    _f,
                 "Tipo":     "Salida",
-                "Caja":     _lin.get("tipo_valor") or "—",
+                "Caja":     _tv,
                 "Concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
                 "Monto":    float(_lin.get("monto") or 0),
             })
