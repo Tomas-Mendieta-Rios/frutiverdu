@@ -467,10 +467,10 @@ def cargar_pedidos_dux():
     if not resp_orders.data:
         return []
 
-    resp_items = client.table("pedidos_dux_items").select("*").execute()
+    all_items = _fetch_all(client, "pedidos_dux_items")
     prods = _productos_lookup()
     items_por_order = {}
-    for it in (resp_items.data or []):
+    for it in all_items:
         oid = str(it.get("order_id") or "")
         if oid:
             cod = str(it.get("cod_item") or "")
@@ -912,11 +912,21 @@ def guardar_proveedores(df):
 def cargar_compras():
     """DataFrame plano por ítem. Incluye comprobante_id y total_comprobante para el balance."""
     client = get_client()
-    resp = client.table("items_compra").select(
+    cols = (
         "comprobante_id, cod_item, item, ctd, precio_uni, porc_desc, porc_iva, "
         "comprobantes_compra(nro_comprobante, fecha, id_proveedor, proveedor, condicion_pago, total)"
-    ).execute()
-    rows = resp.data or []
+    )
+    rows = []
+    offset = 0
+    batch = 1000
+    while True:
+        resp = client.table("items_compra").select(cols).range(offset, offset + batch - 1).execute()
+        if not resp.data:
+            break
+        rows.extend(resp.data)
+        if len(resp.data) < batch:
+            break
+        offset += batch
     if not rows:
         return pd.DataFrame()
     prods = _productos_lookup()
@@ -1192,10 +1202,10 @@ def cargar_gastos():
     if not resp_gastos.data:
         return []
 
-    resp_items = client.table("gastos_items").select("*").execute()
+    all_items_gasto = _fetch_all(client, "gastos_items")
     prods = _productos_lookup()
     items_por_gasto = {}
-    for it in (resp_items.data or []):
+    for it in all_items_gasto:
         gid = it.get("gasto_id")
         if gid is not None:
             cod = str(it.get("cod_item") or "")
