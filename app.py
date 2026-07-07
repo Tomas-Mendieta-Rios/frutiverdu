@@ -2991,12 +2991,22 @@ with tab_carga_stock:
         f"🕒 Último guardado: **{_fmt_ts(db.ultima_carga('stock'))}**"
     )
 
-    fecha_carga = st.date_input(
-        "Fecha de conteo",
-        value=date.today(),
-        key="carga_stock_fecha",
-        format="DD/MM/YYYY",
-    )
+    if "carga_stock_fecha_activa" not in st.session_state:
+        st.session_state["carga_stock_fecha_activa"] = date.today()
+
+    with st.form("form_ver_stock_fecha", border=False):
+        fecha_carga_input = st.date_input(
+            "Fecha de conteo",
+            value=st.session_state["carga_stock_fecha_activa"],
+            key="carga_stock_fecha",
+            format="DD/MM/YYYY",
+        )
+        _ver_stock = st.form_submit_button("🔄 Ver", type="primary", use_container_width=True)
+
+    if _ver_stock:
+        st.session_state["carga_stock_fecha_activa"] = fecha_carga_input
+
+    fecha_carga = st.session_state["carga_stock_fecha_activa"]
 
     if productos.empty:
         st.warning("Primero sincronizá los productos en 📡 DUX Productos.")
@@ -3018,9 +3028,6 @@ with tab_carga_stock:
         ).astype(float)
 
         with st.form("form_carga_stock_simple", clear_on_submit=False):
-            guardar_carga = st.form_submit_button(
-                "💾 Guardar Stock", type="primary", use_container_width=True,
-            )
             edited_carga = st.data_editor(
                 df_carga,
                 use_container_width=True,
@@ -3035,6 +3042,9 @@ with tab_carga_stock:
                     ),
                 },
                 key=f"editor_carga_stock_{fecha_carga}",
+            )
+            guardar_carga = st.form_submit_button(
+                "💾 Guardar Stock", type="primary", use_container_width=True,
             )
 
         if guardar_carga:
