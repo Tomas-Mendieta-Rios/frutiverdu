@@ -5372,7 +5372,8 @@ with tab_migracion:
                     _sc = db.get_client()
                     _sc.table("stock_historico").delete().neq("codigo", "___never___").execute()
                     _st_recs = _df_stock_mig.where(pd.notnull(_df_stock_mig), None).to_dict(orient="records")
-                    _sc.table("stock_historico").insert(_st_recs).execute()
+                    for _ci in range(0, len(_st_recs), 500):
+                        _sc.table("stock_historico").insert(_st_recs[_ci:_ci + 500]).execute()
                     _msgs.append((True, f"✅ 📦 Stock histórico: {len(_st_recs)} registros migrados"))
                 else:
                     _msgs.append((True, "✅ 📦 Stock histórico: Sheets vacío, nada que migrar"))
@@ -5428,7 +5429,8 @@ with tab_migracion:
                         _sc_b = db.get_client()
                         _sc_b.table("stock_historico").delete().neq("codigo", "___never___").execute()
                         _st_recs_b = _df_stock_b.where(pd.notnull(_df_stock_b), None).to_dict(orient="records")
-                        _sc_b.table("stock_historico").insert(_st_recs_b).execute()
+                        for _ci in range(0, len(_st_recs_b), 500):
+                            _sc_b.table("stock_historico").insert(_st_recs_b[_ci:_ci + 500]).execute()
                         st.success(f"✅ Stock: {len(_st_recs_b)} registros migrados")
                 except Exception as _e:
                     st.error(f"❌ Stock: {_e}")
