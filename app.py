@@ -2,13 +2,25 @@ import hashlib
 import io
 import re
 import time
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 
 import requests
 import streamlit as st
 import pandas as pd
 
 import supabase_db as db
+
+_AR = timezone(timedelta(hours=-3))
+
+def _fmt_ts(ts):
+    if not ts:
+        return "?"
+    try:
+        dt = datetime.fromisoformat(str(ts)).astimezone(_AR)
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        return str(ts)
+
 
 DUX_RATE_LIMIT_SECONDS = 5.5
 
@@ -2193,7 +2205,7 @@ with tab_editar:
         st.success("Compuestos guardados correctamente.")
 
     ts_comp = db.ultima_carga("compuestos")
-    ts_comp_ph.caption(f"🕒 Última actualización: **{ts_comp or '?'}**")
+    ts_comp_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_comp)}**")
 
 with tab_probar:
     st.info("Elegí un producto y se muestran todas las equivalencias de su familia.")
@@ -2332,7 +2344,7 @@ with tab_comprar:
 
     ts_actualizar_ultimo = cfg_comprar.get("comprar_ultima_actualizacion")
     ts_comprar_ph.caption(
-        f"🕒 Última actualización: **{ts_actualizar_ultimo or '?'}**"
+        f"🕒 Última actualización: **{_fmt_ts(ts_actualizar_ultimo)}**"
     )
 
     if str(fecha_stock_sel) not in (fechas_stock_disp or []):
@@ -2986,7 +2998,7 @@ with tab_estimado:
 
     # Refrescar timestamp despues del posible save (placeholder esta arriba)
     ts_est_ultimo = db.ultima_carga("estimado_semanal")
-    ts_est_ph.caption(f"🕒 Última actualización: **{ts_est_ultimo or '?'}**")
+    ts_est_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_est_ultimo)}**")
 
 with tab_carga_stock:
     ts_carga_stk_ph = st.empty()
@@ -4034,7 +4046,7 @@ with tab_dux_productos:
             st.error(msg_error_sheets("leer productos", e))
 
     ts_dux_prod = db.ultima_carga("dux_productos")
-    ts_dux_prod_ph.caption(f"🕒 Última actualización: **{ts_dux_prod or '?'}**")
+    ts_dux_prod_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_dux_prod)}**")
 
 with tab_dux_rubros:
     ts_dux_rubros_ph = st.empty()
@@ -4155,7 +4167,7 @@ with tab_dux_rubros:
             st.error(msg_error_sheets("leer subrubros", e))
 
     ts_dux_rubros = db.ultima_carga("dux_rubros")
-    ts_dux_rubros_ph.caption(f"🕒 Última actualización rubros: **{ts_dux_rubros or '?'}**")
+    ts_dux_rubros_ph.caption(f"🕒 Última actualización rubros: **{_fmt_ts(ts_dux_rubros)}**")
 
 with tab_wix:
     wix_cfg = st.secrets.get("wix", {})
@@ -4528,7 +4540,7 @@ with tab_wix_productos:
             st.error(msg_error_sheets("leer productos Wix", e))
 
     ts_wix_prod = db.ultima_carga("wix_productos")
-    ts_wix_prod_ph.caption(f"🕒 Última actualización: **{ts_wix_prod or '?'}**")
+    ts_wix_prod_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_wix_prod)}**")
 
 with tab_proveedores:
     ts_prov_ph = st.empty()
@@ -4691,7 +4703,7 @@ with tab_proveedores:
         st.error(msg_error_sheets("leer proveedores", e))
 
     ts_prov = db.ultima_carga("proveedores")
-    ts_prov_ph.caption(f"🕒 Última actualización: **{ts_prov or '?'}**")
+    ts_prov_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_prov)}**")
 
 with tab_eg_compras:
     st.caption(f"🕒 Última sync: **{db.ultima_carga('compras_sync') or '?'}**")
@@ -4871,7 +4883,7 @@ with tab_eg_pagos:
 with tab_mapeo:
     ts_mapeo_ph = st.empty()
     ts_mapeo_ph.caption(
-        f"🕒 Última actualización: **{db.ultima_carga('mapping_wix_dux') or '?'}**"
+        f"🕒 Última actualización: **{_fmt_ts(db.ultima_carga('mapping_wix_dux'))}**"
     )
 
     st.info(
@@ -5021,7 +5033,7 @@ with tab_mapeo:
             db.guardar_mapping_wix_dux(df_to_save)
             try:
                 ts_mapeo_ph.caption(
-                    f"🕒 Última actualización: **{db.ultima_carga('mapping_wix_dux') or '?'}**"
+                    f"🕒 Última actualización: **{_fmt_ts(db.ultima_carga('mapping_wix_dux'))}**"
                 )
             except Exception:
                 pass
@@ -5163,7 +5175,7 @@ with tab_packs:
                 )
 
     ts_packs = db.ultima_carga("packs")
-    ts_packs_ph.caption(f"🕒 Última actualización: **{ts_packs or '?'}**")
+    ts_packs_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_packs)}**")
 
 with tab_mixes:
     ts_mixes_ph = st.empty()
@@ -5238,7 +5250,7 @@ with tab_mixes:
                     st.error(msg_error_sheets("guardar mixes", e))
 
     ts_mixes = db.ultima_carga("mixes_dux")
-    ts_mixes_ph.caption(f"🕒 Última actualización: **{ts_mixes or '?'}**")
+    ts_mixes_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_mixes)}**")
 
 
 
