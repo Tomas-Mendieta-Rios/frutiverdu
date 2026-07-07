@@ -169,6 +169,23 @@ def guardar_compuestos(df):
 
 # ---------------- STOCK ----------------
 
+def _norm_fecha_iso(x):
+    """Convierte cualquier formato de fecha a 'YYYY-MM-DD'. Devuelve None si inválido."""
+    if x is None:
+        return None
+    s = str(x).strip()
+    if s in ("", "None", "nan", "NaT"):
+        return None
+    # Fast path: ya es ISO (empieza con YYYY-)
+    if len(s) >= 10 and s[4] == "-":
+        return s[:10]
+    # Slow path: puede ser DD/MM/YYYY (Sheets argentino) o MM/DD/YYYY
+    try:
+        return pd.to_datetime(s, dayfirst=True).strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
 def cargar_stock_completo():
     client = get_client()
     resp = client.table("stock_historico").select("*").execute()
@@ -179,8 +196,9 @@ def cargar_stock_completo():
     if "id" in df.columns:
         df = df.drop(columns=["id"])
     df["codigo"] = df["codigo"].astype(str)
-    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df["fecha"] = df["fecha"].apply(_norm_fecha_iso)
     df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce")
+    df = df[df["fecha"].notna()]
     return df
 
 

@@ -5308,6 +5308,11 @@ with tab_migracion:
             try:
                 _df_stock_mig = _gdb.cargar_stock_completo()
                 if not _df_stock_mig.empty:
+                    # Normalizar fecha a ISO YYYY-MM-DD (Sheets puede traer DD/MM/YYYY)
+                    _df_stock_mig["fecha"] = pd.to_datetime(
+                        _df_stock_mig["fecha"], dayfirst=True, errors="coerce"
+                    ).dt.strftime("%Y-%m-%d")
+                    _df_stock_mig = _df_stock_mig[_df_stock_mig["fecha"].notna()]
                     _sc = db.get_client()
                     _sc.table("stock_historico").delete().neq("codigo", "___never___").execute()
                     _st_recs = _df_stock_mig.where(pd.notnull(_df_stock_mig), None).to_dict(orient="records")
@@ -5365,6 +5370,11 @@ with tab_migracion:
                     if _df_stock_b.empty:
                         st.warning("⚠️ Stock: Sheets vacío, nada que migrar")
                     else:
+                        # Normalizar fecha a ISO YYYY-MM-DD (Sheets puede traer DD/MM/YYYY)
+                        _df_stock_b["fecha"] = pd.to_datetime(
+                            _df_stock_b["fecha"], dayfirst=True, errors="coerce"
+                        ).dt.strftime("%Y-%m-%d")
+                        _df_stock_b = _df_stock_b[_df_stock_b["fecha"].notna()]
                         _sc_b = db.get_client()
                         _sc_b.table("stock_historico").delete().neq("codigo", "___never___").execute()
                         _st_recs_b = _df_stock_b.where(pd.notnull(_df_stock_b), None).to_dict(orient="records")
