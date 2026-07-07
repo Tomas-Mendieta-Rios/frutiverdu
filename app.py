@@ -1529,6 +1529,7 @@ def _render_movimiento_caja(cobros, pagos):
             } for m in _movimientos]),
             use_container_width=True,
             hide_index=True,
+            height=500,
             column_config={
                 "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
                 "Fecha": st.column_config.DateColumn("Fecha"),
