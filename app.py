@@ -1380,6 +1380,10 @@ with tab_egresos:
 with tab_ingresos:
     tab_ing_facturas, tab_ing_cobros = st.tabs(["🧾 Facturas", "💵 Cobros"])
 
+with tab_ingresos:
+    with tab_ing_cobros:
+        tab_cob_dux, tab_cob_wix = st.tabs(["DUX", "Wix"])
+
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
 
@@ -1959,59 +1963,138 @@ with tab_ingresos:
 
 with tab_ingresos:
     with tab_ing_cobros:
-        st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('cobros'))}**")
-        try:
-            cobros_saved = db.cargar_cobros()
-        except Exception as e:
-            st.error(msg_error_sheets("leer cobros", e))
-            cobros_saved = []
+        with tab_cob_dux:
+            st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('cobros'))}**")
+            try:
+                cobros_saved = db.cargar_cobros()
+            except Exception as e:
+                st.error(msg_error_sheets("leer cobros", e))
+                cobros_saved = []
 
-        if not cobros_saved:
-            st.info("Todavía no hay cobros. Andá a **🔄 Sincronizar**.")
-        else:
-            cobros_sorted = sorted(cobros_saved, key=lambda c: c.get("fecha") or "", reverse=True)
-            st.markdown(f"**{len(cobros_sorted)} cobros guardados**")
-            for c in cobros_sorted:
-                nro       = c.get("nro_comprobante") or "—"
-                cliente   = c.get("cliente") or "—"
-                fecha     = _fmt_fecha(c.get("fecha"))
-                monto     = c.get("monto") or 0
-                tipo      = c.get("tipo_comprobante") or ""
-                cobranza  = c.get("cobranza") or []
-                imput     = c.get("imputaciones") or []
-                with st.container(border=True):
-                    c_info, c_total = st.columns([5, 1.5])
-                    with c_info:
-                        st.markdown(
-                            f"**#{nro}** — {cliente} · 📅 {fecha}"
-                            + (f" · {tipo}" if tipo else "")
-                        )
-                    with c_total:
-                        st.markdown(f"**$ {monto:,.2f}**")
-                    if cobranza or imput:
-                        with st.expander("Ver detalle"):
-                            if cobranza:
-                                st.caption("Líneas de cobranza")
-                                st.dataframe(
-                                    pd.DataFrame([{
-                                        "Tipo": l.get("tipo_valor", ""),
-                                        "Descripción": l.get("descripcion", ""),
-                                        "Referencia": l.get("referencia", ""),
-                                        "Monto": l.get("monto", 0),
-                                        "Nro Cupón": l.get("nro_cupon", ""),
-                                    } for l in cobranza]),
-                                    use_container_width=True, hide_index=True,
-                                )
-                            if imput:
-                                st.caption("Imputaciones")
-                                st.dataframe(
-                                    pd.DataFrame([{
-                                        "Tipo comp.": i.get("tipo_comp", ""),
-                                        "Nro comprobante": i.get("nro_comprobante", ""),
-                                        "Monto imputado": i.get("monto_imputado", 0),
-                                    } for i in imput]),
-                                    use_container_width=True, hide_index=True,
-                                )
+            if not cobros_saved:
+                st.info("Todavía no hay cobros. Andá a **🔄 Sincronizar**.")
+            else:
+                cobros_sorted = sorted(cobros_saved, key=lambda c: c.get("fecha") or "", reverse=True)
+                st.markdown(f"**{len(cobros_sorted)} cobros guardados**")
+                for c in cobros_sorted:
+                    nro       = c.get("nro_comprobante") or "—"
+                    cliente   = c.get("cliente") or "—"
+                    fecha     = _fmt_fecha(c.get("fecha"))
+                    monto     = c.get("monto") or 0
+                    tipo      = c.get("tipo_comprobante") or ""
+                    cobranza  = c.get("cobranza") or []
+                    imput     = c.get("imputaciones") or []
+                    with st.container(border=True):
+                        c_info, c_total = st.columns([5, 1.5])
+                        with c_info:
+                            st.markdown(
+                                f"**#{nro}** — {cliente} · 📅 {fecha}"
+                                + (f" · {tipo}" if tipo else "")
+                            )
+                        with c_total:
+                            st.markdown(f"**$ {monto:,.2f}**")
+                        if cobranza or imput:
+                            with st.expander("Ver detalle"):
+                                if cobranza:
+                                    st.caption("Líneas de cobranza")
+                                    st.dataframe(
+                                        pd.DataFrame([{
+                                            "Tipo": l.get("tipo_valor", ""),
+                                            "Descripción": l.get("descripcion", ""),
+                                            "Referencia": l.get("referencia", ""),
+                                            "Monto": l.get("monto", 0),
+                                            "Nro Cupón": l.get("nro_cupon", ""),
+                                        } for l in cobranza]),
+                                        use_container_width=True, hide_index=True,
+                                    )
+                                if imput:
+                                    st.caption("Imputaciones")
+                                    st.dataframe(
+                                        pd.DataFrame([{
+                                            "Tipo comp.": i.get("tipo_comp", ""),
+                                            "Nro comprobante": i.get("nro_comprobante", ""),
+                                            "Monto imputado": i.get("monto_imputado", 0),
+                                        } for i in imput]),
+                                        use_container_width=True, hide_index=True,
+                                    )
+
+        with tab_cob_wix:
+            try:
+                _cajas_cob = db.cargar_cajas()
+            except Exception:
+                _cajas_cob = []
+            _cajas_activas_cob = [c for c in _cajas_cob if c.get("activa", True)]
+            _cajas_names_cob = [c["nombre"] for c in _cajas_activas_cob]
+            _cajas_por_id_cob = {c["id"]: c["nombre"] for c in _cajas_cob}
+            _cajas_por_nombre_cob = {c["nombre"]: c["id"] for c in _cajas_cob}
+
+            try:
+                _wix_orders_cob = db.cargar_pedidos_wix()
+            except Exception as _e_wc:
+                st.error(f"No se pudieron cargar los pedidos Wix: {_e_wc}")
+                _wix_orders_cob = []
+
+            if not _wix_orders_cob:
+                st.info("No hay pedidos Wix sincronizados.")
+            else:
+                _wix_sorted_cob = sorted(
+                    _wix_orders_cob,
+                    key=lambda o: int(str(o.get("number") or 0)),
+                    reverse=True,
+                )[:100]
+
+                _filas_cob = []
+                for _o in _wix_sorted_cob:
+                    _nro_c = _o.get("number") or _o.get("id") or ""
+                    _oid_c = str(_o.get("id") or _nro_c)
+                    _bi = (_o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+                    _nombre_c = (
+                        f"{_bi.get('firstName', '')} {_bi.get('lastName', '')}".strip()
+                        or _o.get("buyerInfo", {}).get("email", "")
+                        or "—"
+                    )
+                    _caja_id_c = _o.get("caja_id")
+                    _pay_map = {"PAID": "✅ Pagado", "UNPAID": "❌ Sin pagar", "PENDING": "🟡 Pendiente",
+                                "PARTIALLY_REFUNDED": "🟠 Parcial", "FULLY_REFUNDED": "⚫ Reembolsado"}
+                    _ful_map = {"FULFILLED": "✅ Entregado", "NOT_FULFILLED": "⏳ Pendiente",
+                                "PARTIALLY_FULFILLED": "🔶 Parcial"}
+                    _filas_cob.append({
+                        "_order_id": _oid_c,
+                        "Pedido": f"#{_nro_c}",
+                        "Cliente": _nombre_c,
+                        "Total": (_o.get("priceSummary", {}) or {}).get("total", {}).get("formattedAmount", ""),
+                        "Pago": _pay_map.get(str(_o.get("paymentStatus") or "").upper(), "—"),
+                        "Entrega": _ful_map.get(str(_o.get("fulfillmentStatus") or "").upper(), "—"),
+                        "Caja": _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None,
+                    })
+
+                _df_cob = pd.DataFrame(_filas_cob)
+                with st.form("form_cobros_wix_cajas", border=False):
+                    _edited_cob = st.data_editor(
+                        _df_cob[["Pedido", "Cliente", "Total", "Pago", "Entrega", "Caja"]],
+                        use_container_width=True,
+                        hide_index=True,
+                        disabled=["Pedido", "Cliente", "Total", "Pago", "Entrega"],
+                        column_config={
+                            "Caja": st.column_config.SelectboxColumn(
+                                "Caja", options=_cajas_names_cob, required=False,
+                            ),
+                        },
+                    )
+                    _guardar_cob = st.form_submit_button(
+                        "💾 Guardar cajas", type="primary", use_container_width=True
+                    )
+                if _guardar_cob:
+                    _asign_cob = {}
+                    for _i, _row in _edited_cob.iterrows():
+                        _oid_k = _df_cob.iloc[_i]["_order_id"]
+                        _cn = _row["Caja"]
+                        _asign_cob[_oid_k] = _cajas_por_nombre_cob.get(_cn) if _cn else None
+                    try:
+                        db.asignar_cajas_pedidos_wix(_asign_cob)
+                        st.success(f"✅ Cajas guardadas para {len(_asign_cob)} pedidos.")
+                    except Exception as _e_cob:
+                        st.error(f"❌ {_e_cob}")
 
 with tab_sync:
     st.subheader("🔄 Sincronizar")
@@ -4185,16 +4268,6 @@ with tab_wix:
             st.error(msg_error_sheets("leer pedidos Wix", e))
             wix_orders_saved = []
 
-        try:
-            _cajas_wix = db.cargar_cajas()
-        except Exception:
-            _cajas_wix = []
-
-        _cajas_activas_wix = [c for c in _cajas_wix if c.get("activa", True)]
-        _cajas_opts_wix = ["—"] + [c["nombre"] for c in _cajas_activas_wix]
-        _cajas_por_id_wix = {c["id"]: c["nombre"] for c in _cajas_wix}
-        _cajas_por_nombre_wix = {c["nombre"]: c["id"] for c in _cajas_wix}
-
         st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_wix'))}**")
 
         orders_saved = wix_orders_saved or []
@@ -4403,50 +4476,6 @@ with tab_wix:
                     st.success(f"✅ {len(nuevas_selecciones)} entregas guardadas.")
                 except Exception as e:
                     st.error(msg_error_sheets("guardar selecciones Wix", e))
-
-            # ---- Asignación de cajas (data_editor separado) ----
-            st.divider()
-            st.markdown("#### 💰 Asignar cajas")
-            _filas_caja_ed = []
-            for o in orders_saved_sorted:
-                _nro = _wix_nro(o)
-                _oid = o.get("id") or _nro
-                _caja_prev_id = o.get("caja_id")
-                _filas_caja_ed.append({
-                    "_order_id": str(_oid),
-                    "Pedido": f"#{_nro}",
-                    "Cliente": _wix_cliente(o),
-                    "Total": (o.get("priceSummary", {}) or {}).get("total", {}).get("formattedAmount", ""),
-                    "Caja": _cajas_por_id_wix.get(_caja_prev_id) if _caja_prev_id else None,
-                })
-            _df_caja_ed = pd.DataFrame(_filas_caja_ed)
-            _cajas_names = [c["nombre"] for c in _cajas_activas_wix]
-            with st.form("form_wix_cajas", border=False):
-                _edited_cajas_df = st.data_editor(
-                    _df_caja_ed[["Pedido", "Cliente", "Total", "Caja"]],
-                    use_container_width=True,
-                    hide_index=True,
-                    disabled=["Pedido", "Cliente", "Total"],
-                    column_config={
-                        "Caja": st.column_config.SelectboxColumn(
-                            "Caja", options=_cajas_names, required=False,
-                        ),
-                    },
-                )
-                _guardar_cajas_wix = st.form_submit_button(
-                    "💾 Guardar cajas", type="primary", use_container_width=True
-                )
-            if _guardar_cajas_wix:
-                _asign = {}
-                for _i, _row in _edited_cajas_df.iterrows():
-                    _oid_k = _df_caja_ed.iloc[_i]["_order_id"]
-                    _cn = _row["Caja"]
-                    _asign[_oid_k] = _cajas_por_nombre_wix.get(_cn) if _cn else None
-                try:
-                    db.asignar_cajas_pedidos_wix(_asign)
-                    st.success(f"✅ Cajas guardadas para {len(_asign)} pedidos.")
-                except Exception as _e_cj:
-                    st.error(f"❌ No se pudieron guardar las cajas: {_e_cj}")
 
 with tab_wix_productos:
     ts_wix_prod_ph = st.empty()
