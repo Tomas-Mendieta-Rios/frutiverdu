@@ -1574,11 +1574,28 @@ with tab_balance:
 
     _bal_nav = st.radio("", ["📊 Resumen", "💳 Pendientes & Deudores"], horizontal=True, key="bal_nav", label_visibility="collapsed")
 
+    _cfg_bal = db.cargar_config()
+
     if _bal_nav == "💳 Pendientes & Deudores":
         # ── Rango de fechas propio ─────────────────────────────────────────
+        try:
+            _pend_desde_def = date.fromisoformat(_cfg_bal.get("pend_desde", ""))
+        except Exception:
+            _pend_desde_def = date(2020, 1, 1)
+        try:
+            _pend_hasta_def = date.fromisoformat(_cfg_bal.get("pend_hasta", ""))
+        except Exception:
+            _pend_hasta_def = date.today()
+
+        def _save_pend_dates():
+            db.guardar_config({
+                "pend_desde": str(st.session_state.get("pend_desde", _pend_desde_def)),
+                "pend_hasta": str(st.session_state.get("pend_hasta", _pend_hasta_def)),
+            })
+
         _pd_col1, _pd_col2 = st.columns(2)
-        _pend_desde = _pd_col1.date_input("Desde", value=date(2020, 1, 1), key="pend_desde")
-        _pend_hasta = _pd_col2.date_input("Hasta", value=date.today(),     key="pend_hasta")
+        _pend_desde = _pd_col1.date_input("Desde", value=_pend_desde_def, key="pend_desde", on_change=_save_pend_dates)
+        _pend_hasta = _pd_col2.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta", on_change=_save_pend_dates)
 
         def _pend_en_rango(fecha_str):
             try:
@@ -1700,9 +1717,24 @@ with tab_balance:
 
     elif _bal_nav == "📊 Resumen":
         _hoy_bal = date.today()
+        try:
+            _bal_desde_def = date.fromisoformat(_cfg_bal.get("bal_desde", ""))
+        except Exception:
+            _bal_desde_def = _hoy_bal.replace(day=1)
+        try:
+            _bal_hasta_def = date.fromisoformat(_cfg_bal.get("bal_hasta", ""))
+        except Exception:
+            _bal_hasta_def = _hoy_bal
+
+        def _save_bal_dates():
+            db.guardar_config({
+                "bal_desde": str(st.session_state.get("bal_desde", _bal_desde_def)),
+                "bal_hasta": str(st.session_state.get("bal_hasta", _bal_hasta_def)),
+            })
+
         _cb1, _cb2 = st.columns(2)
-        bal_desde = _cb1.date_input("Desde", value=_hoy_bal.replace(day=1), key="bal_desde", format="YYYY-MM-DD")
-        bal_hasta = _cb2.date_input("Hasta", value=_hoy_bal,                key="bal_hasta", format="YYYY-MM-DD")
+        bal_desde = _cb1.date_input("Desde", value=_bal_desde_def, key="bal_desde", format="YYYY-MM-DD", on_change=_save_bal_dates)
+        bal_hasta = _cb2.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta", format="YYYY-MM-DD", on_change=_save_bal_dates)
 
         def _en_rango(fecha_str):
             try:
