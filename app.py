@@ -12,14 +12,26 @@ import supabase_db as db
 
 _AR = timezone(timedelta(hours=-3))
 
+_DIAS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
+
 def _fmt_ts(ts):
     if not ts:
         return "?"
     try:
         dt = datetime.fromisoformat(str(ts)).astimezone(_AR)
-        return dt.strftime("%d/%m/%Y %H:%M")
+        return f"{_DIAS[dt.weekday()]} {dt.strftime('%d/%m/%Y %H:%M')}"
     except Exception:
         return str(ts)
+
+def _fmt_fecha(s):
+    """Formatea string de fecha ISO a 'lun 06/07/2026'. Devuelve '—' si vacío."""
+    if not s or str(s).strip() in ("", "None", "nan", "—"):
+        return "—"
+    try:
+        d = pd.to_datetime(str(s)).date()
+        return f"{_DIAS[d.weekday()]} {d.strftime('%d/%m/%Y')}"
+    except Exception:
+        return str(s)[:10] if s else "—"
 
 
 DUX_RATE_LIMIT_SECONDS = 5.5
@@ -1465,7 +1477,7 @@ def _render_movimiento_caja(cobros, pagos):
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Fecha":  st.column_config.DateColumn("Fecha"),
+                    "Fecha":  st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
                     "Monto":  st.column_config.NumberColumn("Monto", format="$ %.2f"),
                 },
             )
@@ -1520,8 +1532,8 @@ with tab_balance:
             })
 
         _pd_col1, _pd_col2 = st.columns(2)
-        _pend_desde = _pd_col1.date_input("Desde", value=_pend_desde_def, key="pend_desde", on_change=_save_pend_dates)
-        _pend_hasta = _pd_col2.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta", on_change=_save_pend_dates)
+        _pend_desde = _pd_col1.date_input("Desde", value=_pend_desde_def, key="pend_desde", on_change=_save_pend_dates, format="DD/MM/YYYY")
+        _pend_hasta = _pd_col2.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta", on_change=_save_pend_dates, format="DD/MM/YYYY")
 
         def _pend_en_rango(fecha_str):
             try:
@@ -1614,7 +1626,7 @@ with tab_balance:
                                 _x1, _x2 = st.columns([4, 1.5])
                                 with _x1:
                                     st.markdown(f"🧾 **{_comp}**")
-                                    st.caption(f"📅 {str(_f.get('fecha_comp') or '')[:10]}")
+                                    st.caption(f"📅 {_fmt_fecha(_f.get('fecha_comp'))}")
                                 with _x2:
                                     st.markdown(f"### $ {_pesos(float(_f.get('total') or 0))}")
 
@@ -1637,7 +1649,7 @@ with tab_balance:
                                 _x1, _x2 = st.columns([4, 1.5])
                                 with _x1:
                                     st.markdown(f"🛒 **Pedido #{_nro}**")
-                                    st.caption(f"📅 {str(_p.get('createdDate') or '')[:10]}")
+                                    st.caption(f"📅 {_fmt_fecha(_p.get('createdDate'))}")
                                 with _x2:
                                     st.markdown(f"### $ {_pesos(_wix_monto(_p))}")
 
@@ -1659,8 +1671,8 @@ with tab_balance:
             })
 
         _cb1, _cb2 = st.columns(2)
-        bal_desde = _cb1.date_input("Desde", value=_bal_desde_def, key="bal_desde", format="YYYY-MM-DD", on_change=_save_bal_dates)
-        bal_hasta = _cb2.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta", format="YYYY-MM-DD", on_change=_save_bal_dates)
+        bal_desde = _cb1.date_input("Desde", value=_bal_desde_def, key="bal_desde", format="DD/MM/YYYY", on_change=_save_bal_dates)
+        bal_hasta = _cb2.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta", format="DD/MM/YYYY", on_change=_save_bal_dates)
 
         def _en_rango(fecha_str):
             try:
@@ -1730,7 +1742,7 @@ with tab_balance:
         _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
         def _render_factura(f):
             comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
-            fecha = str(f.get("fecha_comp") or "")[:10]
+            fecha = _fmt_fecha(f.get("fecha_comp"))
             total = float(f.get("total") or 0)
             with st.container(border=True):
                 c1, c2 = st.columns([4, 1.5])
@@ -1767,7 +1779,7 @@ with tab_balance:
 
         def _render_pedido_wix(p):
             nro    = p.get("number") or p.get("id") or "—"
-            fecha  = str(p.get("createdDate") or "")[:10]
+            fecha  = _fmt_fecha(p.get("createdDate"))
             total  = _wix_monto(p)
             pay    = str(p.get("paymentStatus") or "").upper()
             ful    = str(p.get("fulfillmentStatus") or "").upper()
@@ -1814,7 +1826,7 @@ with tab_balance:
         def _render_comprobante(c):
             nro  = c.get("nro_comprobante") or "—"
             prov = c.get("proveedor") or "—"
-            fec  = c.get("fecha") or "—"
+            fec  = _fmt_fecha(c.get("fecha"))
             tot  = float(c.get("total") or 0)
             cond = c.get("condicion_pago") or ""
             with st.container(border=True):
@@ -1828,7 +1840,7 @@ with tab_balance:
         def _render_gasto(g):
             nro  = g.get("nro_comprobante") or "—"
             prov = g.get("proveedor") or "—"
-            fec  = g.get("fecha") or "—"
+            fec  = _fmt_fecha(g.get("fecha"))
             tot  = float(g.get("total") or 0)
             tipo = g.get("tipo_comprobante") or ""
             with st.container(border=True):
@@ -1913,7 +1925,7 @@ with tab_ingresos:
             for _f in _facturas:
                 _fac_df_rows.append({
                     "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
-                    "Fecha": _f.get("fecha_comp", ""),
+                    "Fecha": _fmt_fecha(_f.get("fecha_comp")),
                     "Cliente": f"{_f.get('apellido_razon_soc','')} {_f.get('nombre','')}".strip(),
                     "CUIT": _f.get("cuit", ""),
                     "Nro Pedido": _f.get("nro_pedido", ""),
@@ -1959,7 +1971,7 @@ with tab_ingresos:
 
 with tab_ingresos:
     with tab_ing_cobros:
-        st.caption(f"🕒 Última sync: **{db.ultima_carga('cobros') or '?'}**")
+        st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('cobros'))}**")
         try:
             cobros_saved = db.cargar_cobros()
         except Exception as e:
@@ -1974,7 +1986,7 @@ with tab_ingresos:
             for c in cobros_sorted:
                 nro       = c.get("nro_comprobante") or "—"
                 cliente   = c.get("cliente") or "—"
-                fecha     = c.get("fecha") or "—"
+                fecha     = _fmt_fecha(c.get("fecha"))
                 monto     = c.get("monto") or 0
                 tipo      = c.get("tipo_comprobante") or ""
                 cobranza  = c.get("cobranza") or []
@@ -2038,11 +2050,11 @@ with tab_sync:
         col_s1, col_s2 = st.columns([1, 1])
         with col_s1:
             sync_desde = st.date_input(
-                "Desde", value=_sync_desde_default, key="sync_central_desde", format="YYYY-MM-DD"
+                "Desde", value=_sync_desde_default, key="sync_central_desde", format="DD/MM/YYYY"
             )
         with col_s2:
             sync_hasta = st.date_input(
-                "Hasta", value=_sync_hasta_default, key="sync_central_hasta", format="YYYY-MM-DD"
+                "Hasta", value=_sync_hasta_default, key="sync_central_hasta", format="DD/MM/YYYY"
             )
         sincronizar_todo = st.form_submit_button(
             "🔄 Sincronizar todo", type="primary", use_container_width=True
@@ -2291,6 +2303,7 @@ with tab_comprar:
                 options=fechas_entrega_disp,
                 default=def_fent_list,
                 key="comprar_fechas_entrega",
+                format_func=_fmt_fecha,
                 help="Elegí una o más fechas. Los pedidos de todas ellas se suman.",
             )
         with col_fc2:
@@ -2298,7 +2311,7 @@ with tab_comprar:
                 "📦 Fecha de stock",
                 value=def_fstk,
                 key="comprar_fecha_stock",
-                format="YYYY-MM-DD",
+                format="DD/MM/YYYY",
             )
         with col_fc3:
             dia_estimado_sel = st.selectbox(
@@ -2987,14 +3000,14 @@ with tab_estimado:
 with tab_carga_stock:
     ts_carga_stk_ph = st.empty()
     ts_carga_stk_ph.caption(
-        f"🕒 Último guardado: **{db.ultima_carga('stock') or '?'}**"
+        f"🕒 Último guardado: **{_fmt_ts(db.ultima_carga('stock'))}**"
     )
 
     fecha_carga = st.date_input(
         "Fecha de conteo",
         value=date.today(),
         key="carga_stock_fecha",
-        format="YYYY-MM-DD",
+        format="DD/MM/YYYY",
     )
 
     if productos.empty:
@@ -3052,9 +3065,9 @@ with tab_carga_stock:
                 except Exception:
                     pass
                 ts_carga_stk_ph.caption(
-                    f"🕒 Último guardado: **{db.ultima_carga('stock') or '?'}**"
+                    f"🕒 Último guardado: **{_fmt_ts(db.ultima_carga('stock'))}**"
                 )
-                st.success(f"✅ Stock del {fecha_carga} guardado.")
+                st.success(f"✅ Stock del {_fmt_fecha(fecha_carga)} guardado.")
             except Exception as e:
                 st.error(f"❌ No se pudo guardar el stock: {e}")
 
@@ -3068,7 +3081,7 @@ with tab_stock:
     # Se actualizan desde adentro del fragment cuando corresponde.
     ts_stk_save_ph = st.empty()
     ts_stk_save_ph.caption(
-        f"🕒 Último guardado de stock: **{db.ultima_carga('stock') or '?'}**"
+        f"🕒 Último guardado de stock: **{_fmt_ts(db.ultima_carga('stock'))}**"
     )
     ts_stk_calc_ph = st.empty()
 
@@ -3110,7 +3123,7 @@ with tab_stock:
                 "📦 Stock inicial",
                 value=f0_default,
                 key="st_teorico_f0",
-                format="YYYY-MM-DD",
+                format="DD/MM/YYYY",
                 help="Día con conteo físico cargado en Stock.",
             )
         with col_t2:
@@ -3118,7 +3131,7 @@ with tab_stock:
                 "🛒 Compras",
                 value=fc_default,
                 key="st_teorico_fc",
-                format="YYYY-MM-DD",
+                format="DD/MM/YYYY",
                 help="Día de la compra a sumar.",
             )
         with col_t3:
@@ -3126,7 +3139,7 @@ with tab_stock:
                 "📋 Pedidos",
                 value=fp_default,
                 key="st_teorico_fp",
-                format="YYYY-MM-DD",
+                format="DD/MM/YYYY",
                 help="Día de entrega del pedido a restar.",
             )
         with col_t4:
@@ -3134,7 +3147,7 @@ with tab_stock:
                 "📅 Stock",
                 value=fecha_conteo_default,
                 key="fecha_conteo_real",
-                format="YYYY-MM-DD",
+                format="DD/MM/YYYY",
                 help="Día con el que se guardará el Stock al apretar Guardar.",
             )
         actualizar = st.form_submit_button(
@@ -3345,9 +3358,9 @@ with tab_stock:
         n_stock_ini = int((df_teorico_r["Stock inicial"] > 0.001).sum())
         st.success(
             f"✅ {n_con_mov} productos con movimientos. "
-            f"Stock inicial ({resultado['f0']}): {n_stock_ini} códigos. "
-            f"Compras del {resultado['fc']}: {resultado['n_compras']} códigos. "
-            f"Pedidos entregados el {resultado['fp']}: {resultado['n_pedidos']} códigos."
+            f"Stock inicial ({_fmt_fecha(resultado['f0'])}): {n_stock_ini} códigos. "
+            f"Compras del {_fmt_fecha(resultado['fc'])}: {resultado['n_compras']} códigos. "
+            f"Pedidos entregados el {_fmt_fecha(resultado['fp'])}: {resultado['n_pedidos']} códigos."
         )
 
         # Expanders para auditar la data que esta entrando al calculo
@@ -3359,7 +3372,7 @@ with tab_stock:
 
         _map_ini = resultado.get("map_stock_ini") or {}
         with st.expander(
-            f"📦 Stock inicial del {f0} ({n_stock_ini} códigos)",
+            f"📦 Stock inicial del {_fmt_fecha(f0)} ({n_stock_ini} códigos)",
             expanded=False,
         ):
             if not _map_ini:
@@ -3384,7 +3397,7 @@ with tab_stock:
 
         _compras_raw = resultado.get("compras_raw") or []
         with st.expander(
-            f"🛒 Compras del {resultado['fc']} ({len(_compras_raw)} compras)",
+            f"🛒 Compras del {_fmt_fecha(resultado['fc'])} ({len(_compras_raw)} compras)",
             expanded=False,
         ):
             if not _compras_raw:
@@ -3423,7 +3436,7 @@ with tab_stock:
         _wix_ct = resultado.get("wix_contados") or []
         _total_ped = len(_dux_ct) + len(_wix_ct)
         with st.expander(
-            f"📋 Pedidos contados del {resultado['fp']} ({_total_ped} pedidos)",
+            f"📋 Pedidos contados del {_fmt_fecha(resultado['fp'])} ({_total_ped} pedidos)",
             expanded=False,
         ):
             if not _total_ped:
@@ -3509,7 +3522,7 @@ with tab_stock:
         # para la fecha_conteo elegida (lectura desde gsheets).
         _n_real = sum(1 for v in map_stk_conteo.values() if float(v) > 1e-6)
         with st.expander(
-            f"✏️ Stock real del {fecha_conteo} ({_n_real} códigos)",
+            f"✏️ Stock real del {_fmt_fecha(fecha_conteo)} ({_n_real} códigos)",
             expanded=False,
         ):
             if not map_stk_conteo:
@@ -3703,12 +3716,12 @@ with tab_stock:
                 # Actualizar el caption arriba (placeholder en outer scope)
                 try:
                     ts_stk_save_ph.caption(
-                        f"🕒 Último guardado de stock: **{db.ultima_carga('stock') or '?'}**"
+                        f"🕒 Último guardado de stock: **{_fmt_ts(db.ultima_carga('stock'))}**"
                     )
                 except Exception:
                     pass
                 stk_save_msg_ph.success(
-                    f"✅ Stock del {fecha_conteo} guardado en Sheets."
+                    f"✅ Stock del {_fmt_fecha(fecha_conteo)} guardado en Sheets."
                 )
             except Exception as e:
                 stk_save_msg_ph.error(f"⚠️ Error al guardar: {e}")
@@ -3716,7 +3729,7 @@ with tab_stock:
         # Actualizar el caption "Ultimo calculo" arriba (placeholder en outer)
         try:
             ts_stk_calc_ph.caption(
-                f"🕒 Último cálculo: **{resultado.get('ts') or '?'}**"
+                f"🕒 Último cálculo: **{_fmt_ts(resultado.get('ts'))}**"
             )
         except Exception:
             pass
@@ -3745,7 +3758,7 @@ with tab_dux:
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos DUX", e))
 
-        st.caption(f"🕒 Última sync: **{db.ultima_carga('pedidos_dux') or '?'}**")
+        st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_dux'))}**")
 
         if all_orders_saved:
             n_asignados = sum(1 for v in selecciones_dux.values() if v)
@@ -3827,7 +3840,7 @@ with tab_dux:
                             registro_badge = ""
                             if f_reg_dux and f_reg_dux != pd.Timestamp.min:
                                 registro_badge = (
-                                    f" · 📅 registrado {f_reg_dux.date()}"
+                                    f" · 📅 registrado {f_reg_dux.strftime('%d/%m/%Y')}"
                                 )
                             anulado_badge = " · 🚫 **ANULADO**" if es_anulado else ""
                             st.markdown(
@@ -3846,7 +3859,7 @@ with tab_dux:
                                     "Fecha de entrega",
                                     value=fecha_default_entrega,
                                     key=f"dux_fent_{oid}",
-                                    format="YYYY-MM-DD",
+                                    format="DD/MM/YYYY",
                                     label_visibility="collapsed",
                                 )
 
@@ -4170,7 +4183,7 @@ with tab_wix:
             st.error(msg_error_sheets("leer pedidos Wix", e))
             wix_orders_saved = []
 
-        st.caption(f"🕒 Última sync: **{db.ultima_carga('pedidos_wix') or '?'}**")
+        st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_wix'))}**")
 
         orders_saved = wix_orders_saved or []
         selecciones = db.cargar_selecciones("wix")
@@ -4311,7 +4324,7 @@ with tab_wix:
                             f_reg_wix = _fecha_wix(o)
                             registro_badge = ""
                             if f_reg_wix and f_reg_wix != pd.Timestamp.min:
-                                registro_badge = f" · 📅 {f_reg_wix.date()}"
+                                registro_badge = f" · 📅 {f_reg_wix.strftime('%d/%m/%Y')}"
                             cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
                             badges_line = " · ".join(b for b in [pay_badge, ful_badge] if b)
                             st.markdown(
@@ -4340,7 +4353,7 @@ with tab_wix:
                                     "Fecha de entrega",
                                     value=fecha_default_entrega,
                                     key=f"wix_fent_{oid}",
-                                    format="YYYY-MM-DD",
+                                    format="DD/MM/YYYY",
                                     label_visibility="collapsed",
                                 )
 
@@ -4690,7 +4703,7 @@ with tab_proveedores:
     ts_prov_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_prov)}**")
 
 with tab_eg_compras:
-    st.caption(f"🕒 Última sync: **{db.ultima_carga('compras_sync') or '?'}**")
+    st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('compras_sync'))}**")
 
     # Visualización de compras sincronizadas
     try:
@@ -4732,7 +4745,7 @@ with tab_eg_compras:
                 c_info, c_total = st.columns([5, 1.5])
                 with c_info:
                     st.markdown(
-                        f"**#{nro_comp or '—'}** — {proveedor_c or '—'} · 📅 {fecha_c or '—'}"
+                        f"**#{nro_comp or '—'}** — {proveedor_c or '—'} · 📅 {_fmt_fecha(fecha_c)}"
                         + (f" · {cond_pago_c}" if cond_pago_c else "")
                         + f" · {n_items} ítem{'s' if n_items != 1 else ''}"
                     )
@@ -4752,7 +4765,7 @@ with tab_eg_compras:
                     st.dataframe(pd.DataFrame(filas_items), use_container_width=True, hide_index=True)
 
 with tab_eg_gastos:
-    st.caption(f"🕒 Última sync: **{db.ultima_carga('gastos') or '?'}**")
+    st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('gastos'))}**")
 
     # Display gastos guardados
     try:
@@ -4769,7 +4782,7 @@ with tab_eg_gastos:
         for g in gastos_sorted:
             nro = g.get("nro_comprobante") or "—"
             proveedor = g.get("proveedor") or "—"
-            fecha = g.get("fecha") or "—"
+            fecha = _fmt_fecha(g.get("fecha"))
             total = g.get("total") or 0
             cond_pago = g.get("tipo_comprobante") or ""
             pago_badge = " · 💳 **pago pendiente**" if g.get("pago_pendiente") else ""
@@ -4802,7 +4815,7 @@ with tab_eg_gastos:
                         st.dataframe(pd.DataFrame(filas_det), use_container_width=True, hide_index=True)
 
 with tab_eg_pagos:
-    st.caption(f"🕒 Última sync: **{db.ultima_carga('pagos_proveedores') or '?'}**")
+    st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pagos_proveedores'))}**")
 
     try:
         pagos_saved = db.cargar_pagos_proveedores()
@@ -4818,7 +4831,7 @@ with tab_eg_pagos:
         for p in pagos_sorted:
             nro       = p.get("nro_comprobante") or "—"
             proveedor = p.get("proveedor") or "—"
-            fecha     = p.get("fecha") or "—"
+            fecha     = _fmt_fecha(p.get("fecha"))
             monto     = p.get("monto") or 0
             forma     = p.get("forma_pago") or ""
             concepto  = p.get("concepto") or ""
