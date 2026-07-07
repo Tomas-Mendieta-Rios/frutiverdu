@@ -4744,7 +4744,6 @@ with tab_eg_compras:
                 with st.expander("Ver ítems"):
                     filas_items = [
                         {
-                            "Código": str(r.get("codigo_producto", "")),
                             "Producto": str(r.get("producto_nombre", "")),
                             "Cantidad": float(r.get("cantidad", 0) or 0),
                             "Precio unit.": float(r.get("precio", 0) or 0),
