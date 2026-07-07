@@ -523,10 +523,11 @@ def guardar_pedidos_dux(pedidos):
 
     client.table("pedidos_dux").upsert(order_rows, on_conflict="order_id").execute()
 
-    for oid, items in items_por_order.items():
-        client.table("pedidos_dux_items").delete().eq("order_id", oid).execute()
-        if items:
-            client.table("pedidos_dux_items").insert(items).execute()
+    _oids = list(items_por_order.keys())
+    client.table("pedidos_dux_items").delete().in_("order_id", _oids).execute()
+    _all_items = [it for its in items_por_order.values() for it in its]
+    if _all_items:
+        client.table("pedidos_dux_items").insert(_all_items).execute()
 
 
 def _to_float(v):
@@ -698,10 +699,11 @@ def guardar_pedidos_wix(pedidos):
         else:
             raise
 
-    for oid, items in items_por_order.items():
-        client.table("pedidos_wix_items").delete().eq("order_id", oid).execute()
-        if items:
-            client.table("pedidos_wix_items").insert(items).execute()
+    _oids_wix = list(items_por_order.keys())
+    client.table("pedidos_wix_items").delete().in_("order_id", _oids_wix).execute()
+    _all_wix_items = [it for its in items_por_order.values() for it in its]
+    if _all_wix_items:
+        client.table("pedidos_wix_items").insert(_all_wix_items).execute()
 
 
 # ---------------- FACTURAS ----------------
@@ -765,10 +767,11 @@ def guardar_facturas(facturas):
         else:
             raise
 
-    for fid, items in items_por_factura.items():
-        client.table("facturas_items").delete().eq("factura_id", fid).execute()
-        if items:
-            client.table("facturas_items").insert(items).execute()
+    _fids = list(items_por_factura.keys())
+    client.table("facturas_items").delete().in_("factura_id", _fids).execute()
+    _all_fitems = [it for its in items_por_factura.values() for it in its]
+    if _all_fitems:
+        client.table("facturas_items").insert(_all_fitems).execute()
 
 
 @st.cache_data(ttl=600)
@@ -969,10 +972,11 @@ def guardar_compras_sync(compras):
 
     client.table("comprobantes_compra").upsert(comp_rows, on_conflict="id").execute()
 
-    for cid, items in items_por_comp.items():
-        client.table("items_compra").delete().eq("comprobante_id", cid).execute()
-        if items:
-            client.table("items_compra").insert(items).execute()
+    _cids = list(items_por_comp.keys())
+    client.table("items_compra").delete().in_("comprobante_id", _cids).execute()
+    _all_citems = [it for its in items_por_comp.values() for it in its]
+    if _all_citems:
+        client.table("items_compra").insert(_all_citems).execute()
 
 
 # ---------------- MIXES DUX ----------------
@@ -1238,10 +1242,11 @@ def guardar_gastos(gastos):
 
     client.table("gastos").upsert(gasto_rows, on_conflict="id").execute()
 
-    for gid, items in items_por_gasto.items():
-        client.table("gastos_items").delete().eq("gasto_id", gid).execute()
-        if items:
-            client.table("gastos_items").insert(items).execute()
+    _gids = list(items_por_gasto.keys())
+    client.table("gastos_items").delete().in_("gasto_id", _gids).execute()
+    _all_gitems = [it for its in items_por_gasto.values() for it in its]
+    if _all_gitems:
+        client.table("gastos_items").insert(_all_gitems).execute()
 
 
 @st.cache_data(ttl=600)
@@ -1337,15 +1342,16 @@ def guardar_pagos_proveedores(pagos):
 
     client.table("pagos_proveedores").upsert(pago_rows, on_conflict="id").execute()
 
-    for pid, lineas in lineas_por_pago.items():
-        client.table("pagos_proveedores_lineas").delete().eq("pago_id", pid).execute()
-        if lineas:
-            client.table("pagos_proveedores_lineas").insert(lineas).execute()
+    _pids = list(lineas_por_pago.keys())
+    client.table("pagos_proveedores_lineas").delete().in_("pago_id", _pids).execute()
+    _all_lineas = [l for ls in lineas_por_pago.values() for l in ls]
+    if _all_lineas:
+        client.table("pagos_proveedores_lineas").insert(_all_lineas).execute()
 
-    for pid, imput in imput_por_pago.items():
-        client.table("pagos_proveedores_imputaciones").delete().eq("pago_id", pid).execute()
-        if imput:
-            client.table("pagos_proveedores_imputaciones").insert(imput).execute()
+    client.table("pagos_proveedores_imputaciones").delete().in_("pago_id", _pids).execute()
+    _all_imput_p = [i for its in imput_por_pago.values() for i in its]
+    if _all_imput_p:
+        client.table("pagos_proveedores_imputaciones").insert(_all_imput_p).execute()
 
 
 @st.cache_data(ttl=600)
@@ -1440,15 +1446,16 @@ def guardar_cobros(cobros):
 
     client.table("cobros").upsert(cobro_rows, on_conflict="id").execute()
 
-    for cid, lineas in cobranza_por_cobro.items():
-        client.table("cobros_cobranza").delete().eq("cobro_id", cid).execute()
-        if lineas:
-            client.table("cobros_cobranza").insert(lineas).execute()
+    _cids_cobro = list(cobranza_por_cobro.keys())
+    client.table("cobros_cobranza").delete().in_("cobro_id", _cids_cobro).execute()
+    _all_cobranza = [l for ls in cobranza_por_cobro.values() for l in ls]
+    if _all_cobranza:
+        client.table("cobros_cobranza").insert(_all_cobranza).execute()
 
-    for cid, imput in imput_por_cobro.items():
-        client.table("cobros_imputaciones").delete().eq("cobro_id", cid).execute()
-        if imput:
-            client.table("cobros_imputaciones").insert(imput).execute()
+    client.table("cobros_imputaciones").delete().in_("cobro_id", _cids_cobro).execute()
+    _all_imput_c = [i for its in imput_por_cobro.values() for i in its]
+    if _all_imput_c:
+        client.table("cobros_imputaciones").insert(_all_imput_c).execute()
 
 
 def cargar_compras_desde_gastos(fecha):
