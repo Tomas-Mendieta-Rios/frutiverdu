@@ -3225,10 +3225,12 @@ with tab_stock:
             # Guardar el outer no re-ejecuta, asi que fechas_stk_disp_t
             # de afuera queda con la lista vieja).
             fechas_actuales = db.fechas_stock()
-            if str(f0) not in (fechas_actuales or []):
+            _f0_str = str(f0)
+            if _f0_str not in (fechas_actuales or []):
+                _disp = ", ".join(_fmt_fecha(f) for f in (fechas_actuales or [])[:5]) or "ninguna"
                 st.error(
-                    f"⚠️ No hay Stock guardado para la fecha {f0}. "
-                    "Elegí una fecha que tenga conteo físico cargado."
+                    f"⚠️ No hay stock para {_fmt_fecha(f0)}. "
+                    f"Fechas disponibles: {_disp}."
                 )
             else:
                 with st.spinner("Calculando stock teórico..."):

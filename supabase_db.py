@@ -186,10 +186,29 @@ def _norm_fecha_iso(x):
         return None
 
 
+def _fetch_all(client, table, columns="*", filters=None, batch=1000):
+    """Pagina sobre una tabla de Supabase y devuelve todos los registros."""
+    rows = []
+    offset = 0
+    while True:
+        q = client.table(table).select(columns).range(offset, offset + batch - 1)
+        if filters:
+            for col, val in filters.items():
+                q = q.eq(col, val)
+        resp = q.execute()
+        if not resp.data:
+            break
+        rows.extend(resp.data)
+        if len(resp.data) < batch:
+            break
+        offset += batch
+    return rows
+
+
 def cargar_stock_completo():
     client = get_client()
-    resp = client.table("stock_historico").select("*").execute()
-    df = pd.DataFrame(resp.data or [])
+    rows = _fetch_all(client, "stock_historico")
+    df = pd.DataFrame(rows)
     if df.empty:
         return df
     df = _drop_meta(df)
@@ -203,17 +222,23 @@ def cargar_stock_completo():
 
 
 def cargar_stock(fecha=None):
-    df = cargar_stock_completo()
+    client = get_client()
+    if fecha is None:
+        # Sin fecha: devolver la fecha más reciente disponible
+        fechas = fechas_stock()
+        if not fechas:
+            return pd.DataFrame(columns=["codigo", "producto", "unidad_medida", "cantidad"])
+        fecha = fechas[0]
+    f_str = _norm_fecha_iso(str(fecha)) or str(fecha)
+    rows = _fetch_all(client, "stock_historico", filters={"fecha": f_str})
+    df = pd.DataFrame(rows)
     if df.empty:
         return pd.DataFrame(columns=["codigo", "producto", "unidad_medida", "cantidad"])
-    if fecha is None:
-        try:
-            latest = pd.to_datetime(df["fecha"]).max()
-            df = df[pd.to_datetime(df["fecha"]) == latest]
-        except Exception:
-            pass
-    else:
-        df = df[df["fecha"] == str(fecha)]
+    df = _drop_meta(df)
+    if "id" in df.columns:
+        df = df.drop(columns=["id"])
+    df["codigo"] = df["codigo"].astype(str)
+    df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce")
     return df.drop(columns=["fecha"], errors="ignore").reset_index(drop=True)
 
 
@@ -228,10 +253,14 @@ def guardar_stock(df_fecha, fecha):
 
 
 def fechas_stock():
-    df = cargar_stock_completo()
-    if df.empty:
-        return []
-    return sorted(df["fecha"].dropna().unique().tolist(), reverse=True)
+    client = get_client()
+    rows = _fetch_all(client, "stock_historico", columns="fecha")
+    fechas = set()
+    for row in rows:
+        f = _norm_fecha_iso(row.get("fecha"))
+        if f:
+            fechas.add(f)
+    return sorted(fechas, reverse=True)
 
 
 # ---------------- ESTIMADO ----------------
