@@ -1410,7 +1410,6 @@ pagos_bal        = db.cargar_pagos_proveedores()
         "🔄 Sincronizar",
         "⚙️ Configuración",
     ],
-    key="main_tabs",
 )
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -1447,6 +1446,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
         ]
     )
 
+@st.fragment
 def _render_movimiento_caja(cobros, pagos):
     _all_tipos = set()
     for _c in cobros:
