@@ -593,6 +593,38 @@ def _to_float(v):
         return 0.0
 
 
+# ---------------- CAJAS ----------------
+
+@st.cache_data(ttl=300)
+def cargar_cajas():
+    client = get_client()
+    resp = client.table("cajas").select("*").order("id").execute()
+    return resp.data or []
+
+
+def guardar_cajas(cajas):
+    client = get_client()
+    for c in cajas:
+        caja_id = c.get("id")
+        nombre = (c.get("nombre") or "").strip()
+        activa = bool(c.get("activa", True))
+        if not nombre:
+            continue
+        if caja_id:
+            client.table("cajas").update({"nombre": nombre, "activa": activa}).eq("id", caja_id).execute()
+        else:
+            client.table("cajas").insert({"nombre": nombre, "activa": activa}).execute()
+    cargar_cajas.clear()
+
+
+def asignar_cajas_pedidos_wix(asignaciones):
+    """asignaciones: dict {order_id: caja_id | None}"""
+    client = get_client()
+    for order_id, caja_id in asignaciones.items():
+        client.table("pedidos_wix").update({"caja_id": caja_id}).eq("order_id", order_id).execute()
+    cargar_pedidos_wix.clear()
+
+
 # ---------------- PEDIDOS WIX ----------------
 
 @st.cache_data(ttl=600)
@@ -668,6 +700,7 @@ def cargar_pedidos_wix():
             "fulfillmentStatus": r.get("fulfillment_status"),
             "buyerNote": r.get("buyer_note"),
             "updatedDate": r.get("updated_date"),
+            "caja_id": r.get("caja_id"),
         })
     return pedidos
 

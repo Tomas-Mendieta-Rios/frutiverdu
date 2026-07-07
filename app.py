@@ -2103,6 +2103,7 @@ with tab_grupo_config:
         tab_editar,
         tab_probar,
         tab_migracion,
+        tab_cajas,
     ) = st.tabs(
         [
             "Mapeo Wix↔DUX",
@@ -2115,6 +2116,7 @@ with tab_grupo_config:
             "Relacionar productos",
             "Probar conversión",
             "📦 Migrar desde Sheets",
+            "💰 Cajas",
         ]
     )
 
@@ -4183,6 +4185,16 @@ with tab_wix:
             st.error(msg_error_sheets("leer pedidos Wix", e))
             wix_orders_saved = []
 
+        try:
+            _cajas_wix = db.cargar_cajas()
+        except Exception:
+            _cajas_wix = []
+
+        _cajas_activas_wix = [c for c in _cajas_wix if c.get("activa", True)]
+        _cajas_opts_wix = ["—"] + [c["nombre"] for c in _cajas_activas_wix]
+        _cajas_por_id_wix = {c["id"]: c["nombre"] for c in _cajas_wix}
+        _cajas_por_nombre_wix = {c["nombre"]: c["id"] for c in _cajas_wix}
+
         st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_wix'))}**")
 
         orders_saved = wix_orders_saved or []
@@ -4279,6 +4291,7 @@ with tab_wix:
                 )
 
                 nuevas_selecciones = {}
+                nuevas_cajas_sel = {}
                 for o in orders_saved_sorted:
                     nro = _wix_nro(o)
                     cliente = _wix_cliente(o)
@@ -4319,7 +4332,7 @@ with tab_wix:
                     ful_badge = _ful_badges.get(str(o.get("fulfillmentStatus") or "").upper(), "")
                     buyer_note = o.get("buyerNote") or ""
                     with st.container(border=True):
-                        c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
+                        c_info, c_caja, c_chk, c_fec = st.columns([4, 1.8, 1.2, 1.6])
                         with c_info:
                             f_reg_wix = _fecha_wix(o)
                             registro_badge = ""
@@ -4341,6 +4354,19 @@ with tab_wix:
                                 detalles.append(f"💬 {buyer_note}")
                             if detalles:
                                 st.caption(" · ".join(detalles))
+                        _caja_prev_id = o.get("caja_id")
+                        _caja_prev_nombre = _cajas_por_id_wix.get(_caja_prev_id, "—") if _caja_prev_id else "—"
+                        with c_caja:
+                            _caja_sel = st.selectbox(
+                                "Caja",
+                                options=_cajas_opts_wix,
+                                index=_cajas_opts_wix.index(_caja_prev_nombre) if _caja_prev_nombre in _cajas_opts_wix else 0,
+                                key=f"wix_caja_{oid}",
+                                label_visibility="collapsed",
+                            )
+                        if _caja_sel != "—":
+                            nuevas_cajas_sel[oid] = _cajas_por_nombre_wix[_caja_sel]
+
                         if not es_cancelado:
                             with c_chk:
                                 asignar = st.checkbox(
@@ -4389,10 +4415,16 @@ with tab_wix:
                     db.guardar_selecciones("wix", nuevas_selecciones)
                     selecciones = nuevas_selecciones
                     st.success(
-                        f"✅ {len(nuevas_selecciones)} entregas guardadas en Sheets."
+                        f"✅ {len(nuevas_selecciones)} entregas guardadas."
                     )
                 except Exception as e:
                     st.error(msg_error_sheets("guardar selecciones Wix", e))
+                if nuevas_cajas_sel:
+                    try:
+                        db.asignar_cajas_pedidos_wix(nuevas_cajas_sel)
+                        st.success(f"✅ Caja asignada a {len(nuevas_cajas_sel)} pedidos.")
+                    except Exception as e:
+                        st.error(f"❌ No se pudieron guardar las cajas: {e}")
 
 with tab_wix_productos:
     ts_wix_prod_ph = st.empty()
@@ -5414,6 +5446,49 @@ with tab_migracion:
             if st.button("Migrar selecciones Wix", key="mig_sel_wix"):
                 ok, msg = _mig_run("Selecciones Wix", lambda: _gdb.cargar_selecciones("wix"), lambda d: db.guardar_selecciones("wix", d), lambda d: len(d))
                 (st.success if ok else st.error)(msg)
+
+
+with tab_cajas:
+    st.subheader("💰 Cajas de cobro")
+    st.caption(
+        "Definí los canales de cobro que usás. "
+        "Los pedidos Wix se asignan a estas cajas. "
+        "En el futuro coincidirán con las cajas de DUX."
+    )
+
+    try:
+        _cajas_data = db.cargar_cajas()
+    except Exception as _e_cajas:
+        st.error(f"No se pudieron cargar las cajas: {_e_cajas}")
+        _cajas_data = []
+
+    _cajas_df = pd.DataFrame(
+        _cajas_data if _cajas_data else [{"id": None, "nombre": "", "activa": True}],
+        columns=["id", "nombre", "activa"],
+    )
+
+    with st.form("form_cajas_config", border=False):
+        _cajas_editadas = st.data_editor(
+            _cajas_df,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="dynamic",
+            column_config={
+                "id": None,
+                "nombre": st.column_config.TextColumn("Nombre de caja", required=True),
+                "activa": st.column_config.CheckboxColumn("Activa", default=True),
+            },
+        )
+        _guardar_cajas = st.form_submit_button("💾 Guardar cajas", type="primary", use_container_width=True)
+
+    if _guardar_cajas:
+        try:
+            _cajas_list = _cajas_editadas.where(pd.notnull(_cajas_editadas), None).to_dict(orient="records")
+            _cajas_list = [c for c in _cajas_list if (c.get("nombre") or "").strip()]
+            db.guardar_cajas(_cajas_list)
+            st.success(f"✅ {len(_cajas_list)} cajas guardadas.")
+        except Exception as _e_gc:
+            st.error(f"❌ No se pudieron guardar las cajas: {_e_gc}")
 
 
 #python -m streamlit run app.py
