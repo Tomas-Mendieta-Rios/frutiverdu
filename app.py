@@ -2094,32 +2094,39 @@ with tab_sync:
             ("Facturas (DUX)", _sync_facturas),
             ("Cobros (DUX)", _sync_cobros),
         ]
-        _wix_tasks = [
+        # Wix corre dentro del sleep de rate limit de DUX: gap gratis.
+        _wix_queue = [
             ("Pedidos Wix", _sync_pedidos_wix),
         ]
-        # DUX: rate limit entre cada llamada. Wix: API distinta, sin sleep previo.
         for _i, (_label, _fn) in enumerate(_dux_tasks):
             if _i > 0:
-                time.sleep(DUX_RATE_LIMIT_SECONDS)
+                if _wix_queue:
+                    _wlabel, _wfn = _wix_queue.pop(0)
+                    _t0 = time.time()
+                    with st.spinner(f"Sincronizando {_wlabel}..."):
+                        try:
+                            _ok, _n, _msg = _wfn(sync_desde, sync_hasta)
+                        except Exception as _e:
+                            _ok, _msg = False, msg_error_sheets(_wlabel, _e)
+                    (st.success if _ok else st.error)(_msg)
+                    _remaining = DUX_RATE_LIMIT_SECONDS - (time.time() - _t0)
+                    if _remaining > 0:
+                        time.sleep(_remaining)
+                else:
+                    time.sleep(DUX_RATE_LIMIT_SECONDS)
             with st.spinner(f"Sincronizando {_label}..."):
                 try:
                     _ok, _n, _msg = _fn(sync_desde, sync_hasta)
                 except Exception as _e:
                     _ok, _msg = False, msg_error_sheets(_label, _e)
-            if _ok:
-                st.success(_msg)
-            else:
-                st.error(_msg)
-        for _label, _fn in _wix_tasks:
-            with st.spinner(f"Sincronizando {_label}..."):
+            (st.success if _ok else st.error)(_msg)
+        for _wlabel, _wfn in _wix_queue:
+            with st.spinner(f"Sincronizando {_wlabel}..."):
                 try:
-                    _ok, _n, _msg = _fn(sync_desde, sync_hasta)
+                    _ok, _n, _msg = _wfn(sync_desde, sync_hasta)
                 except Exception as _e:
-                    _ok, _msg = False, msg_error_sheets(_label, _e)
-            if _ok:
-                st.success(_msg)
-            else:
-                st.error(_msg)
+                    _ok, _msg = False, msg_error_sheets(_wlabel, _e)
+            (st.success if _ok else st.error)(_msg)
 
 with tab_grupo_config:
     (
