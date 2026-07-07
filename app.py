@@ -5274,6 +5274,8 @@ with tab_migracion:
             ("🔀 Mixes DUX",           _gdb.cargar_mixes_dux,       db.guardar_mixes_dux,
              lambda d: sum(len(v) for v in d.values())),
             ("🔗 Compuestos",          _gdb.cargar_compuestos,      db.guardar_compuestos,      None),
+            ("📅 Selecciones DUX",     lambda: _gdb.cargar_selecciones("dux"), lambda d: db.guardar_selecciones("dux", d), lambda d: len(d)),
+            ("📅 Selecciones Wix",     lambda: _gdb.cargar_selecciones("wix"), lambda d: db.guardar_selecciones("wix", d), lambda d: len(d)),
             ("⚙️ Configuración",       None,                        None,                       None),  # handled separately
         ]
 
@@ -5293,6 +5295,19 @@ with tab_migracion:
                 _msgs.append((True, f"✅ ⚙️ Configuración: {len(_cfg_filtrado)} claves migradas"))
             except Exception as _e:
                 _msgs.append((False, f"❌ ⚙️ Configuración: {_e}"))
+            # Stock separado
+            try:
+                _df_stock_mig = _gdb.cargar_stock_completo()
+                if not _df_stock_mig.empty:
+                    _sc = db.get_client()
+                    _sc.table("stock_historico").delete().neq("codigo", "___never___").execute()
+                    _st_recs = _df_stock_mig.where(pd.notnull(_df_stock_mig), None).to_dict(orient="records")
+                    _sc.table("stock_historico").insert(_st_recs).execute()
+                    _msgs.append((True, f"✅ 📦 Stock histórico: {len(_st_recs)} registros migrados"))
+                else:
+                    _msgs.append((True, "✅ 📦 Stock histórico: Sheets vacío, nada que migrar"))
+            except Exception as _e:
+                _msgs.append((False, f"❌ 📦 Stock histórico: {_e}"))
             for ok, msg in _msgs:
                 if ok:
                     st.success(msg)
@@ -5327,6 +5342,27 @@ with tab_migracion:
                 except Exception as _e:
                     st.error(f"❌ Configuración: {_e}")
 
+            st.markdown("#### 📅 Selecciones DUX")
+            st.caption("Fecha asignada de entrega de pedidos DUX.")
+            if st.button("Migrar selecciones DUX", key="mig_sel_dux"):
+                ok, msg = _mig_run("Selecciones DUX", lambda: _gdb.cargar_selecciones("dux"), lambda d: db.guardar_selecciones("dux", d), lambda d: len(d))
+                (st.success if ok else st.error)(msg)
+
+            st.markdown("#### 📦 Stock histórico")
+            if st.button("Migrar stock", key="mig_stock"):
+                try:
+                    _df_stock_b = _gdb.cargar_stock_completo()
+                    if _df_stock_b.empty:
+                        st.warning("⚠️ Stock: Sheets vacío, nada que migrar")
+                    else:
+                        _sc_b = db.get_client()
+                        _sc_b.table("stock_historico").delete().neq("codigo", "___never___").execute()
+                        _st_recs_b = _df_stock_b.where(pd.notnull(_df_stock_b), None).to_dict(orient="records")
+                        _sc_b.table("stock_historico").insert(_st_recs_b).execute()
+                        st.success(f"✅ Stock: {len(_st_recs_b)} registros migrados")
+                except Exception as _e:
+                    st.error(f"❌ Stock: {_e}")
+
         with _e2:
             st.markdown("#### 📦 Packs Wix")
             if st.button("Migrar packs", key="mig_packs"):
@@ -5336,6 +5372,12 @@ with tab_migracion:
             st.markdown("#### 🔗 Compuestos (Relacionar productos)")
             if st.button("Migrar compuestos", key="mig_compuestos"):
                 ok, msg = _mig_run("Compuestos", _gdb.cargar_compuestos, db.guardar_compuestos)
+                (st.success if ok else st.error)(msg)
+
+            st.markdown("#### 📅 Selecciones Wix")
+            st.caption("Fecha asignada de entrega de pedidos Wix.")
+            if st.button("Migrar selecciones Wix", key="mig_sel_wix"):
+                ok, msg = _mig_run("Selecciones Wix", lambda: _gdb.cargar_selecciones("wix"), lambda d: db.guardar_selecciones("wix", d), lambda d: len(d))
                 (st.success if ok else st.error)(msg)
 
 
