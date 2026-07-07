@@ -1246,40 +1246,17 @@ def guardar_gastos(gastos):
 @st.cache_data(ttl=600)
 def cargar_pagos_proveedores():
     client = get_client()
-    resp = client.table("pagos_proveedores").select("*").execute()
+    resp = client.table("pagos_proveedores").select(
+        "*, pagos_proveedores_lineas(*), pagos_proveedores_imputaciones(*)"
+    ).execute()
     if not resp.data:
         return []
-
-    resp_lineas = client.table("pagos_proveedores_lineas").select("*").execute()
-    lineas_por_pago = {}
-    for l in (resp_lineas.data or []):
-        pid = l.get("pago_id")
-        if pid is not None:
-            lineas_por_pago.setdefault(pid, []).append({
-                "tipo_valor":  l.get("tipo_valor"),
-                "descripcion": l.get("descripcion"),
-                "referencia":  l.get("referencia"),
-                "monto":       l.get("monto"),
-            })
-
-    resp_imput = client.table("pagos_proveedores_imputaciones").select("*").execute()
-    imput_por_pago = {}
-    for i in (resp_imput.data or []):
-        pid = i.get("pago_id")
-        if pid is not None:
-            imput_por_pago.setdefault(pid, []).append({
-                "tipo_comprobante": i.get("tipo_comprobante"),
-                "nro_comprobante":  i.get("nro_comprobante"),
-                "monto_imputado":   i.get("monto_imputado"),
-            })
-
     pagos = []
     for r in resp.data:
-        pid = r.get("id")
         pagos.append({
-            **r,
-            "lineas_pago":  lineas_por_pago.get(pid, []),
-            "imputaciones": imput_por_pago.get(pid, []),
+            **{k: v for k, v in r.items() if k not in ("pagos_proveedores_lineas", "pagos_proveedores_imputaciones")},
+            "lineas_pago":  r.get("pagos_proveedores_lineas") or [],
+            "imputaciones": r.get("pagos_proveedores_imputaciones") or [],
         })
     return pagos
 
@@ -1373,47 +1350,17 @@ def guardar_pagos_proveedores(pagos):
 @st.cache_data(ttl=600)
 def cargar_cobros():
     client = get_client()
-    resp = client.table("cobros").select("*").execute()
+    resp = client.table("cobros").select(
+        "*, cobros_cobranza(*), cobros_imputaciones(*)"
+    ).execute()
     if not resp.data:
         return []
-
-    resp_cobranza = client.table("cobros_cobranza").select("*").execute()
-    cobranza_por_cobro = {}
-    for l in (resp_cobranza.data or []):
-        cid = l.get("cobro_id")
-        if cid is not None:
-            cobranza_por_cobro.setdefault(cid, []).append({
-                "tipo_valor":     l.get("tipo_valor"),
-                "descripcion":    l.get("descripcion"),
-                "referencia":     l.get("referencia"),
-                "monto":          l.get("monto"),
-                "id_tarjeta":     l.get("id_tarjeta"),
-                "id_plan_tarjeta": l.get("id_plan_tarjeta"),
-                "id_terminal":    l.get("id_terminal"),
-                "nro_cupon":      l.get("nro_cupon"),
-                "nro_lote":       l.get("nro_lote"),
-            })
-
-    resp_imput = client.table("cobros_imputaciones").select("*").execute()
-    imput_por_cobro = {}
-    for i in (resp_imput.data or []):
-        cid = i.get("cobro_id")
-        if cid is not None:
-            imput_por_cobro.setdefault(cid, []).append({
-                "id_comp_venta":                i.get("id_comp_venta"),
-                "id_nota_credito_debito_venta": i.get("id_nota_credito_debito_venta"),
-                "tipo_comp":                    i.get("tipo_comp"),
-                "nro_comprobante":              i.get("nro_comprobante"),
-                "monto_imputado":               i.get("monto_imputado"),
-            })
-
     cobros = []
     for r in resp.data:
-        cid = r.get("id")
         cobros.append({
-            **r,
-            "cobranza":     cobranza_por_cobro.get(cid, []),
-            "imputaciones": imput_por_cobro.get(cid, []),
+            **{k: v for k, v in r.items() if k not in ("cobros_cobranza", "cobros_imputaciones")},
+            "cobranza":     r.get("cobros_cobranza") or [],
+            "imputaciones": r.get("cobros_imputaciones") or [],
         })
     return cobros
 
