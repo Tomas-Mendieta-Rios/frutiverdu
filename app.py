@@ -2060,16 +2060,21 @@ with tab_sync:
     st.caption("Trae y guarda Gastos, Compras, Pedidos DUX y Pedidos Wix de una sola vez.")
 
     _hoy_sync = date.today()
-    _m3, _y3 = _hoy_sync.month - 2, _hoy_sync.year
-    if _m3 <= 0:
-        _m3 += 12
-        _y3 -= 1
-    _sync_desde_default = _hoy_sync.replace(year=_y3, month=_m3)
-    _m1, _y1 = _hoy_sync.month + 1, _hoy_sync.year
-    if _m1 > 12:
-        _m1 -= 12
-        _y1 += 1
-    _sync_hasta_default = _hoy_sync.replace(year=_y1, month=_m1)
+    _cfg_sync = db.cargar_config()
+    try:
+        _sync_desde_default = date.fromisoformat(_cfg_sync.get("dux_fecha_desde", ""))
+    except Exception:
+        _sync_desde_default = _hoy_sync.replace(day=1)
+    try:
+        _sync_hasta_default = date.fromisoformat(_cfg_sync.get("dux_fecha_hasta", ""))
+    except Exception:
+        _sync_hasta_default = _hoy_sync
+
+    _ts_sync = db.ultima_carga("pedidos_dux")
+    _rango_sync = ""
+    if _cfg_sync.get("dux_fecha_desde") and _cfg_sync.get("dux_fecha_hasta"):
+        _rango_sync = f" · Rango: {_cfg_sync['dux_fecha_desde']} → {_cfg_sync['dux_fecha_hasta']}"
+    st.caption(f"🕒 Última sincronización: **{_fmt_ts(_ts_sync)}**{_rango_sync}")
 
     with st.form("form_sync_central", border=False):
         col_s1, col_s2 = st.columns([1, 1])
