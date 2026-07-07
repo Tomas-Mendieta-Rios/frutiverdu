@@ -804,7 +804,7 @@ def _slim_wix_pedido(o):
     }
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def construir_grafo_conversion(compuestos_df):
     grafo = {}
     for _, row in compuestos_df.iterrows():

@@ -537,7 +537,7 @@ def _to_float(v):
 
 # ---------------- PEDIDOS WIX ----------------
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def cargar_pedidos_wix():
     client = get_client()
     resp_orders = client.table("pedidos_wix").select("*").execute()
@@ -770,7 +770,7 @@ def guardar_facturas(facturas):
             client.table("facturas_items").insert(items).execute()
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def cargar_facturas():
     client = get_client()
     resp = client.table("facturas").select("*").order("fecha_comp", desc=True).execute()
@@ -848,7 +848,7 @@ def guardar_proveedores(df):
 
 # ---------------- COMPRAS ----------------
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def cargar_compras():
     """DataFrame plano por ítem. Incluye comprobante_id y total_comprobante para el balance."""
     client = get_client()
@@ -878,7 +878,7 @@ def cargar_compras():
     return pd.DataFrame(records)
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def cargar_comprobantes_compra():
     """Lista de comprobantes con su total DUX — para sumar en el balance sin pasar por ítems."""
     client = get_client()
@@ -1122,7 +1122,7 @@ def cargar_stock_teorico_detalle():
 
 # ---------------- GASTOS ----------------
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def cargar_gastos():
     client = get_client()
     resp_gastos = client.table("gastos").select("*").execute()
@@ -1243,7 +1243,7 @@ def guardar_gastos(gastos):
             client.table("gastos_items").insert(items).execute()
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def cargar_pagos_proveedores():
     client = get_client()
     resp = client.table("pagos_proveedores").select("*").execute()
@@ -1370,7 +1370,7 @@ def guardar_pagos_proveedores(pagos):
             client.table("pagos_proveedores_imputaciones").insert(imput).execute()
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=600)
 def cargar_cobros():
     client = get_client()
     resp = client.table("cobros").select("*").execute()
