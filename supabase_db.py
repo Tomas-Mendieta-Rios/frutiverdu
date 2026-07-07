@@ -82,6 +82,13 @@ def ultima_carga(clave):
 
 # ---------------- PRODUCTOS ----------------
 
+def _productos_lookup():
+    """Dict {codigo: nombre} para enriquecer items sin descripcion en DUX."""
+    client = get_client()
+    resp = client.table("productos").select("codigo, producto").execute()
+    return {str(r.get("codigo", "")): str(r.get("producto") or "") for r in (resp.data or [])}
+
+
 def cargar_productos():
     client = get_client()
     resp = client.table("productos").select("*").execute()
@@ -461,13 +468,15 @@ def cargar_pedidos_dux():
         return []
 
     resp_items = client.table("pedidos_dux_items").select("*").execute()
+    prods = _productos_lookup()
     items_por_order = {}
     for it in (resp_items.data or []):
         oid = str(it.get("order_id") or "")
         if oid:
+            cod = str(it.get("cod_item") or "")
             items_por_order.setdefault(oid, []).append({
                 "cod_item": it.get("cod_item"),
-                "item": it.get("item"),
+                "item": it.get("item") or prods.get(cod, ""),
                 "ctd": it.get("ctd"),
                 "precio_uni": it.get("precio_uni"),
                 "porc_desc": it.get("porc_desc"),
@@ -910,15 +919,17 @@ def cargar_compras():
     rows = resp.data or []
     if not rows:
         return pd.DataFrame()
+    prods = _productos_lookup()
     records = []
     for it in rows:
         cab = it.get("comprobantes_compra") or {}
+        cod = str(it.get("cod_item") or "")
         records.append({
             "fecha": str(cab.get("fecha") or ""),
             "proveedor_id": str(cab.get("id_proveedor") or ""),
             "proveedor_nombre": str(cab.get("proveedor") or ""),
-            "codigo_producto": str(it.get("cod_item") or ""),
-            "producto_nombre": str(it.get("item") or ""),
+            "codigo_producto": cod,
+            "producto_nombre": str(it.get("item") or "") or prods.get(cod, ""),
             "cantidad": _to_float(it.get("ctd")),
             "precio": _to_float(it.get("precio_uni")),
             "condicion_pago": str(cab.get("condicion_pago") or ""),
@@ -1182,13 +1193,15 @@ def cargar_gastos():
         return []
 
     resp_items = client.table("gastos_items").select("*").execute()
+    prods = _productos_lookup()
     items_por_gasto = {}
     for it in (resp_items.data or []):
         gid = it.get("gasto_id")
         if gid is not None:
+            cod = str(it.get("cod_item") or "")
             items_por_gasto.setdefault(gid, []).append({
                 "cod_item": it.get("cod_item"),
-                "item": it.get("item"),
+                "item": it.get("item") or prods.get(cod, ""),
                 "ctd": it.get("ctd"),
                 "precio_uni": it.get("precio_uni"),
                 "porc_desc": it.get("porc_desc"),

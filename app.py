@@ -4705,7 +4705,7 @@ with tab_proveedores:
     ts_prov_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_prov)}**")
 
 with tab_eg_compras:
-    st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('compras_sync'))}**")
+    st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('comprobantes_compra'))}**")
 
     # Visualización de compras sincronizadas
     try:
@@ -4764,7 +4764,15 @@ with tab_eg_compras:
                         }
                         for _, r in df_grupo.iterrows()
                     ]
-                    st.dataframe(pd.DataFrame(filas_items), use_container_width=True, hide_index=True)
+                    st.dataframe(
+                        pd.DataFrame(filas_items),
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Precio unit.": st.column_config.NumberColumn("Precio unit.", format="$ %.2f"),
+                            "Subtotal": st.column_config.NumberColumn("Subtotal", format="$ %.2f"),
+                        },
+                    )
 
 with tab_eg_gastos:
     st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('gastos'))}**")
@@ -4814,7 +4822,14 @@ with tab_eg_gastos:
                             }
                             for d in detalles
                         ]
-                        st.dataframe(pd.DataFrame(filas_det), use_container_width=True, hide_index=True)
+                        st.dataframe(
+                            pd.DataFrame(filas_det),
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "Precio unit.": st.column_config.NumberColumn("Precio unit.", format="$ %.2f"),
+                            },
+                        )
 
 with tab_eg_pagos:
     st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pagos_proveedores'))}**")
