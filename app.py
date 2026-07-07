@@ -1936,38 +1936,26 @@ with tab_ingresos:
                 })
             _total_fac = sum(r["Total"] for r in _fac_df_rows if r["Anulada"] != "S")
             st.caption(f"{len(_fac_df_rows)} facturas · Total vigente: **$ {_total_fac:,.2f}**")
-            for _fr in _fac_df_rows:
-                _f = _fr["_raw"]
-                _anulada = _fr["Anulada"] == "S"
-                _label = f"{'~~' if _anulada else ''}**{_fr['Comprobante']}** — {_fr['Cliente']} · {_fr['Fecha']} · $ {_fr['Total']:,.2f}{'~~' if _anulada else ''}"
-                if _anulada:
-                    _label += " :red[ANULADA]"
-                with st.expander(_label):
-                    _col1, _col2 = st.columns(2)
-                    with _col1:
-                        st.write(f"**CUIT:** {_fr['CUIT']}")
-                        st.write(f"**Nro Pedido:** {_fr['Nro Pedido']}")
-                        st.write(f"**Gravado:** $ {_f.get('monto_gravado', 0):,.2f}")
-                        st.write(f"**IVA:** $ {_f.get('monto_iva', 0):,.2f}")
-                    with _col2:
-                        st.write(f"**Exento:** $ {_f.get('monto_exento', 0):,.2f}")
-                        st.write(f"**Descuento:** $ {_f.get('monto_desc', 0):,.2f}")
-                        st.write(f"**CAE/CAI:** {_f.get('nro_cae_cai', '')}")
-                        if _f.get("url_factura"):
-                            st.markdown(f"[Ver factura PDF]({_f['url_factura']})")
-                    _items = _f.get("detalles", []) or _f.get("items", [])
-                    if _items:
-                        st.dataframe(
-                            [{
-                                "Código": it.get("cod_item", ""),
-                                "Item": it.get("item", ""),
-                                "Cantidad": it.get("ctd", 0),
-                                "Precio Unit.": it.get("precio_uni", 0),
-                                "% Desc": it.get("porc_desc", 0),
-                                "% IVA": it.get("porc_iva", 0),
-                            } for it in _items],
-                            use_container_width=True, hide_index=True
-                        )
+            _tabla_fac = [
+                {
+                    "Comprobante": r["Comprobante"] + (" ⛔" if r["Anulada"] == "S" else ""),
+                    "Fecha": r["Fecha"],
+                    "Cliente": r["Cliente"],
+                    "Nro Pedido": str(r["Nro Pedido"] or ""),
+                    "Total": r["Total"],
+                    "PDF": r["URL"] or None,
+                }
+                for r in _fac_df_rows
+            ]
+            st.dataframe(
+                pd.DataFrame(_tabla_fac),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Total": st.column_config.NumberColumn("Total", format="$ %.2f"),
+                    "PDF": st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
+                },
+            )
 
 with tab_ingresos:
     with tab_ing_cobros:
