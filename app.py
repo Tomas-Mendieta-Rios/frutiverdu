@@ -1457,8 +1457,8 @@ def _render_movimiento_caja(cobros, pagos):
     _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
     _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
 
-    # Acumular totales por tipo de caja
-    _por_tipo = {}  # tipo -> {"entradas": float, "salidas": float}
+    # Acumular totales y detalle por tipo de caja
+    _por_tipo = {}  # tipo -> {"Entradas": float, "Salidas": float, "detalle": []}
 
     for _c in cobros:
         try:
@@ -1469,8 +1469,15 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         for _cob in _c.get("cobranza", []):
             _tv = _cob.get("tipo_valor") or "—"
-            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0})
-            _t["Entradas"] += float(_cob.get("monto") or 0)
+            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0, "detalle": []})
+            _monto = float(_cob.get("monto") or 0)
+            _t["Entradas"] += _monto
+            _t["detalle"].append({
+                "Fecha":    _f,
+                "Tipo":     "Entrada",
+                "Concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
+                "Monto":    _monto,
+            })
 
     for _p in pagos:
         try:
@@ -1481,8 +1488,15 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         for _lin in _p.get("lineas_pago", []):
             _tv = _lin.get("tipo_valor") or "—"
-            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0})
-            _t["Salidas"] += float(_lin.get("monto") or 0)
+            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0, "detalle": []})
+            _monto = float(_lin.get("monto") or 0)
+            _t["Salidas"] += _monto
+            _t["detalle"].append({
+                "Fecha":    _f,
+                "Tipo":     "Salida",
+                "Concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
+                "Monto":    _monto,
+            })
 
     _total_e = sum(v["Entradas"] for v in _por_tipo.values())
     _total_s = sum(v["Salidas"]  for v in _por_tipo.values())
@@ -1496,21 +1510,27 @@ def _render_movimiento_caja(cobros, pagos):
         st.info("No hay movimientos en el período seleccionado.")
         return
 
-    _rows = sorted(
-        [{"Tipo de caja": k, "Entradas": v["Entradas"], "Salidas": v["Salidas"], "Neto": v["Entradas"] - v["Salidas"]}
-         for k, v in _por_tipo.items()],
-        key=lambda r: r["Tipo de caja"],
-    )
-    st.dataframe(
-        pd.DataFrame(_rows),
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Entradas": st.column_config.NumberColumn("Entradas", format="$ %.2f"),
-            "Salidas":  st.column_config.NumberColumn("Salidas",  format="$ %.2f"),
-            "Neto":     st.column_config.NumberColumn("Neto",     format="$ %.2f"),
-        },
-    )
+    st.divider()
+    for _tipo in sorted(_por_tipo):
+        _v = _por_tipo[_tipo]
+        _neto = _v["Entradas"] - _v["Salidas"]
+        _label = (
+            f"**{_tipo}** — "
+            f"Entradas: $ {_v['Entradas']:,.0f}  ·  "
+            f"Salidas: $ {_v['Salidas']:,.0f}  ·  "
+            f"Neto: $ {_neto:,.0f}"
+        )
+        with st.expander(_label):
+            _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
+            st.dataframe(
+                pd.DataFrame(_det),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Fecha":  st.column_config.DateColumn("Fecha"),
+                    "Monto":  st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                },
+            )
 
 
 with tab_balance:
