@@ -2086,22 +2086,43 @@ with tab_sync:
         )
 
     if sincronizar_todo:
-        for _i, (_label, _fn) in enumerate([
+        import threading as _threading
+
+        _dux_tasks = [
             ("Gastos (DUX)", _sync_gastos),
             ("Pagos proveedores (DUX)", _sync_pagos_proveedores),
             ("Compras (DUX)", _sync_compras),
             ("Pedidos DUX", _sync_pedidos_dux),
             ("Facturas (DUX)", _sync_facturas),
             ("Cobros (DUX)", _sync_cobros),
+        ]
+        _wix_tasks = [
             ("Pedidos Wix", _sync_pedidos_wix),
-        ]):
-            if _i > 0:
-                time.sleep(DUX_RATE_LIMIT_SECONDS)
-            with st.spinner(f"Sincronizando {_label}..."):
+        ]
+        _results = [None] * (len(_dux_tasks) + len(_wix_tasks))
+
+        def _run_chain(_indexed_tasks, _rate_limit):
+            for _ci, (_idx, _lbl, _fn) in enumerate(_indexed_tasks):
+                if _ci > 0:
+                    time.sleep(_rate_limit)
                 try:
                     _ok, _n, _msg = _fn(sync_desde, sync_hasta)
                 except Exception as _e:
-                    _ok, _msg = False, msg_error_sheets(_label, _e)
+                    _ok, _msg = False, msg_error_sheets(_lbl, _e)
+                _results[_idx] = (_ok, _msg)
+
+        _dux_idx = [(i, lbl, fn) for i, (lbl, fn) in enumerate(_dux_tasks)]
+        _wix_idx = [(len(_dux_tasks) + i, lbl, fn) for i, (lbl, fn) in enumerate(_wix_tasks)]
+
+        with st.spinner("Sincronizando DUX y Wix en paralelo..."):
+            _t1 = _threading.Thread(target=_run_chain, args=(_dux_idx, DUX_RATE_LIMIT_SECONDS))
+            _t2 = _threading.Thread(target=_run_chain, args=(_wix_idx, 0))
+            _t1.start()
+            _t2.start()
+            _t1.join()
+            _t2.join()
+
+        for _ok, _msg in _results:
             if _ok:
                 st.success(_msg)
             else:
