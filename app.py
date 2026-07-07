@@ -1410,6 +1410,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
         "🔄 Sincronizar",
         "⚙️ Configuración",
     ],
+    key="main_tabs",
 )
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -1446,26 +1447,10 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
         ]
     )
 
-@st.fragment
 def _render_movimiento_caja(cobros, pagos):
-    _all_tipos = set()
-    for _c in cobros:
-        for _cob in _c.get("cobranza", []):
-            _tv = _cob.get("tipo_valor")
-            if _tv:
-                _all_tipos.add(_tv)
-    for _p in pagos:
-        for _lin in _p.get("lineas_pago", []):
-            _tv = _lin.get("tipo_valor")
-            if _tv:
-                _all_tipos.add(_tv)
-    _tipos_opts = ["Todas"] + sorted(_all_tipos)
-
-    _hoy_caja = date.today()
-    _cc1, _cc2, _cc3 = st.columns(3)
-    _caja_desde = _cc1.date_input("Desde", value=_hoy_caja.replace(day=1), key="caja_desde", format="YYYY-MM-DD")
-    _caja_hasta = _cc2.date_input("Hasta", value=_hoy_caja,                key="caja_hasta", format="YYYY-MM-DD")
-    _tipo_sel   = _cc3.selectbox("Tipo de caja", _tipos_opts,               key="caja_sel")
+    _hoy = date.today()
+    _desde = _hoy.replace(day=1)
+    st.caption(f"Período: **{_desde.strftime('%d/%m/%Y')}** al **{_hoy.strftime('%d/%m/%Y')}**")
 
     _movimientos = []
     for _c in cobros:
@@ -1473,59 +1458,47 @@ def _render_movimiento_caja(cobros, pagos):
             _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
         except Exception:
             continue
-        if not (_caja_desde <= _f <= _caja_hasta):
+        if not (_desde <= _f <= _hoy):
             continue
         for _cob in _c.get("cobranza", []):
-            _tv = _cob.get("tipo_valor") or "—"
-            if _tipo_sel != "Todas" and _tv != _tipo_sel:
-                continue
             _movimientos.append({
-                "fecha":    _f,
-                "tipo":     "Entrada",
-                "concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
-                "caja":     _tv,
-                "monto":    float(_cob.get("monto") or 0),
+                "Fecha":    _f,
+                "Tipo":     "Entrada",
+                "Caja":     _cob.get("tipo_valor") or "—",
+                "Concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
+                "Monto":    float(_cob.get("monto") or 0),
             })
     for _p in pagos:
         try:
             _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
         except Exception:
             continue
-        if not (_caja_desde <= _f <= _caja_hasta):
+        if not (_desde <= _f <= _hoy):
             continue
         for _lin in _p.get("lineas_pago", []):
-            _tv = _lin.get("tipo_valor") or "—"
-            if _tipo_sel != "Todas" and _tv != _tipo_sel:
-                continue
             _movimientos.append({
-                "fecha":    _f,
-                "tipo":     "Salida",
-                "concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
-                "caja":     _tv,
-                "monto":    float(_lin.get("monto") or 0),
+                "Fecha":    _f,
+                "Tipo":     "Salida",
+                "Caja":     _lin.get("tipo_valor") or "—",
+                "Concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
+                "Monto":    float(_lin.get("monto") or 0),
             })
 
-    _movimientos.sort(key=lambda m: m["fecha"], reverse=True)
+    _movimientos.sort(key=lambda m: m["Fecha"], reverse=True)
 
-    _total_entradas = sum(m["monto"] for m in _movimientos if m["tipo"] == "Entrada")
-    _total_salidas  = sum(m["monto"] for m in _movimientos if m["tipo"] == "Salida")
-    _saldo_neto     = _total_entradas - _total_salidas
-    _k1, _k2, _k3  = st.columns(3)
-    _k1.metric("Entradas",   f"$ {_total_entradas:,.0f}")
-    _k2.metric("Salidas",    f"$ {_total_salidas:,.0f}")
-    _k3.metric("Saldo neto", f"$ {_saldo_neto:,.0f}", delta=f"{_saldo_neto:,.0f}")
+    _entradas = sum(m["Monto"] for m in _movimientos if m["Tipo"] == "Entrada")
+    _salidas  = sum(m["Monto"] for m in _movimientos if m["Tipo"] == "Salida")
+    _neto     = _entradas - _salidas
+    _k1, _k2, _k3 = st.columns(3)
+    _k1.metric("Entradas",   f"$ {_entradas:,.0f}")
+    _k2.metric("Salidas",    f"$ {_salidas:,.0f}")
+    _k3.metric("Saldo neto", f"$ {_neto:,.0f}", delta=f"{_neto:,.0f}")
 
     if not _movimientos:
-        st.info("No hay movimientos en el período seleccionado.")
+        st.info("No hay movimientos en el mes actual.")
     else:
         st.dataframe(
-            pd.DataFrame([{
-                "Fecha":    m["fecha"],
-                "Tipo":     m["tipo"],
-                "Caja":     m["caja"],
-                "Concepto": m["concepto"],
-                "Monto":    m["monto"],
-            } for m in _movimientos]),
+            pd.DataFrame(_movimientos),
             use_container_width=True,
             hide_index=True,
             height=500,
