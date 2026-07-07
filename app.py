@@ -1403,9 +1403,11 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
 
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
-    _c1, _c2 = st.columns(2)
-    _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
-    _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
+    with st.form("form_movcaja_fechas", border=False):
+        _c1, _c2 = st.columns(2)
+        _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
+        _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
+        st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
     # Acumular totales y detalle por tipo de caja
     _por_tipo = {}  # tipo -> {"Entradas": float, "Salidas": float, "detalle": []}
@@ -1525,15 +1527,14 @@ with tab_balance:
         except Exception:
             _pend_hasta_def = date.today()
 
-        def _save_pend_dates():
-            db.guardar_config({
-                "pend_desde": str(st.session_state.get("pend_desde", _pend_desde_def)),
-                "pend_hasta": str(st.session_state.get("pend_hasta", _pend_hasta_def)),
-            })
+        with st.form("form_pend_fechas", border=False):
+            _pd_col1, _pd_col2 = st.columns(2)
+            _pend_desde = _pd_col1.date_input("Desde", value=_pend_desde_def, key="pend_desde", format="DD/MM/YYYY")
+            _pend_hasta = _pd_col2.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta", format="DD/MM/YYYY")
+            _pend_calc = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
-        _pd_col1, _pd_col2 = st.columns(2)
-        _pend_desde = _pd_col1.date_input("Desde", value=_pend_desde_def, key="pend_desde", on_change=_save_pend_dates, format="DD/MM/YYYY")
-        _pend_hasta = _pd_col2.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta", on_change=_save_pend_dates, format="DD/MM/YYYY")
+        if _pend_calc:
+            db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
 
         def _pend_en_rango(fecha_str):
             try:
@@ -1668,7 +1669,7 @@ with tab_balance:
             _cb1, _cb2 = st.columns(2)
             bal_desde = _cb1.date_input("Desde", value=_bal_desde_def, key="bal_desde", format="DD/MM/YYYY")
             bal_hasta = _cb2.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta", format="DD/MM/YYYY")
-            _bal_calc = st.form_submit_button("🔄 Calcular", type="primary")
+            _bal_calc = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
         if _bal_calc:
             db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
