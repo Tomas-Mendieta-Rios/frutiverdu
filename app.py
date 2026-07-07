@@ -1015,8 +1015,12 @@ productos = db.cargar_productos()
 compuestos_orig = db.cargar_compuestos()
 # Si compuestos esta vacio (Sheet corrupto), no llamamos completar_relaciones
 # (rompe por columnas faltantes). El usuario debera re-sincronizar.
+# IMPORTANTE: usar st.empty() para que el árbol de widgets antes de st.tabs()
+# sea siempre estable (mismo nro de slots). Un st.error() condicional sin
+# st.stop() desplaza el índice del st.tabs() y rompe la selección de tabs.
+_compuestos_error_ph = st.empty()
 if compuestos_orig.empty or "codigo_origen" not in compuestos_orig.columns:
-    st.error(
+    _compuestos_error_ph.error(
         "⚠️ La tabla `compuestos` está vacía. "
         "Andá a la pestaña ⚙️ Relacionar productos y guardá las relaciones."
     )
@@ -1449,30 +1453,13 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
 
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
+    _c1, _c2 = st.columns(2)
+    _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
+    _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
 
-    _all_tipos = set()
-    for _c in cobros:
-        for _cob in _c.get("cobranza", []):
-            _tv = _cob.get("tipo_valor")
-            if _tv:
-                _all_tipos.add(_tv)
-    for _p in pagos:
-        for _lin in _p.get("lineas_pago", []):
-            _tv = _lin.get("tipo_valor")
-            if _tv:
-                _all_tipos.add(_tv)
+    # Acumular totales por tipo de caja
+    _por_tipo = {}  # tipo -> {"entradas": float, "salidas": float}
 
-    # on_change: fuerza el tab activo a "Mov. de caja" (índice 6) antes de que
-    # st.tabs() corra en el rerun, evitando que el tab se resetee.
-    def _stay_on_movcaja():
-        st.session_state["main_tabs"] = 6
-
-    _c1, _c2, _c3 = st.columns(3)
-    _desde    = _c1.date_input("Desde",       value=_hoy.replace(day=1),     key="movcaja_desde", format="DD/MM/YYYY", on_change=_stay_on_movcaja)
-    _hasta    = _c2.date_input("Hasta",        value=_hoy,                    key="movcaja_hasta", format="DD/MM/YYYY", on_change=_stay_on_movcaja)
-    _tipo_sel = _c3.selectbox("Tipo de caja", ["Todas"] + sorted(_all_tipos), key="movcaja_tipo",                       on_change=_stay_on_movcaja)
-
-    _movimientos = []
     for _c in cobros:
         try:
             _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
@@ -1482,15 +1469,9 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         for _cob in _c.get("cobranza", []):
             _tv = _cob.get("tipo_valor") or "—"
-            if _tipo_sel != "Todas" and _tv != _tipo_sel:
-                continue
-            _movimientos.append({
-                "Fecha":    _f,
-                "Tipo":     "Entrada",
-                "Caja":     _tv,
-                "Concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
-                "Monto":    float(_cob.get("monto") or 0),
-            })
+            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0})
+            _t["Entradas"] += float(_cob.get("monto") or 0)
+
     for _p in pagos:
         try:
             _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
@@ -1500,39 +1481,36 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         for _lin in _p.get("lineas_pago", []):
             _tv = _lin.get("tipo_valor") or "—"
-            if _tipo_sel != "Todas" and _tv != _tipo_sel:
-                continue
-            _movimientos.append({
-                "Fecha":    _f,
-                "Tipo":     "Salida",
-                "Caja":     _tv,
-                "Concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
-                "Monto":    float(_lin.get("monto") or 0),
-            })
+            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0})
+            _t["Salidas"] += float(_lin.get("monto") or 0)
 
-    _movimientos.sort(key=lambda m: m["Fecha"], reverse=True)
-
-    _entradas = sum(m["Monto"] for m in _movimientos if m["Tipo"] == "Entrada")
-    _salidas  = sum(m["Monto"] for m in _movimientos if m["Tipo"] == "Salida")
-    _neto     = _entradas - _salidas
+    _total_e = sum(v["Entradas"] for v in _por_tipo.values())
+    _total_s = sum(v["Salidas"]  for v in _por_tipo.values())
+    _total_n = _total_e - _total_s
     _k1, _k2, _k3 = st.columns(3)
-    _k1.metric("Entradas",   f"$ {_entradas:,.0f}")
-    _k2.metric("Salidas",    f"$ {_salidas:,.0f}")
-    _k3.metric("Saldo neto", f"$ {_neto:,.0f}", delta=f"{_neto:,.0f}")
+    _k1.metric("Entradas",   f"$ {_total_e:,.0f}")
+    _k2.metric("Salidas",    f"$ {_total_s:,.0f}")
+    _k3.metric("Saldo neto", f"$ {_total_n:,.0f}", delta=f"{_total_n:,.0f}")
 
-    if not _movimientos:
+    if not _por_tipo:
         st.info("No hay movimientos en el período seleccionado.")
-    else:
-        st.dataframe(
-            pd.DataFrame(_movimientos),
-            use_container_width=True,
-            hide_index=True,
-            height=500,
-            column_config={
-                "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
-                "Fecha": st.column_config.DateColumn("Fecha"),
-            },
-        )
+        return
+
+    _rows = sorted(
+        [{"Tipo de caja": k, "Entradas": v["Entradas"], "Salidas": v["Salidas"], "Neto": v["Entradas"] - v["Salidas"]}
+         for k, v in _por_tipo.items()],
+        key=lambda r: r["Tipo de caja"],
+    )
+    st.dataframe(
+        pd.DataFrame(_rows),
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Entradas": st.column_config.NumberColumn("Entradas", format="$ %.2f"),
+            "Salidas":  st.column_config.NumberColumn("Salidas",  format="$ %.2f"),
+            "Neto":     st.column_config.NumberColumn("Neto",     format="$ %.2f"),
+        },
+    )
 
 
 with tab_balance:
