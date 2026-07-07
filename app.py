@@ -1462,10 +1462,15 @@ def _render_movimiento_caja(cobros, pagos):
             if _tv:
                 _all_tipos.add(_tv)
 
+    # on_change: fuerza el tab activo a "Mov. de caja" (índice 6) antes de que
+    # st.tabs() corra en el rerun, evitando que el tab se resetee.
+    def _stay_on_movcaja():
+        st.session_state["main_tabs"] = 6
+
     _c1, _c2, _c3 = st.columns(3)
-    _desde    = _c1.date_input("Desde",         value=_hoy.replace(day=1),              key="movcaja_desde", format="DD/MM/YYYY")
-    _hasta    = _c2.date_input("Hasta",          value=_hoy,                             key="movcaja_hasta", format="DD/MM/YYYY")
-    _tipo_sel = _c3.selectbox("Tipo de caja",   ["Todas"] + sorted(_all_tipos),          key="movcaja_tipo")
+    _desde    = _c1.date_input("Desde",       value=_hoy.replace(day=1),     key="movcaja_desde", format="DD/MM/YYYY", on_change=_stay_on_movcaja)
+    _hasta    = _c2.date_input("Hasta",        value=_hoy,                    key="movcaja_hasta", format="DD/MM/YYYY", on_change=_stay_on_movcaja)
+    _tipo_sel = _c3.selectbox("Tipo de caja", ["Todas"] + sorted(_all_tipos), key="movcaja_tipo",                       on_change=_stay_on_movcaja)
 
     _movimientos = []
     for _c in cobros:
