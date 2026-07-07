@@ -179,7 +179,7 @@ def cargar_stock_completo():
     if "id" in df.columns:
         df = df.drop(columns=["id"])
     df["codigo"] = df["codigo"].astype(str)
-    df["fecha"] = df["fecha"].astype(str)
+    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce").dt.strftime("%Y-%m-%d")
     df["cantidad"] = pd.to_numeric(df["cantidad"], errors="coerce")
     return df
 
