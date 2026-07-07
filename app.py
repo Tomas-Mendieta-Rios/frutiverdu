@@ -1665,10 +1665,10 @@ with tab_balance:
             _bal_hasta_def = _hoy_bal
 
         with st.form("form_bal_fechas", border=False):
-            _cb1, _cb2, _cb3 = st.columns([2, 2, 1])
+            _cb1, _cb2 = st.columns(2)
             bal_desde = _cb1.date_input("Desde", value=_bal_desde_def, key="bal_desde", format="DD/MM/YYYY")
             bal_hasta = _cb2.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta", format="DD/MM/YYYY")
-            _bal_calc = _cb3.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
+            _bal_calc = st.form_submit_button("🔄 Calcular", type="primary")
 
         if _bal_calc:
             db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
