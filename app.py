@@ -1449,8 +1449,9 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
 
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
-    _desde = _hoy.replace(day=1)
-    st.caption(f"Período: **{_desde.strftime('%d/%m/%Y')}** al **{_hoy.strftime('%d/%m/%Y')}**")
+    _c1, _c2 = st.columns(2)
+    _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
+    _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
 
     _movimientos = []
     for _c in cobros:
@@ -1458,7 +1459,7 @@ def _render_movimiento_caja(cobros, pagos):
             _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
         except Exception:
             continue
-        if not (_desde <= _f <= _hoy):
+        if not (_desde <= _f <= _hasta):
             continue
         for _cob in _c.get("cobranza", []):
             _movimientos.append({
@@ -1473,7 +1474,7 @@ def _render_movimiento_caja(cobros, pagos):
             _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
         except Exception:
             continue
-        if not (_desde <= _f <= _hoy):
+        if not (_desde <= _f <= _hasta):
             continue
         for _lin in _p.get("lineas_pago", []):
             _movimientos.append({
@@ -1495,7 +1496,7 @@ def _render_movimiento_caja(cobros, pagos):
     _k3.metric("Saldo neto", f"$ {_neto:,.0f}", delta=f"{_neto:,.0f}")
 
     if not _movimientos:
-        st.info("No hay movimientos en el mes actual.")
+        st.info("No hay movimientos en el período seleccionado.")
     else:
         st.dataframe(
             pd.DataFrame(_movimientos),
