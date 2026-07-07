@@ -69,13 +69,14 @@ def ultima_carga(clave):
         "dux_subrubros": "subrubros",
     }
     tabla = tabla_map.get(clave, clave)
-    try:
-        client = get_client()
-        resp = client.table(tabla).select("updated_at").order("updated_at", desc=True).limit(1).execute()
-        if resp.data:
-            return resp.data[0].get("updated_at")
-    except Exception:
-        pass
+    client = get_client()
+    for col in ("updated_at", "created_at"):
+        try:
+            resp = client.table(tabla).select(col).order(col, desc=True).limit(1).execute()
+            if resp.data and resp.data[0].get(col):
+                return resp.data[0][col]
+        except Exception:
+            continue
     return None
 
 
