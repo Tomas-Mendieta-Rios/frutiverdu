@@ -1444,7 +1444,7 @@ def _calcular_saldos_actuales(cobros, pagos):
             _ajf = pd.to_datetime(str(_aj.get("fecha") or "")).date()
         except Exception:
             continue
-        if _ajf < _inicial_fecha.get(_cn, date.min):
+        if _ajf <= _inicial_fecha.get(_cn, date.min):
             continue
         _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
 
@@ -1456,7 +1456,7 @@ def _calcular_saldos_actuales(cobros, pagos):
             continue
         for _cob in _c.get("cobranza", []):
             _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
-            if _cf < _inicial_fecha.get(_ck, date.min):
+            if _cf <= _inicial_fecha.get(_ck, date.min):
                 continue
             _h = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _h["Entradas"] += float(_cob.get("monto") or 0)
@@ -1467,7 +1467,7 @@ def _calcular_saldos_actuales(cobros, pagos):
             continue
         for _lin in _p.get("lineas_pago", []):
             _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
-            if _pf < _inicial_fecha.get(_ck, date.min):
+            if _pf <= _inicial_fecha.get(_ck, date.min):
                 continue
             _h = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _h["Salidas"] += float(_lin.get("monto") or 0)
@@ -1480,7 +1480,7 @@ def _calcular_saldos_actuales(cobros, pagos):
         _horig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"),  "—")
         _hdest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
         _htm   = float(_tr.get("monto") or 0)
-        if _trf >= _inicial_fecha.get(_horig, date.min):
+        if _trf > _inicial_fecha.get(_horig, date.min):
             _hist.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
         if _trf >= _inicial_fecha.get(_hdest, date.min):
             _hist.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
@@ -1691,7 +1691,7 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         for _cob in _c.get("cobranza", []):
             _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
-            if _cf < _inicial_fecha.get(_ck, date.min):
+            if _cf <= _inicial_fecha.get(_ck, date.min):
                 continue
             _ht = _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _ht["Entradas"] += float(_cob.get("monto") or 0)
@@ -1702,7 +1702,7 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         for _lin in _p.get("lineas_pago", []):
             _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
-            if _pf < _inicial_fecha.get(_ck, date.min):
+            if _pf <= _inicial_fecha.get(_ck, date.min):
                 continue
             _ht = _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _ht["Salidas"] += float(_lin.get("monto") or 0)
@@ -1714,7 +1714,7 @@ def _render_movimiento_caja(cobros, pagos):
         _horig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"),  "—")
         _hdest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
         _htm   = float(_tr.get("monto") or 0)
-        if _trf >= _inicial_fecha.get(_horig, date.min):
+        if _trf > _inicial_fecha.get(_horig, date.min):
             _hist_total.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
         if _trf >= _inicial_fecha.get(_hdest, date.min):
             _hist_total.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
@@ -1730,7 +1730,7 @@ def _render_movimiento_caja(cobros, pagos):
             _ajf = pd.to_datetime(str(_aj.get("fecha") or "")).date()
         except Exception:
             continue
-        if _ajf < _inicial_fecha.get(_cn, date.min):
+        if _ajf <= _inicial_fecha.get(_cn, date.min):
             continue
         _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
 
