@@ -1660,6 +1660,8 @@ def _render_movimiento_caja(cobros, pagos):
 
 
 with tab_balance:
+    _cfg_monto = st.column_config.NumberColumn("Total", format="$ %.0f")
+
     def _parse_wix_total(v):
         try:
             import re as _re
