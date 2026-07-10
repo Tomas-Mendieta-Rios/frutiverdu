@@ -1900,13 +1900,16 @@ with tab_balance:
                     for _f in _lista:
                         _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                         _by_cli.setdefault(_k, []).append(_f)
-                    _rows = [{
-                        "Cliente":    _cli,
-                        "Facturas":   len(_fitems),
-                        "Total":      sum(float(f.get("total") or 0) for f in _fitems),
-                    } for _cli, _fitems in sorted(_by_cli.items())]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                 column_config={"Total": _cfg_monto})
+                    for _cli, _fitems in sorted(_by_cli.items()):
+                        _ctot = sum(float(f.get("total") or 0) for f in _fitems)
+                        with st.expander(f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_ctot)}"):
+                            _rows = [{
+                                "Fecha":       _fmt_fecha(f.get("fecha_comp")),
+                                "Comprobante": f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip(),
+                                "Total":       float(f.get("total") or 0),
+                            } for f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
+                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                         column_config={"Total": _cfg_monto})
 
         # Wix
         st.markdown(f"<h4 style='color:#111111; font-weight:800'>🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos</h4>", unsafe_allow_html=True)
@@ -1929,13 +1932,16 @@ with tab_balance:
                         _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
                         _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
                         _by_cli.setdefault(_k, []).append(_p)
-                    _rows = [{
-                        "Cliente":  _cli,
-                        "Pedidos":  len(_pitems),
-                        "Total":    sum(_wix_monto(_p) for _p in _pitems),
-                    } for _cli, _pitems in sorted(_by_cli.items())]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                 column_config={"Total": _cfg_monto})
+                    for _cli, _pitems in sorted(_by_cli.items()):
+                        _ctot = sum(_wix_monto(_p) for _p in _pitems)
+                        with st.expander(f"{_cli} — {len(_pitems)} pedido{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ctot)}"):
+                            _rows = [{
+                                "Fecha":    _fmt_fecha(_p.get("createdDate")),
+                                "Pedido #": _p.get("number") or _p.get("id") or "—",
+                                "Total":    _wix_monto(_p),
+                            } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
+                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                         column_config={"Total": _cfg_monto})
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
@@ -1959,13 +1965,16 @@ with tab_balance:
                     _by_prov = {}
                     for _c in _lista:
                         _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
-                    _rows = [{
-                        "Proveedor":     _prov,
-                        "Comprobantes":  len(_pitems),
-                        "Total":         sum(float(c.get("total") or 0) for c in _pitems),
-                    } for _prov, _pitems in sorted(_by_prov.items())]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                 column_config={"Total": _cfg_monto})
+                    for _prov, _pitems in sorted(_by_prov.items()):
+                        _ptot = sum(float(c.get("total") or 0) for c in _pitems)
+                        with st.expander(f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
+                            _rows = [{
+                                "Fecha":       _fmt_fecha(c.get("fecha")),
+                                "Comprobante": c.get("nro_comprobante") or "—",
+                                "Total":       float(c.get("total") or 0),
+                            } for c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                         column_config={"Total": _cfg_monto})
 
         # Gastos
         total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
@@ -1985,13 +1994,16 @@ with tab_balance:
                     _by_prov = {}
                     for _g in _lista:
                         _by_prov.setdefault(_g.get("proveedor") or "—", []).append(_g)
-                    _rows = [{
-                        "Proveedor":  _prov,
-                        "Gastos":     len(_pitems),
-                        "Total":      sum(float(g.get("total") or 0) for g in _pitems),
-                    } for _prov, _pitems in sorted(_by_prov.items())]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                 column_config={"Total": _cfg_monto})
+                    for _prov, _pitems in sorted(_by_prov.items()):
+                        _ptot = sum(float(g.get("total") or 0) for g in _pitems)
+                        with st.expander(f"{_prov} — {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
+                            _rows = [{
+                                "Fecha":       _fmt_fecha(g.get("fecha")),
+                                "Comprobante": g.get("nro_comprobante") or "—",
+                                "Total":       float(g.get("total") or 0),
+                            } for g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                         column_config={"Total": _cfg_monto})
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
