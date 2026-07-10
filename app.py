@@ -1482,15 +1482,16 @@ def _render_movimiento_caja(cobros, pagos):
             else:
                 _cat = "Mixto"
             _t["detalle"].append({
-                "Fecha":     _f,
-                "Tipo":      "Salida",
-                "Cat.":      _cat,
-                "Concepto":  _p.get("concepto") or "—",
-                "Proveedor": _p.get("proveedor") or "—",
-                "Cobro #":   "",
-                "Pago #":    _p.get("nro_comprobante") or "—",
-                "Cheque":    _cheque_det,
-                "Monto":     _monto,
+                "Fecha":        _f,
+                "Tipo":         "Salida",
+                "Cat.":         _cat,
+                "Concepto":     _p.get("concepto") or "—",
+                "Proveedor":    _p.get("proveedor") or "—",
+                "Cobro #":      "",
+                "Pago #":       _p.get("nro_comprobante") or "—",
+                "Cheque":       _cheque_det,
+                "Monto":        _monto,
+                "imputaciones": _imput,
             })
 
     _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
@@ -1531,9 +1532,22 @@ def _render_movimiento_caja(cobros, pagos):
                 _cheque  = _row.get("Cheque", "")
                 _label   = f"{_fecha}  |  {_tipo}  {('· ' + _cat) if _cat else ''}  |  {_prov}  |  {_ref}  |  $ {_monto:,.0f}"
                 with st.expander(_label):
-                    st.write("**Concepto:**", _row.get("Concepto") or "—")
                     if _cheque:
                         st.write("**Cheque:**", _cheque)
+                    _imput_rows = _row.get("imputaciones") or []
+                    if _imput_rows:
+                        st.dataframe(
+                            pd.DataFrame([{
+                                "Comprobante": i.get("nro_comprobante") or "—",
+                                "Tipo":        i.get("tipo_comprobante") or "—",
+                                "Monto":       float(i.get("monto_imputado") or 0),
+                            } for i in _imput_rows]),
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")},
+                        )
+                    else:
+                        st.write("**Concepto:**", _row.get("Concepto") or "—")
         st.divider()
 
 
