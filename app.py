@@ -2217,21 +2217,16 @@ with tab_mov_caja:
         _todos_aj = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste"]
         _aj_cajas_map = {c["id"]: c["nombre"] for c in _aj_cajas_list}
         if _todos_aj:
-            _aj_df = pd.DataFrame([{
-                "Fecha":  a.get("fecha"),
-                "Caja":   _aj_cajas_map.get(a.get("caja_id"), "—"),
-                "Monto":  float(a.get("monto") or 0),
-                "Nota":   a.get("nota") or "",
-            } for a in _todos_aj])
-            st.dataframe(
-                _aj_df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
-                },
-            )
+            for _a in sorted(_todos_aj, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                _a_caja  = _aj_cajas_map.get(_a.get("caja_id"), "—")
+                _a_fecha = str(_a.get("fecha") or "")[:10]
+                _a_monto = float(_a.get("monto") or 0)
+                _a_nota  = _a.get("nota") or ""
+                _ra1, _ra2 = st.columns([8, 1])
+                _ra1.markdown(f"**{_a_caja}** · {_a_fecha} · $ {_a_monto:,.0f}" + (f" · {_a_nota}" if _a_nota else ""))
+                if _ra2.button("🗑", key=f"del_aj_{_a['id']}"):
+                    db.eliminar_ajuste_caja(_a["id"])
+                    st.rerun()
         else:
             st.info("No hay ajustes registrados.")
 
@@ -2244,7 +2239,7 @@ with tab_mov_caja:
             st.info("No hay cajas configuradas.")
         else:
             _ini_ajustes = {
-                _aj["caja_id"]: _aj
+                int(_aj["caja_id"]): _aj
                 for _aj in db.cargar_ajustes_caja()
                 if _aj.get("tipo") == "inicial"
             }
@@ -2252,7 +2247,7 @@ with tab_mov_caja:
                 _ini_vals = {}
                 _ini_fechas = {}
                 for _cj in _ini_cajas_con_id:
-                    _aj_ini = _ini_ajustes.get(_cj["id"]) or {}
+                    _aj_ini = _ini_ajustes.get(int(_cj["id"])) or {}
                     _ini_actual = float(_aj_ini.get("monto") or 0)
                     _fecha_actual = _safe_date(_aj_ini.get("fecha"), default=date.today())
                     _fc1, _fc2, _fc3 = st.columns([2, 2, 2])
@@ -2312,22 +2307,17 @@ with tab_mov_caja:
         st.divider()
         _todas_tr = db.cargar_transferencias()
         if _todas_tr:
-            _df_tr = pd.DataFrame([{
-                "Fecha":   t.get("fecha"),
-                "Desde":   (t.get("origen")  or {}).get("nombre") or "—",
-                "Hacia":   (t.get("destino") or {}).get("nombre") or "—",
-                "Monto":   float(t.get("monto") or 0),
-                "Concepto": t.get("concepto") or "",
-                "id":      t.get("id"),
-            } for t in _todas_tr])
-            st.dataframe(
-                _df_tr.drop(columns=["id"]),
-                use_container_width=True, hide_index=True,
-                column_config={
-                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
-                },
-            )
+            for _tr in sorted(_todas_tr, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                _tr_desde   = (_tr.get("origen")  or {}).get("nombre") or "—"
+                _tr_hacia   = (_tr.get("destino") or {}).get("nombre") or "—"
+                _tr_fecha   = str(_tr.get("fecha") or "")[:10]
+                _tr_monto   = float(_tr.get("monto") or 0)
+                _tr_conc    = _tr.get("concepto") or ""
+                _rt1, _rt2  = st.columns([8, 1])
+                _rt1.markdown(f"**{_tr_desde} → {_tr_hacia}** · {_tr_fecha} · $ {_tr_monto:,.0f}" + (f" · {_tr_conc}" if _tr_conc else ""))
+                if _rt2.button("🗑", key=f"del_tr_{_tr['id']}"):
+                    db.eliminar_transferencia(_tr["id"])
+                    st.rerun()
         else:
             st.info("No hay transferencias registradas.")
 
