@@ -1409,8 +1409,9 @@ def _render_movimiento_caja(cobros, pagos):
         _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
         st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
-    _comp_fecha = {c["id"]: c.get("fecha", "") for c in db.cargar_comprobantes_compra()}
+    _comp_fecha  = {c["id"]: c.get("fecha", "") for c in db.cargar_comprobantes_compra()}
     _gasto_fecha = {g["id"]: g.get("fecha", "") for g in db.cargar_gastos()}
+    _factura_fecha = {(f.get("tipo_comp", ""), f.get("nro_comp", "")): f.get("fecha_comp", "") for f in db.cargar_facturas()}
 
     def _caja_key(tipo_valor, descripcion):
         tv   = (tipo_valor or "").upper().strip()
@@ -1564,6 +1565,7 @@ def _render_movimiento_caja(cobros, pagos):
                         if _cob_imput:
                             st.dataframe(
                                 pd.DataFrame([{
+                                    "Fecha comp.": _factura_fecha.get((i.get("tipo_comp", ""), i.get("nro_comprobante", "")), "") or "—",
                                     "Comprobante": i.get("nro_comprobante") or "—",
                                     "Tipo":        i.get("tipo_comp") or "—",
                                     "Monto":       float(i.get("monto_imputado") or 0),
