@@ -4956,12 +4956,11 @@ with tab_eg_gastos:
         _total_gas = sum(float(g.get("total") or 0) for g in gastos_sorted)
         st.caption(f"{len(gastos_sorted)} gastos · Total: **$ {_total_gas:,.0f}**")
         _rows = [{
-            "Comprobante":    g.get("nro_comprobante") or "—",
-            "Fecha":          _fmt_fecha(g.get("fecha")),
-            "Proveedor":      g.get("proveedor") or "—",
-            "Items":          ", ".join(d.get("cod_item","") for d in (g.get("detalles") or []) if d.get("cod_item")),
-            "Pago pendiente": "⏳" if g.get("pago_pendiente") else "✅",
-            "Total":          float(g.get("total") or 0),
+            "Comprobante": g.get("nro_comprobante") or "—",
+            "Fecha":       _fmt_fecha(g.get("fecha")),
+            "Proveedor":   g.get("proveedor") or "—",
+            "Items":       ", ".join(d.get("cod_item","") for d in (g.get("detalles") or []) if d.get("cod_item")),
+            "Total":       float(g.get("total") or 0),
         } for g in gastos_sorted]
         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                      column_config={"Total": st.column_config.NumberColumn("Total", format="$ %.0f")})
