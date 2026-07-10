@@ -1459,7 +1459,7 @@ def _render_movimiento_caja(cobros, pagos):
                 _cli_nombre = str(_cli_obj) or "—"
             _imput_cob = _c.get("imputaciones") or []
             _facts = ", ".join(
-                f"{i.get('tipo_comp','')} {i.get('nro_comprobante','')}".strip()
+                str(i.get("nro_comprobante", "")).strip()
                 for i in _imput_cob if i.get("nro_comprobante")
             ) or "—"
             _t["detalle"].append({
@@ -1511,7 +1511,7 @@ def _render_movimiento_caja(cobros, pagos):
             else:
                 _cat = "Mixto"
             _comp_list = ", ".join(
-                f"{i.get('tipo_comprobante','')} {i.get('nro_comprobante','')}".strip()
+                str(i.get("nro_comprobante", "")).strip()
                 for i in _imput if i.get("nro_comprobante")
             ) or "—"
             _t["detalle"].append({
