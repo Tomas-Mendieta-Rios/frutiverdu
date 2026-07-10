@@ -2283,6 +2283,21 @@ with tab_mov_caja:
                         st.success("✅ Saldos iniciales guardados.")
                         st.rerun()
 
+            _del_ini_opts = {
+                _cj["nombre"]: int(_cj["id"])
+                for _cj in _ini_cajas_con_id
+                if int(_cj["id"]) in _ini_ajustes
+            }
+            if _del_ini_opts:
+                with st.expander("🗑 Eliminar saldo inicial"):
+                    _del_ini_sel = st.selectbox("Caja", options=list(_del_ini_opts.keys()), key="del_ini_sel")
+                    if st.button("Eliminar", type="secondary", key="del_ini_btn"):
+                        _aj_del = _ini_ajustes.get(_del_ini_opts[_del_ini_sel])
+                        if _aj_del:
+                            db.eliminar_ajuste_caja(_aj_del["id"])
+                            st.cache_data.clear()
+                            st.rerun()
+
     with _stab_transferencias:
         st.subheader("Transferencias entre cajas")
         _cajas_tr = db.cargar_cajas()
