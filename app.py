@@ -1566,6 +1566,31 @@ def _render_movimiento_caja(cobros, pagos):
                 _t["Sal. Compras"] += _tm
                 _t["detalle"].append({"Fecha": _tf, "Tipo": "Salida", "Cat.": "Transferencia", "Concepto": f"Hacia {_dest} — {_conc}", "Proveedor": "", "Cobro #": "", "Pago #": "", "Cheque": "", "Monto": _tm, "imputaciones": []})
 
+    # Ajustes de caja (inicial + ajustes del período)
+    _ajustes_todos = db.cargar_ajustes_caja()
+    _nombre_a_id   = {c["nombre"]: c["id"] for c in _cajas_list}
+    # saldo inicial por nombre de caja
+    _inicial = {}
+    for _aj in _ajustes_todos:
+        if _aj.get("tipo") == "inicial":
+            _cn = _cajas_map.get(_aj["caja_id"], "")
+            if _cn:
+                _inicial[_cn] = float(_aj.get("monto") or 0)
+    # ajustes del período por nombre de caja
+    _ajustes_periodo = {}
+    for _aj in _ajustes_todos:
+        if _aj.get("tipo") != "ajuste":
+            continue
+        try:
+            _ajf = pd.to_datetime(str(_aj.get("fecha") or "")).date()
+        except Exception:
+            continue
+        if not (_desde <= _ajf <= _hasta):
+            continue
+        _cn = _cajas_map.get(_aj["caja_id"], "")
+        if _cn:
+            _ajustes_periodo.setdefault(_cn, []).append(_aj)
+
     _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
     _total_sc = sum(v["Sal. Compras"] for v in _por_caja.values())
     _total_sg = sum(v["Sal. Gastos"]  for v in _por_caja.values())
@@ -1581,17 +1606,39 @@ def _render_movimiento_caja(cobros, pagos):
         st.info("No hay movimientos en el período seleccionado.")
         return
 
+    # Form para registrar ajuste de caja
+    _cajas_activas = [c for c in _cajas_list if c.get("activa")]
+    if _cajas_activas:
+        with st.expander("➕ Registrar ajuste de caja"):
+            with st.form("form_ajuste_caja"):
+                _aj_c1, _aj_c2, _aj_c3 = st.columns([2, 1, 1])
+                _aj_caja  = _aj_c1.selectbox("Caja", options=[c["nombre"] for c in _cajas_activas])
+                _aj_fecha = _aj_c2.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
+                _aj_monto = _aj_c3.number_input("Diferencia ($)", step=100.0,
+                    help="Positivo si sobra plata, negativo si falta.")
+                _aj_nota  = st.text_input("Nota (opcional)")
+                if st.form_submit_button("Guardar ajuste", type="primary", use_container_width=True):
+                    _aj_id = _nombre_a_id.get(_aj_caja)
+                    if _aj_id:
+                        db.guardar_ajuste_caja(_aj_id, _aj_fecha, _aj_monto, _aj_nota, tipo="ajuste")
+                        st.success(f"✅ Ajuste registrado en {_aj_caja}.")
+                        st.rerun()
+
     st.divider()
     for _caja in sorted(_por_caja):
         _v = _por_caja[_caja]
         _sal = _v["Sal. Compras"] + _v["Sal. Gastos"]
         _neto = _v["Entradas"] - _sal
+        _ini  = _inicial.get(_caja, 0.0)
+        _aj_sum = sum(float(_aj.get("monto") or 0) for _aj in _ajustes_periodo.get(_caja, []))
+        _saldo_total = _ini + _neto + _aj_sum
         st.subheader(_caja)
-        _m1, _m2, _m3, _m4 = st.columns(4)
-        _m1.metric("Entradas",     f"$ {_v['Entradas']:,.0f}")
-        _m2.metric("Sal. Compras", f"$ {_v['Sal. Compras']:,.0f}")
-        _m3.metric("Sal. Gastos",  f"$ {_v['Sal. Gastos']:,.0f}")
-        _m4.metric("Neto",         f"$ {_neto:,.0f}")
+        _m1, _m2, _m3, _m4, _m5 = st.columns(5)
+        _m1.metric("Inicial",      f"$ {_ini:,.0f}")
+        _m2.metric("Entradas",     f"$ {_v['Entradas']:,.0f}")
+        _m3.metric("Salidas",      f"$ {_sal:,.0f}")
+        _m4.metric("Ajustes",      f"$ {_aj_sum:,.0f}")
+        _m5.metric("Saldo",        f"$ {_saldo_total:,.0f}")
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
         _cfg_fecha = st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
         _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %.2f")
@@ -1642,6 +1689,12 @@ def _render_movimiento_caja(cobros, pagos):
                         use_container_width=True, hide_index=True,
                         column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                     )
+        _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
+        if _aj_caja_periodo:
+            with st.expander(f"Ajustes ({len(_aj_caja_periodo)}) — $ {_aj_sum:,.0f}"):
+                _aj_rows = [{"Fecha": _aj.get("fecha"), "Monto": float(_aj.get("monto") or 0), "Nota": _aj.get("nota") or ""} for _aj in _aj_caja_periodo]
+                st.dataframe(pd.DataFrame(_aj_rows), use_container_width=True, hide_index=True,
+                    column_config={"Fecha": _cfg_fecha, "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")})
         st.divider()
 
 
@@ -5317,6 +5370,32 @@ with tab_cajas:
             st.success(f"✅ {len(_cajas_list)} cajas guardadas.")
         except Exception as _e_gc:
             st.error(f"❌ No se pudieron guardar las cajas: {_e_gc}")
+
+    st.divider()
+    st.subheader("💵 Saldo inicial por caja")
+    st.caption("El saldo inicial es el punto de partida para el cálculo de saldo en Mov. de Cajas. No aparece como movimiento.")
+
+    _cajas_con_id = [c for c in _cajas_data if c.get("id")]
+    if not _cajas_con_id:
+        st.info("Primero guardá las cajas.")
+    else:
+        _ajustes_ini = {_aj["caja_id"]: _aj for _aj in db.cargar_ajustes_caja() if _aj.get("tipo") == "inicial"}
+        with st.form("form_saldo_inicial_cajas"):
+            _ini_vals = {}
+            for _cj in _cajas_con_id:
+                _ini_actual = float((_ajustes_ini.get(_cj["id"]) or {}).get("monto") or 0)
+                _ini_vals[_cj["id"]] = st.number_input(
+                    f"{_cj['nombre']}",
+                    value=_ini_actual,
+                    step=100.0,
+                    key=f"ini_caja_{_cj['id']}",
+                    format="%.2f",
+                )
+            if st.form_submit_button("💾 Guardar saldos iniciales", type="primary", use_container_width=True):
+                for _cj_id, _monto in _ini_vals.items():
+                    db.guardar_ajuste_caja(_cj_id, date.today(), _monto, "Saldo inicial", tipo="inicial")
+                st.success("✅ Saldos iniciales guardados.")
+                st.rerun()
 
 
 #python -m streamlit run app.py

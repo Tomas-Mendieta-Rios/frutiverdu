@@ -629,6 +629,41 @@ def guardar_cajas(cajas):
     cargar_cajas.clear()
 
 
+@st.cache_data(ttl=120)
+def cargar_ajustes_caja():
+    client = get_client()
+    resp = client.table("cajas_ajustes").select("*").order("fecha").execute()
+    return resp.data or []
+
+
+def guardar_ajuste_caja(caja_id, fecha, monto, nota="", tipo="ajuste"):
+    client = get_client()
+    if tipo == "inicial":
+        # Solo puede haber uno por caja — reemplazar si existe
+        existing = client.table("cajas_ajustes").select("id").eq("caja_id", caja_id).eq("tipo", "inicial").execute()
+        if existing.data:
+            client.table("cajas_ajustes").update({
+                "fecha": str(fecha), "monto": float(monto), "nota": nota or "",
+            }).eq("id", existing.data[0]["id"]).execute()
+        else:
+            client.table("cajas_ajustes").insert({
+                "caja_id": caja_id, "fecha": str(fecha),
+                "monto": float(monto), "nota": nota or "", "tipo": "inicial",
+            }).execute()
+    else:
+        client.table("cajas_ajustes").insert({
+            "caja_id": caja_id, "fecha": str(fecha),
+            "monto": float(monto), "nota": nota or "", "tipo": "ajuste",
+        }).execute()
+    cargar_ajustes_caja.clear()
+
+
+def eliminar_ajuste_caja(ajuste_id):
+    client = get_client()
+    client.table("cajas_ajustes").delete().eq("id", ajuste_id).execute()
+    cargar_ajustes_caja.clear()
+
+
 def asignar_cajas_pedidos_wix(asignaciones):
     """asignaciones: dict {order_id: caja_id | None}"""
     client = get_client()
