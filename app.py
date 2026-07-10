@@ -1418,6 +1418,10 @@ def _render_movimiento_caja(cobros, pagos):
             return "CHEQUE"
         return tv or "—"
 
+    # DEBUG TEMPORAL
+    _debug_tvs = list({(l.get("tipo_valor"), l.get("descripcion")) for p in pagos for l in p.get("lineas_pago", [])})
+    st.write("DEBUG pagos tipo_valor+desc:", _debug_tvs)
+
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
     _por_caja = {}
 
