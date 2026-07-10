@@ -1575,7 +1575,7 @@ def _render_movimiento_caja(cobros, pagos):
             _cn = _cajas_map.get(_aj["caja_id"], "")
             if _cn:
                 _inicial[_cn] = float(_aj.get("monto") or 0)
-    # ajustes del período por nombre de caja
+    # ajustes del período (para el desglose)
     _ajustes_periodo = {}
     for _aj in _ajustes_todos:
         if _aj.get("tipo") != "ajuste":
@@ -1589,6 +1589,33 @@ def _render_movimiento_caja(cobros, pagos):
         _cn = _cajas_map.get(_aj["caja_id"], "")
         if _cn:
             _ajustes_periodo.setdefault(_cn, []).append(_aj)
+
+    # Totales históricos (sin filtro de fecha) para el saldo acumulativo
+    _hist_total = {}
+    for _c in cobros:
+        for _cob in _c.get("cobranza", []):
+            _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
+            _ht = _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
+            _ht["Entradas"] += float(_cob.get("monto") or 0)
+    for _p in pagos:
+        for _lin in _p.get("lineas_pago", []):
+            _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
+            _ht = _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
+            _ht["Salidas"] += float(_lin.get("monto") or 0)
+    for _tr in _transferencias:
+        _horig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"),  "—")
+        _hdest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
+        _htm   = float(_tr.get("monto") or 0)
+        _hist_total.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
+        _hist_total.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
+    # suma histórica de ajustes por caja (todos, no solo del período)
+    _all_aj_sum = {}
+    for _aj in _ajustes_todos:
+        if _aj.get("tipo") != "ajuste":
+            continue
+        _cn = _cajas_map.get(_aj["caja_id"], "")
+        if _cn:
+            _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
 
     _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
     _total_sc = sum(v["Sal. Compras"] for v in _por_caja.values())
@@ -1609,17 +1636,17 @@ def _render_movimiento_caja(cobros, pagos):
     for _caja in sorted(_por_caja):
         _v = _por_caja[_caja]
         _sal = _v["Sal. Compras"] + _v["Sal. Gastos"]
-        _neto = _v["Entradas"] - _sal
         _ini  = _inicial.get(_caja, 0.0)
         _aj_sum = sum(float(_aj.get("monto") or 0) for _aj in _ajustes_periodo.get(_caja, []))
-        _saldo_total = _ini + _neto + _aj_sum
+        _ht = _hist_total.get(_caja, {"Entradas": 0.0, "Salidas": 0.0})
+        _saldo_actual = _ini + _ht["Entradas"] - _ht["Salidas"] + _all_aj_sum.get(_caja, 0.0)
         st.subheader(_caja)
         _m1, _m2, _m3, _m4, _m5 = st.columns(5)
         _m1.metric("Inicial",      f"$ {_ini:,.0f}")
         _m2.metric("Entradas",     f"$ {_v['Entradas']:,.0f}")
         _m3.metric("Salidas",      f"$ {_sal:,.0f}")
         _m4.metric("Ajustes",      f"$ {_aj_sum:,.0f}")
-        _m5.metric("Saldo",        f"$ {_saldo_total:,.0f}")
+        _m5.metric("Saldo actual", f"$ {_saldo_actual:,.0f}")
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
         _cfg_fecha = st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
         _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %.2f")
