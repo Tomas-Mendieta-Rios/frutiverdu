@@ -1485,8 +1485,6 @@ def _render_movimiento_caja(cobros, pagos):
         if not (_desde <= _f <= _hasta):
             continue
         _imput = _p.get("imputaciones", [])
-        if _imput:
-            st.write("DEBUG imput[0]:", {k: v for k, v in _imput[0].items() if k not in ("pago_id",)})
         def _es_compra(i):
             return bool(i.get("id_compra") or i.get("id_comp_compra") or
                         "COMPRA" in (i.get("tipo_comprobante") or "").upper())
