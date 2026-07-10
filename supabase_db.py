@@ -1561,6 +1561,33 @@ def guardar_cobros(cobros):
         client.table("cobros_imputaciones").insert(_all_imput_c).execute()
 
 
+@st.cache_data(ttl=300)
+def cargar_transferencias():
+    client = get_client()
+    resp = client.table("transferencias_cajas").select(
+        "*, origen:origen_id(nombre), destino:destino_id(nombre)"
+    ).order("fecha", desc=True).execute()
+    return resp.data or []
+
+
+def guardar_transferencia(fecha, origen_id, destino_id, monto, concepto=""):
+    client = get_client()
+    client.table("transferencias_cajas").insert({
+        "fecha":      str(fecha),
+        "origen_id":  origen_id,
+        "destino_id": destino_id,
+        "monto":      float(monto),
+        "concepto":   concepto or "",
+    }).execute()
+    st.cache_data.clear()
+
+
+def eliminar_transferencia(transfer_id):
+    client = get_client()
+    client.table("transferencias_cajas").delete().eq("id", transfer_id).execute()
+    st.cache_data.clear()
+
+
 def cargar_compras_desde_gastos(fecha):
     """Lee compras del día desde gastos sincronizados en Supabase.
     Retorna el mismo formato que cargar_compras_dux_v2 para compatibilidad

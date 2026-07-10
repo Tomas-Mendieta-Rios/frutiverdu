@@ -1493,6 +1493,30 @@ def _render_movimiento_caja(cobros, pagos):
                 "imputaciones": _imput,
             })
 
+    # Transferencias entre cajas
+    _cajas_list = db.cargar_cajas()
+    _cajas_map  = {c["id"]: c["nombre"] for c in _cajas_list}
+    _transferencias = db.cargar_transferencias()
+    for _tr in _transferencias:
+        try:
+            _tf = pd.to_datetime(str(_tr.get("fecha") or "")).date()
+        except Exception:
+            continue
+        if not (_desde <= _tf <= _hasta):
+            continue
+        _orig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"), "—")
+        _dest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
+        _tm   = float(_tr.get("monto") or 0)
+        _conc = _tr.get("concepto") or "Transferencia"
+        for _ck, _signo in [(_orig, -1), (_dest, 1)]:
+            _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
+            if _signo == 1:
+                _t["Entradas"] += _tm
+                _t["detalle"].append({"Fecha": _tf, "Tipo": "Entrada", "Cat.": "Transferencia", "Concepto": f"Desde {_orig} — {_conc}", "Proveedor": "", "Cobro #": "", "Pago #": "", "Cheque": "", "Monto": _tm, "imputaciones": []})
+            else:
+                _t["Sal. Compras"] += _tm
+                _t["detalle"].append({"Fecha": _tf, "Tipo": "Salida", "Cat.": "Transferencia", "Concepto": f"Hacia {_dest} — {_conc}", "Proveedor": "", "Cobro #": "", "Pago #": "", "Cheque": "", "Monto": _tm, "imputaciones": []})
+
     _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
     _total_sc = sum(v["Sal. Compras"] for v in _por_caja.values())
     _total_sg = sum(v["Sal. Gastos"]  for v in _por_caja.values())
@@ -1503,6 +1527,26 @@ def _render_movimiento_caja(cobros, pagos):
     _k1.metric("Entradas",   f"$ {_total_e:,.0f}")
     _k2.metric("Salidas",    f"$ {_total_s:,.0f}")
     _k3.metric("Saldo neto", f"$ {_total_n:,.0f}")
+
+    # Formulario nueva transferencia
+    with st.expander("Nueva transferencia entre cajas"):
+        with st.form("form_transferencia"):
+            _tc1, _tc2, _tc3, _tc4 = st.columns(4)
+            _tr_fecha  = _tc1.date_input("Fecha", value=_hoy, format="DD/MM/YYYY")
+            _cajas_opts = {c["nombre"]: c["id"] for c in _cajas_list if c.get("activa")}
+            _tr_origen  = _tc2.selectbox("Desde", options=list(_cajas_opts.keys()))
+            _tr_destino = _tc3.selectbox("Hacia",  options=list(_cajas_opts.keys()))
+            _tr_monto   = _tc4.number_input("Monto", min_value=0.0, step=100.0)
+            _tr_concepto = st.text_input("Concepto (opcional)")
+            if st.form_submit_button("Registrar transferencia", type="primary"):
+                if _tr_origen == _tr_destino:
+                    st.error("Origen y destino deben ser distintos.")
+                elif _tr_monto <= 0:
+                    st.error("El monto debe ser mayor a cero.")
+                else:
+                    db.guardar_transferencia(_tr_fecha, _cajas_opts[_tr_origen], _cajas_opts[_tr_destino], _tr_monto, _tr_concepto)
+                    st.success("Transferencia registrada.")
+                    st.rerun()
 
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
@@ -1526,20 +1570,32 @@ def _render_movimiento_caja(cobros, pagos):
         _entradas    = [r for r in _det if r.get("Tipo") == "Entrada"]
         _sal_compras = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Compra"]
         _sal_gastos  = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Gasto"]
-        _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto")]
+        _sal_transf  = [r for r in _det if r.get("Cat.") == "Transferencia" and r.get("Tipo") == "Salida"]
+        _ent_transf  = [r for r in _det if r.get("Cat.") == "Transferencia" and r.get("Tipo") == "Entrada"]
+        _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto", "Transferencia")]
 
-        if _entradas:
-            with st.expander(f"Entradas ({len(_entradas)})"):
+        _entradas_real = [r for r in _entradas if r.get("Cat.") != "Transferencia"]
+        if _entradas_real:
+            with st.expander(f"Entradas ({len(_entradas_real)})"):
                 st.dataframe(
-                    pd.DataFrame(_entradas)[["Fecha", "Concepto", "Cobro #", "Monto"]].rename(columns={"Concepto": "Cliente"}),
+                    pd.DataFrame(_entradas_real)[["Fecha", "Concepto", "Cobro #", "Monto"]].rename(columns={"Concepto": "Cliente"}),
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
-        for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Otros", _sal_otros)]:
+        if _ent_transf:
+            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)})"):
+                st.dataframe(
+                    pd.DataFrame(_ent_transf)[["Fecha", "Concepto", "Monto"]],
+                    use_container_width=True, hide_index=True,
+                    column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
+                )
+        for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Transferencias", _sal_transf), ("Salidas — Otros", _sal_otros)]:
             if _rows:
                 with st.expander(f"{_titulo} ({len(_rows)})"):
                     st.dataframe(
-                        pd.DataFrame(_rows)[["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]],
+                        pd.DataFrame(_rows)[["Fecha", "Concepto", "Monto"]
+                            if _titulo == "Salidas — Transferencias"
+                            else ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]],
                         use_container_width=True, hide_index=True,
                         column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                     )
