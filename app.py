@@ -1449,17 +1449,32 @@ def _render_movimiento_caja(cobros, pagos):
             _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
             _monto = float(_cob.get("monto") or 0)
             _t["Entradas"] += _monto
+            _cli_obj = _c.get("cliente") or {}
+            if isinstance(_cli_obj, dict):
+                _cli_nombre = " ".join(filter(None, [
+                    _cli_obj.get("apellido_razon_social", ""),
+                    _cli_obj.get("nombre", ""),
+                ])).strip() or "—"
+            else:
+                _cli_nombre = str(_cli_obj) or "—"
+            _imput_cob = _c.get("imputaciones") or []
+            _facts = ", ".join(
+                f"{i.get('tipo_comp','')} {i.get('nro_comprobante','')}".strip()
+                for i in _imput_cob if i.get("nro_comprobante")
+            ) or "—"
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Entrada",
                 "Cat.":         "",
-                "Concepto":     _c.get("cliente") or "—",
+                "Cliente":      _cli_nombre,
+                "Facturas":     _facts,
+                "Concepto":     _cli_nombre,
                 "Proveedor":    "",
                 "Cobro #":      _c.get("nro_comprobante") or "—",
                 "Pago #":       "",
                 "Cheque":       "",
                 "Monto":        _monto,
-                "imputaciones": _c.get("imputaciones") or [],
+                "imputaciones": _imput_cob,
             })
 
     for _p in pagos:
@@ -1573,7 +1588,7 @@ def _render_movimiento_caja(cobros, pagos):
         if _entradas_real:
             with st.expander(f"Entradas ({len(_entradas_real)})"):
                 st.dataframe(
-                    pd.DataFrame(_entradas_real)[["Fecha", "Concepto", "Cobro #", "Monto"]].rename(columns={"Concepto": "Cliente"}),
+                    pd.DataFrame(_entradas_real)[["Fecha", "Cliente", "Facturas", "Cobro #", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
