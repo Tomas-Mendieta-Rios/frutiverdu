@@ -1437,16 +1437,15 @@ def _render_movimiento_caja(cobros, pagos):
             _monto = float(_cob.get("monto") or 0)
             _t["Entradas"] += _monto
             _t["detalle"].append({
-                "Fecha":        _f,
-                "Tipo":         "Entrada",
-                "Concepto":     _c.get("cliente") or "—",
-                "Proveedor":    "",
-                "Cobro #":      _c.get("nro_comprobante") or "—",
-                "Pago #":       "",
-                "Cheque":       "",
-                "Monto":        _monto,
-                "Sal. Compras": 0.0,
-                "Sal. Gastos":  0.0,
+                "Fecha":     _f,
+                "Tipo":      "Entrada",
+                "Cat.":      "",
+                "Concepto":  _c.get("cliente") or "—",
+                "Proveedor": "",
+                "Cobro #":   _c.get("nro_comprobante") or "—",
+                "Pago #":    "",
+                "Cheque":    "",
+                "Monto":     _monto,
             })
 
     for _p in pagos:
@@ -1476,17 +1475,22 @@ def _render_movimiento_caja(cobros, pagos):
                 _cheque_det = _lin.get("descripcion") or _lin.get("tipo_valor") or ""
             elif "CHEQUE" in (_lin.get("descripcion") or "").upper():
                 _cheque_det = _lin.get("descripcion") or ""
+            if _pct_compra == 1.0:
+                _cat = "Compra"
+            elif _pct_gasto == 1.0:
+                _cat = "Gasto"
+            else:
+                _cat = "Mixto"
             _t["detalle"].append({
-                "Fecha":        _f,
-                "Tipo":         "Salida",
-                "Concepto":     _p.get("concepto") or "—",
-                "Proveedor":    _p.get("proveedor") or "—",
-                "Cobro #":      "",
-                "Pago #":       _p.get("nro_comprobante") or "—",
-                "Cheque":       _cheque_det,
-                "Monto":        _monto,
-                "Sal. Compras": _sal_compra,
-                "Sal. Gastos":  _sal_gasto,
+                "Fecha":     _f,
+                "Tipo":      "Salida",
+                "Cat.":      _cat,
+                "Concepto":  _p.get("concepto") or "—",
+                "Proveedor": _p.get("proveedor") or "—",
+                "Cobro #":   "",
+                "Pago #":    _p.get("nro_comprobante") or "—",
+                "Cheque":    _cheque_det,
+                "Monto":     _monto,
             })
 
     _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
@@ -1518,14 +1522,12 @@ def _render_movimiento_caja(cobros, pagos):
         with st.expander("Ver detalles"):
             _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
             st.dataframe(
-                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto", "Sal. Compras", "Sal. Gastos"]),
+                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Cat.", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto"]),
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Fecha":        st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                    "Monto":        st.column_config.NumberColumn("Monto", format="$ %.2f"),
-                    "Sal. Compras": st.column_config.NumberColumn("Sal. Compras", format="$ %.2f"),
-                    "Sal. Gastos":  st.column_config.NumberColumn("Sal. Gastos", format="$ %.2f"),
+                    "Fecha":  st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                    "Monto":  st.column_config.NumberColumn("Monto", format="$ %.2f"),
                 },
             )
         st.divider()
