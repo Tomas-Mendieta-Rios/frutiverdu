@@ -1413,6 +1413,8 @@ def _render_movimiento_caja(cobros, pagos):
         tv = (tipo_valor or "").upper().strip()
         if tv == "CUENTA":
             return (descripcion or "CUENTA").strip().upper() or "CUENTA"
+        if "CHEQUE" in tv:
+            return "CHEQUE"
         return tv or "—"
 
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
@@ -1466,7 +1468,7 @@ def _render_movimiento_caja(cobros, pagos):
                 "Tipo":         "Salida",
                 "Concepto":     (
                     f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}"
-                    + (f" | {_lin['descripcion']}" if (_lin.get("tipo_valor") or "").upper() == "CHEQUE" and _lin.get("descripcion") else "")
+                    + (f" | {_lin.get('descripcion') or _lin.get('tipo_valor', '')}" if "CHEQUE" in (_lin.get("tipo_valor") or "").upper() else "")
                 ),
                 "Monto":        _monto,
                 "Sal. Compras": _sal_compra,
