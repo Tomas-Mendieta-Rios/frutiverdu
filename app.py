@@ -3277,13 +3277,10 @@ with tab_stock:
     # session_state (no se pierde al cambiar fechas, solo se recalcula
     # cuando se aprieta el boton).
 
-    # Placeholders: dos timestamps arriba (guardado + ultimo calculo).
-    # Se actualizan desde adentro del fragment cuando corresponde.
     ts_stk_save_ph = st.empty()
     ts_stk_save_ph.caption(
         f"🕒 Último guardado de stock: **{_fmt_ts(db.ultima_carga('stock'))}**"
     )
-    ts_stk_calc_ph = st.empty()
 
     fechas_stk_disp_t = db.fechas_stock()
     cfg_teorico = db.cargar_config()
@@ -3356,15 +3353,7 @@ with tab_stock:
             use_container_width=True,
         )
 
-    # Pasar el "click" de Actualizar al fragment via flag en session_state.
-    # Sin esto, el fragment captura 'actualizar' por closure y lo ve como
-    # True en cada rerun (incluido el del Guardar) -> dispara recalc =
-    # se pierde lo que se tipeo en Real.
     if actualizar:
-        st.session_state["_st_teorico_should_calc"] = True
-        # Persistir las 3 fechas del calculo para que sobrevivan al refresh.
-        # (fecha_conteo se sigue persistiendo aparte en Guardar Stock para
-        # respetar la decision previa: 'solo al apretar Guardar'.)
         try:
             db.guardar_config({
                 "st_teorico_ultimo_f0": str(f0),
@@ -3373,575 +3362,418 @@ with tab_stock:
             })
         except Exception:
             pass
+        st.cache_data.clear()
 
-    TEO_RESULT_KEY = "_st_teorico_result"
-
-    # Cargar el ultimo resultado persistido en gsheets (si no esta ya en session_state).
-    # Asi sobrevive cerrar/refresar la app.
-    if TEO_RESULT_KEY not in st.session_state:
-        try:
-            saved_teo = db.cargar_stock_teorico()
-        except Exception:
-            saved_teo = {"rows": [], "f0": None, "fc": None, "fp": None, "ts": None}
-        if saved_teo.get("rows"):
-            rows_s = saved_teo["rows"]
-            # Detalle de los expanders (puede no existir en deploys viejos)
-            try:
-                saved_detalle = db.cargar_stock_teorico_detalle()
-            except Exception:
-                saved_detalle = {
-                    "map_stock_ini": {}, "map_compras": {},
-                    "compras_raw": [], "dux_contados": [], "wix_contados": [],
-                }
-            st.session_state[TEO_RESULT_KEY] = {
-                "rows": rows_s,
-                "f0": saved_teo.get("f0"),
-                "fc": saved_teo.get("fc"),
-                "fp": saved_teo.get("fp"),
-                "ts": saved_teo.get("ts"),
-                "n_compras": sum(
-                    1 for r in rows_s if float(r.get("+ Compras", 0) or 0) > 0
-                ),
-                "n_pedidos": sum(
-                    1 for r in rows_s if float(r.get("− Pedidos", 0) or 0) > 0
-                ),
-                "map_stock_ini": saved_detalle.get("map_stock_ini", {}),
-                "map_compras": saved_detalle.get("map_compras", {}),
-                "compras_raw": saved_detalle.get("compras_raw", []),
-                "dux_contados": saved_detalle.get("dux_contados", []),
-                "wix_contados": saved_detalle.get("wix_contados", []),
-            }
-        else:
-            # No hay resultado guardado en DB — auto-calcular al abrir la pestaña.
-            if "_st_teorico_auto_triggered" not in st.session_state:
-                st.session_state["_st_teorico_auto_triggered"] = True
-                st.session_state["_st_teorico_should_calc"] = True
-
-    # Fragment: boton Calcular + tabla resultado.
-    # Aislar en fragment hace que cambiar fechas (afuera) NO refresque la
-    # tabla pesada (300 productos en data_editor). Solo el click del boton
-    # adentro re-ejecuta este bloque.
-    @st.fragment
-    def _fragment_stock_teorico():
-        # Consumir el flag (pop = check + delete atomico). Solo es True una
-        # vez por click de Actualizar; en reruns posteriores (Guardar), False.
-        if st.session_state.pop("_st_teorico_should_calc", False):
-            # Re-leer fechas frescas adentro del fragment (despues de un
-            # Guardar el outer no re-ejecuta, asi que fechas_stk_disp_t
-            # de afuera queda con la lista vieja).
-            fechas_actuales = db.fechas_stock()
-            _f0_str = str(f0)
-            if _f0_str not in (fechas_actuales or []):
-                _disp = ", ".join(_fmt_fecha(f) for f in (fechas_actuales or [])[:5]) or "ninguna"
-                st.error(
-                    f"⚠️ No hay stock para {_fmt_fecha(f0)}. "
-                    f"Fechas disponibles: {_disp}."
-                )
-            else:
-                with st.spinner("Calculando stock teórico..."):
-                    stk_ini_df = db.cargar_stock(fecha=f0)
-                    map_stock_ini = {}
-                    if not stk_ini_df.empty:
-                        map_stock_ini = dict(
-                            zip(
-                                stk_ini_df["codigo"].astype(str),
-                                stk_ini_df["cantidad"].astype(float),
-                            )
-                        )
-
-                    compras_res = db.cargar_compras_desde_gastos(fc)
-                    map_compras = compras_res.get("cantidades", {})
-                    compras_raw = compras_res.get("compras", [])
-
-                    df_ped_agg = cargar_pedidos_dux_aggregated(
-                        productos, dia_estimado=None, fecha_compra=[str(fp)]
-                    )
-                    map_pedidos = {}
-                    if not df_ped_agg.empty:
-                        for _, r in df_ped_agg.iterrows():
-                            cod = str(r.get("codigo", ""))
-                            ctd = float(r.get("cantidad", 0) or 0)
-                            if cod and ctd > 0:
-                                map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
-
-                    # Incluir TODOS los productos del catalogo
-                    prod_map = {
-                        str(c): (str(p), str(u))
-                        for c, p, u in zip(
-                            productos["codigo"],
-                            productos["producto"],
-                            productos["unidad_medida"],
-                        )
-                    }
-                    rows = []
-                    for cod in prod_map.keys():
-                        nombre, _u = prod_map[cod]
-                        s = float(map_stock_ini.get(cod, 0.0))
-                        c = float(map_compras.get(cod, 0.0))
-                        p = float(map_pedidos.get(cod, 0.0))
-                        t = s + c - p
-                        rows.append({
-                            "Código": cod,
-                            "Producto": nombre,
-                            "Stock inicial": s,
-                            "+ Compras": c,
-                            "− Pedidos": p,
-                            "= Teórico": t,
-                        })
-
-                    try:
-                        db.guardar_stock_teorico(rows, f0, fc, fp)
-                        # Detalle (para que otros usuarios vean los dropdowns)
-                        try:
-                            # Slim para que entren en la celda de Sheets (49KB
-                            # por celda; un pedido DUX crudo pesa varios KB).
-                            dux_slim = [
-                                _slim_dux_pedido(o)
-                                for o in st.session_state.get("_dux_contados", [])
-                            ]
-                            wix_slim = [
-                                _slim_wix_pedido(o)
-                                for o in st.session_state.get("_wix_contados", [])
-                            ]
-                            db.guardar_stock_teorico_detalle(
-                                map_stock_ini=map_stock_ini,
-                                map_compras=map_compras,
-                                compras_raw=compras_raw,
-                                dux_contados=dux_slim,
-                                wix_contados=wix_slim,
-                            )
-                        except Exception:
-                            pass
-                        ts_calc = pd.Timestamp.now(
-                            tz="America/Argentina/Buenos_Aires"
-                        ).strftime("%Y-%m-%d %H:%M:%S")
-                    except Exception:
-                        ts_calc = None
-
-                    st.session_state[TEO_RESULT_KEY] = {
-                        "rows": rows,
-                        "f0": f0,
-                        "fc": fc,
-                        "fp": fp,
-                        "ts": ts_calc,
-                        "n_compras": len(map_compras),
-                        "n_pedidos": len(map_pedidos),
-                        # Snapshot para los expanders de detalle
-                        "map_stock_ini": dict(map_stock_ini),
-                        "map_compras": dict(map_compras),
-                        "compras_raw": list(compras_raw),
-                        "dux_contados": list(
-                            st.session_state.get("_dux_contados", [])
-                        ),
-                        "wix_contados": list(
-                            st.session_state.get("_wix_contados", [])
-                        ),
-                    }
-
-        # Render del resultado (si hay).
-        resultado = st.session_state.get(TEO_RESULT_KEY)
-        if not resultado:
-            return
-
-        rows_r = resultado["rows"]
-        if not rows_r:
-            st.info("No hay movimientos en las fechas seleccionadas.")
-            return
-
-        # Sort fijo alfabetico A-Z por Producto.
-        df_teorico_r = (
-            pd.DataFrame(rows_r)
-            .sort_values("Producto", ascending=True)
-            .reset_index(drop=True)
+    # Calcular siempre al cargar (igual que Total a comprar)
+    fechas_actuales = db.fechas_stock()
+    if str(f0) not in (fechas_actuales or []):
+        _disp = ", ".join(_fmt_fecha(f) for f in (fechas_actuales or [])[:5]) or "ninguna"
+        st.error(
+            f"⚠️ No hay stock para {_fmt_fecha(f0)}. "
+            f"Fechas disponibles: {_disp}."
         )
+    else:
+        stk_ini_df = db.cargar_stock(fecha=f0)
+        map_stock_ini = {}
+        if not stk_ini_df.empty:
+            map_stock_ini = dict(zip(
+                stk_ini_df["codigo"].astype(str),
+                stk_ini_df["cantidad"].astype(float),
+            ))
 
-        def _tiene_mov(row):
-            return (
-                abs(float(row.get("Stock inicial", 0))) > 1e-6
-                or abs(float(row.get("+ Compras", 0))) > 1e-6
-                or abs(float(row.get("− Pedidos", 0))) > 1e-6
+        compras_res = db.cargar_compras_desde_gastos(fc)
+        map_compras = compras_res.get("cantidades", {})
+        compras_raw = compras_res.get("compras", [])
+
+        df_ped_agg = cargar_pedidos_dux_aggregated(
+            productos, dia_estimado=None, fecha_compra=[str(fp)]
+        )
+        map_pedidos = {}
+        if not df_ped_agg.empty:
+            for _, r in df_ped_agg.iterrows():
+                cod = str(r.get("codigo", ""))
+                ctd = float(r.get("cantidad", 0) or 0)
+                if cod and ctd > 0:
+                    map_pedidos[cod] = map_pedidos.get(cod, 0.0) + ctd
+
+        prod_map = {
+            str(c): (str(p), str(u))
+            for c, p, u in zip(
+                productos["codigo"],
+                productos["producto"],
+                productos["unidad_medida"],
             )
-        n_con_mov = sum(1 for _, r in df_teorico_r.iterrows() if _tiene_mov(r))
-        n_stock_ini = int((df_teorico_r["Stock inicial"] > 0.001).sum())
-        st.success(
-            f"✅ {n_con_mov} productos con movimientos. "
-            f"Stock inicial ({_fmt_fecha(resultado['f0'])}): {n_stock_ini} códigos. "
-            f"Compras del {_fmt_fecha(resultado['fc'])}: {resultado['n_compras']} códigos. "
-            f"Pedidos entregados el {_fmt_fecha(resultado['fp'])}: {resultado['n_pedidos']} códigos."
-        )
+        }
+        rows = []
+        for cod in prod_map.keys():
+            nombre, _u = prod_map[cod]
+            s = float(map_stock_ini.get(cod, 0.0))
+            c = float(map_compras.get(cod, 0.0))
+            p = float(map_pedidos.get(cod, 0.0))
+            t = s + c - p
+            rows.append({
+                "Código": cod,
+                "Producto": nombre,
+                "Stock inicial": s,
+                "+ Compras": c,
+                "− Pedidos": p,
+                "= Teórico": t,
+            })
 
-        # Expanders para auditar la data que esta entrando al calculo
-        # (similar a Total a comprar). Snapshot guardado al apretar Actualizar.
-        _prod_nombre = dict(zip(
-            productos["codigo"].astype(str),
-            productos["producto"].astype(str),
-        ))
+        if not rows:
+            st.info("No hay movimientos en las fechas seleccionadas.")
+        else:
+            df_teorico_r = (
+                pd.DataFrame(rows)
+                .sort_values("Producto", ascending=True)
+                .reset_index(drop=True)
+            )
 
-        _map_ini = resultado.get("map_stock_ini") or {}
-        with st.expander(
-            f"📦 Stock inicial del {_fmt_fecha(f0)} ({n_stock_ini} códigos)",
-            expanded=False,
-        ):
-            if not _map_ini:
-                st.caption("Sin datos.")
-            else:
-                _filas_ini = [
-                    {
-                        "Prod": _prod_nombre.get(cod, "(desconocido)"),
-                        "Cant": float(cant),
-                    }
-                    for cod, cant in _map_ini.items()
-                    if float(cant) > 1e-6
-                ]
-                if _filas_ini:
-                    st.dataframe(
-                        pd.DataFrame(_filas_ini).sort_values("Prod"),
-                        use_container_width=False,
-                        hide_index=True,
-                    )
+            def _tiene_mov(row):
+                return (
+                    abs(float(row.get("Stock inicial", 0))) > 1e-6
+                    or abs(float(row.get("+ Compras", 0))) > 1e-6
+                    or abs(float(row.get("− Pedidos", 0))) > 1e-6
+                )
+            n_con_mov = sum(1 for _, r in df_teorico_r.iterrows() if _tiene_mov(r))
+            n_stock_ini = int((df_teorico_r["Stock inicial"] > 0.001).sum())
+            st.success(
+                f"✅ {n_con_mov} productos con movimientos. "
+                f"Stock inicial ({_fmt_fecha(f0)}): {n_stock_ini} códigos. "
+                f"Compras del {_fmt_fecha(fc)}: {len(map_compras)} códigos. "
+                f"Pedidos entregados el {_fmt_fecha(fp)}: {len(map_pedidos)} códigos."
+            )
+
+            _prod_nombre = dict(zip(
+                productos["codigo"].astype(str),
+                productos["producto"].astype(str),
+            ))
+
+            with st.expander(
+                f"📦 Stock inicial del {_fmt_fecha(f0)} ({n_stock_ini} códigos)",
+                expanded=False,
+            ):
+                if not map_stock_ini:
+                    st.caption("Sin datos.")
                 else:
-                    st.caption("Stock inicial todo en 0.")
-
-        _compras_raw = resultado.get("compras_raw") or []
-        with st.expander(
-            f"🛒 Compras del {_fmt_fecha(resultado['fc'])} ({len(_compras_raw)} compras)",
-            expanded=False,
-        ):
-            if not _compras_raw:
-                st.caption("No hubo compras ese día (o no fueron sincronizadas en Egresos → Gastos).")
-            else:
-                for c in _compras_raw:
-                    nro = c.get("nro_comprobante", "?")
-                    prov = (c.get("proveedor") or {}).get("razon_social") or "?"
-                    items = c.get("items") or []
-                    with st.expander(
-                        f"#{nro} · {prov} · {len(items)} ítems",
-                        expanded=False,
-                    ):
-                        if items:
-                            filas_c = [
-                                {
-                                    "Prod": _prod_nombre.get(
-                                        str(it.get("cod_item", "")),
-                                        "(desconocido)",
-                                    ),
-                                    "Cant": float(
-                                        it.get("ctd_recepcionada", 0) or 0
-                                    ),
-                                }
-                                for it in items
-                            ]
-                            st.dataframe(
-                                pd.DataFrame(filas_c),
-                                use_container_width=False,
-                                hide_index=True,
-                            )
-                        else:
-                            st.caption("Sin items.")
-
-        _dux_ct = resultado.get("dux_contados") or []
-        _wix_ct = resultado.get("wix_contados") or []
-        _total_ped = len(_dux_ct) + len(_wix_ct)
-        with st.expander(
-            f"📋 Pedidos contados del {_fmt_fecha(resultado['fp'])} ({_total_ped} pedidos)",
-            expanded=False,
-        ):
-            if not _total_ped:
-                st.caption("No hay pedidos asignados a esa fecha de entrega.")
-            else:
-                if _dux_ct:
-                    st.markdown(f"**DUX ({len(_dux_ct)})**")
-                    for o in _dux_ct:
-                        nro = _dux_get_first(
-                            o, ["nro_pedido", "nroPedido", "numero", "id"]
+                    _filas_ini = [
+                        {"Prod": _prod_nombre.get(cod, "(desconocido)"), "Cant": float(cant)}
+                        for cod, cant in map_stock_ini.items()
+                        if float(cant) > 1e-6
+                    ]
+                    if _filas_ini:
+                        st.dataframe(
+                            pd.DataFrame(_filas_ini).sort_values("Prod"),
+                            use_container_width=False,
+                            hide_index=True,
                         )
-                        cliente = extraer_cliente_dux(o)
-                        items = extraer_items_dux(o)
+                    else:
+                        st.caption("Stock inicial todo en 0.")
+
+            with st.expander(
+                f"🛒 Compras del {_fmt_fecha(fc)} ({len(compras_raw)} compras)",
+                expanded=False,
+            ):
+                if not compras_raw:
+                    st.caption("No hubo compras ese día (o no fueron sincronizadas en Egresos → Gastos).")
+                else:
+                    for c in compras_raw:
+                        nro = c.get("nro_comprobante", "?")
+                        prov = (c.get("proveedor") or {}).get("razon_social") or "?"
+                        items = c.get("items") or []
                         with st.expander(
-                            f"#{nro or '-'} · {cliente} · {len(items)} ítems",
+                            f"#{nro} · {prov} · {len(items)} ítems",
                             expanded=False,
                         ):
                             if items:
-                                filas_it = [extraer_item_dux(it) for it in items]
+                                filas_c = [
+                                    {
+                                        "Prod": _prod_nombre.get(
+                                            str(it.get("cod_item", "")), "(desconocido)"
+                                        ),
+                                        "Cant": float(it.get("ctd_recepcionada", 0) or 0),
+                                    }
+                                    for it in items
+                                ]
                                 st.dataframe(
-                                    pd.DataFrame(filas_it)[
-                                        ["producto", "cantidad"]
-                                    ].rename(columns={
-                                        "producto": "Prod", "cantidad": "Cant",
-                                    }),
-                                    use_container_width=False,
-                                    hide_index=True,
-                                )
-                            else:
-                                st.caption("Sin items.")
-                if _wix_ct:
-                    st.markdown(f"**Wix ({len(_wix_ct)})**")
-                    for o in _wix_ct:
-                        nro = o.get("number") or o.get("id", "")
-                        bi = (
-                            (o.get("billingInfo", {}) or {})
-                            .get("contactDetails", {}) or {}
-                        )
-                        nombre_w = (
-                            f"{bi.get('firstName', '') or ''} "
-                            f"{bi.get('lastName', '') or ''}".strip()
-                            or "(sin cliente)"
-                        )
-                        items_w = o.get("lineItems") or []
-                        with st.expander(
-                            f"#{nro} · {nombre_w} · {len(items_w)} ítems",
-                            expanded=False,
-                        ):
-                            if items_w:
-                                filas_iw = []
-                                for li in items_w:
-                                    nombre_prod = (
-                                        (li.get("productName") or {}).get("translated")
-                                        or (li.get("productName") or {}).get("original")
-                                        or ""
-                                    )
-                                    cant = li.get("quantity") or 0
-                                    filas_iw.append({
-                                        "Prod": nombre_prod,
-                                        "Cant": cant,
-                                    })
-                                st.dataframe(
-                                    pd.DataFrame(filas_iw),
+                                    pd.DataFrame(filas_c),
                                     use_container_width=False,
                                     hide_index=True,
                                 )
                             else:
                                 st.caption("Sin items.")
 
-        # Pre-fill Real EXACTAMENTE como Stock tab:
-        # - Si hay stock guardado para fecha_conteo -> mostrar esos valores
-        # - Si no -> "0" para todos los productos
-        # Cero magia, sin carry-forward ni asumir nada.
-        stk_conteo_df = db.cargar_stock(fecha=fecha_conteo)
-        map_stk_conteo = (
-            dict(zip(
-                stk_conteo_df["codigo"].astype(str),
-                stk_conteo_df["cantidad"].astype(float),
-            )) if not stk_conteo_df.empty else {}
-        )
-
-        # Auditoria visual: lo que ya esta cargado como Stock real
-        # para la fecha_conteo elegida (lectura desde gsheets).
-        _n_real = sum(1 for v in map_stk_conteo.values() if float(v) > 1e-6)
-        with st.expander(
-            f"✏️ Stock real del {_fmt_fecha(fecha_conteo)} ({_n_real} códigos)",
-            expanded=False,
-        ):
-            if not map_stk_conteo:
-                st.caption("Aún no se cargó stock real para esta fecha.")
-            else:
-                _filas_real = [
-                    {
-                        "Prod": _prod_nombre.get(cod, "(desconocido)"),
-                        "Cant": float(cant),
-                    }
-                    for cod, cant in map_stk_conteo.items()
-                    if float(cant) > 1e-6
-                ]
-                if _filas_real:
-                    st.dataframe(
-                        pd.DataFrame(_filas_real).sort_values("Prod"),
-                        use_container_width=False,
-                        hide_index=True,
-                    )
+            _dux_ct = st.session_state.get("_dux_contados", [])
+            _wix_ct = st.session_state.get("_wix_contados", [])
+            _total_ped = len(_dux_ct) + len(_wix_ct)
+            with st.expander(
+                f"📋 Pedidos contados del {_fmt_fecha(fp)} ({_total_ped} pedidos)",
+                expanded=False,
+            ):
+                if not _total_ped:
+                    st.caption("No hay pedidos asignados a esa fecha de entrega.")
                 else:
-                    st.caption("Aún no hay valores > 0 cargados.")
+                    if _dux_ct:
+                        st.markdown(f"**DUX ({len(_dux_ct)})**")
+                        for o in _dux_ct:
+                            nro = _dux_get_first(
+                                o, ["nro_pedido", "nroPedido", "numero", "id"]
+                            )
+                            cliente = extraer_cliente_dux(o)
+                            items = extraer_items_dux(o)
+                            with st.expander(
+                                f"#{nro or '-'} · {cliente} · {len(items)} ítems",
+                                expanded=False,
+                            ):
+                                if items:
+                                    filas_it = [extraer_item_dux(it) for it in items]
+                                    st.dataframe(
+                                        pd.DataFrame(filas_it)[
+                                            ["producto", "cantidad"]
+                                        ].rename(columns={
+                                            "producto": "Prod", "cantidad": "Cant",
+                                        }),
+                                        use_container_width=False,
+                                        hide_index=True,
+                                    )
+                                else:
+                                    st.caption("Sin items.")
+                    if _wix_ct:
+                        st.markdown(f"**Wix ({len(_wix_ct)})**")
+                        for o in _wix_ct:
+                            nro = o.get("number") or o.get("id", "")
+                            bi = (
+                                (o.get("billingInfo", {}) or {})
+                                .get("contactDetails", {}) or {}
+                            )
+                            nombre_w = (
+                                f"{bi.get('firstName', '') or ''} "
+                                f"{bi.get('lastName', '') or ''}".strip()
+                                or "(sin cliente)"
+                            )
+                            items_w = o.get("lineItems") or []
+                            with st.expander(
+                                f"#{nro} · {nombre_w} · {len(items_w)} ítems",
+                                expanded=False,
+                            ):
+                                if items_w:
+                                    filas_iw = []
+                                    for li in items_w:
+                                        nombre_prod = (
+                                            (li.get("productName") or {}).get("translated")
+                                            or (li.get("productName") or {}).get("original")
+                                            or ""
+                                        )
+                                        cant = li.get("quantity") or 0
+                                        filas_iw.append({
+                                            "Prod": nombre_prod,
+                                            "Cant": cant,
+                                        })
+                                    st.dataframe(
+                                        pd.DataFrame(filas_iw),
+                                        use_container_width=False,
+                                        hide_index=True,
+                                    )
+                                else:
+                                    st.caption("Sin items.")
 
-        df_editor = df_teorico_r.copy()
-        df_editor["Stock"] = df_editor["Código"].astype(str).map(
-            lambda c: _fmt_num_es(map_stk_conteo.get(c, 0.0))
-        )
-
-        # Enriquecer con rubro (catalogo productos) y partir Producto en
-        # base / variante por ' - '.
-        cod_to_rubro = dict(zip(
-            productos["codigo"].astype(str),
-            productos.get("rubro", pd.Series([""] * len(productos))).fillna("").astype(str),
-        ))
-
-        def _split_producto(prod_str):
-            s = str(prod_str)
-            if " - " in s:
-                base, variante = s.rsplit(" - ", 1)
-                return base.strip(), variante.strip()
-            return s, ""
-
-        df_editor["Rubro"] = df_editor["Código"].astype(str).map(
-            lambda c: (cod_to_rubro.get(c, "") or "").strip().upper()
-        )
-        _split_series = df_editor["Producto"].apply(_split_producto)
-        df_editor["Base"] = _split_series.apply(lambda t: t[0])
-        df_editor["Variante"] = _split_series.apply(lambda t: t[1])
-
-        # Ocultar productos sin rubro (VACIO / RECUPERO VACIO etc) -> no se
-        # consideran productos reales.
-        df_editor = df_editor[df_editor["Rubro"] != ""].copy()
-
-        # Orden fijo de rubros pedido por el usuario.
-        orden_rubros = [
-            "HOJAS", "VERDURAS", "FRUTAS", "HIERBAS",
-            "HONGOS", "BROTES", "AJIES", "CONDIMENTOS", "OTROS",
-        ]
-        rubros_presentes = [r for r in orden_rubros if r in df_editor["Rubro"].values]
-        # Cualquier rubro no listado -> al final, orden alfabetico (por si DUX
-        # mete uno nuevo).
-        extras = sorted(set(df_editor["Rubro"].values) - set(orden_rubros))
-        rubros_presentes += extras
-
-        edited_por_clave = {}  # (rubro, base) -> edited_df
-
-        st.caption(
-            "ℹ️ Los productos / rubros en :gray[**gris**] no tienen ningún "
-            "valor: sin stock inicial, sin compras, sin pedidos y sin "
-            "stock real cargado."
-        )
-
-        with st.form("form_conteo_fisico", clear_on_submit=False):
-            guardar_conteo = st.form_submit_button(
-                "💾 Guardar Stock", type="primary", use_container_width=True,
+            stk_conteo_df = db.cargar_stock(fecha=fecha_conteo)
+            map_stk_conteo = (
+                dict(zip(
+                    stk_conteo_df["codigo"].astype(str),
+                    stk_conteo_df["cantidad"].astype(float),
+                )) if not stk_conteo_df.empty else {}
             )
-            # Placeholder para el mensaje de exito justo debajo del boton.
-            stk_save_msg_ph = st.empty()
 
-            def _df_tiene_mov(df):
-                if (
-                    df["Stock inicial"].abs().astype(float).sum() > 1e-6
-                    or df["+ Compras"].abs().astype(float).sum() > 1e-6
-                    or df["− Pedidos"].abs().astype(float).sum() > 1e-6
-                ):
-                    return True
-                # Tambien chequear el Stock real cargado (columna editable,
-                # viene como string formateado en es-AR).
-                for v in df["Stock"]:
+            _n_real = sum(1 for v in map_stk_conteo.values() if float(v) > 1e-6)
+            with st.expander(
+                f"✏️ Stock real del {_fmt_fecha(fecha_conteo)} ({_n_real} códigos)",
+                expanded=False,
+            ):
+                if not map_stk_conteo:
+                    st.caption("Aún no se cargó stock real para esta fecha.")
+                else:
+                    _filas_real = [
+                        {
+                            "Prod": _prod_nombre.get(cod, "(desconocido)"),
+                            "Cant": float(cant),
+                        }
+                        for cod, cant in map_stk_conteo.items()
+                        if float(cant) > 1e-6
+                    ]
+                    if _filas_real:
+                        st.dataframe(
+                            pd.DataFrame(_filas_real).sort_values("Prod"),
+                            use_container_width=False,
+                            hide_index=True,
+                        )
+                    else:
+                        st.caption("Aún no hay valores > 0 cargados.")
+
+            df_editor = df_teorico_r.copy()
+            df_editor["Stock"] = df_editor["Código"].astype(str).map(
+                lambda c: _fmt_num_es(map_stk_conteo.get(c, 0.0))
+            )
+
+            cod_to_rubro = dict(zip(
+                productos["codigo"].astype(str),
+                productos.get("rubro", pd.Series([""] * len(productos))).fillna("").astype(str),
+            ))
+
+            def _split_producto(prod_str):
+                s = str(prod_str)
+                if " - " in s:
+                    base, variante = s.rsplit(" - ", 1)
+                    return base.strip(), variante.strip()
+                return s, ""
+
+            df_editor["Rubro"] = df_editor["Código"].astype(str).map(
+                lambda c: (cod_to_rubro.get(c, "") or "").strip().upper()
+            )
+            _split_series = df_editor["Producto"].apply(_split_producto)
+            df_editor["Base"] = _split_series.apply(lambda t: t[0])
+            df_editor["Variante"] = _split_series.apply(lambda t: t[1])
+
+            df_editor = df_editor[df_editor["Rubro"] != ""].copy()
+
+            orden_rubros = [
+                "HOJAS", "VERDURAS", "FRUTAS", "HIERBAS",
+                "HONGOS", "BROTES", "AJIES", "CONDIMENTOS", "OTROS",
+            ]
+            rubros_presentes = [r for r in orden_rubros if r in df_editor["Rubro"].values]
+            extras = sorted(set(df_editor["Rubro"].values) - set(orden_rubros))
+            rubros_presentes += extras
+
+            edited_por_clave = {}
+
+            st.caption(
+                "ℹ️ Los productos / rubros en :gray[**gris**] no tienen ningún "
+                "valor: sin stock inicial, sin compras, sin pedidos y sin "
+                "stock real cargado."
+            )
+
+            with st.form("form_conteo_fisico", clear_on_submit=False):
+                guardar_conteo = st.form_submit_button(
+                    "💾 Guardar Stock", type="primary", use_container_width=True,
+                )
+                stk_save_msg_ph = st.empty()
+
+                def _df_tiene_mov(df):
+                    if (
+                        df["Stock inicial"].abs().astype(float).sum() > 1e-6
+                        or df["+ Compras"].abs().astype(float).sum() > 1e-6
+                        or df["− Pedidos"].abs().astype(float).sum() > 1e-6
+                    ):
+                        return True
+                    for v in df["Stock"]:
+                        try:
+                            if abs(_parse_num_es(str(v))) > 1e-6:
+                                return True
+                        except Exception:
+                            pass
+                    return False
+
+                for rubro_name in rubros_presentes:
+                    df_rubro = df_editor[df_editor["Rubro"] == rubro_name]
+                    n_bases = df_rubro["Base"].nunique()
+                    _rubro_label_txt = f"📁 {rubro_name} ({n_bases} productos)"
+                    _rubro_label = (
+                        _rubro_label_txt if _df_tiene_mov(df_rubro)
+                        else f":gray[{_rubro_label_txt}]"
+                    )
+                    with st.expander(_rubro_label, expanded=False):
+                        for base_name, df_base in df_rubro.groupby("Base", sort=True):
+                            n_var = len(df_base)
+                            _base_label_txt = (
+                                f"📦 {base_name} "
+                                f"({n_var} variante{'s' if n_var != 1 else ''})"
+                            )
+                            label = (
+                                _base_label_txt if _df_tiene_mov(df_base)
+                                else f":gray[{_base_label_txt}]"
+                            )
+                            with st.expander(label, expanded=False):
+                                _df_stk_sorted = (
+                                    df_base
+                                    .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                                    .sort_values(["_prio", "Variante"]).drop(columns="_prio")
+                                )
+                                edited = st.data_editor(
+                                    _df_stk_sorted[[
+                                        "Código", "Variante",
+                                        "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
+                                        "Stock",
+                                    ]].reset_index(drop=True),
+                                    use_container_width=False,
+                                    hide_index=True,
+                                    disabled=[
+                                        "Código", "Variante",
+                                        "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
+                                    ],
+                                    column_order=[
+                                        "Variante",
+                                        "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
+                                        "Stock",
+                                    ],
+                                    column_config={
+                                        "Código": st.column_config.TextColumn("Código"),
+                                        "Variante": st.column_config.TextColumn("Var"),
+                                        "Stock inicial": st.column_config.NumberColumn(
+                                            "S.I", format="%.2f"
+                                        ),
+                                        "+ Compras": st.column_config.NumberColumn(
+                                            "+ Com", format="%.2f"
+                                        ),
+                                        "− Pedidos": st.column_config.NumberColumn(
+                                            "− Ped", format="%.2f"
+                                        ),
+                                        "= Teórico": st.column_config.NumberColumn(
+                                            "= Tot", format="%.2f"
+                                        ),
+                                        "Stock": st.column_config.TextColumn(
+                                            "✏️ S",
+                                            help="Cargá el stock real medido. Coma o punto. Vacío = 0.",
+                                            required=False,
+                                        ),
+                                    },
+                                    key=f"editor_stock_{rubro_name}_{base_name}_{fecha_conteo}",
+                                )
+                                edited_por_clave[(rubro_name, base_name)] = edited
+
+            if guardar_conteo:
+                valores_stock = {}
+                for _clave, edited in edited_por_clave.items():
+                    for _, row in edited.iterrows():
+                        cod = str(row["Código"])
+                        v_str = str(row.get("Stock", "") or "").strip()
+                        valores_stock[cod] = (
+                            _parse_num_es(v_str) if v_str else 0.0
+                        )
+
+                salida = productos[["codigo", "producto", "unidad_medida"]].copy()
+                salida["cantidad"] = salida["codigo"].astype(str).map(
+                    lambda c: valores_stock.get(c, 0.0)
+                ).astype(float)
+
+                try:
+                    db.guardar_stock(salida, fecha_conteo)
                     try:
-                        if abs(_parse_num_es(str(v))) > 1e-6:
-                            return True
+                        db.guardar_config(
+                            {"st_teorico_fecha_conteo": str(fecha_conteo)}
+                        )
                     except Exception:
                         pass
-                return False
-
-            for rubro_name in rubros_presentes:
-                df_rubro = df_editor[df_editor["Rubro"] == rubro_name]
-                n_bases = df_rubro["Base"].nunique()
-                _rubro_label_txt = f"📁 {rubro_name} ({n_bases} productos)"
-                _rubro_label = (
-                    _rubro_label_txt if _df_tiene_mov(df_rubro)
-                    else f":gray[{_rubro_label_txt}]"
-                )
-                with st.expander(_rubro_label, expanded=False):
-                    for base_name, df_base in df_rubro.groupby("Base", sort=True):
-                        n_var = len(df_base)
-                        _base_label_txt = (
-                            f"📦 {base_name} "
-                            f"({n_var} variante{'s' if n_var != 1 else ''})"
+                    try:
+                        ts_stk_save_ph.caption(
+                            f"🕒 Último guardado de stock: **{_fmt_ts(db.ultima_carga('stock'))}**"
                         )
-                        label = (
-                            _base_label_txt if _df_tiene_mov(df_base)
-                            else f":gray[{_base_label_txt}]"
-                        )
-                        with st.expander(label, expanded=False):
-                            _df_stk_sorted = (
-                                df_base
-                                .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
-                                .sort_values(["_prio", "Variante"]).drop(columns="_prio")
-                            )
-                            edited = st.data_editor(
-                                _df_stk_sorted[[
-                                    "Código", "Variante",
-                                    "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
-                                    "Stock",
-                                ]].reset_index(drop=True),
-                                use_container_width=False,
-                                hide_index=True,
-                                disabled=[
-                                    "Código", "Variante",
-                                    "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
-                                ],
-                                # column_order oculta 'Código' del display sin
-                                # sacarla del df -> el save sigue usando row["Código"].
-                                column_order=[
-                                    "Variante",
-                                    "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
-                                    "Stock",
-                                ],
-                                column_config={
-                                    "Código": st.column_config.TextColumn("Código"),
-                                    "Variante": st.column_config.TextColumn("Var"),
-                                    "Stock inicial": st.column_config.NumberColumn(
-                                        "S.I", format="%.2f"
-                                    ),
-                                    "+ Compras": st.column_config.NumberColumn(
-                                        "+ Com", format="%.2f"
-                                    ),
-                                    "− Pedidos": st.column_config.NumberColumn(
-                                        "− Ped", format="%.2f"
-                                    ),
-                                    "= Teórico": st.column_config.NumberColumn(
-                                        "= Tot", format="%.2f"
-                                    ),
-                                    "Stock": st.column_config.TextColumn(
-                                        "✏️ S",
-                                        help="Cargá el stock real medido. Coma o punto. Vacío = 0.",
-                                        required=False,
-                                    ),
-                                },
-                                key=f"editor_stock_{rubro_name}_{base_name}_{fecha_conteo}",
-                            )
-                            edited_por_clave[(rubro_name, base_name)] = edited
-
-        if guardar_conteo:
-            # Recorrer todos los mini-editors y armar dict global {cod: ctd}.
-            valores_stock = {}
-            for _clave, edited in edited_por_clave.items():
-                for _, row in edited.iterrows():
-                    cod = str(row["Código"])
-                    v_str = str(row.get("Stock", "") or "").strip()
-                    valores_stock[cod] = (
-                        _parse_num_es(v_str) if v_str else 0.0
+                    except Exception:
+                        pass
+                    stk_save_msg_ph.success(
+                        f"✅ Stock del {_fmt_fecha(fecha_conteo)} guardado en Sheets."
                     )
-
-            salida = productos[["codigo", "producto", "unidad_medida"]].copy()
-            salida["cantidad"] = salida["codigo"].astype(str).map(
-                lambda c: valores_stock.get(c, 0.0)
-            ).astype(float)
-
-            try:
-                db.guardar_stock(salida, fecha_conteo)
-                # Persistir fecha_conteo para que aparezca como default
-                # la proxima vez que se abra la app.
-                try:
-                    db.guardar_config(
-                        {"st_teorico_fecha_conteo": str(fecha_conteo)}
-                    )
-                except Exception:
-                    pass
-                # Actualizar el caption arriba (placeholder en outer scope)
-                try:
-                    ts_stk_save_ph.caption(
-                        f"🕒 Último guardado de stock: **{_fmt_ts(db.ultima_carga('stock'))}**"
-                    )
-                except Exception:
-                    pass
-                stk_save_msg_ph.success(
-                    f"✅ Stock del {_fmt_fecha(fecha_conteo)} guardado en Sheets."
-                )
-            except Exception as e:
-                stk_save_msg_ph.error(f"⚠️ Error al guardar: {e}")
-
-        # Actualizar el caption "Ultimo calculo" arriba (placeholder en outer)
-        try:
-            ts_stk_calc_ph.caption(
-                f"🕒 Último cálculo: **{_fmt_ts(resultado.get('ts'))}**"
-            )
-        except Exception:
-            pass
-
-    _fragment_stock_teorico()
+                except Exception as e:
+                    stk_save_msg_ph.error(f"⚠️ Error al guardar: {e}")
 
 with tab_dux:
     dux_cfg = st.secrets.get("dux", {})
