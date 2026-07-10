@@ -1522,17 +1522,30 @@ def _render_movimiento_caja(cobros, pagos):
         _m2.metric("Sal. Compras", f"$ {_v['Sal. Compras']:,.0f}")
         _m3.metric("Sal. Gastos",  f"$ {_v['Sal. Gastos']:,.0f}")
         _m4.metric("Neto",         f"$ {_neto:,.0f}")
-        with st.expander("Ver detalles"):
-            _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
-            st.dataframe(
-                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Cat.", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto"]),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
-                },
-            )
+        _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
+        _cols = ["Fecha", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto"]
+        _col_cfg = {
+            "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+            "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
+        }
+
+        _entradas = [r for r in _det if r.get("Tipo") == "Entrada"]
+        _sal_compras = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Compra"]
+        _sal_gastos  = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Gasto"]
+        _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto")]
+
+        if _entradas:
+            with st.expander(f"Entradas ({len(_entradas)})"):
+                st.dataframe(pd.DataFrame(_entradas, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
+        if _sal_compras:
+            with st.expander(f"Salidas — Compras ({len(_sal_compras)})"):
+                st.dataframe(pd.DataFrame(_sal_compras, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
+        if _sal_gastos:
+            with st.expander(f"Salidas — Gastos ({len(_sal_gastos)})"):
+                st.dataframe(pd.DataFrame(_sal_gastos, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
+        if _sal_otros:
+            with st.expander(f"Salidas — Otros ({len(_sal_otros)})"):
+                st.dataframe(pd.DataFrame(_sal_otros, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
         st.divider()
 
 
