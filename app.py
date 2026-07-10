@@ -1523,29 +1523,29 @@ def _render_movimiento_caja(cobros, pagos):
         _m3.metric("Sal. Gastos",  f"$ {_v['Sal. Gastos']:,.0f}")
         _m4.metric("Neto",         f"$ {_neto:,.0f}")
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
-        _cols = ["Fecha", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto"]
-        _col_cfg = {
-            "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-            "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
-        }
+        _cfg_fecha = st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
+        _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %.2f")
 
-        _entradas = [r for r in _det if r.get("Tipo") == "Entrada"]
+        _entradas    = [r for r in _det if r.get("Tipo") == "Entrada"]
         _sal_compras = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Compra"]
         _sal_gastos  = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Gasto"]
         _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto")]
 
         if _entradas:
             with st.expander(f"Entradas ({len(_entradas)})"):
-                st.dataframe(pd.DataFrame(_entradas, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
-        if _sal_compras:
-            with st.expander(f"Salidas — Compras ({len(_sal_compras)})"):
-                st.dataframe(pd.DataFrame(_sal_compras, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
-        if _sal_gastos:
-            with st.expander(f"Salidas — Gastos ({len(_sal_gastos)})"):
-                st.dataframe(pd.DataFrame(_sal_gastos, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
-        if _sal_otros:
-            with st.expander(f"Salidas — Otros ({len(_sal_otros)})"):
-                st.dataframe(pd.DataFrame(_sal_otros, columns=_cols), use_container_width=True, hide_index=True, column_config=_col_cfg)
+                st.dataframe(
+                    pd.DataFrame(_entradas)[["Fecha", "Concepto", "Cobro #", "Monto"]].rename(columns={"Concepto": "Cliente"}),
+                    use_container_width=True, hide_index=True,
+                    column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
+                )
+        for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Otros", _sal_otros)]:
+            if _rows:
+                with st.expander(f"{_titulo} ({len(_rows)})"):
+                    st.dataframe(
+                        pd.DataFrame(_rows)[["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]],
+                        use_container_width=True, hide_index=True,
+                        column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
+                    )
         st.divider()
 
 
