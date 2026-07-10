@@ -1528,26 +1528,6 @@ def _render_movimiento_caja(cobros, pagos):
     _k2.metric("Salidas",    f"$ {_total_s:,.0f}")
     _k3.metric("Saldo neto", f"$ {_total_n:,.0f}")
 
-    # Formulario nueva transferencia
-    with st.expander("Nueva transferencia entre cajas"):
-        with st.form("form_transferencia"):
-            _tc1, _tc2, _tc3, _tc4 = st.columns(4)
-            _tr_fecha  = _tc1.date_input("Fecha", value=_hoy, format="DD/MM/YYYY")
-            _cajas_opts = {c["nombre"]: c["id"] for c in _cajas_list if c.get("activa")}
-            _tr_origen  = _tc2.selectbox("Desde", options=list(_cajas_opts.keys()))
-            _tr_destino = _tc3.selectbox("Hacia",  options=list(_cajas_opts.keys()))
-            _tr_monto   = _tc4.number_input("Monto", min_value=0.0, step=100.0)
-            _tr_concepto = st.text_input("Concepto (opcional)")
-            if st.form_submit_button("Registrar transferencia", type="primary"):
-                if _tr_origen == _tr_destino:
-                    st.error("Origen y destino deben ser distintos.")
-                elif _tr_monto <= 0:
-                    st.error("El monto debe ser mayor a cero.")
-                else:
-                    db.guardar_transferencia(_tr_fecha, _cajas_opts[_tr_origen], _cajas_opts[_tr_destino], _tr_monto, _tr_concepto)
-                    st.success("Transferencia registrada.")
-                    st.rerun()
-
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
         return
@@ -2029,7 +2009,53 @@ with tab_balance:
         st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
 
 with tab_mov_caja:
-    _render_movimiento_caja(cobros_bal, pagos_bal)
+    _stab_movimientos, _stab_transferencias = st.tabs(["📊 Movimientos", "↔️ Transferencias"])
+
+    with _stab_movimientos:
+        _render_movimiento_caja(cobros_bal, pagos_bal)
+
+    with _stab_transferencias:
+        st.subheader("Transferencias entre cajas")
+        _cajas_tr = db.cargar_cajas()
+        _cajas_tr_opts = {c["nombre"]: c["id"] for c in _cajas_tr if c.get("activa")}
+        with st.form("form_nueva_transferencia"):
+            _tc1, _tc2, _tc3, _tc4 = st.columns(4)
+            _tr_fecha   = _tc1.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
+            _tr_origen  = _tc2.selectbox("Desde", options=list(_cajas_tr_opts.keys()))
+            _tr_destino = _tc3.selectbox("Hacia",  options=list(_cajas_tr_opts.keys()))
+            _tr_monto   = _tc4.number_input("Monto", min_value=0.0, step=100.0)
+            _tr_concepto = st.text_input("Concepto (opcional)")
+            if st.form_submit_button("Registrar", type="primary", use_container_width=True):
+                if _tr_origen == _tr_destino:
+                    st.error("Origen y destino deben ser distintos.")
+                elif _tr_monto <= 0:
+                    st.error("El monto debe ser mayor a cero.")
+                else:
+                    db.guardar_transferencia(_tr_fecha, _cajas_tr_opts[_tr_origen], _cajas_tr_opts[_tr_destino], _tr_monto, _tr_concepto)
+                    st.success("Transferencia registrada.")
+                    st.rerun()
+
+        st.divider()
+        _todas_tr = db.cargar_transferencias()
+        if _todas_tr:
+            _df_tr = pd.DataFrame([{
+                "Fecha":   t.get("fecha"),
+                "Desde":   (t.get("origen")  or {}).get("nombre") or "—",
+                "Hacia":   (t.get("destino") or {}).get("nombre") or "—",
+                "Monto":   float(t.get("monto") or 0),
+                "Concepto": t.get("concepto") or "",
+                "id":      t.get("id"),
+            } for t in _todas_tr])
+            st.dataframe(
+                _df_tr.drop(columns=["id"]),
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                },
+            )
+        else:
+            st.info("No hay transferencias registradas.")
 
 with tab_ingresos:
     with tab_ing_facturas:
