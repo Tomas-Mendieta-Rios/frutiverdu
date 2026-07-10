@@ -1875,7 +1875,10 @@ with tab_balance:
         total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_pendientes)
         total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_pendientes)
 
-        total_ingresos = total_facturas + total_wix
+        cobros_f = [c for c in cobros_bal if _en_rango(str(c.get("fecha") or ""))]
+        total_cobros_dux = sum(float(c.get("monto") or 0) for c in cobros_f)
+
+        total_ingresos = total_facturas + total_wix + total_cobros_dux
         total_egresos  = total_compras + total_gastos
         resultado      = total_ingresos - total_egresos
 
@@ -1942,6 +1945,33 @@ with tab_balance:
                             } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={"Total": _cfg_monto})
+
+        # Cobros DUX
+        if cobros_f:
+            st.markdown(f"<h4 style='color:#111111; font-weight:800'>💰 Cobros DUX — $ {_pesos(total_cobros_dux)} · {len(cobros_f)} cobros</h4>", unsafe_allow_html=True)
+            _by_cli = {}
+            for _c in cobros_f:
+                _k = str(_c.get("cliente") or _c.get("nombre_cliente") or "—").strip() or "—"
+                _by_cli.setdefault(_k, []).append(_c)
+            with st.expander(f"Detalle cobros ({len(cobros_f)}) — $ {_pesos(total_cobros_dux)}"):
+                for _cli, _citems in sorted(_by_cli.items()):
+                    _ctot = sum(float(c.get("monto") or 0) for c in _citems)
+                    with st.expander(f"{_cli} — {len(_citems)} cobro{'s' if len(_citems)!=1 else ''} — $ {_pesos(_ctot)}"):
+                        _rows = []
+                        for _c in sorted(_citems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                            _imput_cob = _c.get("imputaciones") or []
+                            _facts = ", ".join(
+                                str(i.get("nro_comprobante","")).strip()
+                                for i in _imput_cob if i.get("nro_comprobante")
+                            ) or "—"
+                            _rows.append({
+                                "Fecha":             _fmt_fecha(_c.get("fecha")),
+                                "Cobro #":           _c.get("nro_comprobante") or "—",
+                                "Facturas cobradas": _facts,
+                                "Monto":             float(_c.get("monto") or 0),
+                            })
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")})
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
