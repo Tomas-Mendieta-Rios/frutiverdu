@@ -604,6 +604,18 @@ def cargar_cajas():
 
 def guardar_cajas(cajas):
     client = get_client()
+    ids_nuevos = {int(c["id"]) for c in cajas if c.get("id")}
+    # Eliminar cajas que ya no están en la lista (nullear FK en pedidos_wix primero)
+    existing = client.table("cajas").select("id").execute()
+    ids_existentes = {r["id"] for r in (existing.data or [])}
+    ids_a_borrar = ids_existentes - ids_nuevos
+    for caja_id in ids_a_borrar:
+        try:
+            client.table("pedidos_wix").update({"caja_id": None}).eq("caja_id", caja_id).execute()
+        except Exception:
+            pass
+        client.table("cajas").delete().eq("id", caja_id).execute()
+    # Update / insert
     for c in cajas:
         caja_id = c.get("id")
         nombre = (c.get("nombre") or "").strip()
