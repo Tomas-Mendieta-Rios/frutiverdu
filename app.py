@@ -4925,19 +4925,23 @@ with tab_eg_compras:
         )
         comprobantes = sorted(grupos.groups.keys(), key=lambda k: str(k[1]), reverse=True)
         st.caption(f"{len(comprobantes)} comprobantes sincronizados")
-        _rows = []
         for key in comprobantes:
             nro_comp, fecha_c, proveedor_c, cond_pago_c = key
             df_grupo = grupos.get_group(key)
-            _rows.append({
-                "Comprobante": nro_comp or "—",
-                "Fecha":       _fmt_fecha(fecha_c),
-                "Proveedor":   proveedor_c or "—",
-                "Ítems":       len(df_grupo),
-                "Total":       float(df_grupo["subtotal"].sum()),
-            })
-        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                     column_config={"Total": st.column_config.NumberColumn("Total", format="$ %.0f")})
+            total_c = float(df_grupo["subtotal"].sum())
+            n_items = len(df_grupo)
+            with st.expander(f"#{nro_comp or '—'} — {proveedor_c or '—'} — {_fmt_fecha(fecha_c)} — {n_items} ítem{'s' if n_items!=1 else ''} — $ {total_c:,.0f}"):
+                filas_items = [{
+                    "Producto":    str(r.get("producto_nombre", "")),
+                    "Cantidad":    float(r.get("cantidad", 0) or 0),
+                    "Precio unit.": float(r.get("precio", 0) or 0),
+                    "Subtotal":    float(r.get("subtotal", 0) or 0),
+                } for _, r in df_grupo.iterrows()]
+                st.dataframe(pd.DataFrame(filas_items), use_container_width=True, hide_index=True,
+                             column_config={
+                                 "Precio unit.": st.column_config.NumberColumn("Precio unit.", format="$ %.2f"),
+                                 "Subtotal":     st.column_config.NumberColumn("Subtotal",     format="$ %.2f"),
+                             })
 
 with tab_eg_gastos:
     st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('gastos'))}**")
