@@ -1388,7 +1388,7 @@ with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
 
 with tab_grupo_diario:
-    tab_stock, tab_carga_stock, tab_estimado = st.tabs(["📦 Stock", "📝 Cargar Stock", "Estimado"])
+    tab_stock, tab_estimado = st.tabs(["📦 Stock", "Estimado"])
 
 if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analitica:'
     (
@@ -3173,89 +3173,6 @@ with tab_estimado:
     ts_est_ultimo = db.ultima_carga("estimado_semanal")
     ts_est_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_est_ultimo)}**")
 
-with tab_carga_stock:
-    ts_carga_stk_ph = st.empty()
-    ts_carga_stk_ph.caption(
-        f"🕒 Último guardado: **{_fmt_ts(db.ultima_carga('stock'))}**"
-    )
-
-    if "carga_stock_fecha_activa" not in st.session_state:
-        st.session_state["carga_stock_fecha_activa"] = date.today()
-
-    with st.form("form_ver_stock_fecha", border=False):
-        fecha_carga_input = st.date_input(
-            "Fecha de conteo",
-            value=st.session_state["carga_stock_fecha_activa"],
-            key="carga_stock_fecha",
-            format="DD/MM/YYYY",
-        )
-        _ver_stock = st.form_submit_button("🔄 Ver", type="primary", use_container_width=True)
-
-    if _ver_stock:
-        st.session_state["carga_stock_fecha_activa"] = fecha_carga_input
-
-    fecha_carga = st.session_state["carga_stock_fecha_activa"]
-
-    if productos.empty:
-        st.warning("Primero sincronizá los productos en 📡 DUX Productos.")
-    else:
-        stk_prev = db.cargar_stock(fecha=str(fecha_carga))
-        valores_prev = {}
-        if not stk_prev.empty:
-            valores_prev = dict(zip(
-                stk_prev["codigo"].astype(str),
-                stk_prev["cantidad"].astype(float),
-            ))
-
-        df_carga = productos[["codigo", "producto", "unidad_medida"]].copy()
-        df_carga = df_carga.rename(columns={
-            "codigo": "Código", "producto": "Producto", "unidad_medida": "Unidad"
-        })
-        df_carga["Cantidad"] = df_carga["Código"].astype(str).map(
-            lambda c: valores_prev.get(c, 0.0)
-        ).astype(float)
-
-        with st.form("form_carga_stock_simple", clear_on_submit=False):
-            edited_carga = st.data_editor(
-                df_carga,
-                use_container_width=True,
-                hide_index=True,
-                disabled=["Código", "Producto", "Unidad"],
-                column_config={
-                    "Código": st.column_config.TextColumn("Cód.", width="small"),
-                    "Producto": st.column_config.TextColumn("Producto"),
-                    "Unidad": st.column_config.TextColumn("Und.", width="small"),
-                    "Cantidad": st.column_config.NumberColumn(
-                        "Cantidad", format="%.2f", min_value=0, width="small"
-                    ),
-                },
-                key=f"editor_carga_stock_{fecha_carga}",
-            )
-            guardar_carga = st.form_submit_button(
-                "💾 Guardar Stock", type="primary", use_container_width=True,
-            )
-
-        if guardar_carga:
-            salida_carga = productos[["codigo", "producto", "unidad_medida"]].copy()
-            cantidades_carga = dict(zip(
-                edited_carga["Código"].astype(str),
-                edited_carga["Cantidad"].astype(float),
-            ))
-            salida_carga["cantidad"] = salida_carga["codigo"].astype(str).map(
-                lambda c: cantidades_carga.get(c, 0.0)
-            ).astype(float)
-            try:
-                db.guardar_stock(salida_carga, str(fecha_carga))
-                try:
-                    db.guardar_config({"st_teorico_fecha_conteo": str(fecha_carga)})
-                except Exception:
-                    pass
-                ts_carga_stk_ph.caption(
-                    f"🕒 Último guardado: **{_fmt_ts(db.ultima_carga('stock'))}**"
-                )
-                st.success(f"✅ Stock del {_fmt_fecha(fecha_carga)} guardado.")
-            except Exception as e:
-                st.error(f"❌ No se pudo guardar el stock: {e}")
 
 with tab_stock:
     # Stock (single-day): Stock(F0) + Compras(Fc) - Pedidos(Fp)
