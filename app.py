@@ -209,6 +209,13 @@ st.markdown("""
     html, body, [class*="st-"], .stMarkdown, .stDataFrame, label, .stSelectbox, .stTextInput, .stNumberInput, .stRadio, .stCheckbox {
         font-size: 16px !important;
     }
+    /* Tablas / dataframes */
+    .stDataFrame td, .stDataFrame th,
+    [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] th,
+    .dvn-scroller, .dvn-scroller *,
+    .glideDataEditor, .glideDataEditor * {
+        font-size: 16px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
