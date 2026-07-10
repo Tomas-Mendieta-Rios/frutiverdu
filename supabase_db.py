@@ -1564,8 +1564,11 @@ def guardar_cobros(cobros):
 @st.cache_data(ttl=600)
 def cargar_ids_gastos():
     client = get_client()
-    resp = client.table("gastos").select("id").execute()
-    return {r["id"] for r in (resp.data or [])}
+    resp = client.table("gastos").select("id, gasto, nro_comprobante").execute()
+    return {
+        r["id"]: {"gasto": r.get("gasto") or "", "nro_comprobante": r.get("nro_comprobante") or ""}
+        for r in (resp.data or [])
+    }
 
 
 @st.cache_data(ttl=300)
