@@ -1592,8 +1592,8 @@ def _render_movimiento_caja(cobros, pagos):
         if _entradas_real:
             with st.expander(f"Entradas ({len(_entradas_real)})"):
                 st.dataframe(
-                    pd.DataFrame(_entradas_real)[["Fecha", "Cliente", "Facturas", "Cobro #", "Monto"]]
-                      .rename(columns={"Facturas": "Facturas cobradas", "Cobro #": "Cobro #"}),
+                    pd.DataFrame(_entradas_real)[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
+                      .rename(columns={"Facturas": "Facturas cobradas"}),
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
@@ -1611,13 +1611,13 @@ def _render_movimiento_caja(cobros, pagos):
                         _cols_rename = {}
                         _cols_sel = ["Fecha", "Concepto", "Monto"]
                     elif _titulo == "Salidas — Compras":
-                        _cols_sel = ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                         _cols_rename = {"Concepto": "Comprobante compra"}
                     elif _titulo == "Salidas — Gastos":
-                        _cols_sel = ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                         _cols_rename = {"Concepto": "Comprobante gasto"}
                     else:
-                        _cols_sel = ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                         _cols_rename = {"Concepto": "Comprobante"}
                     st.dataframe(
                         pd.DataFrame(_rows)[_cols_sel].rename(columns=_cols_rename),
