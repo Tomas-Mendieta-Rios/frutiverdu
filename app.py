@@ -1498,7 +1498,7 @@ def _render_movimiento_caja(cobros, pagos):
     _k1, _k2, _k3 = st.columns(3)
     _k1.metric("Entradas",   f"$ {_total_e:,.0f}")
     _k2.metric("Salidas",    f"$ {_total_s:,.0f}")
-    _k3.metric("Saldo neto", f"$ {_total_n:,.0f}", delta=f"{_total_n:,.0f}")
+    _k3.metric("Saldo neto", f"$ {_total_n:,.0f}")
 
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
@@ -1514,7 +1514,7 @@ def _render_movimiento_caja(cobros, pagos):
         _m1.metric("Entradas",     f"$ {_v['Entradas']:,.0f}")
         _m2.metric("Sal. Compras", f"$ {_v['Sal. Compras']:,.0f}")
         _m3.metric("Sal. Gastos",  f"$ {_v['Sal. Gastos']:,.0f}")
-        _m4.metric("Neto",         f"$ {_neto:,.0f}", delta=f"{_neto:,.0f}")
+        _m4.metric("Neto",         f"$ {_neto:,.0f}")
         with st.expander("Ver detalles"):
             _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
             st.dataframe(
