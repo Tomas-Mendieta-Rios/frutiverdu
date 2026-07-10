@@ -3351,7 +3351,7 @@ with tab_stock:
                 help="Día con el que se guardará el Stock al apretar Guardar.",
             )
         actualizar = st.form_submit_button(
-            "🔄 Actualizar",
+            "🔄 Calcular",
             type="primary",
             use_container_width=True,
         )
@@ -3411,6 +3411,11 @@ with tab_stock:
                 "dux_contados": saved_detalle.get("dux_contados", []),
                 "wix_contados": saved_detalle.get("wix_contados", []),
             }
+        else:
+            # No hay resultado guardado en DB — auto-calcular al abrir la pestaña.
+            if "_st_teorico_auto_triggered" not in st.session_state:
+                st.session_state["_st_teorico_auto_triggered"] = True
+                st.session_state["_st_teorico_should_calc"] = True
 
     # Fragment: boton Calcular + tabla resultado.
     # Aislar en fragment hace que cambiar fechas (afuera) NO refresque la
