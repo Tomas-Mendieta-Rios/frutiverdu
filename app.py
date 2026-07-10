@@ -1611,14 +1611,17 @@ def _render_movimiento_caja(cobros, pagos):
                         _cols_rename = {}
                         _cols_sel = ["Fecha", "Concepto", "Monto"]
                     elif _titulo == "Salidas — Compras":
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                         _cols_rename = {"Concepto": "Comprobante compra"}
                     elif _titulo == "Salidas — Gastos":
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                         _cols_rename = {"Concepto": "Comprobante gasto"}
                     else:
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                         _cols_rename = {"Concepto": "Comprobante"}
+                    if _titulo != "Salidas — Transferencias":
+                        _df_rows = pd.DataFrame(_rows)
+                        _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Monto"]
+                        if _tiene_cheque:
+                            _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                     st.dataframe(
                         pd.DataFrame(_rows)[_cols_sel].rename(columns=_cols_rename),
                         use_container_width=True, hide_index=True,
