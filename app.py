@@ -204,6 +204,14 @@ def msg_error_sheets(accion, exc):
 
 st.set_page_config(page_title="Frutiverdu - Compuestos", layout="wide")
 
+st.markdown("""
+<style>
+    html, body, [class*="st-"], .stMarkdown, .stDataFrame, label, .stSelectbox, .stTextInput, .stNumberInput, .stRadio, .stCheckbox {
+        font-size: 16px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 
 EXCEPCIONES = {
     ("061", "062"),
