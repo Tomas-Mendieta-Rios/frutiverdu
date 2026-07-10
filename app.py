@@ -1405,6 +1405,68 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
         ]
     )
 
+def _caja_key(tipo_valor, descripcion):
+    tv   = (tipo_valor or "").upper().strip()
+    desc = (descripcion or "").upper().strip()
+    if "CHEQUE" in tv or "CHEQUE" in desc:
+        return "CHEQUE"
+    if tv == "CUENTA":
+        return desc or "CUENTA"
+    return tv or "—"
+
+
+def _calcular_saldos_actuales(cobros, pagos):
+    """Devuelve {caja_key: saldo_actual} acumulando todo el historial."""
+    _cajas_list = db.cargar_cajas()
+    _cajas_map  = {c["id"]: c["nombre"] for c in _cajas_list}
+    _ajustes_todos = db.cargar_ajustes_caja()
+
+    _inicial = {}
+    for _aj in _ajustes_todos:
+        if _aj.get("tipo") == "inicial":
+            _cn = _cajas_map.get(_aj["caja_id"], "")
+            if _cn:
+                _inicial[_cn] = float(_aj.get("monto") or 0)
+
+    _all_aj_sum = {}
+    for _aj in _ajustes_todos:
+        if _aj.get("tipo") != "ajuste":
+            continue
+        _cn = _cajas_map.get(_aj["caja_id"], "")
+        if _cn:
+            _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
+
+    _hist = {}
+    for _c in cobros:
+        for _cob in _c.get("cobranza", []):
+            _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
+            _h  = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
+            _h["Entradas"] += float(_cob.get("monto") or 0)
+    for _p in pagos:
+        for _lin in _p.get("lineas_pago", []):
+            _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
+            _h  = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
+            _h["Salidas"] += float(_lin.get("monto") or 0)
+    _transferencias = db.cargar_transferencias()
+    for _tr in _transferencias:
+        _horig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"),  "—")
+        _hdest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
+        _htm   = float(_tr.get("monto") or 0)
+        _hist.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
+        _hist.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
+
+    _saldos = {}
+    for _ck, _h in _hist.items():
+        _ini = _inicial.get(_ck, 0.0)
+        _aj  = _all_aj_sum.get(_ck, 0.0)
+        _saldos[_ck] = _ini + _h["Entradas"] - _h["Salidas"] + _aj
+    # cajas configuradas que no tienen movimientos aún
+    for _cn, _ini in _inicial.items():
+        if _cn not in _saldos:
+            _saldos[_cn] = _ini + _all_aj_sum.get(_cn, 0.0)
+    return _saldos
+
+
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
     with st.form("form_movcaja_fechas", border=False):
@@ -1412,16 +1474,6 @@ def _render_movimiento_caja(cobros, pagos):
         _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
         _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
         st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
-
-
-    def _caja_key(tipo_valor, descripcion):
-        tv   = (tipo_valor or "").upper().strip()
-        desc = (descripcion or "").upper().strip()
-        if "CHEQUE" in tv or "CHEQUE" in desc:
-            return "CHEQUE"
-        if tv == "CUENTA":
-            return desc or "CUENTA"
-        return tv or "—"
 
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
     _por_caja = {}
@@ -2059,9 +2111,21 @@ with tab_balance:
         st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
 
 with tab_mov_caja:
-    _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs(
-        ["📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial"]
+    _stab_saldos, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs(
+        ["💰 Saldos", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial"]
     )
+
+    with _stab_saldos:
+        _saldos_actuales = _calcular_saldos_actuales(cobros_bal, pagos_bal)
+        if not _saldos_actuales:
+            st.info("No hay movimientos registrados aún.")
+        else:
+            _total_cajas = sum(_saldos_actuales.values())
+            st.metric("Total en cajas", f"$ {_total_cajas:,.0f}")
+            st.divider()
+            _cols_saldo = st.columns(min(len(_saldos_actuales), 3))
+            for _i, (_ck, _sv) in enumerate(sorted(_saldos_actuales.items())):
+                _cols_saldo[_i % 3].metric(_ck, f"$ {_sv:,.0f}")
 
     with _stab_movimientos:
         _render_movimiento_caja(cobros_bal, pagos_bal)
