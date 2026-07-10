@@ -1510,11 +1510,15 @@ def _render_movimiento_caja(cobros, pagos):
                 _cat = "Gasto"
             else:
                 _cat = "Mixto"
+            _comp_list = ", ".join(
+                f"{i.get('tipo_comprobante','')} {i.get('nro_comprobante','')}".strip()
+                for i in _imput if i.get("nro_comprobante")
+            ) or "—"
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Salida",
                 "Cat.":         _cat,
-                "Concepto":     _p.get("concepto") or "—",
+                "Concepto":     _comp_list,
                 "Proveedor":    _p.get("proveedor") or "—",
                 "Cobro #":      "",
                 "Pago #":       _p.get("nro_comprobante") or "—",
