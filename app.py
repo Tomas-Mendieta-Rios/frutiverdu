@@ -1440,15 +1440,16 @@ def _render_movimiento_caja(cobros, pagos):
             _monto = float(_cob.get("monto") or 0)
             _t["Entradas"] += _monto
             _t["detalle"].append({
-                "Fecha":     _f,
-                "Tipo":      "Entrada",
-                "Cat.":      "",
-                "Concepto":  _c.get("cliente") or "—",
-                "Proveedor": "",
-                "Cobro #":   _c.get("nro_comprobante") or "—",
-                "Pago #":    "",
-                "Cheque":    "",
-                "Monto":     _monto,
+                "Fecha":        _f,
+                "Tipo":         "Entrada",
+                "Cat.":         "",
+                "Concepto":     _c.get("cliente") or "—",
+                "Proveedor":    "",
+                "Cobro #":      _c.get("nro_comprobante") or "—",
+                "Pago #":       "",
+                "Cheque":       "",
+                "Monto":        _monto,
+                "imputaciones": _c.get("imputaciones") or [],
             })
 
     for _p in pagos:
@@ -1558,6 +1559,21 @@ def _render_movimiento_caja(cobros, pagos):
                             hide_index=True,
                             column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")},
                         )
+                    elif _row.get("Tipo") == "Entrada":
+                        _cob_imput = _row.get("imputaciones") or []
+                        if _cob_imput:
+                            st.dataframe(
+                                pd.DataFrame([{
+                                    "Comprobante": i.get("nro_comprobante") or "—",
+                                    "Tipo":        i.get("tipo_comp") or "—",
+                                    "Monto":       float(i.get("monto_imputado") or 0),
+                                } for i in _cob_imput]),
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")},
+                            )
+                        else:
+                            st.write("**Cliente:**", _row.get("Concepto") or "—")
                     else:
                         st.write("**Concepto:**", _row.get("Concepto") or "—")
         st.divider()
