@@ -1733,41 +1733,28 @@ with tab_balance:
             if not _comp_pend_hist:
                 st.caption("Sin compras pendientes en el rango seleccionado.")
             else:
-                _by_prov = {}
-                for _c in _comp_pend_hist:
-                    _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
-                for _pnombre, _pitems in sorted(_by_prov.items()):
-                    _ptot = sum(float(_c.get("total") or 0) for _c in _pitems)
-                    with st.expander(f"🏭 {_pnombre}  —  {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''}  ·  $ {_pesos(_ptot)}"):
-                        for _c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                            with st.container(border=True):
-                                _x1, _x2 = st.columns([4, 1.5])
-                                with _x1:
-                                    _cond = _c.get("condicion_pago") or ""
-                                    st.markdown(f"**#{_c.get('nro_comprobante') or '—'}**")
-                                    st.caption(f"📅 {_c.get('fecha') or '—'}" + (f" · {_cond}" if _cond else ""))
-                                with _x2:
-                                    st.markdown(f"### $ {_pesos(float(_c.get('total') or 0))}")
+                _rows = [{
+                    "Fecha":      _fmt_fecha(c.get("fecha")),
+                    "Proveedor":  c.get("proveedor") or "—",
+                    "Comprobante": c.get("nro_comprobante") or "—",
+                    "Condición":  c.get("condicion_pago") or "—",
+                    "Total":      float(c.get("total") or 0),
+                } for c in sorted(_comp_pend_hist, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Total": _cfg_monto})
 
         with st.expander(f"📄 Gastos pendientes ({len(_gas_pend_hist)}) — $ {_pesos(_total_pend_gas)}"):
             if not _gas_pend_hist:
                 st.caption("Sin gastos pendientes en el rango seleccionado.")
             else:
-                _by_prov = {}
-                for _g in _gas_pend_hist:
-                    _by_prov.setdefault(_g.get("proveedor") or "—", []).append(_g)
-                for _pnombre, _pitems in sorted(_by_prov.items()):
-                    _ptot = sum(float(_g.get("total") or 0) for _g in _pitems)
-                    with st.expander(f"🏭 {_pnombre}  —  {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''}  ·  $ {_pesos(_ptot)}"):
-                        for _g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                            with st.container(border=True):
-                                _x1, _x2 = st.columns([4, 1.5])
-                                with _x1:
-                                    _tipo = _g.get("tipo_comprobante") or ""
-                                    st.markdown(f"**#{_g.get('nro_comprobante') or '—'}**")
-                                    st.caption(f"📅 {_g.get('fecha') or '—'}" + (f" · {_tipo}" if _tipo else ""))
-                                with _x2:
-                                    st.markdown(f"### $ {_pesos(float(_g.get('total') or 0))}")
+                _rows = [{
+                    "Fecha":      _fmt_fecha(g.get("fecha")),
+                    "Proveedor":  g.get("proveedor") or "—",
+                    "Comprobante": g.get("nro_comprobante") or "—",
+                    "Total":      float(g.get("total") or 0),
+                } for g in sorted(_gas_pend_hist, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Total": _cfg_monto})
 
         st.divider()
 
@@ -1788,45 +1775,31 @@ with tab_balance:
             if not _fac_deud:
                 st.caption("Sin facturas pendientes de cobro en el rango seleccionado.")
             else:
-                _by_cli = {}
-                for _f in _fac_deud:
-                    _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
-                    _by_cli.setdefault(_k, []).append(_f)
-                for _cli, _citems in sorted(_by_cli.items()):
-                    _ctot = sum(float(_f.get("total") or 0) for _f in _citems)
-                    with st.expander(f"👤 {_cli}  —  {len(_citems)} factura{'s' if len(_citems)!=1 else ''}  ·  $ {_pesos(_ctot)}"):
-                        for _f in sorted(_citems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-                            _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
-                            with st.container(border=True):
-                                _x1, _x2 = st.columns([4, 1.5])
-                                with _x1:
-                                    st.markdown(f"🧾 **{_comp}**")
-                                    st.caption(f"📅 {_fmt_fecha(_f.get('fecha_comp'))}")
-                                with _x2:
-                                    st.markdown(f"### $ {_pesos(float(_f.get('total') or 0))}")
+                _rows = [{
+                    "Fecha":       _fmt_fecha(f.get("fecha_comp")),
+                    "Cliente":     f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—",
+                    "Comprobante": f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip(),
+                    "Total":       float(f.get("total") or 0),
+                } for f in sorted(_fac_deud, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Total": _cfg_monto})
 
         # Wix deudores
         with st.expander(f"🌐 Wix sin cobrar ({len(_wix_deud)}) — $ {_pesos(_total_deud_wix)}"):
             if not _wix_deud:
                 st.caption("Sin pedidos pendientes de cobro en el rango seleccionado.")
             else:
-                _by_cli = {}
-                for _p in _wix_deud:
+                _rows = []
+                for _p in sorted(_wix_deud, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
                     _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
-                    _k  = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
-                    _by_cli.setdefault(_k, []).append(_p)
-                for _cli, _citems in sorted(_by_cli.items()):
-                    _ctot = sum(_wix_monto(_p) for _p in _citems)
-                    with st.expander(f"👤 {_cli}  —  {len(_citems)} pedido{'s' if len(_citems)!=1 else ''}  ·  $ {_pesos(_ctot)}"):
-                        for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
-                            _nro = _p.get("number") or _p.get("id") or "—"
-                            with st.container(border=True):
-                                _x1, _x2 = st.columns([4, 1.5])
-                                with _x1:
-                                    st.markdown(f"🛒 **Pedido #{_nro}**")
-                                    st.caption(f"📅 {_fmt_fecha(_p.get('createdDate'))}")
-                                with _x2:
-                                    st.markdown(f"### $ {_pesos(_wix_monto(_p))}")
+                    _rows.append({
+                        "Fecha":    _fmt_fecha(_p.get("createdDate")),
+                        "Cliente":  f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—",
+                        "Pedido #": _p.get("number") or _p.get("id") or "—",
+                        "Total":    _wix_monto(_p),
+                    })
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Total": _cfg_monto})
 
     elif _bal_nav == "📊 Resumen":
         _hoy_bal = date.today()
@@ -1914,18 +1887,6 @@ with tab_balance:
         _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
         _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
         _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
-        def _render_factura(f):
-            comp  = f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip()
-            fecha = _fmt_fecha(f.get("fecha_comp"))
-            total = float(f.get("total") or 0)
-            with st.container(border=True):
-                c1, c2 = st.columns([4, 1.5])
-                with c1:
-                    st.markdown(f"🧾 **{comp}**")
-                    st.caption(f"📅 {fecha}")
-                with c2:
-                    st.markdown(f"### $ {_pesos(total)}")
-
         for _label, _lista in [
             ("✅ Cobrado", fac_cobradas),
             ("⏳ Pendiente", fac_pendientes),
@@ -1933,15 +1894,14 @@ with tab_balance:
         ]:
             if _lista:
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
-                    _by_cli = {}
-                    for _f in _lista:
-                        _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
-                        _by_cli.setdefault(_k, []).append(_f)
-                    for _cli_name, _cli_items in sorted(_by_cli.items()):
-                        _cli_total = sum(float(_f.get("total") or 0) for _f in _cli_items)
-                        with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} factura{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
-                            for f in sorted(_cli_items, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-                                _render_factura(f)
+                    _rows = [{
+                        "Fecha":        _fmt_fecha(f.get("fecha_comp")),
+                        "Cliente":      f"{f.get('apellido_razon_soc','') or ''} {f.get('nombre','') or ''}".strip() or "—",
+                        "Comprobante":  f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip(),
+                        "Total":        float(f.get("total") or 0),
+                    } for f in sorted(_lista, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
+                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                 column_config={"Total": _cfg_monto})
 
         # Wix
         st.markdown(f"<h4 style='color:#111111; font-weight:800'>🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos</h4>", unsafe_allow_html=True)
@@ -1951,29 +1911,6 @@ with tab_balance:
         _w3.metric("❌ Anulado", f"$ {_pesos(total_wix_anul)}", f"{len(wix_anulados)}")
         _w4.metric("🚚 No entregado", f"$ {_pesos(total_wix_no_ent)}", f"{len(wix_no_entregados)}")
 
-        def _render_pedido_wix(p):
-            nro    = p.get("number") or p.get("id") or "—"
-            fecha  = _fmt_fecha(p.get("createdDate"))
-            total  = _wix_monto(p)
-            pay    = str(p.get("paymentStatus") or "").upper()
-            ful    = str(p.get("fulfillmentStatus") or "").upper()
-            status = str(p.get("status") or "").upper()
-            if status == "CANCELED":
-                badge = "❌"
-            elif pay == "PAID":
-                badge = "✅"
-            elif ful == "FULFILLED":
-                badge = "⏳"
-            else:
-                badge = "🚚"
-            with st.container(border=True):
-                c1, c2 = st.columns([4, 1.5])
-                with c1:
-                    st.markdown(f"{badge} **Pedido #{nro}**")
-                    st.caption(f"📅 {fecha}")
-                with c2:
-                    st.markdown(f"### $ {_pesos(total)}")
-
         for _label, _lista in [
             ("✅ Cobrado", wix_cobradas),
             ("⏳ Pendiente", wix_pendientes),
@@ -1982,48 +1919,21 @@ with tab_balance:
         ]:
             if _lista:
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
-                    _by_cli = {}
-                    for _p in _lista:
+                    _rows = []
+                    for _p in sorted(_lista, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
                         _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
-                        _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
-                        _by_cli.setdefault(_k, []).append(_p)
-                    for _cli_name, _cli_items in sorted(_by_cli.items()):
-                        _cli_total = sum(_wix_monto(_p) for _p in _cli_items)
-                        with st.expander(f"👤 {_cli_name}  —  {len(_cli_items)} pedido{'s' if len(_cli_items) != 1 else ''}  ·  $ {_pesos(_cli_total)}"):
-                            for p in sorted(_cli_items, key=lambda x: str(x.get("createdDate") or ""), reverse=True):
-                                _render_pedido_wix(p)
+                        _rows.append({
+                            "Fecha":    _fmt_fecha(_p.get("createdDate")),
+                            "Cliente":  f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—",
+                            "Pedido #": _p.get("number") or _p.get("id") or "—",
+                            "Total":    _wix_monto(_p),
+                        })
+                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                 column_config={"Total": _cfg_monto})
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
         st.markdown(f"<h3 style='color:#111111; font-weight:800'>📉 Egresos — $ {_pesos(total_egresos)}</h3>", unsafe_allow_html=True)
-
-        def _render_comprobante(c):
-            nro  = c.get("nro_comprobante") or "—"
-            prov = c.get("proveedor") or "—"
-            fec  = _fmt_fecha(c.get("fecha"))
-            tot  = float(c.get("total") or 0)
-            cond = c.get("condicion_pago") or ""
-            with st.container(border=True):
-                _c1, _c2 = st.columns([4, 1.5])
-                with _c1:
-                    st.markdown(f"**#{nro}** — {prov}")
-                    st.caption(f"📅 {fec}" + (f" · {cond}" if cond else ""))
-                with _c2:
-                    st.markdown(f"### $ {_pesos(tot)}")
-
-        def _render_gasto(g):
-            nro  = g.get("nro_comprobante") or "—"
-            prov = g.get("proveedor") or "—"
-            fec  = _fmt_fecha(g.get("fecha"))
-            tot  = float(g.get("total") or 0)
-            tipo = g.get("tipo_comprobante") or ""
-            with st.container(border=True):
-                _c1, _c2 = st.columns([4, 1.5])
-                with _c1:
-                    st.markdown(f"**#{nro}** — {prov}")
-                    st.caption(f"📅 {fec}" + (f" · {tipo}" if tipo else ""))
-                with _c2:
-                    st.markdown(f"### $ {_pesos(tot)}")
 
         # Compras
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
@@ -2035,22 +1945,20 @@ with tab_balance:
         _ec2.metric("⏳ Pendiente", f"$ {_pesos(total_comp_pend)}", f"{len(comp_pendientes)}")
         _ec3.metric("❌ Anulado",   f"$ {_pesos(total_comp_anul)}", f"{len(comp_anuladas)}")
         for _label, _lista in [
-            ("✅ Pagado",    comp_pagadas),
-            ("⏳ Pendiente", comp_pendientes),
-            ("❌ Anulado",   comp_anuladas),
+            ("✅ Pagado", comp_pagadas), ("⏳ Pendiente", comp_pendientes), ("❌ Anulado", comp_anuladas),
         ]:
             if _lista:
                 _tot_lbl = sum(float(c.get("total") or 0) for c in _lista)
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
-                    _by_prov = {}
-                    for _c in _lista:
-                        _k = _c.get("proveedor") or "—"
-                        _by_prov.setdefault(_k, []).append(_c)
-                    for _prov_name, _prov_items in sorted(_by_prov.items()):
-                        _prov_total = sum(float(_c.get("total") or 0) for _c in _prov_items)
-                        with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} comprobante{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
-                            for _c in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                                _render_comprobante(_c)
+                    _rows = [{
+                        "Fecha":      _fmt_fecha(c.get("fecha")),
+                        "Proveedor":  c.get("proveedor") or "—",
+                        "Comprobante": c.get("nro_comprobante") or "—",
+                        "Condición":  c.get("condicion_pago") or "—",
+                        "Total":      float(c.get("total") or 0),
+                    } for c in sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                 column_config={"Total": _cfg_monto})
 
         # Gastos
         total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
@@ -2062,22 +1970,19 @@ with tab_balance:
         _eg2.metric("⏳ Pendiente", f"$ {_pesos(total_gas_pend)}", f"{len(gas_pendientes)}")
         _eg3.metric("❌ Anulado",   f"$ {_pesos(total_gas_anul)}", f"{len(gas_anulados)}")
         for _label, _lista in [
-            ("✅ Pagado",    gas_pagados),
-            ("⏳ Pendiente", gas_pendientes),
-            ("❌ Anulado",   gas_anulados),
+            ("✅ Pagado", gas_pagados), ("⏳ Pendiente", gas_pendientes), ("❌ Anulado", gas_anulados),
         ]:
             if _lista:
                 _tot_lbl = sum(float(g.get("total") or 0) for g in _lista)
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
-                    _by_prov = {}
-                    for _g in _lista:
-                        _k = _g.get("proveedor") or "—"
-                        _by_prov.setdefault(_k, []).append(_g)
-                    for _prov_name, _prov_items in sorted(_by_prov.items()):
-                        _prov_total = sum(float(_g.get("total") or 0) for _g in _prov_items)
-                        with st.expander(f"🏭 {_prov_name}  —  {len(_prov_items)} gasto{'s' if len(_prov_items) != 1 else ''}  ·  $ {_pesos(_prov_total)}"):
-                            for _g in sorted(_prov_items, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                                _render_gasto(_g)
+                    _rows = [{
+                        "Fecha":      _fmt_fecha(g.get("fecha")),
+                        "Proveedor":  g.get("proveedor") or "—",
+                        "Comprobante": g.get("nro_comprobante") or "—",
+                        "Total":      float(g.get("total") or 0),
+                    } for g in sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                 column_config={"Total": _cfg_monto})
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
