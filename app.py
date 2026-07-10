@@ -1067,6 +1067,9 @@ def _sync_gastos(fecha_desde, fecha_hasta):
         page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
         if not page:
             break
+        if not all_gastos and page:
+            st.write("DEBUG gasto[0] keys:", list(page[0].keys()))
+            st.write("DEBUG gasto[0]:", page[0])
         all_gastos.extend(page)
         paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
         if not paging.get("hay_mas"):
