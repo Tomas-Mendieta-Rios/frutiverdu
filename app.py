@@ -1508,14 +1508,13 @@ def _render_movimiento_caja(cobros, pagos):
         _v = _por_caja[_caja]
         _sal = _v["Sal. Compras"] + _v["Sal. Gastos"]
         _neto = _v["Entradas"] - _sal
-        _label = (
-            f"**{_caja}** — "
-            f"Entradas: $ {_v['Entradas']:,.0f}  ·  "
-            f"Sal. Compras: $ {_v['Sal. Compras']:,.0f}  ·  "
-            f"Sal. Gastos: $ {_v['Sal. Gastos']:,.0f}  ·  "
-            f"Neto: $ {_neto:,.0f}"
-        )
-        with st.expander(_label):
+        st.subheader(_caja)
+        _m1, _m2, _m3, _m4 = st.columns(4)
+        _m1.metric("Entradas",     f"$ {_v['Entradas']:,.0f}")
+        _m2.metric("Sal. Compras", f"$ {_v['Sal. Compras']:,.0f}")
+        _m3.metric("Sal. Gastos",  f"$ {_v['Sal. Gastos']:,.0f}")
+        _m4.metric("Neto",         f"$ {_neto:,.0f}", delta=f"{_neto:,.0f}")
+        with st.expander("Ver detalles"):
             _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
             st.dataframe(
                 pd.DataFrame(_det, columns=["Fecha", "Tipo", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto", "Sal. Compras", "Sal. Gastos"]),
@@ -1528,6 +1527,7 @@ def _render_movimiento_caja(cobros, pagos):
                     "Sal. Gastos":  st.column_config.NumberColumn("Sal. Gastos", format="$ %.2f"),
                 },
             )
+        st.divider()
 
 
 with tab_balance:
