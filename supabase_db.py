@@ -1561,6 +1561,13 @@ def guardar_cobros(cobros):
         client.table("cobros_imputaciones").insert(_all_imput_c).execute()
 
 
+@st.cache_data(ttl=600)
+def cargar_ids_gastos():
+    client = get_client()
+    resp = client.table("gastos").select("id").execute()
+    return {r["id"] for r in (resp.data or [])}
+
+
 @st.cache_data(ttl=300)
 def cargar_transferencias():
     client = get_client()

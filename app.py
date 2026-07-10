@@ -1480,6 +1480,8 @@ def _render_movimiento_caja(cobros, pagos):
                 "imputaciones": _imput_cob,
             })
 
+    _ids_gastos = db.cargar_ids_gastos()
+
     for _p in pagos:
         try:
             _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
@@ -1488,12 +1490,12 @@ def _render_movimiento_caja(cobros, pagos):
         if not (_desde <= _f <= _hasta):
             continue
         _imput = _p.get("imputaciones", [])
-        def _es_compra(i):
-            return bool(i.get("id_compra") or i.get("id_comp_compra") or
-                        "COMPRA" in (i.get("tipo_comprobante") or "").upper())
-        def _es_gasto(i):
+        def _es_gasto(i, _ids=_ids_gastos):
+            _idc = i.get("id_comp_compra") or i.get("id_compra")
             return bool(i.get("id_gasto") or i.get("id_comp_gasto") or
-                        "GASTO" in (i.get("tipo_comprobante") or "").upper())
+                        (_idc and int(_idc) in _ids))
+        def _es_compra(i, _ids=_ids_gastos):
+            return not _es_gasto(i, _ids)
         _tot_compra = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_compra(i))
         _tot_gasto  = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_gasto(i))
         _tot_imput  = _tot_compra + _tot_gasto
