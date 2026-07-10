@@ -1409,9 +1409,6 @@ def _render_movimiento_caja(cobros, pagos):
         _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
         st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
-    _comp_fecha  = {c["id"]: c.get("fecha", "") for c in db.cargar_comprobantes_compra()}
-    _gasto_fecha = {g["id"]: g.get("fecha", "") for g in db.cargar_gastos()}
-    _factura_fecha = {(f.get("tipo_comp", ""), f.get("nro_comp", "")): f.get("fecha_comp", "") for f in db.cargar_facturas()}
 
     def _caja_key(tipo_valor, descripcion):
         tv   = (tipo_valor or "").upper().strip()
@@ -1527,57 +1524,15 @@ def _render_movimiento_caja(cobros, pagos):
         _m4.metric("Neto",         f"$ {_neto:,.0f}")
         with st.expander("Ver detalles"):
             _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
-            for _row in _det:
-                _fecha   = _row["Fecha"].strftime("%d/%m/%Y") if hasattr(_row["Fecha"], "strftime") else str(_row["Fecha"])
-                _tipo    = _row.get("Tipo", "")
-                _cat     = _row.get("Cat.", "")
-                _prov    = _row.get("Proveedor") or _row.get("Concepto") or "—"
-                _ref     = _row.get("Pago #") or _row.get("Cobro #") or "—"
-                _monto   = _row.get("Monto", 0)
-                _cheque  = _row.get("Cheque", "")
-                _label   = f"{_fecha}  |  {_tipo}  {('· ' + _cat) if _cat else ''}  |  {_prov}  |  {_ref}  |  $ {_monto:,.0f}"
-                with st.expander(_label):
-                    if _cheque:
-                        st.write("**Cheque:**", _cheque)
-                    _imput_rows = _row.get("imputaciones") or []
-                    if _imput_rows:
-                        _imput_data = []
-                        for _i in _imput_rows:
-                            _fcomp = ""
-                            if _i.get("id_comp_compra"):
-                                _fcomp = _comp_fecha.get(_i["id_comp_compra"], "")
-                            elif _i.get("id_comp_gasto"):
-                                _fcomp = _gasto_fecha.get(_i["id_comp_gasto"], "")
-                            _imput_data.append({
-                                "Fecha comp.":  _fcomp or "—",
-                                "Comprobante":  _i.get("nro_comprobante") or "—",
-                                "Tipo":         _i.get("tipo_comprobante") or "—",
-                                "Monto":        float(_i.get("monto_imputado") or 0),
-                            })
-                        st.dataframe(
-                            pd.DataFrame(_imput_data),
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")},
-                        )
-                    elif _row.get("Tipo") == "Entrada":
-                        _cob_imput = _row.get("imputaciones") or []
-                        if _cob_imput:
-                            st.dataframe(
-                                pd.DataFrame([{
-                                    "Fecha comp.": _factura_fecha.get((i.get("tipo_comp", ""), i.get("nro_comprobante", "")), "") or "—",
-                                    "Comprobante": i.get("nro_comprobante") or "—",
-                                    "Tipo":        i.get("tipo_comp") or "—",
-                                    "Monto":       float(i.get("monto_imputado") or 0),
-                                } for i in _cob_imput]),
-                                use_container_width=True,
-                                hide_index=True,
-                                column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")},
-                            )
-                        else:
-                            st.write("**Cliente:**", _row.get("Concepto") or "—")
-                    else:
-                        st.write("**Concepto:**", _row.get("Concepto") or "—")
+            st.dataframe(
+                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Cat.", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto"]),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                },
+            )
         st.divider()
 
 
