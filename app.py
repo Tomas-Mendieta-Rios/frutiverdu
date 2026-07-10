@@ -1409,8 +1409,14 @@ def _render_movimiento_caja(cobros, pagos):
         _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
         st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
-    # Acumular totales y detalle por tipo de caja
-    _por_tipo = {}  # tipo -> {"Entradas": float, "Salidas": float, "detalle": []}
+    def _caja_key(tipo_valor, descripcion):
+        tv = (tipo_valor or "").upper().strip()
+        if tv == "CUENTA":
+            return (descripcion or "CUENTA").strip().upper() or "CUENTA"
+        return tv or "—"
+
+    # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
+    _por_caja = {}
 
     for _c in cobros:
         try:
@@ -1420,15 +1426,17 @@ def _render_movimiento_caja(cobros, pagos):
         if not (_desde <= _f <= _hasta):
             continue
         for _cob in _c.get("cobranza", []):
-            _tv = _cob.get("tipo_valor") or "—"
-            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0, "detalle": []})
+            _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
+            _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
             _monto = float(_cob.get("monto") or 0)
             _t["Entradas"] += _monto
             _t["detalle"].append({
-                "Fecha":    _f,
-                "Tipo":     "Entrada",
-                "Concepto": f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
-                "Monto":    _monto,
+                "Fecha":        _f,
+                "Tipo":         "Entrada",
+                "Concepto":     f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
+                "Monto":        _monto,
+                "Sal. Compras": 0.0,
+                "Sal. Gastos":  0.0,
             })
 
     for _p in pagos:
@@ -1438,38 +1446,54 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         if not (_desde <= _f <= _hasta):
             continue
+        _imput = _p.get("imputaciones", [])
+        _tot_compra = sum(float(i.get("monto_imputado") or 0) for i in _imput if i.get("id_compra"))
+        _tot_gasto  = sum(float(i.get("monto_imputado") or 0) for i in _imput if i.get("id_gasto"))
+        _tot_imput  = _tot_compra + _tot_gasto
+        _pct_compra = (_tot_compra / _tot_imput) if _tot_imput else 1.0
+        _pct_gasto  = (_tot_gasto  / _tot_imput) if _tot_imput else 0.0
+
         for _lin in _p.get("lineas_pago", []):
-            _tv = _lin.get("tipo_valor") or "—"
-            _t = _por_tipo.setdefault(_tv, {"Entradas": 0.0, "Salidas": 0.0, "detalle": []})
-            _monto = float(_lin.get("monto") or 0)
-            _t["Salidas"] += _monto
+            _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
+            _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
+            _monto      = float(_lin.get("monto") or 0)
+            _sal_compra = _monto * _pct_compra
+            _sal_gasto  = _monto * _pct_gasto
+            _t["Sal. Compras"] += _sal_compra
+            _t["Sal. Gastos"]  += _sal_gasto
             _t["detalle"].append({
-                "Fecha":    _f,
-                "Tipo":     "Salida",
-                "Concepto": f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
-                "Monto":    _monto,
+                "Fecha":        _f,
+                "Tipo":         "Salida",
+                "Concepto":     f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
+                "Monto":        _monto,
+                "Sal. Compras": _sal_compra,
+                "Sal. Gastos":  _sal_gasto,
             })
 
-    _total_e = sum(v["Entradas"] for v in _por_tipo.values())
-    _total_s = sum(v["Salidas"]  for v in _por_tipo.values())
-    _total_n = _total_e - _total_s
+    _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
+    _total_sc = sum(v["Sal. Compras"] for v in _por_caja.values())
+    _total_sg = sum(v["Sal. Gastos"]  for v in _por_caja.values())
+    _total_s  = _total_sc + _total_sg
+    _total_n  = _total_e - _total_s
     _k1, _k2, _k3 = st.columns(3)
     _k1.metric("Entradas",   f"$ {_total_e:,.0f}")
     _k2.metric("Salidas",    f"$ {_total_s:,.0f}")
     _k3.metric("Saldo neto", f"$ {_total_n:,.0f}", delta=f"{_total_n:,.0f}")
 
-    if not _por_tipo:
+    if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
         return
 
     st.divider()
-    for _tipo in sorted(_por_tipo):
-        _v = _por_tipo[_tipo]
-        _neto = _v["Entradas"] - _v["Salidas"]
+    for _caja in sorted(_por_caja):
+        _v = _por_caja[_caja]
+        _sal = _v["Sal. Compras"] + _v["Sal. Gastos"]
+        _neto = _v["Entradas"] - _sal
         _label = (
-            f"**{_tipo}** — "
+            f"**{_caja}** — "
             f"Entradas: $ {_v['Entradas']:,.0f}  ·  "
-            f"Salidas: $ {_v['Salidas']:,.0f}  ·  "
+            f"Sal. Compras: $ {_v['Sal. Compras']:,.0f}  ·  "
+            f"Sal. Gastos: $ {_v['Sal. Gastos']:,.0f}  ·  "
             f"Neto: $ {_neto:,.0f}"
         )
         with st.expander(_label):
@@ -1479,8 +1503,10 @@ def _render_movimiento_caja(cobros, pagos):
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Fecha":  st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                    "Monto":  st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                    "Fecha":        st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                    "Monto":        st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                    "Sal. Compras": st.column_config.NumberColumn("Sal. Compras", format="$ %.2f"),
+                    "Sal. Gastos":  st.column_config.NumberColumn("Sal. Gastos", format="$ %.2f"),
                 },
             )
 
