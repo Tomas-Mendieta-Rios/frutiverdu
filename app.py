@@ -1402,6 +1402,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
     )
 
 def _render_movimiento_caja(cobros, pagos):
+    st.title("HOLA")
     _hoy = date.today()
     with st.form("form_movcaja_fechas", border=False):
         _c1, _c2 = st.columns(2)
