@@ -1409,6 +1409,9 @@ def _render_movimiento_caja(cobros, pagos):
         _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
         st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
+    _comp_fecha = {c["id"]: c.get("fecha", "") for c in db.cargar_comprobantes_compra()}
+    _gasto_fecha = {g["id"]: g.get("fecha", "") for g in db.cargar_gastos()}
+
     def _caja_key(tipo_valor, descripcion):
         tv   = (tipo_valor or "").upper().strip()
         desc = (descripcion or "").upper().strip()
@@ -1536,12 +1539,21 @@ def _render_movimiento_caja(cobros, pagos):
                         st.write("**Cheque:**", _cheque)
                     _imput_rows = _row.get("imputaciones") or []
                     if _imput_rows:
+                        _imput_data = []
+                        for _i in _imput_rows:
+                            _fcomp = ""
+                            if _i.get("id_comp_compra"):
+                                _fcomp = _comp_fecha.get(_i["id_comp_compra"], "")
+                            elif _i.get("id_comp_gasto"):
+                                _fcomp = _gasto_fecha.get(_i["id_comp_gasto"], "")
+                            _imput_data.append({
+                                "Fecha comp.":  _fcomp or "—",
+                                "Comprobante":  _i.get("nro_comprobante") or "—",
+                                "Tipo":         _i.get("tipo_comprobante") or "—",
+                                "Monto":        float(_i.get("monto_imputado") or 0),
+                            })
                         st.dataframe(
-                            pd.DataFrame([{
-                                "Comprobante": i.get("nro_comprobante") or "—",
-                                "Tipo":        i.get("tipo_comprobante") or "—",
-                                "Monto":       float(i.get("monto_imputado") or 0),
-                            } for i in _imput_rows]),
+                            pd.DataFrame(_imput_data),
                             use_container_width=True,
                             hide_index=True,
                             column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")},
