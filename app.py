@@ -1364,7 +1364,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
         "📋 Pedidos",
         "📦 Diario",
         "📊 Balance",
-        "💰 Mov. de caja",
+        "💰 Caja",
         "🔄 Sincronizar",
         "⚙️ Configuración",
     ],
@@ -1568,7 +1568,6 @@ def _render_movimiento_caja(cobros, pagos):
 
     # Ajustes de caja (inicial + ajustes del período)
     _ajustes_todos = db.cargar_ajustes_caja()
-    _nombre_a_id   = {c["nombre"]: c["id"] for c in _cajas_list}
     # saldo inicial por nombre de caja
     _inicial = {}
     for _aj in _ajustes_todos:
@@ -1605,24 +1604,6 @@ def _render_movimiento_caja(cobros, pagos):
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
         return
-
-    # Form para registrar ajuste de caja
-    _cajas_activas = [c for c in _cajas_list if c.get("activa")]
-    if _cajas_activas:
-        with st.expander("➕ Registrar ajuste de caja"):
-            with st.form("form_ajuste_caja"):
-                _aj_c1, _aj_c2, _aj_c3 = st.columns([2, 1, 1])
-                _aj_caja  = _aj_c1.selectbox("Caja", options=[c["nombre"] for c in _cajas_activas])
-                _aj_fecha = _aj_c2.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
-                _aj_monto = _aj_c3.number_input("Diferencia ($)", step=100.0,
-                    help="Positivo si sobra plata, negativo si falta.")
-                _aj_nota  = st.text_input("Nota (opcional)")
-                if st.form_submit_button("Guardar ajuste", type="primary", use_container_width=True):
-                    _aj_id = _nombre_a_id.get(_aj_caja)
-                    if _aj_id:
-                        db.guardar_ajuste_caja(_aj_id, _aj_fecha, _aj_monto, _aj_nota, tipo="ajuste")
-                        st.success(f"✅ Ajuste registrado en {_aj_caja}.")
-                        st.rerun()
 
     st.divider()
     for _caja in sorted(_por_caja):
@@ -1896,7 +1877,7 @@ with tab_balance:
         total_fac_cobr    = sum(float(f.get("total") or 0) for f in fac_cobradas)
         total_fac_pend    = sum(float(f.get("total") or 0) for f in fac_pendientes)
         total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
-        total_wix         = sum(_wix_monto(p) for p in ped_wix_f)
+        total_wix         = sum(_wix_monto(p) for p in ped_wix_f if str(p.get("status") or "").upper() != "CANCELED")
         total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
         total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
         total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
@@ -2051,10 +2032,102 @@ with tab_balance:
         st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
 
 with tab_mov_caja:
-    _stab_movimientos, _stab_transferencias = st.tabs(["📊 Movimientos", "↔️ Transferencias"])
+    _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs(
+        ["📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial"]
+    )
 
     with _stab_movimientos:
         _render_movimiento_caja(cobros_bal, pagos_bal)
+
+    with _stab_ajustes:
+        st.subheader("Ajustes de caja")
+        _aj_cajas_list = db.cargar_cajas()
+        _aj_cajas_activas = [c for c in _aj_cajas_list if c.get("activa")]
+        _aj_nombre_a_id = {c["nombre"]: c["id"] for c in _aj_cajas_activas}
+        if not _aj_cajas_activas:
+            st.info("No hay cajas activas.")
+        else:
+            with st.form("form_ajuste_caja"):
+                _aj_fc1, _aj_fc2, _aj_fc3 = st.columns([2, 1, 1])
+                _aj_caja  = _aj_fc1.selectbox("Caja", options=[c["nombre"] for c in _aj_cajas_activas])
+                _aj_fecha = _aj_fc2.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
+                _aj_monto_str = _aj_fc3.text_input("Diferencia ($)", value="0",
+                    help="Positivo si sobra plata, negativo si falta.")
+                _aj_nota = st.text_input("Nota (opcional)")
+                if st.form_submit_button("💾 Guardar ajuste", type="primary", use_container_width=True):
+                    try:
+                        _aj_monto = float(str(_aj_monto_str).replace(",", ".").strip())
+                    except ValueError:
+                        st.error("El monto debe ser un número.")
+                        _aj_monto = None
+                    if _aj_monto is not None:
+                        _aj_id = _aj_nombre_a_id.get(_aj_caja)
+                        if _aj_id:
+                            db.guardar_ajuste_caja(_aj_id, _aj_fecha, _aj_monto, _aj_nota, tipo="ajuste")
+                            st.success(f"✅ Ajuste registrado en {_aj_caja}.")
+                            st.rerun()
+
+        st.divider()
+        st.subheader("Historial de ajustes")
+        _todos_aj = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste"]
+        _aj_cajas_map = {c["id"]: c["nombre"] for c in _aj_cajas_list}
+        if _todos_aj:
+            _aj_df = pd.DataFrame([{
+                "Fecha":  a.get("fecha"),
+                "Caja":   _aj_cajas_map.get(a.get("caja_id"), "—"),
+                "Monto":  float(a.get("monto") or 0),
+                "Nota":   a.get("nota") or "",
+            } for a in _todos_aj])
+            st.dataframe(
+                _aj_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                    "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f"),
+                },
+            )
+        else:
+            st.info("No hay ajustes registrados.")
+
+    with _stab_saldo_ini:
+        st.subheader("Saldo inicial por caja")
+        st.caption("El saldo inicial es el punto de partida para el cálculo de saldo en Movimientos. No aparece como movimiento.")
+        _ini_cajas_list = db.cargar_cajas()
+        _ini_cajas_con_id = [c for c in _ini_cajas_list if c.get("id")]
+        if not _ini_cajas_con_id:
+            st.info("No hay cajas configuradas.")
+        else:
+            _ini_ajustes = {
+                _aj["caja_id"]: _aj
+                for _aj in db.cargar_ajustes_caja()
+                if _aj.get("tipo") == "inicial"
+            }
+            with st.form("form_saldo_inicial_cajas"):
+                _ini_vals = {}
+                for _cj in _ini_cajas_con_id:
+                    _ini_actual = float((_ini_ajustes.get(_cj["id"]) or {}).get("monto") or 0)
+                    _ini_str = st.text_input(
+                        f"{_cj['nombre']}",
+                        value=str(int(_ini_actual)) if _ini_actual == int(_ini_actual) else str(_ini_actual),
+                        key=f"ini_caja_{_cj['id']}",
+                    )
+                    _ini_vals[_cj["id"]] = _ini_str
+                if st.form_submit_button("💾 Guardar saldos iniciales", type="primary", use_container_width=True):
+                    _ini_error = False
+                    _ini_parsed = {}
+                    for _cj_id, _ini_str in _ini_vals.items():
+                        try:
+                            _ini_parsed[_cj_id] = float(str(_ini_str).replace(",", ".").strip())
+                        except ValueError:
+                            st.error(f"Monto inválido para la caja.")
+                            _ini_error = True
+                            break
+                    if not _ini_error:
+                        for _cj_id, _monto in _ini_parsed.items():
+                            db.guardar_ajuste_caja(_cj_id, date.today(), _monto, "Saldo inicial", tipo="inicial")
+                        st.success("✅ Saldos iniciales guardados.")
+                        st.rerun()
 
     with _stab_transferencias:
         st.subheader("Transferencias entre cajas")
@@ -5371,31 +5444,6 @@ with tab_cajas:
         except Exception as _e_gc:
             st.error(f"❌ No se pudieron guardar las cajas: {_e_gc}")
 
-    st.divider()
-    st.subheader("💵 Saldo inicial por caja")
-    st.caption("El saldo inicial es el punto de partida para el cálculo de saldo en Mov. de Cajas. No aparece como movimiento.")
-
-    _cajas_con_id = [c for c in _cajas_data if c.get("id")]
-    if not _cajas_con_id:
-        st.info("Primero guardá las cajas.")
-    else:
-        _ajustes_ini = {_aj["caja_id"]: _aj for _aj in db.cargar_ajustes_caja() if _aj.get("tipo") == "inicial"}
-        with st.form("form_saldo_inicial_cajas"):
-            _ini_vals = {}
-            for _cj in _cajas_con_id:
-                _ini_actual = float((_ajustes_ini.get(_cj["id"]) or {}).get("monto") or 0)
-                _ini_vals[_cj["id"]] = st.number_input(
-                    f"{_cj['nombre']}",
-                    value=_ini_actual,
-                    step=100.0,
-                    key=f"ini_caja_{_cj['id']}",
-                    format="%.2f",
-                )
-            if st.form_submit_button("💾 Guardar saldos iniciales", type="primary", use_container_width=True):
-                for _cj_id, _monto in _ini_vals.items():
-                    db.guardar_ajuste_caja(_cj_id, date.today(), _monto, "Saldo inicial", tipo="inicial")
-                st.success("✅ Saldos iniciales guardados.")
-                st.rerun()
 
 
 #python -m streamlit run app.py
