@@ -4919,57 +4919,25 @@ with tab_eg_compras:
             pd.to_numeric(df_compras_all["cantidad"], errors="coerce").fillna(0)
             * pd.to_numeric(df_compras_all["precio"], errors="coerce").fillna(0)
         )
-
-        # Agrupar por comprobante para mostrar cards
         grupos = df_compras_all.groupby(
             ["comprobante", "fecha", "proveedor_nombre", "condicion_pago"],
-            dropna=False,
-            sort=False,
+            dropna=False, sort=False,
         )
-
-        comprobantes = sorted(
-            grupos.groups.keys(),
-            key=lambda k: str(k[1]),
-            reverse=True,
-        )
-
-        st.markdown(f"**{len(comprobantes)} comprobantes sincronizados**")
-
+        comprobantes = sorted(grupos.groups.keys(), key=lambda k: str(k[1]), reverse=True)
+        st.caption(f"{len(comprobantes)} comprobantes sincronizados")
+        _rows = []
         for key in comprobantes:
             nro_comp, fecha_c, proveedor_c, cond_pago_c = key
             df_grupo = grupos.get_group(key)
-            total_c = float(df_grupo["subtotal"].sum())
-            n_items = len(df_grupo)
-
-            with st.container(border=True):
-                c_info, c_total = st.columns([5, 1.5])
-                with c_info:
-                    st.markdown(
-                        f"**#{nro_comp or '—'}** — {proveedor_c or '—'} · 📅 {_fmt_fecha(fecha_c)}"
-                        + (f" · {cond_pago_c}" if cond_pago_c else "")
-                        + f" · {n_items} ítem{'s' if n_items != 1 else ''}"
-                    )
-                with c_total:
-                    st.markdown(f"**$ {total_c:,.2f}**")
-                with st.expander("Ver ítems"):
-                    filas_items = [
-                        {
-                            "Producto": str(r.get("producto_nombre", "")),
-                            "Cantidad": float(r.get("cantidad", 0) or 0),
-                            "Precio unit.": float(r.get("precio", 0) or 0),
-                            "Subtotal": float(r.get("subtotal", 0) or 0),
-                        }
-                        for _, r in df_grupo.iterrows()
-                    ]
-                    st.dataframe(
-                        pd.DataFrame(filas_items),
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Precio unit.": st.column_config.NumberColumn("Precio unit.", format="$ %.2f"),
-                            "Subtotal": st.column_config.NumberColumn("Subtotal", format="$ %.2f"),
-                        },
-                    )
+            _rows.append({
+                "Comprobante": nro_comp or "—",
+                "Fecha":       _fmt_fecha(fecha_c),
+                "Proveedor":   proveedor_c or "—",
+                "Ítems":       len(df_grupo),
+                "Total":       float(df_grupo["subtotal"].sum()),
+            })
+        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                     column_config={"Total": st.column_config.NumberColumn("Total", format="$ %.0f")})
 
 with tab_eg_gastos:
     st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('gastos'))}**")
@@ -4985,48 +4953,18 @@ with tab_eg_gastos:
         st.info("Todavía no hay gastos. Andá a **🔄 Sincronizar**.")
     else:
         gastos_sorted = sorted(gastos_saved, key=lambda g: g.get("fecha") or "", reverse=True)
-        st.markdown(f"**{len(gastos_sorted)} gastos guardados**")
-        for g in gastos_sorted:
-            nro = g.get("nro_comprobante") or "—"
-            proveedor = g.get("proveedor") or "—"
-            fecha = _fmt_fecha(g.get("fecha"))
-            total = g.get("total") or 0
-            cond_pago = g.get("tipo_comprobante") or ""
-            pago_badge = " · 💳 **pago pendiente**" if g.get("pago_pendiente") else ""
-            detalles = g.get("detalles") or []
-            with st.container(border=True):
-                c_info, c_total = st.columns([5, 1.5])
-                with c_info:
-                    st.markdown(
-                        f"**#{nro}** — {proveedor} · 📅 {fecha}"
-                        + (f" · {cond_pago}" if cond_pago else "")
-                        + f" · {len(detalles)} ítem{'s' if len(detalles) != 1 else ''}"
-                        + pago_badge
-                    )
-                with c_total:
-                    st.markdown(f"**$ {total:,.2f}**")
-                if detalles:
-                    with st.expander("Ver ítems"):
-                        filas_det = [
-                            {
-                                "Código": d.get("cod_item", ""),
-                                "Ítem": d.get("item", ""),
-                                "Cantidad": d.get("ctd", 0),
-                                "Precio unit.": d.get("precio_uni", 0),
-                                "% Desc.": d.get("porc_desc", 0),
-                                "% IVA": d.get("porc_iva", 0),
-                                "Observaciones": d.get("comentarios", ""),
-                            }
-                            for d in detalles
-                        ]
-                        st.dataframe(
-                            pd.DataFrame(filas_det),
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={
-                                "Precio unit.": st.column_config.NumberColumn("Precio unit.", format="$ %.2f"),
-                            },
-                        )
+        _total_gas = sum(float(g.get("total") or 0) for g in gastos_sorted)
+        st.caption(f"{len(gastos_sorted)} gastos · Total: **$ {_total_gas:,.0f}**")
+        _rows = [{
+            "Comprobante":    g.get("nro_comprobante") or "—",
+            "Fecha":          _fmt_fecha(g.get("fecha")),
+            "Proveedor":      g.get("proveedor") or "—",
+            "Items":          ", ".join(d.get("cod_item","") for d in (g.get("detalles") or []) if d.get("cod_item")),
+            "Pago pendiente": "⏳" if g.get("pago_pendiente") else "✅",
+            "Total":          float(g.get("total") or 0),
+        } for g in gastos_sorted]
+        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                     column_config={"Total": st.column_config.NumberColumn("Total", format="$ %.0f")})
 
 with tab_eg_pagos:
     st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pagos_proveedores'))}**")
@@ -5041,55 +4979,24 @@ with tab_eg_pagos:
         st.info("Todavía no hay pagos. Andá a **🔄 Sincronizar**.")
     else:
         pagos_sorted = sorted(pagos_saved, key=lambda p: p.get("fecha") or "", reverse=True)
-        st.markdown(f"**{len(pagos_sorted)} pagos guardados**")
-        for p in pagos_sorted:
-            nro       = p.get("nro_comprobante") or "—"
-            proveedor = p.get("proveedor") or "—"
-            fecha     = _fmt_fecha(p.get("fecha"))
-            monto     = p.get("monto") or 0
-            forma     = p.get("forma_pago") or ""
-            concepto  = p.get("concepto") or ""
-            lineas    = p.get("lineas_pago") or []
-            imput     = p.get("imputaciones") or []
-            with st.container(border=True):
-                c_info, c_total = st.columns([5, 1.5])
-                with c_info:
-                    st.markdown(
-                        f"**#{nro}** — {proveedor} · 📅 {fecha}"
-                        + (f" · {forma}" if forma else "")
-                        + (f" · {concepto}" if concepto else "")
-                    )
-                with c_total:
-                    st.markdown(f"**$ {monto:,.2f}**")
-                if lineas or imput:
-                    with st.expander("Ver detalle"):
-                        if lineas:
-                            st.caption("Líneas de pago")
-                            st.dataframe(
-                                pd.DataFrame([
-                                    {
-                                        "Tipo": l.get("tipo_valor", ""),
-                                        "Descripción": l.get("descripcion", ""),
-                                        "Referencia": l.get("referencia", ""),
-                                        "Monto": l.get("monto", 0),
-                                    }
-                                    for l in lineas
-                                ]),
-                                use_container_width=True, hide_index=True,
-                            )
-                        if imput:
-                            st.caption("Imputaciones")
-                            st.dataframe(
-                                pd.DataFrame([
-                                    {
-                                        "Tipo comprobante": i.get("tipo_comprobante", ""),
-                                        "Nro comprobante": i.get("nro_comprobante", ""),
-                                        "Monto imputado": i.get("monto_imputado", 0),
-                                    }
-                                    for i in imput
-                                ]),
-                                use_container_width=True, hide_index=True,
-                            )
+        _total_pag = sum(float(p.get("monto") or 0) for p in pagos_sorted)
+        st.caption(f"{len(pagos_sorted)} pagos · Total: **$ {_total_pag:,.0f}**")
+        _rows = []
+        for _p in pagos_sorted:
+            _imput = _p.get("imputaciones") or []
+            _comps = ", ".join(
+                str(i.get("nro_comprobante","")).strip()
+                for i in _imput if i.get("nro_comprobante")
+            ) or "—"
+            _rows.append({
+                "Pago #":       _p.get("nro_comprobante") or "—",
+                "Fecha":        _fmt_fecha(_p.get("fecha")),
+                "Proveedor":    _p.get("proveedor") or "—",
+                "Comprobantes": _comps,
+                "Monto":        float(_p.get("monto") or 0),
+            })
+        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                     column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")})
 
 with tab_mapeo:
     ts_mapeo_ph = st.empty()
