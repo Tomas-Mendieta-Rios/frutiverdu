@@ -1440,6 +1440,7 @@ def _render_movimiento_caja(cobros, pagos):
                 "Fecha":        _f,
                 "Tipo":         "Entrada",
                 "Concepto":     _c.get("cliente") or "—",
+                "Proveedor":    "",
                 "Cobro #":      _c.get("nro_comprobante") or "—",
                 "Pago #":       "",
                 "Cheque":       "",
@@ -1478,7 +1479,8 @@ def _render_movimiento_caja(cobros, pagos):
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Salida",
-                "Concepto":     _p.get("proveedor") or "—",
+                "Concepto":     _p.get("concepto") or "—",
+                "Proveedor":    _p.get("proveedor") or "—",
                 "Cobro #":      "",
                 "Pago #":       _p.get("nro_comprobante") or "—",
                 "Cheque":       _cheque_det,
@@ -1516,7 +1518,7 @@ def _render_movimiento_caja(cobros, pagos):
         with st.expander(_label):
             _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
             st.dataframe(
-                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Concepto", "Cobro #", "Pago #", "Cheque", "Monto", "Sal. Compras", "Sal. Gastos"]),
+                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto", "Sal. Compras", "Sal. Gastos"]),
                 use_container_width=True,
                 hide_index=True,
                 column_config={
