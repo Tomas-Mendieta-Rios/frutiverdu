@@ -3359,7 +3359,11 @@ with tab_stock:
             f"Fechas disponibles: {_disp}."
         )
     else:
-        stk_ini_df = db.cargar_stock(fecha=f0)
+        try:
+            stk_ini_df = db.cargar_stock(fecha=f0)
+        except Exception as _e_stk:
+            st.error(f"⚠️ Error cargando stock: {_e_stk}")
+            stk_ini_df = pd.DataFrame()
         map_stock_ini = {}
         if not stk_ini_df.empty:
             map_stock_ini = dict(zip(
@@ -3367,13 +3371,19 @@ with tab_stock:
                 stk_ini_df["cantidad"].astype(float),
             ))
 
-        compras_res = db.cargar_compras_desde_gastos(fc)
+        try:
+            compras_res = db.cargar_compras_desde_gastos(fc)
+        except Exception:
+            compras_res = {"cantidades": {}, "compras": []}
         map_compras = compras_res.get("cantidades", {})
         compras_raw = compras_res.get("compras", [])
 
-        df_ped_agg = cargar_pedidos_dux_aggregated(
-            productos, dia_estimado=None, fecha_compra=[str(fp)]
-        )
+        try:
+            df_ped_agg = cargar_pedidos_dux_aggregated(
+                productos, dia_estimado=None, fecha_compra=[str(fp)]
+            )
+        except Exception:
+            df_ped_agg = pd.DataFrame()
         map_pedidos = {}
         if not df_ped_agg.empty:
             for _, r in df_ped_agg.iterrows():
