@@ -1485,8 +1485,14 @@ def _render_movimiento_caja(cobros, pagos):
         if not (_desde <= _f <= _hasta):
             continue
         _imput = _p.get("imputaciones", [])
-        _tot_compra = sum(float(i.get("monto_imputado") or 0) for i in _imput if i.get("id_compra"))
-        _tot_gasto  = sum(float(i.get("monto_imputado") or 0) for i in _imput if i.get("id_gasto"))
+        def _es_compra(i):
+            return bool(i.get("id_compra") or i.get("id_comp_compra") or
+                        "COMPRA" in (i.get("tipo_comprobante") or "").upper())
+        def _es_gasto(i):
+            return bool(i.get("id_gasto") or i.get("id_comp_gasto") or
+                        "GASTO" in (i.get("tipo_comprobante") or "").upper())
+        _tot_compra = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_compra(i))
+        _tot_gasto  = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_gasto(i))
         _tot_imput  = _tot_compra + _tot_gasto
         _pct_compra = (_tot_compra / _tot_imput) if _tot_imput else 1.0
         _pct_gasto  = (_tot_gasto  / _tot_imput) if _tot_imput else 0.0
@@ -1510,9 +1516,15 @@ def _render_movimiento_caja(cobros, pagos):
                 _cat = "Gasto"
             else:
                 _cat = "Mixto"
+            if _cat == "Compra":
+                _imput_filtro = [i for i in _imput if _es_compra(i)]
+            elif _cat == "Gasto":
+                _imput_filtro = [i for i in _imput if _es_gasto(i)]
+            else:
+                _imput_filtro = _imput
             _comp_list = ", ".join(
                 str(i.get("nro_comprobante", "")).strip()
-                for i in _imput if i.get("nro_comprobante")
+                for i in _imput_filtro if i.get("nro_comprobante")
             ) or "—"
             _t["detalle"].append({
                 "Fecha":        _f,
