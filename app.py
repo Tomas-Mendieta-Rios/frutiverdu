@@ -1413,12 +1413,9 @@ def _render_movimiento_caja(cobros, pagos):
     def _caja_key(tipo_valor, descripcion):
         tv   = (tipo_valor or "").upper().strip()
         desc = (descripcion or "").upper().strip()
-        if "CHEQUE" in tv:
+        if "CHEQUE" in tv or "CHEQUE" in desc:
             return "CHEQUE"
         if tv == "CUENTA":
-            # cheque propio contra una cuenta: "BBVA - CHEQUE682190" → "BBVA"
-            if "CHEQUE" in desc:
-                return desc.split("-")[0].strip() or "CUENTA"
             return desc or "CUENTA"
         return tv or "—"
 
