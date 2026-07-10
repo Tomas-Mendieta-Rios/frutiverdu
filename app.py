@@ -1494,6 +1494,7 @@ def _render_movimiento_caja(cobros, pagos):
     _total_sg = sum(v["Sal. Gastos"]  for v in _por_caja.values())
     _total_s  = _total_sc + _total_sg
     _total_n  = _total_e - _total_s
+    st.subheader("Total general")
     _k1, _k2, _k3 = st.columns(3)
     _k1.metric("Entradas",   f"$ {_total_e:,.0f}")
     _k2.metric("Salidas",    f"$ {_total_s:,.0f}")
