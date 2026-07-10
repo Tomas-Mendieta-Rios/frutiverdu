@@ -1521,15 +1521,19 @@ def _render_movimiento_caja(cobros, pagos):
         _m4.metric("Neto",         f"$ {_neto:,.0f}")
         with st.expander("Ver detalles"):
             _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
-            st.dataframe(
-                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Cat.", "Concepto", "Proveedor", "Cobro #", "Pago #", "Cheque", "Monto"]),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Fecha":  st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                    "Monto":  st.column_config.NumberColumn("Monto", format="$ %.2f"),
-                },
-            )
+            for _row in _det:
+                _fecha   = _row["Fecha"].strftime("%d/%m/%Y") if hasattr(_row["Fecha"], "strftime") else str(_row["Fecha"])
+                _tipo    = _row.get("Tipo", "")
+                _cat     = _row.get("Cat.", "")
+                _prov    = _row.get("Proveedor") or _row.get("Concepto") or "—"
+                _ref     = _row.get("Pago #") or _row.get("Cobro #") or "—"
+                _monto   = _row.get("Monto", 0)
+                _cheque  = _row.get("Cheque", "")
+                _label   = f"{_fecha}  |  {_tipo}  {('· ' + _cat) if _cat else ''}  |  {_prov}  |  {_ref}  |  $ {_monto:,.0f}"
+                with st.expander(_label):
+                    st.write("**Concepto:**", _row.get("Concepto") or "—")
+                    if _cheque:
+                        st.write("**Cheque:**", _cheque)
         st.divider()
 
 
