@@ -1419,7 +1419,13 @@ def _cargar_fecha_corte_cajas():
     """Devuelve la fecha de corte global para cajas, o date.min si no está configurada."""
     try:
         _cfg = db.cargar_config()
-        return pd.to_datetime(_cfg.get("fecha_corte_cajas", "")).date()
+        _val = _cfg.get("fecha_corte_cajas") or ""
+        if not _val:
+            return date.min
+        _dt = pd.to_datetime(_val)
+        if pd.isna(_dt):
+            return date.min
+        return _dt.date()
     except Exception:
         return date.min
 
