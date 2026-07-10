@@ -2116,31 +2116,23 @@ with tab_ingresos:
             st.info("Todavía no hay cobros. Andá a **🔄 Sincronizar**.")
         else:
             _total_cobros = sum(float(c.get("monto") or 0) for c in cobros_saved)
-            st.markdown(f"**{len(cobros_saved)} cobros · Total: $ {_total_cobros:,.0f}**")
-
-            _by_cli = {}
-            for _c in cobros_saved:
-                _k = str(_c.get("cliente") or _c.get("nombre_cliente") or "—").strip() or "—"
-                _by_cli.setdefault(_k, []).append(_c)
-
-            for _cli, _citems in sorted(_by_cli.items()):
-                _ctot = sum(float(c.get("monto") or 0) for c in _citems)
-                with st.expander(f"{_cli} — {len(_citems)} cobro{'s' if len(_citems)!=1 else ''} — $ {_ctot:,.0f}"):
-                    _rows = []
-                    for _c in sorted(_citems, key=lambda x: x.get("fecha") or "", reverse=True):
-                        _imput = _c.get("imputaciones") or []
-                        _facts = ", ".join(
-                            str(i.get("nro_comprobante","")).strip()
-                            for i in _imput if i.get("nro_comprobante")
-                        ) or "—"
-                        _rows.append({
-                            "Cobro #":           _c.get("nro_comprobante") or "—",
-                            "Fecha":             _fmt_fecha(_c.get("fecha")),
-                            "Facturas cobradas": _facts,
-                            "Monto":             float(_c.get("monto") or 0),
-                        })
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                 column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")})
+            st.caption(f"{len(cobros_saved)} cobros · Total: **$ {_total_cobros:,.0f}**")
+            _rows = []
+            for _c in sorted(cobros_saved, key=lambda x: x.get("fecha") or "", reverse=True):
+                _imput = _c.get("imputaciones") or []
+                _facts = ", ".join(
+                    str(i.get("nro_comprobante","")).strip()
+                    for i in _imput if i.get("nro_comprobante")
+                ) or "—"
+                _rows.append({
+                    "Cobro #":           _c.get("nro_comprobante") or "—",
+                    "Fecha":             _fmt_fecha(_c.get("fecha")),
+                    "Cliente":           str(_c.get("cliente") or "—").strip(),
+                    "Facturas cobradas": _facts,
+                    "Monto":             float(_c.get("monto") or 0),
+                })
+            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                         column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")})
 
 with tab_ingresos:
     with tab_ing_cobros_wix:
