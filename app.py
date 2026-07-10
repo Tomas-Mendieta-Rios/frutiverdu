@@ -1439,7 +1439,10 @@ def _render_movimiento_caja(cobros, pagos):
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Entrada",
-                "Concepto":     f"Cobro #{_c.get('nro_comprobante','—')} — {_c.get('cliente','')}",
+                "Concepto":     _c.get("cliente") or "—",
+                "Cobro #":      _c.get("nro_comprobante") or "—",
+                "Pago #":       "",
+                "Cheque":       "",
                 "Monto":        _monto,
                 "Sal. Compras": 0.0,
                 "Sal. Gastos":  0.0,
@@ -1467,13 +1470,18 @@ def _render_movimiento_caja(cobros, pagos):
             _sal_gasto  = _monto * _pct_gasto
             _t["Sal. Compras"] += _sal_compra
             _t["Sal. Gastos"]  += _sal_gasto
+            _cheque_det = ""
+            if "CHEQUE" in (_lin.get("tipo_valor") or "").upper():
+                _cheque_det = _lin.get("descripcion") or _lin.get("tipo_valor") or ""
+            elif "CHEQUE" in (_lin.get("descripcion") or "").upper():
+                _cheque_det = _lin.get("descripcion") or ""
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Salida",
-                "Concepto":     (
-                    f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}"
-                    + (f" | {_lin.get('descripcion') or _lin.get('tipo_valor', '')}" if "CHEQUE" in (_lin.get("tipo_valor") or "").upper() else "")
-                ),
+                "Concepto":     _p.get("proveedor") or "—",
+                "Cobro #":      "",
+                "Pago #":       _p.get("nro_comprobante") or "—",
+                "Cheque":       _cheque_det,
                 "Monto":        _monto,
                 "Sal. Compras": _sal_compra,
                 "Sal. Gastos":  _sal_gasto,
@@ -1508,7 +1516,7 @@ def _render_movimiento_caja(cobros, pagos):
         with st.expander(_label):
             _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
             st.dataframe(
-                pd.DataFrame(_det),
+                pd.DataFrame(_det, columns=["Fecha", "Tipo", "Concepto", "Cobro #", "Pago #", "Cheque", "Monto", "Sal. Compras", "Sal. Gastos"]),
                 use_container_width=True,
                 hide_index=True,
                 column_config={
