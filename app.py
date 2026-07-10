@@ -1402,7 +1402,6 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
     )
 
 def _render_movimiento_caja(cobros, pagos):
-    st.title("HOLA")
     _hoy = date.today()
     with st.form("form_movcaja_fechas", border=False):
         _c1, _c2 = st.columns(2)
@@ -1411,16 +1410,13 @@ def _render_movimiento_caja(cobros, pagos):
         st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
     def _caja_key(tipo_valor, descripcion):
-        tv = (tipo_valor or "").upper().strip()
-        if tv == "CUENTA":
-            return (descripcion or "CUENTA").strip().upper() or "CUENTA"
-        if "CHEQUE" in tv:
+        tv   = (tipo_valor or "").upper().strip()
+        desc = (descripcion or "").upper().strip()
+        if "CHEQUE" in tv or "CHEQUE" in desc:
             return "CHEQUE"
+        if tv == "CUENTA":
+            return desc or "CUENTA"
         return tv or "—"
-
-    # DEBUG TEMPORAL
-    _debug_tvs = list({(l.get("tipo_valor"), l.get("descripcion")) for p in pagos for l in p.get("lineas_pago", [])})
-    st.write("DEBUG pagos tipo_valor+desc:", _debug_tvs)
 
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
     _por_caja = {}
