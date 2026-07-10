@@ -1416,51 +1416,80 @@ def _caja_key(tipo_valor, descripcion):
 
 
 def _calcular_saldos_actuales(cobros, pagos):
-    """Devuelve {caja_key: saldo_actual} acumulando todo el historial."""
+    """Devuelve {caja_key: saldo_actual} desde la fecha de corte del saldo inicial."""
     _cajas_list = db.cargar_cajas()
     _cajas_map  = {c["id"]: c["nombre"] for c in _cajas_list}
     _ajustes_todos = db.cargar_ajustes_caja()
 
     _inicial = {}
+    _inicial_fecha = {}  # caja_name -> fecha de corte
     for _aj in _ajustes_todos:
         if _aj.get("tipo") == "inicial":
             _cn = _cajas_map.get(_aj["caja_id"], "")
             if _cn:
                 _inicial[_cn] = float(_aj.get("monto") or 0)
+                try:
+                    _inicial_fecha[_cn] = pd.to_datetime(str(_aj.get("fecha") or "")).date()
+                except Exception:
+                    _inicial_fecha[_cn] = date.min
 
     _all_aj_sum = {}
     for _aj in _ajustes_todos:
         if _aj.get("tipo") != "ajuste":
             continue
         _cn = _cajas_map.get(_aj["caja_id"], "")
-        if _cn:
-            _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
+        if not _cn:
+            continue
+        try:
+            _ajf = pd.to_datetime(str(_aj.get("fecha") or "")).date()
+        except Exception:
+            continue
+        if _ajf < _inicial_fecha.get(_cn, date.min):
+            continue
+        _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
 
     _hist = {}
     for _c in cobros:
+        try:
+            _cf = pd.to_datetime(str(_c.get("fecha") or "")).date()
+        except Exception:
+            continue
         for _cob in _c.get("cobranza", []):
             _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
-            _h  = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
+            if _cf < _inicial_fecha.get(_ck, date.min):
+                continue
+            _h = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _h["Entradas"] += float(_cob.get("monto") or 0)
     for _p in pagos:
+        try:
+            _pf = pd.to_datetime(str(_p.get("fecha") or "")).date()
+        except Exception:
+            continue
         for _lin in _p.get("lineas_pago", []):
             _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
-            _h  = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
+            if _pf < _inicial_fecha.get(_ck, date.min):
+                continue
+            _h = _hist.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _h["Salidas"] += float(_lin.get("monto") or 0)
     _transferencias = db.cargar_transferencias()
     for _tr in _transferencias:
+        try:
+            _trf = pd.to_datetime(str(_tr.get("fecha") or "")).date()
+        except Exception:
+            continue
         _horig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"),  "—")
         _hdest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
         _htm   = float(_tr.get("monto") or 0)
-        _hist.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
-        _hist.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
+        if _trf >= _inicial_fecha.get(_horig, date.min):
+            _hist.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
+        if _trf >= _inicial_fecha.get(_hdest, date.min):
+            _hist.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
 
     _saldos = {}
     for _ck, _h in _hist.items():
         _ini = _inicial.get(_ck, 0.0)
         _aj  = _all_aj_sum.get(_ck, 0.0)
         _saldos[_ck] = _ini + _h["Entradas"] - _h["Salidas"] + _aj
-    # cajas configuradas que no tienen movimientos aún
     for _cn, _ini in _inicial.items():
         if _cn not in _saldos:
             _saldos[_cn] = _ini + _all_aj_sum.get(_cn, 0.0)
@@ -1642,32 +1671,68 @@ def _render_movimiento_caja(cobros, pagos):
         if _cn:
             _ajustes_periodo.setdefault(_cn, []).append(_aj)
 
-    # Totales históricos (sin filtro de fecha) para el saldo acumulativo
+    # Fecha de corte por caja (desde el saldo inicial)
+    _inicial_fecha = {}
+    for _aj in _ajustes_todos:
+        if _aj.get("tipo") == "inicial":
+            _cn = _cajas_map.get(_aj["caja_id"], "")
+            if _cn:
+                try:
+                    _inicial_fecha[_cn] = pd.to_datetime(str(_aj.get("fecha") or "")).date()
+                except Exception:
+                    _inicial_fecha[_cn] = date.min
+
+    # Totales históricos desde la fecha de corte para el saldo acumulativo
     _hist_total = {}
     for _c in cobros:
+        try:
+            _cf = pd.to_datetime(str(_c.get("fecha") or "")).date()
+        except Exception:
+            continue
         for _cob in _c.get("cobranza", []):
             _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
+            if _cf < _inicial_fecha.get(_ck, date.min):
+                continue
             _ht = _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _ht["Entradas"] += float(_cob.get("monto") or 0)
     for _p in pagos:
+        try:
+            _pf = pd.to_datetime(str(_p.get("fecha") or "")).date()
+        except Exception:
+            continue
         for _lin in _p.get("lineas_pago", []):
             _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
+            if _pf < _inicial_fecha.get(_ck, date.min):
+                continue
             _ht = _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
             _ht["Salidas"] += float(_lin.get("monto") or 0)
     for _tr in _transferencias:
+        try:
+            _trf = pd.to_datetime(str(_tr.get("fecha") or "")).date()
+        except Exception:
+            continue
         _horig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"),  "—")
         _hdest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
         _htm   = float(_tr.get("monto") or 0)
-        _hist_total.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
-        _hist_total.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
-    # suma histórica de ajustes por caja (todos, no solo del período)
+        if _trf >= _inicial_fecha.get(_horig, date.min):
+            _hist_total.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
+        if _trf >= _inicial_fecha.get(_hdest, date.min):
+            _hist_total.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
+    # suma histórica de ajustes desde la fecha de corte
     _all_aj_sum = {}
     for _aj in _ajustes_todos:
         if _aj.get("tipo") != "ajuste":
             continue
         _cn = _cajas_map.get(_aj["caja_id"], "")
-        if _cn:
-            _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
+        if not _cn:
+            continue
+        try:
+            _ajf = pd.to_datetime(str(_aj.get("fecha") or "")).date()
+        except Exception:
+            continue
+        if _ajf < _inicial_fecha.get(_cn, date.min):
+            continue
+        _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
 
     _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
     _total_sc = sum(v["Sal. Compras"] for v in _por_caja.values())
@@ -2195,14 +2260,32 @@ with tab_mov_caja:
             }
             with st.form("form_saldo_inicial_cajas"):
                 _ini_vals = {}
+                _ini_fechas = {}
                 for _cj in _ini_cajas_con_id:
-                    _ini_actual = float((_ini_ajustes.get(_cj["id"]) or {}).get("monto") or 0)
-                    _ini_str = st.text_input(
-                        f"{_cj['nombre']}",
+                    _aj_ini = _ini_ajustes.get(_cj["id"]) or {}
+                    _ini_actual = float(_aj_ini.get("monto") or 0)
+                    try:
+                        _fecha_actual = pd.to_datetime(str(_aj_ini.get("fecha") or "")).date()
+                    except Exception:
+                        _fecha_actual = date.today()
+                    _fc1, _fc2, _fc3 = st.columns([2, 2, 2])
+                    _fc1.markdown(f"**{_cj['nombre']}**", help=None)
+                    _ini_str = _fc2.text_input(
+                        "Monto ($)",
                         value=str(int(_ini_actual)) if _ini_actual == int(_ini_actual) else str(_ini_actual),
                         key=f"ini_caja_{_cj['id']}",
+                        label_visibility="collapsed",
+                    )
+                    _ini_fecha = _fc3.date_input(
+                        "Fecha de corte",
+                        value=_fecha_actual,
+                        key=f"ini_fecha_{_cj['id']}",
+                        format="DD/MM/YYYY",
+                        label_visibility="collapsed",
                     )
                     _ini_vals[_cj["id"]] = _ini_str
+                    _ini_fechas[_cj["id"]] = _ini_fecha
+                st.caption("Caja · Monto inicial · Fecha de corte (solo se suman movimientos desde esa fecha)")
                 if st.form_submit_button("💾 Guardar saldos iniciales", type="primary", use_container_width=True):
                     _ini_error = False
                     _ini_parsed = {}
@@ -2210,12 +2293,12 @@ with tab_mov_caja:
                         try:
                             _ini_parsed[_cj_id] = float(str(_ini_str).replace(",", ".").strip())
                         except ValueError:
-                            st.error(f"Monto inválido para la caja.")
+                            st.error("Monto inválido para la caja.")
                             _ini_error = True
                             break
                     if not _ini_error:
                         for _cj_id, _monto in _ini_parsed.items():
-                            db.guardar_ajuste_caja(_cj_id, date.today(), _monto, "Saldo inicial", tipo="inicial")
+                            db.guardar_ajuste_caja(_cj_id, _ini_fechas[_cj_id], _monto, "Saldo inicial", tipo="inicial")
                         st.success("✅ Saldos iniciales guardados.")
                         st.rerun()
 
