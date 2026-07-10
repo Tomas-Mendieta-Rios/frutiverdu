@@ -1464,7 +1464,10 @@ def _render_movimiento_caja(cobros, pagos):
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Salida",
-                "Concepto":     f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}",
+                "Concepto":     (
+                    f"Pago #{_p.get('nro_comprobante','—')} — {_p.get('proveedor','')}"
+                    + (f" | {_lin['descripcion']}" if (_lin.get("tipo_valor") or "").upper() == "CHEQUE" and _lin.get("descripcion") else "")
+                ),
                 "Monto":        _monto,
                 "Sal. Compras": _sal_compra,
                 "Sal. Gastos":  _sal_gasto,
