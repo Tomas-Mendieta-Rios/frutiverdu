@@ -1499,8 +1499,7 @@ def _render_movimiento_caja(cobros, pagos):
         def _gasto_label(i, _ids=_ids_gastos):
             _idc = i.get("id_comp_compra") or i.get("id_compra")
             if _idc and int(_idc) in _ids:
-                _g = _ids[int(_idc)]
-                return _g.get("gasto") or _g.get("nro_comprobante") or str(_idc)
+                return _ids[int(_idc)].get("label") or str(_idc)
             return str(i.get("nro_comprobante") or "")
         _tot_compra = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_compra(i))
         _tot_gasto  = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_gasto(i))

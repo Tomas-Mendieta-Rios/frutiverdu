@@ -1564,11 +1564,17 @@ def guardar_cobros(cobros):
 @st.cache_data(ttl=600)
 def cargar_ids_gastos():
     client = get_client()
-    resp = client.table("gastos").select("id, gasto, nro_comprobante").execute()
-    return {
-        r["id"]: {"gasto": r.get("gasto") or "", "nro_comprobante": r.get("nro_comprobante") or ""}
-        for r in (resp.data or [])
-    }
+    resp = client.table("gastos").select("id, gasto, nro_comprobante, gastos_items(cod_item)").execute()
+    result = {}
+    for r in (resp.data or []):
+        items = r.get("gastos_items") or []
+        cod_items = ", ".join(
+            str(i.get("cod_item") or "").strip()
+            for i in items if i.get("cod_item") and str(i.get("cod_item")).strip() not in ("", "None")
+        )
+        label = cod_items or r.get("gasto") or r.get("nro_comprobante") or str(r["id"])
+        result[r["id"]] = {"label": label, "nro_comprobante": r.get("nro_comprobante") or ""}
+    return result
 
 
 @st.cache_data(ttl=300)
