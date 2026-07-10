@@ -1592,7 +1592,8 @@ def _render_movimiento_caja(cobros, pagos):
         if _entradas_real:
             with st.expander(f"Entradas ({len(_entradas_real)})"):
                 st.dataframe(
-                    pd.DataFrame(_entradas_real)[["Fecha", "Cliente", "Facturas", "Cobro #", "Monto"]],
+                    pd.DataFrame(_entradas_real)[["Fecha", "Cliente", "Facturas", "Cobro #", "Monto"]]
+                      .rename(columns={"Facturas": "Facturas cobradas", "Cobro #": "Cobro #"}),
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
@@ -1606,10 +1607,20 @@ def _render_movimiento_caja(cobros, pagos):
         for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Transferencias", _sal_transf), ("Salidas — Otros", _sal_otros)]:
             if _rows:
                 with st.expander(f"{_titulo} ({len(_rows)})"):
+                    if _titulo == "Salidas — Transferencias":
+                        _cols_rename = {}
+                        _cols_sel = ["Fecha", "Concepto", "Monto"]
+                    elif _titulo == "Salidas — Compras":
+                        _cols_sel = ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]
+                        _cols_rename = {"Concepto": "Comprobante compra"}
+                    elif _titulo == "Salidas — Gastos":
+                        _cols_sel = ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]
+                        _cols_rename = {"Concepto": "Comprobante gasto"}
+                    else:
+                        _cols_sel = ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]
+                        _cols_rename = {"Concepto": "Comprobante"}
                     st.dataframe(
-                        pd.DataFrame(_rows)[["Fecha", "Concepto", "Monto"]
-                            if _titulo == "Salidas — Transferencias"
-                            else ["Fecha", "Proveedor", "Concepto", "Pago #", "Cheque", "Monto"]],
+                        pd.DataFrame(_rows)[_cols_sel].rename(columns=_cols_rename),
                         use_container_width=True, hide_index=True,
                         column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                     )
