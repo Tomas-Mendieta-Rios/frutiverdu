@@ -2204,12 +2204,12 @@ with tab_balance:
         st.markdown(f"**Wix — $ {_pesos(total_wix)}** · {_wix_fin_count} pedidos")
         _w1, _w2, _w3 = st.columns(3)
         _bal_metric(_w1, "Cobrado",    f"$ {_pesos(total_wix_cobr)}", "#2e7d32")
-        _bal_metric(_w2, "Por cobrar", f"$ {_pesos(total_wix_pend)}", "#e65100")
+        _bal_metric(_w2, "Pendiente", f"$ {_pesos(total_wix_pend)}", "#e65100")
         _bal_metric(_w3, "Anulado",    f"$ {_pesos(total_wix_anul)}", "#757575")
 
         for _label, _lista in [
             ("Cobrado",    wix_cobradas),
-            ("Por cobrar", wix_pendientes),
+            ("Pendiente", wix_pendientes),
             ("Anulado",    wix_anulados),
         ]:
             if _lista:
