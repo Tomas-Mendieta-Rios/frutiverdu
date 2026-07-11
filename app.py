@@ -2414,9 +2414,13 @@ with tab_mov_caja:
             _tr_fecha   = _tc1.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
             _tr_origen  = _tc2.selectbox("Desde", options=list(_cajas_tr_opts.keys()))
             _tr_destino = _tc3.selectbox("Hacia",  options=list(_cajas_tr_opts.keys()))
-            _tr_monto   = _tc4.number_input("Monto", min_value=0.0, step=100.0)
+            _tr_monto_str = _tc4.text_input("Monto", value="", placeholder="0")
             _tr_concepto = st.text_input("Concepto (opcional)")
             if st.form_submit_button("Registrar", type="primary", use_container_width=True):
+                try:
+                    _tr_monto = float(str(_tr_monto_str).replace(",", ".").strip())
+                except ValueError:
+                    _tr_monto = 0.0
                 if _tr_origen == _tr_destino:
                     st.error("Origen y destino deben ser distintos.")
                 elif _tr_monto <= 0:
