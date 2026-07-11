@@ -2318,9 +2318,9 @@ with tab_balance:
         _fic_signo = "+" if resultado >= 0 else ""
         _real_color = "#2e7d32" if _res_real >= 0 else "#c62828"
         _real_signo = "+" if _res_real >= 0 else ""
-        _bal_metric(_rf1, "Ficticio", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color,
+        _bal_metric(_rf1, "Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color,
                     sub="Facturado − Comprado/Gastado")
-        _bal_metric(_rf2, "Real",     f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color,
+        _bal_metric(_rf2, "Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color,
                     sub="Cobrado − Pagado")
 
 with tab_mov_caja:
