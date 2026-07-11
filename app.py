@@ -1053,9 +1053,6 @@ def _sync_gastos(fecha_desde, fecha_hasta):
         page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
         if not page:
             break
-        if not all_gastos and page:
-            st.write("DEBUG gasto[0] keys:", list(page[0].keys()))
-            st.write("DEBUG gasto[0]:", page[0])
         all_gastos.extend(page)
         paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
         if not paging.get("hay_mas"):
@@ -1905,6 +1902,7 @@ with tab_balance:
                 _rows = [{
                     "Fecha":      _fmt_fecha(g.get("fecha")),
                     "Proveedor":  g.get("proveedor") or "—",
+                    "Gasto":      g.get("gasto") or "—",
                     "Comprobante": g.get("nro_comprobante") or "—",
                     "Total":      float(g.get("total") or 0),
                 } for g in sorted(_gas_pend_hist, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -2152,6 +2150,7 @@ with tab_balance:
                         with st.expander(f"{_prov} — {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
                             _rows = [{
                                 "Fecha":       _fmt_fecha(g.get("fecha")),
+                                "Gasto":       g.get("gasto") or "—",
                                 "Comprobante": g.get("nro_comprobante") or "—",
                                 "Total":       float(g.get("total") or 0),
                             } for g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -5003,7 +5002,8 @@ with tab_eg_gastos:
             "Comprobante": g.get("nro_comprobante") or "—",
             "Fecha":       _fmt_fecha(g.get("fecha")),
             "Proveedor":   g.get("proveedor") or "—",
-            "Items":       ", ".join(d.get("cod_item","") for d in (g.get("detalles") or []) if d.get("cod_item")),
+            "Gasto":       g.get("gasto") or "—",
+            "Items":       ", ".join(d.get("item","") or d.get("cod_item","") for d in (g.get("detalles") or []) if (d.get("item") or d.get("cod_item"))),
             "Total":       float(g.get("total") or 0),
         } for g in gastos_sorted]
         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
