@@ -1789,26 +1789,22 @@ def _render_movimiento_caja(cobros, pagos):
                 )
             else:
                 st.caption("Sin entradas en el período.")
-        _tot_et = sum(r["Monto"] for r in _ent_transf)
-        with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — $ {_tot_et:,.0f}"):
-            if _ent_transf:
+        if _ent_transf:
+            _tot_et = sum(r["Monto"] for r in _ent_transf)
+            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — $ {_tot_et:,.0f}"):
                 st.dataframe(
                     pd.DataFrame(_ent_transf)[["Fecha", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
-            else:
-                st.caption("Sin transferencias entrantes en el período.")
-        _tot_st = sum(r["Monto"] for r in _sal_transf)
-        with st.expander(f"Salidas — Transferencias ({len(_sal_transf)}) — $ {_tot_st:,.0f}"):
-            if _sal_transf:
+        if _sal_transf:
+            _tot_st = sum(r["Monto"] for r in _sal_transf)
+            with st.expander(f"Salidas — Transferencias ({len(_sal_transf)}) — $ {_tot_st:,.0f}"):
                 st.dataframe(
                     pd.DataFrame(_sal_transf)[["Fecha", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
-            else:
-                st.caption("Sin transferencias salientes en el período.")
         for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Otros", _sal_otros)]:
             if _rows:
                 _tot_rows = sum(r["Monto"] for r in _rows)
