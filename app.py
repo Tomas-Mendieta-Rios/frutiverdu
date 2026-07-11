@@ -2138,8 +2138,8 @@ with tab_balance:
         gas_pendientes = [g for g in gastos_f if g.get("pago_pendiente") and _pagado_gasto(g) == 0 and str(g.get("estado") or "").upper() != "ANULADA"]
         gas_anulados   = [g for g in gastos_f if str(g.get("estado") or "").upper() == "ANULADA"]
 
-        total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_pendientes)
-        total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_pendientes)
+        total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
+        total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_parciales + gas_pendientes)
 
         total_ingresos = total_facturas + total_wix
         total_egresos  = total_compras + total_gastos
