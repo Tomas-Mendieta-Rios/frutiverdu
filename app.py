@@ -2011,14 +2011,16 @@ with tab_balance:
         except Exception:
             _pend_hasta_def = date.today()
 
-        with st.form("form_pend_fechas", border=False):
-            _pd_col1, _pd_col2 = st.columns(2)
-            _pend_desde = _pd_col1.date_input("Desde", value=_pend_desde_def, key="pend_desde", format="DD/MM/YYYY")
-            _pend_hasta = _pd_col2.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta", format="DD/MM/YYYY")
-            _pend_calc = st.form_submit_button("Calcular", type="primary", use_container_width=True)
-
-        if _pend_calc:
-            db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
+        _periodo_pend = st.date_input(
+            "Período", value=(_pend_desde_def, _pend_hasta_def),
+            key="pend_periodo", format="DD/MM/YYYY",
+        )
+        if isinstance(_periodo_pend, (list, tuple)) and len(_periodo_pend) == 2:
+            _pend_desde, _pend_hasta = _periodo_pend
+            if str(_pend_desde) != _cfg_bal.get("pend_desde") or str(_pend_hasta) != _cfg_bal.get("pend_hasta"):
+                db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
+        else:
+            _pend_desde, _pend_hasta = _pend_desde_def, _pend_hasta_def
 
         def _pend_en_rango(fecha_str):
             try:
@@ -2123,14 +2125,16 @@ with tab_balance:
         except Exception:
             _bal_hasta_def = _hoy_bal
 
-        with st.form("form_bal_fechas", border=False):
-            _cb1, _cb2 = st.columns(2)
-            bal_desde = _cb1.date_input("Desde", value=_bal_desde_def, key="bal_desde", format="DD/MM/YYYY")
-            bal_hasta = _cb2.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta", format="DD/MM/YYYY")
-            _bal_calc = st.form_submit_button("Calcular", type="primary", use_container_width=True)
-
-        if _bal_calc:
-            db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
+        _periodo_bal = st.date_input(
+            "Período", value=(_bal_desde_def, _bal_hasta_def),
+            key="bal_periodo", format="DD/MM/YYYY",
+        )
+        if isinstance(_periodo_bal, (list, tuple)) and len(_periodo_bal) == 2:
+            bal_desde, bal_hasta = _periodo_bal
+            if str(bal_desde) != _cfg_bal.get("bal_desde") or str(bal_hasta) != _cfg_bal.get("bal_hasta"):
+                db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
+        else:
+            bal_desde, bal_hasta = _bal_desde_def, _bal_hasta_def
 
         def _en_rango(fecha_str):
             try:
