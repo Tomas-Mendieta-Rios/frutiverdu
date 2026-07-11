@@ -2372,7 +2372,7 @@ with tab_mov_caja:
                         use_container_width=True,
                         hide_index=True,
                         column_config={
-                            "Saldo inicial": st.column_config.NumberColumn("Saldo inicial", format="$ {:,.0f}"),
+                            "Saldo inicial": st.column_config.NumberColumn("Saldo inicial", format="$ %.0f"),
                         },
                     )
 
