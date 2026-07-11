@@ -2289,16 +2289,32 @@ with tab_mov_caja:
         _todos_aj = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste"]
         _aj_cajas_map = {c["id"]: c["nombre"] for c in _aj_cajas_list}
         if _todos_aj:
-            for _a in sorted(_todos_aj, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                _a_caja  = _aj_cajas_map.get(_a.get("caja_id"), "—")
-                _a_fecha = str(_a.get("fecha") or "")[:10]
-                _a_monto = float(_a.get("monto") or 0)
-                _a_nota  = _a.get("nota") or ""
-                _ra1, _ra2 = st.columns([8, 1])
-                _ra1.markdown(f"**{_a_caja}** · {_a_fecha} · $ {_a_monto:,.0f}" + (f" · {_a_nota}" if _a_nota else ""))
-                if _ra2.button("🗑", key=f"del_aj_{_a['id']}"):
-                    db.eliminar_ajuste_caja(_a["id"])
-                    st.rerun()
+            _aj_sorted = sorted(_todos_aj, key=lambda x: str(x.get("fecha") or ""), reverse=True)
+            _aj_rows = []
+            for _a in _aj_sorted:
+                _aj_rows.append({
+                    "Fecha":  _safe_date(_a.get("fecha")).strftime("%d/%m/%Y") if _safe_date(_a.get("fecha")) != date.min else str(_a.get("fecha") or "")[:10],
+                    "Caja":   _aj_cajas_map.get(_a.get("caja_id"), "—"),
+                    "Monto":  float(_a.get("monto") or 0),
+                    "Nota":   _a.get("nota") or "—",
+                })
+            st.dataframe(
+                pd.DataFrame(_aj_rows),
+                use_container_width=True,
+                hide_index=True,
+                column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")},
+            )
+            st.markdown("**🗑 Eliminar ajuste**")
+            _aj_labels = {
+                f"{r['Fecha']} · {r['Caja']} · $ {r['Monto']:,.0f}" + (f" · {r['Nota']}" if r["Nota"] != "—" else ""): _aj_sorted[i]["id"]
+                for i, r in enumerate(_aj_rows)
+            }
+            _del_aj_col, _del_aj_btn_col = st.columns([5, 1])
+            _del_aj_sel = _del_aj_col.selectbox("Ajuste", options=list(_aj_labels.keys()), key="del_aj_sel", label_visibility="collapsed")
+            if _del_aj_btn_col.button("🗑 Eliminar", key="del_aj_btn", type="secondary"):
+                db.eliminar_ajuste_caja(_aj_labels[_del_aj_sel])
+                st.cache_data.clear()
+                st.rerun()
         else:
             st.info("No hay ajustes registrados.")
 
@@ -2437,17 +2453,33 @@ with tab_mov_caja:
         st.divider()
         _todas_tr = db.cargar_transferencias()
         if _todas_tr:
-            for _tr in sorted(_todas_tr, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                _tr_desde   = (_tr.get("origen")  or {}).get("nombre") or "—"
-                _tr_hacia   = (_tr.get("destino") or {}).get("nombre") or "—"
-                _tr_fecha   = str(_tr.get("fecha") or "")[:10]
-                _tr_monto   = float(_tr.get("monto") or 0)
-                _tr_conc    = _tr.get("concepto") or ""
-                _rt1, _rt2  = st.columns([8, 1])
-                _rt1.markdown(f"**{_tr_desde} → {_tr_hacia}** · {_tr_fecha} · $ {_tr_monto:,.0f}" + (f" · {_tr_conc}" if _tr_conc else ""))
-                if _rt2.button("🗑", key=f"del_tr_{_tr['id']}"):
-                    db.eliminar_transferencia(_tr["id"])
-                    st.rerun()
+            _tr_sorted = sorted(_todas_tr, key=lambda x: str(x.get("fecha") or ""), reverse=True)
+            _tr_rows = []
+            for _tr in _tr_sorted:
+                _tr_rows.append({
+                    "Fecha":    _safe_date(_tr.get("fecha")).strftime("%d/%m/%Y") if _safe_date(_tr.get("fecha")) != date.min else str(_tr.get("fecha") or "")[:10],
+                    "Desde":   (_tr.get("origen")  or {}).get("nombre") or "—",
+                    "Hacia":   (_tr.get("destino") or {}).get("nombre") or "—",
+                    "Concepto": _tr.get("concepto") or "—",
+                    "Monto":   float(_tr.get("monto") or 0),
+                })
+            st.dataframe(
+                pd.DataFrame(_tr_rows),
+                use_container_width=True,
+                hide_index=True,
+                column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")},
+            )
+            st.markdown("**🗑 Eliminar transferencia**")
+            _tr_labels = {
+                f"{r['Fecha']} · {r['Desde']} → {r['Hacia']} · $ {r['Monto']:,.0f}": _tr_sorted[i]["id"]
+                for i, r in enumerate(_tr_rows)
+            }
+            _del_tr_col, _del_tr_btn_col = st.columns([5, 1])
+            _del_tr_sel = _del_tr_col.selectbox("Transferencia", options=list(_tr_labels.keys()), key="del_tr_sel", label_visibility="collapsed")
+            if _del_tr_btn_col.button("🗑 Eliminar", key="del_tr_btn", type="secondary"):
+                db.eliminar_transferencia(_tr_labels[_del_tr_sel])
+                st.cache_data.clear()
+                st.rerun()
         else:
             st.info("No hay transferencias registradas.")
 
