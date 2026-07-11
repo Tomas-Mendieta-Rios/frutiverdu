@@ -1752,21 +1752,17 @@ def _render_movimiento_caja(cobros, pagos):
         return
 
     st.divider()
-    for _caja in sorted(_por_caja):
-        if _caja not in _inicial:
-            continue
-        _v = _por_caja[_caja]
-        _sal = _v["Sal. Compras"] + _v["Sal. Gastos"]
-        _ini  = _inicial.get(_caja, 0.0)
-        _aj_sum = sum(float(_aj.get("monto") or 0) for _aj in _ajustes_periodo.get(_caja, []))
+    for _caja in sorted(_inicial):
         _ht = _hist_total.get(_caja, {"Entradas": 0.0, "Salidas": 0.0})
+        _ini  = _inicial.get(_caja, 0.0)
         _saldo_actual = _ini + _ht["Entradas"] - _ht["Salidas"] + _all_aj_sum.get(_caja, 0.0)
         st.subheader(_caja)
-        _m1, _m2, _m3, _m4 = st.columns(4)
-        _m1.metric("Entradas",     f"$ {_v['Entradas']:,.0f}")
-        _m2.metric("Salidas",      f"$ {_sal:,.0f}")
-        _m3.metric("Ajustes",      f"$ {_aj_sum:,.0f}")
-        _m4.metric("Saldo actual", f"$ {_saldo_actual:,.0f}")
+        _m1, _m2, _m3 = st.columns(3)
+        _m1.metric("Entradas",     f"$ {_ht['Entradas']:,.0f}")
+        _m2.metric("Salidas",      f"$ {_ht['Salidas']:,.0f}")
+        _m3.metric("Saldo actual", f"$ {_saldo_actual:,.0f}")
+
+        _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
         _cfg_fecha = st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
         _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %.2f")
@@ -1780,7 +1776,8 @@ def _render_movimiento_caja(cobros, pagos):
 
         _entradas_real = [r for r in _entradas if r.get("Cat.") != "Transferencia"]
         if _entradas_real:
-            with st.expander(f"Entradas ({len(_entradas_real)})"):
+            _tot_ent = sum(r["Monto"] for r in _entradas_real)
+            with st.expander(f"Entradas ({len(_entradas_real)}) — $ {_tot_ent:,.0f}"):
                 st.dataframe(
                     pd.DataFrame(_entradas_real)[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
                       .rename(columns={"Facturas": "Facturas cobradas"}),
@@ -1788,7 +1785,8 @@ def _render_movimiento_caja(cobros, pagos):
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
         if _ent_transf:
-            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)})"):
+            _tot_et = sum(r["Monto"] for r in _ent_transf)
+            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — $ {_tot_et:,.0f}"):
                 st.dataframe(
                     pd.DataFrame(_ent_transf)[["Fecha", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
@@ -1796,7 +1794,8 @@ def _render_movimiento_caja(cobros, pagos):
                 )
         for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Transferencias", _sal_transf), ("Salidas — Otros", _sal_otros)]:
             if _rows:
-                with st.expander(f"{_titulo} ({len(_rows)})"):
+                _tot_rows = sum(r["Monto"] for r in _rows)
+                with st.expander(f"{_titulo} ({len(_rows)}) — $ {_tot_rows:,.0f}"):
                     if _titulo == "Salidas — Transferencias":
                         _cols_rename = {}
                         _cols_sel = ["Fecha", "Concepto", "Monto"]
