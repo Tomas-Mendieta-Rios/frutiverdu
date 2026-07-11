@@ -1886,7 +1886,7 @@ def _render_movimiento_caja(cobros, pagos):
 
 
 with tab_balance:
-    _cfg_monto = st.column_config.NumberColumn("Total", format="$ %.0f")
+    _cfg_monto = st.column_config.NumberColumn("Total", format="$ %,.2f")
 
     def _bal_metric(col, label, value, color, sub=None):
         _sub = f'<p style="margin:0;font-size:0.75rem;color:#999;">{sub}</p>' if sub else ""
@@ -1919,7 +1919,7 @@ with tab_balance:
         return v
 
     def _pesos(v):
-        return f"{int(round(float(v or 0))):,}".replace(",", ".")
+        return f"{float(v or 0):,.2f}"
 
     _bal_nav = st.radio("", ["Resumen", "Pendientes & Deudores"], horizontal=True, key="bal_nav", label_visibility="collapsed")
 
@@ -2197,9 +2197,9 @@ with tab_balance:
                                 _rows.append(_row)
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={
-                                             "Total":   st.column_config.NumberColumn("Total",   format="$ %,.0f"),
-                                             "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.0f"),
-                                             "Saldo":   st.column_config.NumberColumn("Saldo",   format="$ %,.0f"),
+                                             "Total":   st.column_config.NumberColumn("Total",   format="$ %,.2f"),
+                                             "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.2f"),
+                                             "Saldo":   st.column_config.NumberColumn("Saldo",   format="$ %,.2f"),
                                          })
 
         # Wix
@@ -2271,9 +2271,9 @@ with tab_balance:
                             } for c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={
-                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.0f"),
-                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.0f"),
-                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.0f"),
+                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
+                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
+                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.2f"),
                                          })
 
         # Gastos
@@ -2310,9 +2310,9 @@ with tab_balance:
                             } for g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={
-                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.0f"),
-                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.0f"),
-                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.0f"),
+                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
+                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
+                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.2f"),
                                          })
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
