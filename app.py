@@ -2111,11 +2111,10 @@ with tab_balance:
         )
         total_fac_pend    = total_facturas - total_fac_cobr
         total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
-        total_wix         = sum(_wix_monto(p) for p in ped_wix_f if str(p.get("status") or "").upper() != "CANCELED")
         total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
         total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
         total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
-        total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
+        total_wix         = total_wix_cobr + total_wix_pend
         # Categorizar compras
         def _pagado_comp(c):
             return min(float(c.get("total") or 0), _pagado_por_comp.get(str(c.get("nro_comprobante") or ""), 0.0))
@@ -2201,18 +2200,17 @@ with tab_balance:
                                          })
 
         # Wix
-        st.markdown(f"**Wix — $ {_pesos(total_wix)}** · {len(ped_wix_f)} pedidos")
-        _w1, _w2, _w3, _w4 = st.columns(4)
-        _bal_metric(_w1, "Cobrado",      f"$ {_pesos(total_wix_cobr)}",   "#2e7d32")
-        _bal_metric(_w2, "Pendiente",    f"$ {_pesos(total_wix_pend)}",   "#e65100")
-        _bal_metric(_w3, "Anulado",      f"$ {_pesos(total_wix_anul)}",   "#757575")
-        _bal_metric(_w4, "No entregado", f"$ {_pesos(total_wix_no_ent)}", "#1565c0")
+        _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
+        st.markdown(f"**Wix — $ {_pesos(total_wix)}** · {_wix_fin_count} pedidos")
+        _w1, _w2, _w3 = st.columns(3)
+        _bal_metric(_w1, "Cobrado",    f"$ {_pesos(total_wix_cobr)}", "#2e7d32")
+        _bal_metric(_w2, "Por cobrar", f"$ {_pesos(total_wix_pend)}", "#e65100")
+        _bal_metric(_w3, "Anulado",    f"$ {_pesos(total_wix_anul)}", "#757575")
 
         for _label, _lista in [
-            ("Cobrado", wix_cobradas),
-            ("Pendiente", wix_pendientes),
-            ("Anulado", wix_anulados),
-            ("No entregado", wix_no_entregados),
+            ("Cobrado",    wix_cobradas),
+            ("Por cobrar", wix_pendientes),
+            ("Anulado",    wix_anulados),
         ]:
             if _lista:
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
