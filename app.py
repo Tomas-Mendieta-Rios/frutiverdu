@@ -2330,20 +2330,25 @@ with tab_mov_caja:
 
             st.divider()
             st.markdown("**🗑 Eliminar saldo inicial**")
-            _del_ini_opts = {
-                _cj["nombre"]: int(_cj["id"])
-                for _cj in _ini_cajas_con_id
-                if int(_cj["id"]) in _ini_ajustes
-            }
-            if _del_ini_opts:
+            # Agrupar por fecha de corte
+            _del_por_fecha = {}
+            for _aj_v in _ini_ajustes.values():
+                _fv = _safe_date(_aj_v.get("fecha"))
+                _fv_str = _fv.strftime("%d/%m/%Y") if _fv != date.min else "—"
+                _del_por_fecha.setdefault(_fv_str, []).append(_aj_v)
+            if _del_por_fecha:
                 _col_sel, _col_btn = st.columns([3, 1])
-                _del_ini_sel = _col_sel.selectbox("Caja", options=list(_del_ini_opts.keys()), key="del_ini_sel", label_visibility="collapsed")
+                _del_fecha_sel = _col_sel.selectbox(
+                    "Fecha de corte",
+                    options=list(_del_por_fecha.keys()),
+                    key="del_ini_fecha_sel",
+                    label_visibility="collapsed",
+                )
                 if _col_btn.button("🗑 Eliminar", type="secondary", key="del_ini_btn"):
-                    _aj_del = _ini_ajustes.get(_del_ini_opts[_del_ini_sel])
-                    if _aj_del:
+                    for _aj_del in _del_por_fecha[_del_fecha_sel]:
                         db.eliminar_ajuste_caja(_aj_del["id"])
-                        st.cache_data.clear()
-                        st.rerun()
+                    st.cache_data.clear()
+                    st.rerun()
             else:
                 st.caption("No hay saldos iniciales configurados.")
 
