@@ -2134,19 +2134,29 @@ with tab_balance:
         _bal_metric(_c1, "Cobrado",   f"$ {_pesos(total_fac_cobr)}", "#2e7d32")
         _bal_metric(_c2, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100")
         _bal_metric(_c3, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575")
-        for _label, _lista in [
-            ("Cobrado", fac_cobradas),
-            ("Pendiente", fac_pendientes),
-            ("Anulado", facturas_anul),
+        def _fac_saldo(f):
+            _tot = float(f.get("total") or 0)
+            _cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
+            return max(0.0, _tot - _cob)
+
+        def _fac_cobrado(f):
+            _tot = float(f.get("total") or 0)
+            return min(_tot, _cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
+
+        for _label, _lista, _lbl_fn in [
+            ("Cobrado",  fac_cobradas,   _fac_cobrado),
+            ("Pendiente", fac_pendientes, _fac_saldo),
+            ("Anulado",  facturas_anul,   lambda f: float(f.get("total") or 0)),
         ]:
             if _lista:
-                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
+                _lbl_total = sum(_lbl_fn(f) for f in _lista)
+                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_lbl_total)}"):
                     _by_cli = {}
                     for _f in _lista:
                         _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                         _by_cli.setdefault(_k, []).append(_f)
                     for _cli, _fitems in sorted(_by_cli.items()):
-                        _ctot = sum(float(f.get("total") or 0) for f in _fitems)
+                        _ctot = sum(_lbl_fn(f) for f in _fitems)
                         with st.expander(f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_ctot)}"):
                             _rows = []
                             for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
