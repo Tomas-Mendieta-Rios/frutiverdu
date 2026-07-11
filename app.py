@@ -1495,7 +1495,7 @@ def _calcular_saldos_actuales(cobros, pagos):
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
 
-    # Fecha máxima = última fecha con datos reales (cobros o pagos), si no hay usa hoy
+    # Fecha máxima = última fecha con datos reales (cobros, pagos o transferencias)
     _fechas_datos = []
     for _c in cobros:
         _fd = _safe_date(_c.get("fecha"))
@@ -1503,6 +1503,10 @@ def _render_movimiento_caja(cobros, pagos):
             _fechas_datos.append(_fd)
     for _p in pagos:
         _fd = _safe_date(_p.get("fecha"))
+        if _fd != date.min:
+            _fechas_datos.append(_fd)
+    for _tr in db.cargar_transferencias():
+        _fd = _safe_date(_tr.get("fecha"))
         if _fd != date.min:
             _fechas_datos.append(_fd)
     _hasta = max(_fechas_datos) if _fechas_datos else _hoy
