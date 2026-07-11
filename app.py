@@ -1774,9 +1774,17 @@ def _render_movimiento_caja(cobros, pagos):
     _total_ht_s = sum(_hist_total.get(_cn, {"Salidas": 0.0})["Salidas"]   for _cn in _inicial)
     st.subheader("Total general")
     _k1, _k2, _k3 = st.columns(3)
-    _k1.metric("Saldo",    f"$ {_total_saldo:,.0f}")
-    _k2.metric("Entradas", f"$ {_total_ht_e:,.0f}")
-    _k3.metric("Salidas",  f"$ {_total_ht_s:,.0f}")
+    def _metric_card_total(col, label, value, color):
+        col.markdown(
+            f"""<div style="background:#f8f9fa;border-radius:7px;padding:8px 12px;">
+            <p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p>
+            <p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    _metric_card_total(_k1, "Saldo",    f"$ {_total_saldo:,.0f}", "#1a73e8")
+    _metric_card_total(_k2, "Entradas", f"$ {_total_ht_e:,.0f}",  "#2e7d32")
+    _metric_card_total(_k3, "Salidas",  f"$ {_total_ht_s:,.0f}",  "#c62828")
 
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
