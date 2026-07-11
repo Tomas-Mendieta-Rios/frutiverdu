@@ -1894,6 +1894,17 @@ def _render_movimiento_caja(cobros, pagos):
 with tab_balance:
     _cfg_monto = st.column_config.NumberColumn("Total", format="$ %.0f")
 
+    def _bal_metric(col, label, value, color, sub=None):
+        sub_html = f"<p style='margin:0;font-size:0.75rem;color:#999;'>{sub}</p>" if sub else ""
+        col.markdown(
+            f"""<div style="padding:4px 0;margin-bottom:14px;">
+            <p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p>
+            <p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p>
+            {sub_html}
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
     def _parse_wix_total(v):
         try:
             import re as _re
@@ -1920,11 +1931,11 @@ with tab_balance:
     def _pesos(v):
         return f"{int(round(float(v or 0))):,}".replace(",", ".")
 
-    _bal_nav = st.radio("", ["📊 Resumen", "💳 Pendientes & Deudores"], horizontal=True, key="bal_nav", label_visibility="collapsed")
+    _bal_nav = st.radio("", ["Resumen", "Pendientes & Deudores"], horizontal=True, key="bal_nav", label_visibility="collapsed")
 
     _cfg_bal = db.cargar_config()
 
-    if _bal_nav == "💳 Pendientes & Deudores":
+    if _bal_nav == "Pendientes & Deudores":
         # ── Rango de fechas propio ─────────────────────────────────────────
         try:
             _pend_desde_def = date.fromisoformat(_cfg_bal.get("pend_desde", ""))
@@ -1939,7 +1950,7 @@ with tab_balance:
             _pd_col1, _pd_col2 = st.columns(2)
             _pend_desde = _pd_col1.date_input("Desde", value=_pend_desde_def, key="pend_desde", format="DD/MM/YYYY")
             _pend_hasta = _pd_col2.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta", format="DD/MM/YYYY")
-            _pend_calc = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
+            _pend_calc = st.form_submit_button("Calcular", type="primary", use_container_width=True)
 
         if _pend_calc:
             db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
@@ -1958,12 +1969,12 @@ with tab_balance:
         _total_pend_gas  = sum(float(g.get("total") or 0) for g in _gas_pend_hist)
         _total_pend      = _total_pend_comp + _total_pend_gas
 
-        st.markdown(f"<h4 style='color:#111111; font-weight:800'>💸 Pagos pendientes — $ {_pesos(_total_pend)}</h4>", unsafe_allow_html=True)
+        st.subheader(f"Pagos pendientes — $ {_pesos(_total_pend)}")
         _pp1, _pp2 = st.columns(2)
-        _pp1.metric("💰 Compras",  f"$ {_pesos(_total_pend_comp)}", f"{len(_comp_pend_hist)} comprobantes")
-        _pp2.metric("📄 Gastos",   f"$ {_pesos(_total_pend_gas)}",  f"{len(_gas_pend_hist)} gastos")
+        _bal_metric(_pp1, "Compras", f"$ {_pesos(_total_pend_comp)}", "#c62828", f"{len(_comp_pend_hist)} comprobantes")
+        _bal_metric(_pp2, "Gastos",  f"$ {_pesos(_total_pend_gas)}",  "#c62828", f"{len(_gas_pend_hist)} gastos")
 
-        with st.expander(f"💰 Compras pendientes ({len(_comp_pend_hist)}) — $ {_pesos(_total_pend_comp)}"):
+        with st.expander(f"Compras pendientes ({len(_comp_pend_hist)}) — $ {_pesos(_total_pend_comp)}"):
             if not _comp_pend_hist:
                 st.caption("Sin compras pendientes en el rango seleccionado.")
             else:
@@ -1977,7 +1988,7 @@ with tab_balance:
                 st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                              column_config={"Total": _cfg_monto})
 
-        with st.expander(f"📄 Gastos pendientes ({len(_gas_pend_hist)}) — $ {_pesos(_total_pend_gas)}"):
+        with st.expander(f"Gastos pendientes ({len(_gas_pend_hist)}) — $ {_pesos(_total_pend_gas)}"):
             if not _gas_pend_hist:
                 st.caption("Sin gastos pendientes en el rango seleccionado.")
             else:
@@ -2000,13 +2011,13 @@ with tab_balance:
         _total_deud_wix = sum(_wix_monto(p) for p in _wix_deud)
         _total_deud     = _total_deud_dux + _total_deud_wix
 
-        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🧾 Deudores — $ {_pesos(_total_deud)}</h4>", unsafe_allow_html=True)
+        st.subheader(f"Deudores — $ {_pesos(_total_deud)}")
         _dd1, _dd2 = st.columns(2)
-        _dd1.metric("🧾 DUX (facturas)",  f"$ {_pesos(_total_deud_dux)}", f"{len(_fac_deud)} facturas")
-        _dd2.metric("🌐 Wix (pedidos)",   f"$ {_pesos(_total_deud_wix)}", f"{len(_wix_deud)} pedidos")
+        _bal_metric(_dd1, "DUX (facturas)", f"$ {_pesos(_total_deud_dux)}", "#e65100", f"{len(_fac_deud)} facturas")
+        _bal_metric(_dd2, "Wix (pedidos)",  f"$ {_pesos(_total_deud_wix)}", "#e65100", f"{len(_wix_deud)} pedidos")
 
         # DUX deudores
-        with st.expander(f"🧾 DUX sin cobrar ({len(_fac_deud)}) — $ {_pesos(_total_deud_dux)}"):
+        with st.expander(f"DUX sin cobrar ({len(_fac_deud)}) — $ {_pesos(_total_deud_dux)}"):
             if not _fac_deud:
                 st.caption("Sin facturas pendientes de cobro en el rango seleccionado.")
             else:
@@ -2020,7 +2031,7 @@ with tab_balance:
                              column_config={"Total": _cfg_monto})
 
         # Wix deudores
-        with st.expander(f"🌐 Wix sin cobrar ({len(_wix_deud)}) — $ {_pesos(_total_deud_wix)}"):
+        with st.expander(f"Wix sin cobrar ({len(_wix_deud)}) — $ {_pesos(_total_deud_wix)}"):
             if not _wix_deud:
                 st.caption("Sin pedidos pendientes de cobro en el rango seleccionado.")
             else:
@@ -2036,7 +2047,7 @@ with tab_balance:
                 st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                              column_config={"Total": _cfg_monto})
 
-    elif _bal_nav == "📊 Resumen":
+    elif _bal_nav == "Resumen":
         _hoy_bal = date.today()
         try:
             _bal_desde_def = date.fromisoformat(_cfg_bal.get("bal_desde", ""))
@@ -2051,7 +2062,7 @@ with tab_balance:
             _cb1, _cb2 = st.columns(2)
             bal_desde = _cb1.date_input("Desde", value=_bal_desde_def, key="bal_desde", format="DD/MM/YYYY")
             bal_hasta = _cb2.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta", format="DD/MM/YYYY")
-            _bal_calc = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
+            _bal_calc = st.form_submit_button("Calcular", type="primary", use_container_width=True)
 
         if _bal_calc:
             db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
@@ -2114,18 +2125,18 @@ with tab_balance:
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
-        st.markdown(f"<h3 style='color:#111111; font-weight:800'>📈 Ingresos — $ {_pesos(total_ingresos)}</h3>", unsafe_allow_html=True)
+        st.subheader(f"Ingresos — $ {_pesos(total_ingresos)}")
 
         # Facturas DUX
-        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🧾 DUX — $ {_pesos(total_facturas)} · {len(facturas_vig)} facturas</h4>", unsafe_allow_html=True)
+        st.markdown(f"**DUX — $ {_pesos(total_facturas)}** · {len(facturas_vig)} facturas")
         _c1, _c2, _c3 = st.columns(3)
-        _c1.metric("✅ Cobrado", f"$ {_pesos(total_fac_cobr)}", f"{len(fac_cobradas)}")
-        _c2.metric("⏳ Pendiente", f"$ {_pesos(total_fac_pend)}", f"{len(fac_pendientes)}")
-        _c3.metric("❌ Anulado", f"$ {_pesos(total_fac_anul)}", f"{len(facturas_anul)}")
+        _bal_metric(_c1, "Cobrado",   f"$ {_pesos(total_fac_cobr)}", "#2e7d32", f"{len(fac_cobradas)}")
+        _bal_metric(_c2, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100", f"{len(fac_pendientes)}")
+        _bal_metric(_c3, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575", f"{len(facturas_anul)}")
         for _label, _lista in [
-            ("✅ Cobrado", fac_cobradas),
-            ("⏳ Pendiente", fac_pendientes),
-            ("❌ Anulado", facturas_anul),
+            ("Cobrado", fac_cobradas),
+            ("Pendiente", fac_pendientes),
+            ("Anulado", facturas_anul),
         ]:
             if _lista:
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(float(f.get('total') or 0) for f in _lista))}"):
@@ -2145,18 +2156,18 @@ with tab_balance:
                                          column_config={"Total": _cfg_monto})
 
         # Wix
-        st.markdown(f"<h4 style='color:#111111; font-weight:800'>🌐 Wix — $ {_pesos(total_wix)} · {len(ped_wix_f)} pedidos</h4>", unsafe_allow_html=True)
+        st.markdown(f"**Wix — $ {_pesos(total_wix)}** · {len(ped_wix_f)} pedidos")
         _w1, _w2, _w3, _w4 = st.columns(4)
-        _w1.metric("✅ Cobrado", f"$ {_pesos(total_wix_cobr)}", f"{len(wix_cobradas)}")
-        _w2.metric("⏳ Pendiente", f"$ {_pesos(total_wix_pend)}", f"{len(wix_pendientes)}")
-        _w3.metric("❌ Anulado", f"$ {_pesos(total_wix_anul)}", f"{len(wix_anulados)}")
-        _w4.metric("🚚 No entregado", f"$ {_pesos(total_wix_no_ent)}", f"{len(wix_no_entregados)}")
+        _bal_metric(_w1, "Cobrado",      f"$ {_pesos(total_wix_cobr)}",   "#2e7d32", f"{len(wix_cobradas)}")
+        _bal_metric(_w2, "Pendiente",    f"$ {_pesos(total_wix_pend)}",   "#e65100", f"{len(wix_pendientes)}")
+        _bal_metric(_w3, "Anulado",      f"$ {_pesos(total_wix_anul)}",   "#757575", f"{len(wix_anulados)}")
+        _bal_metric(_w4, "No entregado", f"$ {_pesos(total_wix_no_ent)}", "#1565c0", f"{len(wix_no_entregados)}")
 
         for _label, _lista in [
-            ("✅ Cobrado", wix_cobradas),
-            ("⏳ Pendiente", wix_pendientes),
-            ("❌ Anulado", wix_anulados),
-            ("🚚 No entregado", wix_no_entregados),
+            ("Cobrado", wix_cobradas),
+            ("Pendiente", wix_pendientes),
+            ("Anulado", wix_anulados),
+            ("No entregado", wix_no_entregados),
         ]:
             if _lista:
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
@@ -2178,19 +2189,19 @@ with tab_balance:
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
-        st.markdown(f"<h3 style='color:#111111; font-weight:800'>📉 Egresos — $ {_pesos(total_egresos)}</h3>", unsafe_allow_html=True)
+        st.subheader(f"Egresos — $ {_pesos(total_egresos)}")
 
         # Compras
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
         total_comp_pend = sum(float(c.get("total") or 0) for c in comp_pendientes)
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
-        st.markdown(f"<h4 style='color:#111111; font-weight:800'>💰 Compras — $ {_pesos(total_compras)} · {len(comp_pagadas) + len(comp_pendientes)} comprobantes</h4>", unsafe_allow_html=True)
+        st.markdown(f"**Compras — $ {_pesos(total_compras)}** · {len(comp_pagadas) + len(comp_pendientes)} comprobantes")
         _ec1, _ec2, _ec3 = st.columns(3)
-        _ec1.metric("✅ Pagado",    f"$ {_pesos(total_comp_pag)}",  f"{len(comp_pagadas)}")
-        _ec2.metric("⏳ Pendiente", f"$ {_pesos(total_comp_pend)}", f"{len(comp_pendientes)}")
-        _ec3.metric("❌ Anulado",   f"$ {_pesos(total_comp_anul)}", f"{len(comp_anuladas)}")
+        _bal_metric(_ec1, "Pagado",    f"$ {_pesos(total_comp_pag)}",  "#2e7d32", f"{len(comp_pagadas)}")
+        _bal_metric(_ec2, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100", f"{len(comp_pendientes)}")
+        _bal_metric(_ec3, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575", f"{len(comp_anuladas)}")
         for _label, _lista in [
-            ("✅ Pagado", comp_pagadas), ("⏳ Pendiente", comp_pendientes), ("❌ Anulado", comp_anuladas),
+            ("Pagado", comp_pagadas), ("Pendiente", comp_pendientes), ("Anulado", comp_anuladas),
         ]:
             if _lista:
                 _tot_lbl = sum(float(c.get("total") or 0) for c in _lista)
@@ -2213,13 +2224,13 @@ with tab_balance:
         total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
         total_gas_pend = sum(float(g.get("total") or 0) for g in gas_pendientes)
         total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
-        st.markdown(f"<h4 style='color:#111111; font-weight:800'>📄 Gastos — $ {_pesos(total_gastos)} · {len(gas_pagados) + len(gas_pendientes)} gastos</h4>", unsafe_allow_html=True)
+        st.markdown(f"**Gastos — $ {_pesos(total_gastos)}** · {len(gas_pagados) + len(gas_pendientes)} gastos")
         _eg1, _eg2, _eg3 = st.columns(3)
-        _eg1.metric("✅ Pagado",    f"$ {_pesos(total_gas_pag)}",  f"{len(gas_pagados)}")
-        _eg2.metric("⏳ Pendiente", f"$ {_pesos(total_gas_pend)}", f"{len(gas_pendientes)}")
-        _eg3.metric("❌ Anulado",   f"$ {_pesos(total_gas_anul)}", f"{len(gas_anulados)}")
+        _bal_metric(_eg1, "Pagado",    f"$ {_pesos(total_gas_pag)}",  "#2e7d32", f"{len(gas_pagados)}")
+        _bal_metric(_eg2, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100", f"{len(gas_pendientes)}")
+        _bal_metric(_eg3, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575", f"{len(gas_anulados)}")
         for _label, _lista in [
-            ("✅ Pagado", gas_pagados), ("⏳ Pendiente", gas_pendientes), ("❌ Anulado", gas_anulados),
+            ("Pagado", gas_pagados), ("Pendiente", gas_pendientes), ("Anulado", gas_anulados),
         ]:
             if _lista:
                 _tot_lbl = sum(float(g.get("total") or 0) for g in _lista)
@@ -2241,9 +2252,9 @@ with tab_balance:
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
-        color = "green" if resultado >= 0 else "red"
-        signo = "+" if resultado >= 0 else ""
-        st.markdown(f"### 💰 Resultado: :{color}[**{signo}$ {_pesos(abs(resultado))}**]")
+        _res_color = "#2e7d32" if resultado >= 0 else "#c62828"
+        _res_signo = "+" if resultado >= 0 else ""
+        _bal_metric(st, "Resultado", f"{_res_signo}$ {_pesos(abs(resultado))}", _res_color)
 
 with tab_mov_caja:
     _stab_saldos, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs(
