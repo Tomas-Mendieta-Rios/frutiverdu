@@ -2148,13 +2148,27 @@ with tab_balance:
                     for _cli, _fitems in sorted(_by_cli.items()):
                         _ctot = sum(float(f.get("total") or 0) for f in _fitems)
                         with st.expander(f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_ctot)}"):
-                            _rows = [{
-                                "Fecha":       _fmt_fecha(f.get("fecha_comp")),
-                                "Comprobante": f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip(),
-                                "Total":       float(f.get("total") or 0),
-                            } for f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
+                            _rows = []
+                            for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                                _ftot = float(_f.get("total") or 0)
+                                _fcob = _cobrado_por_fac.get(str(_f.get("id") or ""), 0.0)
+                                _fsal = max(0.0, _ftot - _fcob)
+                                _row = {
+                                    "Fecha":       _fmt_fecha(_f.get("fecha_comp")),
+                                    "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
+                                    "Total":       _ftot,
+                                    "Cobrado":     _fcob,
+                                    "Saldo":       _fsal,
+                                }
+                                if 0 < _fcob < _ftot:
+                                    _row["Comprobante"] += " (parcial)"
+                                _rows.append(_row)
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config={"Total": _cfg_monto})
+                                         column_config={
+                                             "Total":   st.column_config.NumberColumn("Total",   format="$ %,.0f"),
+                                             "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.0f"),
+                                             "Saldo":   st.column_config.NumberColumn("Saldo",   format="$ %,.0f"),
+                                         })
 
         # Wix
         st.markdown(f"**Wix — $ {_pesos(total_wix)}** · {len(ped_wix_f)} pedidos")
