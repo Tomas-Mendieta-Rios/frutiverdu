@@ -1494,10 +1494,25 @@ def _calcular_saldos_actuales(cobros, pagos):
 
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
+    _hasta = _hoy
+
+    # Fecha mínima = fecha del saldo inicial más antiguo configurado
+    _aj_ini_todos = db.cargar_ajustes_caja()
+    _fechas_ini = [_safe_date(_aj.get("fecha")) for _aj in _aj_ini_todos if _aj.get("tipo") == "inicial"]
+    _fecha_min = min((_f for _f in _fechas_ini if _f != date.min), default=_hoy.replace(day=1))
+
+    _default_desde = _hoy.replace(day=1)
+
     with st.form("form_movcaja_fechas", border=False):
-        _c1, _c2 = st.columns(2)
-        _desde = _c1.date_input("Desde", value=_hoy.replace(day=1), key="movcaja_desde", format="DD/MM/YYYY")
-        _hasta = _c2.date_input("Hasta", value=_hoy,                key="movcaja_hasta", format="DD/MM/YYYY")
+        _desde = st.date_input(
+            "Ver desde",
+            value=_default_desde,
+            min_value=_fecha_min,
+            max_value=_hoy,
+            key="movcaja_desde",
+            format="DD/MM/YYYY",
+        )
+        st.caption(f"Hasta: **{_hoy.strftime('%d/%m/%Y')}** (hoy)")
         st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
