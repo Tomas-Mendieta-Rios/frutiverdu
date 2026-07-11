@@ -1788,10 +1788,7 @@ def _render_movimiento_caja(cobros, pagos):
     _k1, _k2, _k3 = st.columns(3)
     def _metric_card_total(col, label, value, color):
         col.markdown(
-            f"""<div style="padding:4px 0;margin-bottom:14px;">
-            <p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p>
-            <p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p>
-            </div>""",
+            f'<div style="padding:4px 0;margin-bottom:14px;"><p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p><p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p></div>',
             unsafe_allow_html=True,
         )
     _metric_card_total(_k1, "Saldo",    _fmt_monto(_total_saldo), "#1a73e8")
@@ -1811,10 +1808,7 @@ def _render_movimiento_caja(cobros, pagos):
         _m1, _m2, _m3 = st.columns(3)
         def _metric_card(col, label, value, color):
             col.markdown(
-                f"""<div style="padding:4px 0;margin-bottom:14px;">
-                <p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p>
-                <p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p>
-                </div>""",
+                f'<div style="padding:4px 0;margin-bottom:14px;"><p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p><p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p></div>',
                 unsafe_allow_html=True,
             )
         _metric_card(_m1, "Saldo actual", _fmt_monto(_saldo_actual), "#1a73e8")
@@ -1895,13 +1889,9 @@ with tab_balance:
     _cfg_monto = st.column_config.NumberColumn("Total", format="$ %.0f")
 
     def _bal_metric(col, label, value, color, sub=None):
-        sub_html = f"<p style='margin:0;font-size:0.75rem;color:#999;'>{sub}</p>" if sub else ""
+        _sub = f'<p style="margin:0;font-size:0.75rem;color:#999;">{sub}</p>' if sub else ""
         col.markdown(
-            f"""<div style="padding:4px 0;margin-bottom:14px;">
-            <p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p>
-            <p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p>
-            {sub_html}
-            </div>""",
+            f'<div style="padding:4px 0;margin-bottom:14px;"><p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p><p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p>{_sub}</div>',
             unsafe_allow_html=True,
         )
 
@@ -1971,8 +1961,8 @@ with tab_balance:
 
         st.subheader(f"Pagos pendientes — $ {_pesos(_total_pend)}")
         _pp1, _pp2 = st.columns(2)
-        _bal_metric(_pp1, "Compras", f"$ {_pesos(_total_pend_comp)}", "#c62828", f"{len(_comp_pend_hist)} comprobantes")
-        _bal_metric(_pp2, "Gastos",  f"$ {_pesos(_total_pend_gas)}",  "#c62828", f"{len(_gas_pend_hist)} gastos")
+        _bal_metric(_pp1, "Compras", f"$ {_pesos(_total_pend_comp)}", "#c62828")
+        _bal_metric(_pp2, "Gastos",  f"$ {_pesos(_total_pend_gas)}",  "#c62828")
 
         with st.expander(f"Compras pendientes ({len(_comp_pend_hist)}) — $ {_pesos(_total_pend_comp)}"):
             if not _comp_pend_hist:
@@ -2013,8 +2003,8 @@ with tab_balance:
 
         st.subheader(f"Deudores — $ {_pesos(_total_deud)}")
         _dd1, _dd2 = st.columns(2)
-        _bal_metric(_dd1, "DUX (facturas)", f"$ {_pesos(_total_deud_dux)}", "#e65100", f"{len(_fac_deud)} facturas")
-        _bal_metric(_dd2, "Wix (pedidos)",  f"$ {_pesos(_total_deud_wix)}", "#e65100", f"{len(_wix_deud)} pedidos")
+        _bal_metric(_dd1, "DUX (facturas)", f"$ {_pesos(_total_deud_dux)}", "#e65100")
+        _bal_metric(_dd2, "Wix (pedidos)",  f"$ {_pesos(_total_deud_wix)}", "#e65100")
 
         # DUX deudores
         with st.expander(f"DUX sin cobrar ({len(_fac_deud)}) — $ {_pesos(_total_deud_dux)}"):
@@ -2130,9 +2120,9 @@ with tab_balance:
         # Facturas DUX
         st.markdown(f"**DUX — $ {_pesos(total_facturas)}** · {len(facturas_vig)} facturas")
         _c1, _c2, _c3 = st.columns(3)
-        _bal_metric(_c1, "Cobrado",   f"$ {_pesos(total_fac_cobr)}", "#2e7d32", f"{len(fac_cobradas)}")
-        _bal_metric(_c2, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100", f"{len(fac_pendientes)}")
-        _bal_metric(_c3, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575", f"{len(facturas_anul)}")
+        _bal_metric(_c1, "Cobrado",   f"$ {_pesos(total_fac_cobr)}", "#2e7d32")
+        _bal_metric(_c2, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100")
+        _bal_metric(_c3, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575")
         for _label, _lista in [
             ("Cobrado", fac_cobradas),
             ("Pendiente", fac_pendientes),
@@ -2158,10 +2148,10 @@ with tab_balance:
         # Wix
         st.markdown(f"**Wix — $ {_pesos(total_wix)}** · {len(ped_wix_f)} pedidos")
         _w1, _w2, _w3, _w4 = st.columns(4)
-        _bal_metric(_w1, "Cobrado",      f"$ {_pesos(total_wix_cobr)}",   "#2e7d32", f"{len(wix_cobradas)}")
-        _bal_metric(_w2, "Pendiente",    f"$ {_pesos(total_wix_pend)}",   "#e65100", f"{len(wix_pendientes)}")
-        _bal_metric(_w3, "Anulado",      f"$ {_pesos(total_wix_anul)}",   "#757575", f"{len(wix_anulados)}")
-        _bal_metric(_w4, "No entregado", f"$ {_pesos(total_wix_no_ent)}", "#1565c0", f"{len(wix_no_entregados)}")
+        _bal_metric(_w1, "Cobrado",      f"$ {_pesos(total_wix_cobr)}",   "#2e7d32")
+        _bal_metric(_w2, "Pendiente",    f"$ {_pesos(total_wix_pend)}",   "#e65100")
+        _bal_metric(_w3, "Anulado",      f"$ {_pesos(total_wix_anul)}",   "#757575")
+        _bal_metric(_w4, "No entregado", f"$ {_pesos(total_wix_no_ent)}", "#1565c0")
 
         for _label, _lista in [
             ("Cobrado", wix_cobradas),
@@ -2197,9 +2187,9 @@ with tab_balance:
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
         st.markdown(f"**Compras — $ {_pesos(total_compras)}** · {len(comp_pagadas) + len(comp_pendientes)} comprobantes")
         _ec1, _ec2, _ec3 = st.columns(3)
-        _bal_metric(_ec1, "Pagado",    f"$ {_pesos(total_comp_pag)}",  "#2e7d32", f"{len(comp_pagadas)}")
-        _bal_metric(_ec2, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100", f"{len(comp_pendientes)}")
-        _bal_metric(_ec3, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575", f"{len(comp_anuladas)}")
+        _bal_metric(_ec1, "Pagado",    f"$ {_pesos(total_comp_pag)}",  "#2e7d32")
+        _bal_metric(_ec2, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100")
+        _bal_metric(_ec3, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575")
         for _label, _lista in [
             ("Pagado", comp_pagadas), ("Pendiente", comp_pendientes), ("Anulado", comp_anuladas),
         ]:
@@ -2226,9 +2216,9 @@ with tab_balance:
         total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
         st.markdown(f"**Gastos — $ {_pesos(total_gastos)}** · {len(gas_pagados) + len(gas_pendientes)} gastos")
         _eg1, _eg2, _eg3 = st.columns(3)
-        _bal_metric(_eg1, "Pagado",    f"$ {_pesos(total_gas_pag)}",  "#2e7d32", f"{len(gas_pagados)}")
-        _bal_metric(_eg2, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100", f"{len(gas_pendientes)}")
-        _bal_metric(_eg3, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575", f"{len(gas_anulados)}")
+        _bal_metric(_eg1, "Pagado",    f"$ {_pesos(total_gas_pag)}",  "#2e7d32")
+        _bal_metric(_eg2, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100")
+        _bal_metric(_eg3, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575")
         for _label, _lista in [
             ("Pagado", gas_pagados), ("Pendiente", gas_pendientes), ("Anulado", gas_anulados),
         ]:
