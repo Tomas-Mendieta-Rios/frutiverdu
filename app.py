@@ -1775,42 +1775,52 @@ def _render_movimiento_caja(cobros, pagos):
         _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto", "Transferencia")]
 
         _entradas_real = [r for r in _entradas if r.get("Cat.") != "Transferencia"]
-        if _entradas_real:
-            _tot_ent = sum(r["Monto"] for r in _entradas_real)
-            with st.expander(f"Entradas ({len(_entradas_real)}) — $ {_tot_ent:,.0f}"):
+        _tot_ent = sum(r["Monto"] for r in _entradas_real)
+        with st.expander(f"Entradas ({len(_entradas_real)}) — $ {_tot_ent:,.0f}"):
+            if _entradas_real:
                 st.dataframe(
                     pd.DataFrame(_entradas_real)[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
                       .rename(columns={"Facturas": "Facturas cobradas"}),
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
-        if _ent_transf:
-            _tot_et = sum(r["Monto"] for r in _ent_transf)
-            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — $ {_tot_et:,.0f}"):
+            else:
+                st.caption("Sin entradas en el período.")
+        _tot_et = sum(r["Monto"] for r in _ent_transf)
+        with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — $ {_tot_et:,.0f}"):
+            if _ent_transf:
                 st.dataframe(
                     pd.DataFrame(_ent_transf)[["Fecha", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
-        for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Transferencias", _sal_transf), ("Salidas — Otros", _sal_otros)]:
+            else:
+                st.caption("Sin transferencias entrantes en el período.")
+        _tot_st = sum(r["Monto"] for r in _sal_transf)
+        with st.expander(f"Salidas — Transferencias ({len(_sal_transf)}) — $ {_tot_st:,.0f}"):
+            if _sal_transf:
+                st.dataframe(
+                    pd.DataFrame(_sal_transf)[["Fecha", "Concepto", "Monto"]],
+                    use_container_width=True, hide_index=True,
+                    column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
+                )
+            else:
+                st.caption("Sin transferencias salientes en el período.")
+        for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Otros", _sal_otros)]:
             if _rows:
                 _tot_rows = sum(r["Monto"] for r in _rows)
                 with st.expander(f"{_titulo} ({len(_rows)}) — $ {_tot_rows:,.0f}"):
-                    if _titulo == "Salidas — Transferencias":
-                        _cols_rename = {}
-                        _cols_sel = ["Fecha", "Concepto", "Monto"]
-                    elif _titulo == "Salidas — Compras":
+                    if _titulo == "Salidas — Compras":
                         _cols_rename = {"Concepto": "Comprobante compra"}
                     elif _titulo == "Salidas — Gastos":
                         _cols_rename = {"Concepto": "Comprobante gasto"}
                     else:
                         _cols_rename = {"Concepto": "Comprobante"}
-                    if _titulo != "Salidas — Transferencias":
-                        _df_rows = pd.DataFrame(_rows)
-                        _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Monto"]
-                        if _tiene_cheque:
-                            _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
+                    _df_rows = pd.DataFrame(_rows)
+                    _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
+                    _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Monto"]
+                    if _tiene_cheque:
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
                     st.dataframe(
                         pd.DataFrame(_rows)[_cols_sel].rename(columns=_cols_rename),
                         use_container_width=True, hide_index=True,
