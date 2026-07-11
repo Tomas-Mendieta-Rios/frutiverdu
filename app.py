@@ -2347,6 +2347,30 @@ with tab_mov_caja:
             else:
                 st.caption("No hay saldos iniciales configurados.")
 
+            # Detalle del saldo inicial configurado
+            if _ini_ajustes:
+                st.divider()
+                st.markdown("**📋 Detalle actual**")
+                _ini_rows = []
+                for _cj in _ini_cajas_con_id:
+                    _aj_d = _ini_ajustes.get(int(_cj["id"]))
+                    if _aj_d:
+                        _ini_rows.append({
+                            "Caja":        _cj["nombre"],
+                            "Fecha corte": _safe_date(_aj_d.get("fecha")).strftime("%d/%m/%Y") if _safe_date(_aj_d.get("fecha")) != date.min else "—",
+                            "Saldo inicial": float(_aj_d.get("monto") or 0),
+                        })
+                if _ini_rows:
+                    _df_ini = pd.DataFrame(_ini_rows)
+                    st.dataframe(
+                        _df_ini,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Saldo inicial": st.column_config.NumberColumn("Saldo inicial", format="$ {:,.0f}"),
+                        },
+                    )
+
     with _stab_transferencias:
         st.subheader("Transferencias entre cajas")
         _cajas_tr = db.cargar_cajas()
