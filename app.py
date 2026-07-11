@@ -1402,6 +1402,10 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
         ]
     )
 
+def _fmt_monto(v):
+    """Formatea un número con puntos como separador de miles y sin decimales. Ej: 1.234.567"""
+    return f"$ {int(round(float(v or 0))):,}".replace(",", ".")
+
 def _safe_date(val, default=date.min):
     if not val:
         return default
@@ -1786,9 +1790,9 @@ def _render_movimiento_caja(cobros, pagos):
             </div>""",
             unsafe_allow_html=True,
         )
-    _metric_card_total(_k1, "Saldo",    f"$ {_total_saldo:,.0f}", "#1a73e8")
-    _metric_card_total(_k2, "Entradas", f"$ {_total_ht_e:,.0f}",  "#2e7d32")
-    _metric_card_total(_k3, "Salidas",  f"$ {_total_ht_s:,.0f}",  "#c62828")
+    _metric_card_total(_k1, "Saldo",    _fmt_monto(_total_saldo), "#1a73e8")
+    _metric_card_total(_k2, "Entradas", _fmt_monto(_total_ht_e),  "#2e7d32")
+    _metric_card_total(_k3, "Salidas",  _fmt_monto(_total_ht_s),  "#c62828")
 
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
@@ -1809,9 +1813,9 @@ def _render_movimiento_caja(cobros, pagos):
                 </div>""",
                 unsafe_allow_html=True,
             )
-        _metric_card(_m1, "Saldo actual", f"$ {_saldo_actual:,.0f}", "#1a73e8")
-        _metric_card(_m2, "Entradas",     f"$ {_ht['Entradas']:,.0f}", "#2e7d32")
-        _metric_card(_m3, "Salidas",      f"$ {_ht['Salidas']:,.0f}", "#c62828")
+        _metric_card(_m1, "Saldo actual", _fmt_monto(_saldo_actual), "#1a73e8")
+        _metric_card(_m2, "Entradas",     _fmt_monto(_ht['Entradas']), "#2e7d32")
+        _metric_card(_m3, "Salidas",      _fmt_monto(_ht['Salidas']), "#c62828")
 
         _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
@@ -1827,7 +1831,7 @@ def _render_movimiento_caja(cobros, pagos):
 
         _entradas_real = [r for r in _entradas if r.get("Cat.") != "Transferencia"]
         _tot_ent = sum(r["Monto"] for r in _entradas_real)
-        with st.expander(f"Entradas ({len(_entradas_real)}) — $ {_tot_ent:,.0f}"):
+        with st.expander(f"Entradas ({len(_entradas_real)}) — {_fmt_monto(_tot_ent)}"):
             if _entradas_real:
                 st.dataframe(
                     pd.DataFrame(_entradas_real)[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
@@ -1839,7 +1843,7 @@ def _render_movimiento_caja(cobros, pagos):
                 st.caption("Sin entradas en el período.")
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
-            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — $ {_tot_et:,.0f}"):
+            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
                 st.dataframe(
                     pd.DataFrame(_ent_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
@@ -1847,7 +1851,7 @@ def _render_movimiento_caja(cobros, pagos):
                 )
         if _sal_transf:
             _tot_st = sum(r["Monto"] for r in _sal_transf)
-            with st.expander(f"Salidas — Transferencias ({len(_sal_transf)}) — $ {_tot_st:,.0f}"):
+            with st.expander(f"Salidas — Transferencias ({len(_sal_transf)}) — {_fmt_monto(_tot_st)}"):
                 st.dataframe(
                     pd.DataFrame(_sal_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
@@ -1856,7 +1860,7 @@ def _render_movimiento_caja(cobros, pagos):
         for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Otros", _sal_otros)]:
             if _rows:
                 _tot_rows = sum(r["Monto"] for r in _rows)
-                with st.expander(f"{_titulo} ({len(_rows)}) — $ {_tot_rows:,.0f}"):
+                with st.expander(f"{_titulo} ({len(_rows)}) — {_fmt_monto(_tot_rows)}"):
                     if _titulo == "Salidas — Compras":
                         _cols_rename = {"Concepto": "Comprobante compra"}
                     elif _titulo == "Salidas — Gastos":
@@ -1875,7 +1879,8 @@ def _render_movimiento_caja(cobros, pagos):
                     )
         _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
         if _aj_caja_periodo:
-            with st.expander(f"Ajustes ({len(_aj_caja_periodo)}) — $ {_aj_sum:,.0f}"):
+            _aj_sum = sum(float(_aj.get("monto") or 0) for _aj in _aj_caja_periodo)
+            with st.expander(f"Ajustes ({len(_aj_caja_periodo)}) — {_fmt_monto(_aj_sum)}"):
                 _aj_rows = [{"Fecha": _aj.get("fecha"), "Monto": float(_aj.get("monto") or 0), "Nota": _aj.get("nota") or ""} for _aj in _aj_caja_periodo]
                 st.dataframe(pd.DataFrame(_aj_rows), use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")})
@@ -2247,11 +2252,11 @@ with tab_mov_caja:
             st.info("No hay movimientos registrados aún.")
         else:
             _total_cajas = sum(_saldos_actuales.values())
-            st.metric("Total en cajas", f"$ {_total_cajas:,.0f}")
+            st.metric("Total en cajas", _fmt_monto(_total_cajas))
             st.divider()
             _cols_saldo = st.columns(min(len(_saldos_actuales), 3))
             for _i, (_ck, _sv) in enumerate(sorted(_saldos_actuales.items())):
-                _cols_saldo[_i % 3].metric(_ck, f"$ {_sv:,.0f}")
+                _cols_saldo[_i % 3].metric(_ck, _fmt_monto(_sv))
 
     with _stab_movimientos:
         _render_movimiento_caja(cobros_bal, pagos_bal)
