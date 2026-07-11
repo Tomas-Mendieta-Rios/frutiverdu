@@ -1583,6 +1583,10 @@ def _render_movimiento_caja(cobros, pagos):
                 str(i.get("nro_comprobante", "")).strip()
                 for i in _imput_cob if i.get("nro_comprobante")
             ) or "—"
+            _is_cob_parcial = bool(_imput_cob) and any(
+                _cob_por_fac_all.get(str(i.get("id_comp_venta") or ""), 0) < _fac_total_lkp.get(str(i.get("id_comp_venta") or ""), float("inf"))
+                for i in _imput_cob if i.get("id_comp_venta")
+            )
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Entrada",
@@ -1596,9 +1600,21 @@ def _render_movimiento_caja(cobros, pagos):
                 "Cheque":       "",
                 "Monto":        _monto,
                 "imputaciones": _imput_cob,
+                "_parcial":     _is_cob_parcial,
             })
 
     _ids_gastos = db.cargar_ids_gastos()
+
+    # Lookups para detectar pagos/cobros parciales
+    _comp_pendiente = {str(c.get("nro_comprobante") or ""): c.get("pago_pendiente", False)
+                       for c in comprobantes_bal if c.get("nro_comprobante")}
+    _cob_por_fac_all = {}
+    for _cx in cobros:
+        for _ix in (_cx.get("imputaciones") or []):
+            _fid = str(_ix.get("id_comp_venta") or "")
+            if _fid:
+                _cob_por_fac_all[_fid] = _cob_por_fac_all.get(_fid, 0.0) + float(_ix.get("monto_imputado") or 0)
+    _fac_total_lkp = {str(f.get("id") or ""): float(f.get("total") or 0) for f in facturas_bal if f.get("id")}
 
     for _p in pagos:
         try:
@@ -1624,6 +1640,10 @@ def _render_movimiento_caja(cobros, pagos):
         _tot_imput  = _tot_compra + _tot_gasto
         _pct_compra = (_tot_compra / _tot_imput) if _tot_imput else 1.0
         _pct_gasto  = (_tot_gasto  / _tot_imput) if _tot_imput else 0.0
+        _is_pag_parcial = bool(_imput) and any(
+            _comp_pendiente.get(str(i.get("nro_comprobante") or ""), False)
+            for i in _imput if _es_compra(i) and i.get("nro_comprobante")
+        )
 
         for _lin in _p.get("lineas_pago", []):
             _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
@@ -1672,6 +1692,7 @@ def _render_movimiento_caja(cobros, pagos):
                 "Cheque":       _cheque_det,
                 "Monto":        _monto,
                 "imputaciones": _imput,
+                "_parcial":     _is_pag_parcial,
             })
 
     # Transferencias entre cajas
@@ -1821,13 +1842,16 @@ def _render_movimiento_caja(cobros, pagos):
         _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %,.0f")
 
         _entradas    = [r for r in _det if r.get("Tipo") == "Entrada"]
-        _sal_compras = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Compra"]
-        _sal_gastos  = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Gasto"]
+        _sal_compras = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Compra" and not r.get("_parcial")]
+        _sal_compras_parc = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Compra" and r.get("_parcial")]
+        _sal_gastos  = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Gasto" and not r.get("_parcial")]
+        _sal_gastos_parc = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Gasto" and r.get("_parcial")]
         _sal_transf  = [r for r in _det if r.get("Cat.") == "Transferencia" and r.get("Tipo") == "Salida"]
         _ent_transf  = [r for r in _det if r.get("Cat.") == "Transferencia" and r.get("Tipo") == "Entrada"]
         _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto", "Transferencia")]
 
-        _entradas_real = [r for r in _entradas if r.get("Cat.") != "Transferencia"]
+        _entradas_real      = [r for r in _entradas if r.get("Cat.") != "Transferencia" and not r.get("_parcial")]
+        _entradas_real_parc = [r for r in _entradas if r.get("Cat.") != "Transferencia" and r.get("_parcial")]
         _tot_ent = sum(r["Monto"] for r in _entradas_real)
         with st.expander(f"Entradas ({len(_entradas_real)}) — {_fmt_monto(_tot_ent)}"):
             if _entradas_real:
@@ -1839,6 +1863,15 @@ def _render_movimiento_caja(cobros, pagos):
                 )
             else:
                 st.caption("Sin entradas en el período.")
+        if _entradas_real_parc:
+            _tot_ent_parc = sum(r["Monto"] for r in _entradas_real_parc)
+            with st.expander(f"Entradas — Parciales ({len(_entradas_real_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
+                st.dataframe(
+                    pd.DataFrame(_entradas_real_parc)[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
+                      .rename(columns={"Facturas": "Facturas cobradas"}),
+                    use_container_width=True, hide_index=True,
+                    column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
+                )
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
             with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
@@ -1855,13 +1888,19 @@ def _render_movimiento_caja(cobros, pagos):
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
-        for _titulo, _rows in [("Salidas — Compras", _sal_compras), ("Salidas — Gastos", _sal_gastos), ("Salidas — Otros", _sal_otros)]:
+        for _titulo, _rows in [
+            ("Salidas — Compras", _sal_compras),
+            ("Salidas — Compras Parciales", _sal_compras_parc),
+            ("Salidas — Gastos", _sal_gastos),
+            ("Salidas — Gastos Parciales", _sal_gastos_parc),
+            ("Salidas — Otros", _sal_otros),
+        ]:
             if _rows:
                 _tot_rows = sum(r["Monto"] for r in _rows)
                 with st.expander(f"{_titulo} ({len(_rows)}) — {_fmt_monto(_tot_rows)}"):
-                    if _titulo == "Salidas — Compras":
+                    if _titulo in ("Salidas — Compras", "Salidas — Compras Parciales"):
                         _cols_rename = {"Concepto": "Comprobante compra"}
-                    elif _titulo == "Salidas — Gastos":
+                    elif _titulo in ("Salidas — Gastos", "Salidas — Gastos Parciales"):
                         _cols_rename = {"Concepto": "Comprobante gasto"}
                     else:
                         _cols_rename = {"Concepto": "Comprobante"}
