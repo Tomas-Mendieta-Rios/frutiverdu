@@ -1403,8 +1403,7 @@ if False:  # Analitica oculta — para volver: cambiar a 'with tab_grupo_analiti
     )
 
 def _fmt_monto(v):
-    """Formatea un número con puntos como separador de miles y sin decimales. Ej: 1.234.567"""
-    return f"$ {int(round(float(v or 0))):,}".replace(",", ".")
+    return f"$ {float(v or 0):,.0f}"
 
 def _safe_date(val, default=date.min):
     if not val:
@@ -1820,7 +1819,7 @@ def _render_movimiento_caja(cobros, pagos):
         _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
         _cfg_fecha = st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
-        _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %.2f")
+        _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %,.0f")
 
         _entradas    = [r for r in _det if r.get("Tipo") == "Entrada"]
         _sal_compras = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Compra"]
