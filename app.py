@@ -1053,16 +1053,6 @@ def _sync_gastos(fecha_desde, fecha_hasta):
         page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
         if not page:
             break
-        if not all_gastos:
-            _sample_items = None
-            for _fname in ["items", "detalles", "productos", "lineas", "renglones", "detalle"]:
-                _v = page[0].get(_fname)
-                if isinstance(_v, list) and _v:
-                    _sample_items = _v[0]
-                    break
-            st.write("DEBUG gasto[0] keys:", list(page[0].keys()))
-            st.write("DEBUG gasto[0] item keys:", list(_sample_items.keys()) if _sample_items else "sin items")
-            st.write("DEBUG gasto[0] item[0]:", _sample_items)
         all_gastos.extend(page)
         paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
         if not paging.get("hay_mas"):
@@ -1912,7 +1902,7 @@ with tab_balance:
                 _rows = [{
                     "Fecha":      _fmt_fecha(g.get("fecha")),
                     "Proveedor":  g.get("proveedor") or "—",
-                    "Gasto":      g.get("gasto") or "—",
+                    "Rubro":      " / ".join(filter(None, [g.get("rubro_nombre"), g.get("sub_rubro_nombre")])) or g.get("gasto") or "—",
                     "Comprobante": g.get("nro_comprobante") or "—",
                     "Total":      float(g.get("total") or 0),
                 } for g in sorted(_gas_pend_hist, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -2160,7 +2150,7 @@ with tab_balance:
                         with st.expander(f"{_prov} — {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
                             _rows = [{
                                 "Fecha":       _fmt_fecha(g.get("fecha")),
-                                "Gasto":       g.get("gasto") or "—",
+                                "Rubro":       " / ".join(filter(None, [g.get("rubro_nombre"), g.get("sub_rubro_nombre")])) or g.get("gasto") or "—",
                                 "Comprobante": g.get("nro_comprobante") or "—",
                                 "Total":       float(g.get("total") or 0),
                             } for g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -5012,7 +5002,7 @@ with tab_eg_gastos:
             "Comprobante": g.get("nro_comprobante") or "—",
             "Fecha":       _fmt_fecha(g.get("fecha")),
             "Proveedor":   g.get("proveedor") or "—",
-            "Gasto":       g.get("gasto") or "—",
+            "Rubro":       " / ".join(filter(None, [g.get("rubro_nombre"), g.get("sub_rubro_nombre")])) or g.get("gasto") or "—",
             "Items":       ", ".join(d.get("item","") or d.get("cod_item","") for d in (g.get("detalles") or []) if (d.get("item") or d.get("cod_item"))),
             "Total":       float(g.get("total") or 0),
         } for g in gastos_sorted]

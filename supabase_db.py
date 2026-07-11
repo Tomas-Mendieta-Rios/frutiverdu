@@ -1376,7 +1376,7 @@ def guardar_gastos(gastos):
             {
                 "gasto_id": int(gid),
                 "cod_item": str(it.get("cod_item") or ""),
-                "item": str(it.get("item") or it.get("descripcion") or ""),
+                "item": str(it.get("cod_item") or it.get("item") or it.get("descripcion") or ""),
                 "ctd": _to_float(it.get("ctd") or it.get("cantidad")),
                 "precio_uni": _to_float(it.get("precio_uni")),
                 "porc_desc": _to_float(it.get("porc_desc")),
