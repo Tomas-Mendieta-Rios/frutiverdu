@@ -1558,6 +1558,17 @@ def _render_movimiento_caja(cobros, pagos):
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
     _por_caja = {}
 
+    # Lookups para detectar pagos/cobros parciales
+    _comp_pendiente = {str(c.get("nro_comprobante") or ""): c.get("pago_pendiente", False)
+                       for c in comprobantes_bal if c.get("nro_comprobante")}
+    _cob_por_fac_all = {}
+    for _cx in cobros:
+        for _ix in (_cx.get("imputaciones") or []):
+            _fid = str(_ix.get("id_comp_venta") or "")
+            if _fid:
+                _cob_por_fac_all[_fid] = _cob_por_fac_all.get(_fid, 0.0) + float(_ix.get("monto_imputado") or 0)
+    _fac_total_lkp = {str(f.get("id") or ""): float(f.get("total") or 0) for f in facturas_bal if f.get("id")}
+
     for _c in cobros:
         try:
             _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
@@ -1604,17 +1615,6 @@ def _render_movimiento_caja(cobros, pagos):
             })
 
     _ids_gastos = db.cargar_ids_gastos()
-
-    # Lookups para detectar pagos/cobros parciales
-    _comp_pendiente = {str(c.get("nro_comprobante") or ""): c.get("pago_pendiente", False)
-                       for c in comprobantes_bal if c.get("nro_comprobante")}
-    _cob_por_fac_all = {}
-    for _cx in cobros:
-        for _ix in (_cx.get("imputaciones") or []):
-            _fid = str(_ix.get("id_comp_venta") or "")
-            if _fid:
-                _cob_por_fac_all[_fid] = _cob_por_fac_all.get(_fid, 0.0) + float(_ix.get("monto_imputado") or 0)
-    _fac_total_lkp = {str(f.get("id") or ""): float(f.get("total") or 0) for f in facturas_bal if f.get("id")}
 
     for _p in pagos:
         try:
