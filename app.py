@@ -1758,9 +1758,9 @@ def _render_movimiento_caja(cobros, pagos):
         _saldo_actual = _ini + _ht["Entradas"] - _ht["Salidas"] + _all_aj_sum.get(_caja, 0.0)
         st.subheader(_caja)
         _m1, _m2, _m3 = st.columns(3)
-        _m1.metric("Entradas",     f"$ {_ht['Entradas']:,.0f}")
-        _m2.metric("Salidas",      f"$ {_ht['Salidas']:,.0f}")
-        _m3.metric("Saldo actual", f"$ {_saldo_actual:,.0f}")
+        _m1.metric("Saldo actual", f"$ {_saldo_actual:,.0f}")
+        _m2.metric("Entradas",     f"$ {_ht['Entradas']:,.0f}")
+        _m3.metric("Salidas",      f"$ {_ht['Salidas']:,.0f}")
 
         _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
