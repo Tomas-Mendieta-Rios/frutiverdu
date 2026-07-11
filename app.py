@@ -1014,8 +1014,9 @@ map_label_a_unidad = dict(zip(productos["label"], productos["unidad_medida"]))
 # Util cuando la app esta instalada como PWA en el celular y queda viva
 # en background: sin esto, el usuario sigue viendo datos viejos hasta
 # que cierre y abra la PWA.
+st.markdown('<style>[data-testid="stButton"][data-key="btn_refresh_global"] button { font-size: 1.1rem; padding: 0.5rem 1.2rem; }</style>', unsafe_allow_html=True)
 if st.button(
-    "🔄 Recargar app para ver cambios de otros usuarios",
+    "🔄  Recargar",
     key="btn_refresh_global",
 ):
     st.cache_data.clear()
@@ -1544,7 +1545,6 @@ def _render_movimiento_caja(cobros, pagos):
     )
     _hasta_label = _hasta.strftime('%d/%m/%Y')
     _hasta_suffix = " (hoy)" if _hasta == _hoy else ""
-    st.caption(f"Hasta: **{_hasta_label}**{_hasta_suffix}")
 
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
     _por_caja = {}
@@ -2399,21 +2399,9 @@ with tab_balance:
                     sub="Cobrado − Pagado")
 
 with tab_mov_caja:
-    _stab_saldos, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs(
-        ["💰 Saldos", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial"]
+    _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs(
+        ["📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial"]
     )
-
-    with _stab_saldos:
-        _saldos_actuales = _calcular_saldos_actuales(cobros_bal, pagos_bal)
-        if not _saldos_actuales:
-            st.info("No hay movimientos registrados aún.")
-        else:
-            _total_cajas = sum(_saldos_actuales.values())
-            st.metric("Total en cajas", _fmt_monto(_total_cajas))
-            st.divider()
-            _cols_saldo = st.columns(min(len(_saldos_actuales), 3))
-            for _i, (_ck, _sv) in enumerate(sorted(_saldos_actuales.items())):
-                _cols_saldo[_i % 3].metric(_ck, _fmt_monto(_sv))
 
     with _stab_movimientos:
         _render_movimiento_caja(cobros_bal, pagos_bal)
