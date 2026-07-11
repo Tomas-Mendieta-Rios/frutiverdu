@@ -1494,7 +1494,18 @@ def _calcular_saldos_actuales(cobros, pagos):
 
 def _render_movimiento_caja(cobros, pagos):
     _hoy = date.today()
-    _hasta = _hoy
+
+    # Fecha máxima = última fecha con datos reales (cobros o pagos), si no hay usa hoy
+    _fechas_datos = []
+    for _c in cobros:
+        _fd = _safe_date(_c.get("fecha"))
+        if _fd != date.min:
+            _fechas_datos.append(_fd)
+    for _p in pagos:
+        _fd = _safe_date(_p.get("fecha"))
+        if _fd != date.min:
+            _fechas_datos.append(_fd)
+    _hasta = max(_fechas_datos) if _fechas_datos else _hoy
 
     # Fecha mínima = fecha del saldo inicial más antiguo configurado
     _aj_ini_todos = db.cargar_ajustes_caja()
@@ -1510,19 +1521,21 @@ def _render_movimiento_caja(cobros, pagos):
     _saved = st.session_state["movcaja_desde_saved"]
     if _saved < _fecha_min:
         _saved = _fecha_min
-    if _saved > _hoy:
-        _saved = _hoy
+    if _saved > _hasta:
+        _saved = _hasta
 
     with st.form("form_movcaja_fechas", border=False):
         _desde_input = st.date_input(
             "Ver desde",
             value=_saved,
             min_value=_fecha_min,
-            max_value=_hoy,
+            max_value=_hasta,
             key="movcaja_desde",
             format="DD/MM/YYYY",
         )
-        st.caption(f"Hasta: **{_hoy.strftime('%d/%m/%Y')}** (hoy)")
+        _hasta_label = _hasta.strftime('%d/%m/%Y')
+        _hasta_suffix = " (hoy)" if _hasta == _hoy else ""
+        st.caption(f"Hasta: **{_hasta_label}**{_hasta_suffix}")
         _calcular = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
 
     if _calcular:
