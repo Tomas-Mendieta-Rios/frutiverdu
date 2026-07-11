@@ -1503,17 +1503,32 @@ def _render_movimiento_caja(cobros, pagos):
 
     _default_desde = max(_hoy.replace(day=1), _fecha_min)
 
+    # Persistir la fecha seleccionada entre reruns
+    if "movcaja_desde_saved" not in st.session_state:
+        st.session_state["movcaja_desde_saved"] = _default_desde
+    # Asegurar que la fecha guardada no sea menor al mínimo
+    _saved = st.session_state["movcaja_desde_saved"]
+    if _saved < _fecha_min:
+        _saved = _fecha_min
+    if _saved > _hoy:
+        _saved = _hoy
+
     with st.form("form_movcaja_fechas", border=False):
-        _desde = st.date_input(
+        _desde_input = st.date_input(
             "Ver desde",
-            value=_default_desde,
+            value=_saved,
             min_value=_fecha_min,
             max_value=_hoy,
             key="movcaja_desde",
             format="DD/MM/YYYY",
         )
         st.caption(f"Hasta: **{_hoy.strftime('%d/%m/%Y')}** (hoy)")
-        st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
+        _calcular = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
+
+    if _calcular:
+        st.session_state["movcaja_desde_saved"] = _desde_input
+
+    _desde = st.session_state["movcaja_desde_saved"]
 
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
     _por_caja = {}
@@ -1746,9 +1761,9 @@ def _render_movimiento_caja(cobros, pagos):
     _total_ht_s = sum(_hist_total.get(_cn, {"Salidas": 0.0})["Salidas"]   for _cn in _inicial)
     st.subheader("Total general")
     _k1, _k2, _k3 = st.columns(3)
-    _k1.metric("Saldo total",      f"$ {_total_saldo:,.0f}")
-    _k2.metric("Entradas totales", f"$ {_total_ht_e:,.0f}")
-    _k3.metric("Salidas totales",  f"$ {_total_ht_s:,.0f}")
+    _k1.metric("Saldo",    f"$ {_total_saldo:,.0f}")
+    _k2.metric("Entradas", f"$ {_total_ht_e:,.0f}")
+    _k3.metric("Salidas",  f"$ {_total_ht_s:,.0f}")
 
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
