@@ -1923,7 +1923,7 @@ def _render_movimiento_caja(cobros, pagos):
         ]:
             if _rows:
                 _tot_rows = sum(r["Monto"] for r in _rows)
-                _n_rows = len({r["Pago #"] for r in _rows}) if "Parciales" in _titulo else len(_rows)
+                _n_rows = len({r["Pago #"] for r in _rows})
                 with st.expander(f"{_titulo} ({_n_rows}) — {_fmt_monto(_tot_rows)}"):
                     if _titulo in ("Salidas — Compras", "Salidas — Compras Parciales"):
                         _cols_rename = {"Concepto": "Comprobante compra"}
@@ -1932,11 +1932,16 @@ def _render_movimiento_caja(cobros, pagos):
                     else:
                         _cols_rename = {"Concepto": "Comprobante"}
                     _df_rows = pd.DataFrame(_rows)
+                    # Agrupar por Pago # para no mostrar duplicados cuando hay múltiples lineas_pago en la misma caja
+                    _agg_dict = {"Monto": "sum", "Fecha": "first", "Proveedor": "first", "Concepto": "first",
+                                 "Cheque": lambda x: ", ".join(v for v in x if str(v).strip())}
+                    for _ec in ["Total comprobante", "Pagado total", "Saldo", "Total factura", "Cobrado total"]:
+                        if _ec in _df_rows.columns:
+                            _agg_dict[_ec] = "first"
+                    _df_rows = _df_rows.groupby("Pago #", sort=False).agg(_agg_dict).reset_index()
                     _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
                     _es_parcial_titulo = "Parciales" in _titulo
                     if _es_parcial_titulo:
-                        # Deduplicar por Pago # — cada pago aparece una sola vez
-                        _df_rows = _df_rows.drop_duplicates(subset=["Pago #"])
                         _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Total comprobante", "Pagado total", "Saldo"]
                     elif _tiene_cheque:
                         _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
