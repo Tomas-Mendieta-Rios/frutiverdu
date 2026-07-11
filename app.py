@@ -1526,34 +1526,25 @@ def _render_movimiento_caja(cobros, pagos):
 
     _default_desde = max(_hoy.replace(day=1), _fecha_min)
 
-    # Persistir la fecha seleccionada entre reruns
-    if "movcaja_desde_saved" not in st.session_state:
-        st.session_state["movcaja_desde_saved"] = _default_desde
-    # Asegurar que la fecha guardada no sea menor al mínimo
-    _saved = st.session_state["movcaja_desde_saved"]
+    _saved = st.session_state.get("movcaja_desde_saved", _default_desde)
+    if not isinstance(_saved, date):
+        _saved = _default_desde
     if _saved < _fecha_min:
         _saved = _fecha_min
     if _saved > _hasta:
         _saved = _hasta
 
-    with st.form("form_movcaja_fechas", border=False):
-        _desde_input = st.date_input(
-            "Ver desde",
-            value=_saved,
-            min_value=_fecha_min,
-            max_value=_hasta,
-            key="movcaja_desde",
-            format="DD/MM/YYYY",
-        )
-        _hasta_label = _hasta.strftime('%d/%m/%Y')
-        _hasta_suffix = " (hoy)" if _hasta == _hoy else ""
-        st.caption(f"Hasta: **{_hasta_label}**{_hasta_suffix}")
-        _calcular = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
-
-    if _calcular:
-        st.session_state["movcaja_desde_saved"] = _desde_input
-
-    _desde = st.session_state["movcaja_desde_saved"]
+    _desde = st.date_input(
+        "Ver desde",
+        value=_saved,
+        min_value=_fecha_min,
+        max_value=_hasta,
+        key="movcaja_desde_saved",
+        format="DD/MM/YYYY",
+    )
+    _hasta_label = _hasta.strftime('%d/%m/%Y')
+    _hasta_suffix = " (hoy)" if _hasta == _hoy else ""
+    st.caption(f"Hasta: **{_hasta_label}**{_hasta_suffix}")
 
     # caja_key -> {"Entradas": float, "Sal. Compras": float, "Sal. Gastos": float, "detalle": []}
     _por_caja = {}
