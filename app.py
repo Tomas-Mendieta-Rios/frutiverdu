@@ -1791,9 +1791,9 @@ def _render_movimiento_caja(cobros, pagos):
         _m1, _m2, _m3 = st.columns(3)
         def _metric_card(col, label, value, color):
             col.markdown(
-                f"""<div style="background:#f8f9fa;border-radius:10px;padding:14px 18px;">
-                <p style="margin:0;font-size:1rem;font-weight:600;color:#555;">{label}</p>
-                <p style="margin:4px 0 0 0;font-size:1.6rem;font-weight:700;color:{color};">{value}</p>
+                f"""<div style="background:#f8f9fa;border-radius:7px;padding:8px 12px;">
+                <p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p>
+                <p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p>
                 </div>""",
                 unsafe_allow_html=True,
             )
