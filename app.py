@@ -1559,15 +1559,23 @@ def _render_movimiento_caja(cobros, pagos):
     _por_caja = {}
 
     # Lookups para detectar pagos/cobros parciales
-    _comp_pendiente = {str(c.get("nro_comprobante") or ""): c.get("pago_pendiente", False)
-                       for c in comprobantes_bal if c.get("nro_comprobante")}
+    _comp_pendiente  = {str(c.get("nro_comprobante") or ""): c.get("pago_pendiente", False)
+                        for c in comprobantes_bal if c.get("nro_comprobante")}
+    _comp_total_lkp  = {str(c.get("nro_comprobante") or ""): float(c.get("total") or 0)
+                        for c in comprobantes_bal if c.get("nro_comprobante")}
+    _fac_total_lkp   = {str(f.get("id") or ""): float(f.get("total") or 0) for f in facturas_bal if f.get("id")}
     _cob_por_fac_all = {}
     for _cx in cobros:
         for _ix in (_cx.get("imputaciones") or []):
             _fid = str(_ix.get("id_comp_venta") or "")
             if _fid:
                 _cob_por_fac_all[_fid] = _cob_por_fac_all.get(_fid, 0.0) + float(_ix.get("monto_imputado") or 0)
-    _fac_total_lkp = {str(f.get("id") or ""): float(f.get("total") or 0) for f in facturas_bal if f.get("id")}
+    _pag_por_comp_all = {}
+    for _px in pagos:
+        for _ix in (_px.get("imputaciones") or []):
+            _nro = str(_ix.get("nro_comprobante") or "")
+            if _nro:
+                _pag_por_comp_all[_nro] = _pag_por_comp_all.get(_nro, 0.0) + float(_ix.get("monto_imputado") or 0)
 
     for _c in cobros:
         try:
@@ -1598,6 +1606,9 @@ def _render_movimiento_caja(cobros, pagos):
                 _cob_por_fac_all.get(str(i.get("id_comp_venta") or ""), 0) < _fac_total_lkp.get(str(i.get("id_comp_venta") or ""), float("inf"))
                 for i in _imput_cob if i.get("id_comp_venta")
             )
+            _tot_fac_ref  = sum(_fac_total_lkp.get(str(i.get("id_comp_venta") or ""), 0) for i in _imput_cob if i.get("id_comp_venta"))
+            _tot_cob_ref  = sum(_cob_por_fac_all.get(str(i.get("id_comp_venta") or ""), 0) for i in _imput_cob if i.get("id_comp_venta"))
+            _saldo_fac_ref = max(0.0, _tot_fac_ref - _tot_cob_ref)
             _t["detalle"].append({
                 "Fecha":        _f,
                 "Tipo":         "Entrada",
@@ -1610,6 +1621,9 @@ def _render_movimiento_caja(cobros, pagos):
                 "Pago #":       "",
                 "Cheque":       "",
                 "Monto":        _monto,
+                "Total factura": _tot_fac_ref,
+                "Cobrado total": _tot_cob_ref,
+                "Saldo":        _saldo_fac_ref,
                 "imputaciones": _imput_cob,
                 "_parcial":     _is_cob_parcial,
             })
@@ -1681,18 +1695,25 @@ def _render_movimiento_caja(cobros, pagos):
                     str(i.get("nro_comprobante", "")).strip()
                     for i in _imput_filtro if i.get("nro_comprobante")
                 ) or "—"
+            _comp_imput_nros = [str(i.get("nro_comprobante") or "") for i in _imput if _es_compra(i) and i.get("nro_comprobante")]
+            _tot_comp_ref  = sum(_comp_total_lkp.get(_n, 0) for _n in _comp_imput_nros)
+            _tot_pag_ref   = sum(_pag_por_comp_all.get(_n, 0) for _n in _comp_imput_nros)
+            _saldo_comp_ref = max(0.0, _tot_comp_ref - _tot_pag_ref)
             _t["detalle"].append({
-                "Fecha":        _f,
-                "Tipo":         "Salida",
-                "Cat.":         _cat,
-                "Concepto":     _comp_list,
-                "Proveedor":    _p.get("proveedor") or "—",
-                "Cobro #":      "",
-                "Pago #":       _p.get("nro_comprobante") or "—",
-                "Cheque":       _cheque_det,
-                "Monto":        _monto,
-                "imputaciones": _imput,
-                "_parcial":     _is_pag_parcial,
+                "Fecha":           _f,
+                "Tipo":            "Salida",
+                "Cat.":            _cat,
+                "Concepto":        _comp_list,
+                "Proveedor":       _p.get("proveedor") or "—",
+                "Cobro #":         "",
+                "Pago #":          _p.get("nro_comprobante") or "—",
+                "Cheque":          _cheque_det,
+                "Monto":           _monto,
+                "Total comprobante": _tot_comp_ref,
+                "Pagado total":    _tot_pag_ref,
+                "Saldo":           _saldo_comp_ref,
+                "imputaciones":    _imput,
+                "_parcial":        _is_pag_parcial,
             })
 
     # Transferencias entre cajas
@@ -1867,10 +1888,15 @@ def _render_movimiento_caja(cobros, pagos):
             _tot_ent_parc = sum(r["Monto"] for r in _entradas_real_parc)
             with st.expander(f"Entradas — Parciales ({len(_entradas_real_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
                 st.dataframe(
-                    pd.DataFrame(_entradas_real_parc)[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
-                      .rename(columns={"Facturas": "Facturas cobradas"}),
+                    pd.DataFrame(_entradas_real_parc)[["Cobro #", "Fecha", "Cliente", "Facturas", "Total factura", "Cobrado total", "Saldo"]]
+                      .rename(columns={"Facturas": "Facturas"}),
                     use_container_width=True, hide_index=True,
-                    column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
+                    column_config={
+                        "Fecha":         _cfg_fecha,
+                        "Total factura": st.column_config.NumberColumn("Total factura", format="$ %,.0f"),
+                        "Cobrado total": st.column_config.NumberColumn("Cobrado total", format="$ %,.0f"),
+                        "Saldo":         st.column_config.NumberColumn("Saldo",         format="$ %,.0f"),
+                    },
                 )
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
@@ -1906,13 +1932,22 @@ def _render_movimiento_caja(cobros, pagos):
                         _cols_rename = {"Concepto": "Comprobante"}
                     _df_rows = pd.DataFrame(_rows)
                     _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
-                    _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Monto"]
-                    if _tiene_cheque:
+                    _es_parcial_titulo = "Parciales" in _titulo
+                    if _es_parcial_titulo:
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Total comprobante", "Pagado total", "Saldo"]
+                    elif _tiene_cheque:
                         _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
+                    else:
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Monto"]
+                    _col_cfg = {"Fecha": _cfg_fecha, "Monto": _cfg_monto}
+                    if _es_parcial_titulo:
+                        _col_cfg["Total comprobante"] = st.column_config.NumberColumn("Total comprobante", format="$ %,.0f")
+                        _col_cfg["Pagado total"]      = st.column_config.NumberColumn("Pagado total",      format="$ %,.0f")
+                        _col_cfg["Saldo"]             = st.column_config.NumberColumn("Saldo",             format="$ %,.0f")
                     st.dataframe(
-                        pd.DataFrame(_rows)[_cols_sel].rename(columns=_cols_rename),
+                        _df_rows[_cols_sel].rename(columns=_cols_rename),
                         use_container_width=True, hide_index=True,
-                        column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
+                        column_config=_col_cfg,
                     )
         _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
         if _aj_caja_periodo:
