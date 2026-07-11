@@ -1776,9 +1776,17 @@ def _render_movimiento_caja(cobros, pagos):
         _saldo_actual = _ini + _ht["Entradas"] - _ht["Salidas"] + _all_aj_sum.get(_caja, 0.0)
         st.subheader(_caja)
         _m1, _m2, _m3 = st.columns(3)
-        _m1.metric("Saldo actual", f"$ {_saldo_actual:,.0f}")
-        _m2.metric("Entradas",     f"$ {_ht['Entradas']:,.0f}")
-        _m3.metric("Salidas",      f"$ {_ht['Salidas']:,.0f}")
+        def _metric_card(col, label, value, color):
+            col.markdown(
+                f"""<div style="background:#f8f9fa;border-radius:10px;padding:14px 18px;">
+                <p style="margin:0;font-size:1rem;font-weight:600;color:#555;">{label}</p>
+                <p style="margin:4px 0 0 0;font-size:1.6rem;font-weight:700;color:{color};">{value}</p>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        _metric_card(_m1, "Saldo actual", f"$ {_saldo_actual:,.0f}", "#1a73e8")
+        _metric_card(_m2, "Entradas",     f"$ {_ht['Entradas']:,.0f}", "#2e7d32")
+        _metric_card(_m3, "Salidas",      f"$ {_ht['Salidas']:,.0f}", "#c62828")
 
         _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
