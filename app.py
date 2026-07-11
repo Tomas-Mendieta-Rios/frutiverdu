@@ -1499,9 +1499,9 @@ def _render_movimiento_caja(cobros, pagos):
     # Fecha mínima = fecha del saldo inicial más antiguo configurado
     _aj_ini_todos = db.cargar_ajustes_caja()
     _fechas_ini = [_safe_date(_aj.get("fecha")) for _aj in _aj_ini_todos if _aj.get("tipo") == "inicial"]
-    _fecha_min = min((_f for _f in _fechas_ini if _f != date.min), default=_hoy.replace(day=1))
+    _fecha_min = min((_f for _f in _fechas_ini if _f != date.min), default=date(2000, 1, 1))
 
-    _default_desde = _hoy.replace(day=1)
+    _default_desde = max(_hoy.replace(day=1), _fecha_min)
 
     with st.form("form_movcaja_fechas", border=False):
         _desde = st.date_input(
