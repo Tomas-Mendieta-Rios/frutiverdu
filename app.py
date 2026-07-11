@@ -2248,7 +2248,7 @@ with tab_mov_caja:
 
     with _stab_saldo_ini:
         st.subheader("Saldo inicial por caja")
-        st.caption("El saldo inicial es el punto de partida para el cálculo de saldo en Movimientos. No aparece como movimiento.")
+        st.caption("Fecha única de corte para todas las cajas. Los movimientos posteriores a esa fecha acumulan sobre el saldo inicial.")
         _ini_cajas_list = db.cargar_cajas()
         _ini_cajas_con_id = [c for c in _ini_cajas_list if c.get("id")]
         if not _ini_cajas_con_id:
@@ -2259,14 +2259,27 @@ with tab_mov_caja:
                 for _aj in db.cargar_ajustes_caja()
                 if _aj.get("tipo") == "inicial"
             }
+            # Fecha global: tomar la del primer saldo inicial existente, o hoy
+            _fecha_global_actual = date.today()
+            for _aj_g in _ini_ajustes.values():
+                _fg = _safe_date(_aj_g.get("fecha"))
+                if _fg != date.min:
+                    _fecha_global_actual = _fg
+                    break
+
             with st.form("form_saldo_inicial_cajas"):
+                _fecha_corte = st.date_input(
+                    "📅 Fecha de corte (única para todas las cajas)",
+                    value=_fecha_global_actual,
+                    format="DD/MM/YYYY",
+                    key="ini_fecha_global",
+                )
+                st.divider()
                 _ini_vals = {}
-                _ini_fechas = {}
                 for _cj in _ini_cajas_con_id:
                     _aj_ini = _ini_ajustes.get(int(_cj["id"])) or {}
                     _ini_actual = float(_aj_ini.get("monto") or 0)
-                    _fecha_actual = _safe_date(_aj_ini.get("fecha"), default=date.today())
-                    _fc1, _fc2, _fc3 = st.columns([2, 2, 2])
+                    _fc1, _fc2 = st.columns([2, 2])
                     _fc1.markdown(f"**{_cj['nombre']}**")
                     _ini_vals[_cj["id"]] = _fc2.text_input(
                         "Monto",
@@ -2274,14 +2287,7 @@ with tab_mov_caja:
                         key=f"ini_caja_{_cj['id']}",
                         label_visibility="collapsed",
                     )
-                    _ini_fechas[_cj["id"]] = _fc3.date_input(
-                        "Fecha de corte",
-                        value=_fecha_actual,
-                        key=f"ini_fecha_{_cj['id']}",
-                        format="DD/MM/YYYY",
-                        label_visibility="collapsed",
-                    )
-                st.caption("Caja · Monto inicial · Fecha de corte")
+                st.caption("Caja · Monto inicial")
                 if st.form_submit_button("💾 Guardar", type="primary", use_container_width=True):
                     _ini_error = False
                     _ini_parsed = {}
@@ -2289,30 +2295,34 @@ with tab_mov_caja:
                         try:
                             _ini_parsed[_cj_id] = float(str(_ini_str).replace(",", ".").strip())
                         except ValueError:
-                            st.error("Monto inválido para la caja.")
+                            st.error("Monto inválido.")
                             _ini_error = True
                             break
                     if not _ini_error:
                         for _cj_id, _monto in _ini_parsed.items():
-                            db.guardar_ajuste_caja(_cj_id, _ini_fechas[_cj_id], _monto, "Saldo inicial", tipo="inicial")
+                            db.guardar_ajuste_caja(_cj_id, _fecha_corte, _monto, "Saldo inicial", tipo="inicial")
                         st.cache_data.clear()
                         st.success("✅ Saldos iniciales guardados.")
                         st.rerun()
 
+            st.divider()
+            st.markdown("**🗑 Eliminar saldo inicial**")
             _del_ini_opts = {
                 _cj["nombre"]: int(_cj["id"])
                 for _cj in _ini_cajas_con_id
                 if int(_cj["id"]) in _ini_ajustes
             }
             if _del_ini_opts:
-                with st.expander("🗑 Eliminar saldo inicial"):
-                    _del_ini_sel = st.selectbox("Caja", options=list(_del_ini_opts.keys()), key="del_ini_sel")
-                    if st.button("Eliminar", type="secondary", key="del_ini_btn"):
-                        _aj_del = _ini_ajustes.get(_del_ini_opts[_del_ini_sel])
-                        if _aj_del:
-                            db.eliminar_ajuste_caja(_aj_del["id"])
-                            st.cache_data.clear()
-                            st.rerun()
+                _col_sel, _col_btn = st.columns([3, 1])
+                _del_ini_sel = _col_sel.selectbox("Caja", options=list(_del_ini_opts.keys()), key="del_ini_sel", label_visibility="collapsed")
+                if _col_btn.button("🗑 Eliminar", type="secondary", key="del_ini_btn"):
+                    _aj_del = _ini_ajustes.get(_del_ini_opts[_del_ini_sel])
+                    if _aj_del:
+                        db.eliminar_ajuste_caja(_aj_del["id"])
+                        st.cache_data.clear()
+                        st.rerun()
+            else:
+                st.caption("No hay saldos iniciales configurados.")
 
     with _stab_transferencias:
         st.subheader("Transferencias entre cajas")
