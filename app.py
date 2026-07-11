@@ -2144,6 +2144,11 @@ with tab_balance:
         total_egresos  = total_compras + total_gastos
         resultado      = total_ingresos - total_egresos
 
+        # Resultado real (solo lo efectivamente cobrado/pagado)
+        _ing_real  = total_fac_cobr + total_wix_cobr
+        _egr_real  = total_comp_pag + total_gas_pag
+        _res_real  = _ing_real - _egr_real
+
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
         st.subheader(f"Ingresos — $ {_pesos(total_ingresos)}")
@@ -2309,9 +2314,16 @@ with tab_balance:
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
-        _res_color = "#2e7d32" if resultado >= 0 else "#c62828"
-        _res_signo = "+" if resultado >= 0 else ""
-        _bal_metric(st, "Resultado", f"{_res_signo}$ {_pesos(abs(resultado))}", _res_color)
+        st.subheader("Resultado")
+        _rf1, _rf2 = st.columns(2)
+        _fic_color = "#2e7d32" if resultado >= 0 else "#c62828"
+        _fic_signo = "+" if resultado >= 0 else ""
+        _real_color = "#2e7d32" if _res_real >= 0 else "#c62828"
+        _real_signo = "+" if _res_real >= 0 else ""
+        _bal_metric(_rf1, "Ficticio",  f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color,
+                    sub=f"Facturado − Comprado/Gastado")
+        _bal_metric(_rf2, "Real",      f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color,
+                    sub=f"Cobrado − Pagado")
 
 with tab_mov_caja:
     _stab_saldos, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs(
