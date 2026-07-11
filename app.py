@@ -1736,16 +1736,19 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
 
-    _total_e  = sum(v["Entradas"]     for v in _por_caja.values())
-    _total_sc = sum(v["Sal. Compras"] for v in _por_caja.values())
-    _total_sg = sum(v["Sal. Gastos"]  for v in _por_caja.values())
-    _total_s  = _total_sc + _total_sg
-    _total_n  = _total_e - _total_s
+    _total_saldo = sum(
+        _inicial.get(_cn, 0.0) + _hist_total.get(_cn, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"]
+        - _hist_total.get(_cn, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]
+        + _all_aj_sum.get(_cn, 0.0)
+        for _cn in _inicial
+    )
+    _total_ht_e = sum(_hist_total.get(_cn, {"Entradas": 0.0})["Entradas"] for _cn in _inicial)
+    _total_ht_s = sum(_hist_total.get(_cn, {"Salidas": 0.0})["Salidas"]   for _cn in _inicial)
     st.subheader("Total general")
     _k1, _k2, _k3 = st.columns(3)
-    _k1.metric("Entradas",   f"$ {_total_e:,.0f}")
-    _k2.metric("Salidas",    f"$ {_total_s:,.0f}")
-    _k3.metric("Saldo neto", f"$ {_total_n:,.0f}")
+    _k1.metric("Saldo total",      f"$ {_total_saldo:,.0f}")
+    _k2.metric("Entradas totales", f"$ {_total_ht_e:,.0f}")
+    _k3.metric("Salidas totales",  f"$ {_total_ht_s:,.0f}")
 
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
