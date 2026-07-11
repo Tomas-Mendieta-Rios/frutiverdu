@@ -2190,7 +2190,6 @@ with tab_balance:
                                     "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
                                     "Total":       _ftot,
                                     "Cobrado":     _fcob,
-                                    "Saldo":       _fsal,
                                 }
                                 if 0 < _fcob < _ftot:
                                     _row["Comprobante"] += " (parcial)"
@@ -2199,7 +2198,6 @@ with tab_balance:
                                          column_config={
                                              "Total":   st.column_config.NumberColumn("Total",   format="$ %,.2f"),
                                              "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.2f"),
-                                             "Saldo":   st.column_config.NumberColumn("Saldo",   format="$ %,.2f"),
                                          })
 
         # Wix
@@ -2267,13 +2265,11 @@ with tab_balance:
                                 "Comprobante": c.get("nro_comprobante") or "—",
                                 "Total":       float(c.get("total") or 0),
                                 "Pagado":      _pagado_comp(c),
-                                "Saldo":       _saldo_comp(c),
                             } for c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={
                                              "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
                                              "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
-                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.2f"),
                                          })
 
         # Gastos
@@ -2306,13 +2302,11 @@ with tab_balance:
                                 "Comprobante": g.get("nro_comprobante") or "—",
                                 "Total":       float(g.get("total") or 0),
                                 "Pagado":      _pagado_gasto(g),
-                                "Saldo":       _saldo_gasto(g),
                             } for g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={
                                              "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
                                              "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
-                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.2f"),
                                          })
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
