@@ -1738,6 +1738,8 @@ def _render_movimiento_caja(cobros, pagos):
 
     st.divider()
     for _caja in sorted(_por_caja):
+        if _caja not in _inicial:
+            continue
         _v = _por_caja[_caja]
         _sal = _v["Sal. Compras"] + _v["Sal. Gastos"]
         _ini  = _inicial.get(_caja, 0.0)
