@@ -2084,8 +2084,17 @@ with tab_balance:
                 if _fid:
                     _cobrado_por_fac[_fid] = _cobrado_por_fac.get(_fid, 0.0) + float(_imp.get("monto_imputado") or 0)
 
+        # Monto pagado real por comprobante/gasto (via imputaciones de pagos a proveedores)
+        _pagado_por_comp = {}
+        for _pag in pagos_bal:
+            for _imp in (_pag.get("imputaciones") or []):
+                _nro = str(_imp.get("nro_comprobante") or "")
+                if _nro:
+                    _pagado_por_comp[_nro] = _pagado_por_comp.get(_nro, 0.0) + float(_imp.get("monto_imputado") or 0)
+
         # Categorizar facturas DUX
-        fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro")]
+        fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro") and _cobrado_por_fac.get(str(f.get("id") or ""), 0.0) >= float(f.get("total") or 0)]
+        fac_parciales  = [f for f in facturas_vig if f.get("con_cobro") and _cobrado_por_fac.get(str(f.get("id") or ""), 0.0) < float(f.get("total") or 0)]
         fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
 
         # Categorizar Wix
@@ -2108,13 +2117,25 @@ with tab_balance:
         total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
         total_wix_no_ent  = sum(_wix_monto(p) for p in wix_no_entregados)
         # Categorizar compras
+        def _pagado_comp(c):
+            return min(float(c.get("total") or 0), _pagado_por_comp.get(str(c.get("nro_comprobante") or ""), 0.0))
+        def _saldo_comp(c):
+            return max(0.0, float(c.get("total") or 0) - _pagado_comp(c))
+
         comp_pagadas    = [c for c in comprobantes_f if not c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA"]
-        comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente")     and str(c.get("estado") or "").upper() != "ANULADA"]
+        comp_parciales  = [c for c in comprobantes_f if c.get("pago_pendiente") and _pagado_comp(c) > 0 and str(c.get("estado") or "").upper() != "ANULADA"]
+        comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente") and _pagado_comp(c) == 0 and str(c.get("estado") or "").upper() != "ANULADA"]
         comp_anuladas   = [c for c in comprobantes_f if str(c.get("estado") or "").upper() == "ANULADA"]
 
         # Categorizar gastos
+        def _pagado_gasto(g):
+            return min(float(g.get("total") or 0), _pagado_por_comp.get(str(g.get("nro_comprobante") or ""), 0.0))
+        def _saldo_gasto(g):
+            return max(0.0, float(g.get("total") or 0) - _pagado_gasto(g))
+
         gas_pagados    = [g for g in gastos_f if not g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA"]
-        gas_pendientes = [g for g in gastos_f if g.get("pago_pendiente")     and str(g.get("estado") or "").upper() != "ANULADA"]
+        gas_parciales  = [g for g in gastos_f if g.get("pago_pendiente") and _pagado_gasto(g) > 0 and str(g.get("estado") or "").upper() != "ANULADA"]
+        gas_pendientes = [g for g in gastos_f if g.get("pago_pendiente") and _pagado_gasto(g) == 0 and str(g.get("estado") or "").upper() != "ANULADA"]
         gas_anulados   = [g for g in gastos_f if str(g.get("estado") or "").upper() == "ANULADA"]
 
         total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_pendientes)
@@ -2129,11 +2150,13 @@ with tab_balance:
         st.subheader(f"Ingresos — $ {_pesos(total_ingresos)}")
 
         # Facturas DUX
+        total_fac_parc = sum(max(0.0, float(f.get("total") or 0) - _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)) for f in fac_parciales)
         st.markdown(f"**DUX — $ {_pesos(total_facturas)}** · {len(facturas_vig)} facturas")
-        _c1, _c2, _c3 = st.columns(3)
+        _c1, _c2, _c3, _c4 = st.columns(4)
         _bal_metric(_c1, "Cobrado",   f"$ {_pesos(total_fac_cobr)}", "#2e7d32")
-        _bal_metric(_c2, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100")
-        _bal_metric(_c3, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575")
+        _bal_metric(_c2, "Parcial",   f"$ {_pesos(total_fac_parc)}", "#1565c0")
+        _bal_metric(_c3, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100")
+        _bal_metric(_c4, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575")
         def _fac_saldo(f):
             _tot = float(f.get("total") or 0)
             _cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
@@ -2145,6 +2168,7 @@ with tab_balance:
 
         for _label, _lista, _lbl_fn in [
             ("Cobrado",  fac_cobradas,   _fac_cobrado),
+            ("Parcial",  fac_parciales,  _fac_saldo),
             ("Pendiente", fac_pendientes, _fac_saldo),
             ("Anulado",  facturas_anul,   lambda f: float(f.get("total") or 0)),
         ]:
@@ -2218,62 +2242,84 @@ with tab_balance:
 
         # Compras
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
+        total_comp_parc = sum(_saldo_comp(c) for c in comp_parciales)
         total_comp_pend = sum(float(c.get("total") or 0) for c in comp_pendientes)
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
-        st.markdown(f"**Compras — $ {_pesos(total_compras)}** · {len(comp_pagadas) + len(comp_pendientes)} comprobantes")
-        _ec1, _ec2, _ec3 = st.columns(3)
+        st.markdown(f"**Compras — $ {_pesos(total_compras)}** · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
+        _ec1, _ec2, _ec3, _ec4 = st.columns(4)
         _bal_metric(_ec1, "Pagado",    f"$ {_pesos(total_comp_pag)}",  "#2e7d32")
-        _bal_metric(_ec2, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100")
-        _bal_metric(_ec3, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575")
-        for _label, _lista in [
-            ("Pagado", comp_pagadas), ("Pendiente", comp_pendientes), ("Anulado", comp_anuladas),
+        _bal_metric(_ec2, "Parcial",   f"$ {_pesos(total_comp_parc)}", "#1565c0")
+        _bal_metric(_ec3, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100")
+        _bal_metric(_ec4, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575")
+        for _label, _lista, _tot_fn in [
+            ("Pagado",    comp_pagadas,    lambda c: float(c.get("total") or 0)),
+            ("Parcial",   comp_parciales,  _saldo_comp),
+            ("Pendiente", comp_pendientes, lambda c: float(c.get("total") or 0)),
+            ("Anulado",   comp_anuladas,   lambda c: float(c.get("total") or 0)),
         ]:
             if _lista:
-                _tot_lbl = sum(float(c.get("total") or 0) for c in _lista)
+                _tot_lbl = sum(_tot_fn(c) for c in _lista)
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
                     _by_prov = {}
                     for _c in _lista:
                         _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
                     for _prov, _pitems in sorted(_by_prov.items()):
-                        _ptot = sum(float(c.get("total") or 0) for c in _pitems)
+                        _ptot = sum(_tot_fn(c) for c in _pitems)
                         with st.expander(f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
                             _rows = [{
                                 "Fecha":       _fmt_fecha(c.get("fecha")),
                                 "Comprobante": c.get("nro_comprobante") or "—",
                                 "Total":       float(c.get("total") or 0),
+                                "Pagado":      _pagado_comp(c),
+                                "Saldo":       _saldo_comp(c),
                             } for c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config={"Total": _cfg_monto})
+                                         column_config={
+                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.0f"),
+                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.0f"),
+                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.0f"),
+                                         })
 
         # Gastos
         total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
+        total_gas_parc = sum(_saldo_gasto(g) for g in gas_parciales)
         total_gas_pend = sum(float(g.get("total") or 0) for g in gas_pendientes)
         total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
-        st.markdown(f"**Gastos — $ {_pesos(total_gastos)}** · {len(gas_pagados) + len(gas_pendientes)} gastos")
-        _eg1, _eg2, _eg3 = st.columns(3)
+        st.markdown(f"**Gastos — $ {_pesos(total_gastos)}** · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
+        _eg1, _eg2, _eg3, _eg4 = st.columns(4)
         _bal_metric(_eg1, "Pagado",    f"$ {_pesos(total_gas_pag)}",  "#2e7d32")
-        _bal_metric(_eg2, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100")
-        _bal_metric(_eg3, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575")
-        for _label, _lista in [
-            ("Pagado", gas_pagados), ("Pendiente", gas_pendientes), ("Anulado", gas_anulados),
+        _bal_metric(_eg2, "Parcial",   f"$ {_pesos(total_gas_parc)}", "#1565c0")
+        _bal_metric(_eg3, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100")
+        _bal_metric(_eg4, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575")
+        for _label, _lista, _tot_fn in [
+            ("Pagado",    gas_pagados,    lambda g: float(g.get("total") or 0)),
+            ("Parcial",   gas_parciales,  _saldo_gasto),
+            ("Pendiente", gas_pendientes, lambda g: float(g.get("total") or 0)),
+            ("Anulado",   gas_anulados,   lambda g: float(g.get("total") or 0)),
         ]:
             if _lista:
-                _tot_lbl = sum(float(g.get("total") or 0) for g in _lista)
+                _tot_lbl = sum(_tot_fn(g) for g in _lista)
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
                     _by_prov = {}
                     for _g in _lista:
                         _by_prov.setdefault(_g.get("proveedor") or "—", []).append(_g)
                     for _prov, _pitems in sorted(_by_prov.items()):
-                        _ptot = sum(float(g.get("total") or 0) for g in _pitems)
+                        _ptot = sum(_tot_fn(g) for g in _pitems)
                         with st.expander(f"{_prov} — {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
                             _rows = [{
                                 "Fecha":       _fmt_fecha(g.get("fecha")),
                                 "Rubro":       " / ".join(filter(None, [g.get("rubro_nombre"), g.get("sub_rubro_nombre")])) or g.get("gasto") or "—",
                                 "Comprobante": g.get("nro_comprobante") or "—",
                                 "Total":       float(g.get("total") or 0),
+                                "Pagado":      _pagado_gasto(g),
+                                "Saldo":       _saldo_gasto(g),
                             } for g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config={"Total": _cfg_monto})
+                                         column_config={
+                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.0f"),
+                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.0f"),
+                                             "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.0f"),
+                                         })
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
