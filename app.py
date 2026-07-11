@@ -2076,6 +2076,14 @@ with tab_balance:
         comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
         gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
 
+        # Monto cobrado real por factura (via imputaciones de cobros)
+        _cobrado_por_fac = {}
+        for _cob in cobros_bal:
+            for _imp in (_cob.get("imputaciones") or []):
+                _fid = str(_imp.get("id_comp_venta") or "")
+                if _fid:
+                    _cobrado_por_fac[_fid] = _cobrado_por_fac.get(_fid, 0.0) + float(_imp.get("monto_imputado") or 0)
+
         # Categorizar facturas DUX
         fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro")]
         fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
@@ -2086,10 +2094,13 @@ with tab_balance:
         wix_pendientes    = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED" and str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
         wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
 
-        # Totales
+        # Totales — cobrado y pendiente calculados con monto_imputado real
         total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
-        total_fac_cobr    = sum(float(f.get("total") or 0) for f in fac_cobradas)
-        total_fac_pend    = sum(float(f.get("total") or 0) for f in fac_pendientes)
+        total_fac_cobr    = sum(
+            min(float(f.get("total") or 0), _cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
+            for f in facturas_vig
+        )
+        total_fac_pend    = total_facturas - total_fac_cobr
         total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
         total_wix         = sum(_wix_monto(p) for p in ped_wix_f if str(p.get("status") or "").upper() != "CANCELED")
         total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
