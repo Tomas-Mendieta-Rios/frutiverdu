@@ -2150,13 +2150,11 @@ with tab_balance:
         st.subheader(f"Ingresos — $ {_pesos(total_ingresos)}")
 
         # Facturas DUX
-        total_fac_parc = sum(max(0.0, float(f.get("total") or 0) - _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)) for f in fac_parciales)
         st.markdown(f"**DUX — $ {_pesos(total_facturas)}** · {len(facturas_vig)} facturas")
-        _c1, _c2, _c3, _c4 = st.columns(4)
+        _c1, _c2, _c3 = st.columns(3)
         _bal_metric(_c1, "Cobrado",   f"$ {_pesos(total_fac_cobr)}", "#2e7d32")
-        _bal_metric(_c2, "Parcial",   f"$ {_pesos(total_fac_parc)}", "#1565c0")
-        _bal_metric(_c3, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100")
-        _bal_metric(_c4, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575")
+        _bal_metric(_c2, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100")
+        _bal_metric(_c3, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575")
         def _fac_saldo(f):
             _tot = float(f.get("total") or 0)
             _cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
@@ -2241,16 +2239,14 @@ with tab_balance:
         st.subheader(f"Egresos — $ {_pesos(total_egresos)}")
 
         # Compras
-        total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
-        total_comp_parc = sum(_pagado_comp(c) for c in comp_parciales)
-        total_comp_pend = sum(float(c.get("total") or 0) for c in comp_pendientes)
+        total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
+        total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
         st.markdown(f"**Compras — $ {_pesos(total_compras)}** · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
-        _ec1, _ec2, _ec3, _ec4 = st.columns(4)
+        _ec1, _ec2, _ec3 = st.columns(3)
         _bal_metric(_ec1, "Pagado",    f"$ {_pesos(total_comp_pag)}",  "#2e7d32")
-        _bal_metric(_ec2, "Parcial",   f"$ {_pesos(total_comp_parc)}", "#1565c0")
-        _bal_metric(_ec3, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100")
-        _bal_metric(_ec4, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575")
+        _bal_metric(_ec2, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100")
+        _bal_metric(_ec3, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575")
         for _label, _lista, _tot_fn in [
             ("Pagado",    comp_pagadas,    lambda c: float(c.get("total") or 0)),
             ("Parcial",   comp_parciales,  _pagado_comp),
@@ -2281,16 +2277,14 @@ with tab_balance:
                                          })
 
         # Gastos
-        total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
-        total_gas_parc = sum(_pagado_gasto(g) for g in gas_parciales)
-        total_gas_pend = sum(float(g.get("total") or 0) for g in gas_pendientes)
+        total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados) + sum(_pagado_gasto(g) for g in gas_parciales)
+        total_gas_pend = sum(_saldo_gasto(g) for g in gas_parciales) + sum(float(g.get("total") or 0) for g in gas_pendientes)
         total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
         st.markdown(f"**Gastos — $ {_pesos(total_gastos)}** · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
-        _eg1, _eg2, _eg3, _eg4 = st.columns(4)
+        _eg1, _eg2, _eg3 = st.columns(3)
         _bal_metric(_eg1, "Pagado",    f"$ {_pesos(total_gas_pag)}",  "#2e7d32")
-        _bal_metric(_eg2, "Parcial",   f"$ {_pesos(total_gas_parc)}", "#1565c0")
-        _bal_metric(_eg3, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100")
-        _bal_metric(_eg4, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575")
+        _bal_metric(_eg2, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100")
+        _bal_metric(_eg3, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575")
         for _label, _lista, _tot_fn in [
             ("Pagado",    gas_pagados,    lambda g: float(g.get("total") or 0)),
             ("Parcial",   gas_parciales,  _pagado_gasto),
