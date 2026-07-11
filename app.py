@@ -1053,6 +1053,16 @@ def _sync_gastos(fecha_desde, fecha_hasta):
         page = d.get("datos", []) or [] if isinstance(d, dict) else (d if isinstance(d, list) else [])
         if not page:
             break
+        if not all_gastos:
+            _sample_items = None
+            for _fname in ["items", "detalles", "productos", "lineas", "renglones", "detalle"]:
+                _v = page[0].get(_fname)
+                if isinstance(_v, list) and _v:
+                    _sample_items = _v[0]
+                    break
+            st.write("DEBUG gasto[0] keys:", list(page[0].keys()))
+            st.write("DEBUG gasto[0] item keys:", list(_sample_items.keys()) if _sample_items else "sin items")
+            st.write("DEBUG gasto[0] item[0]:", _sample_items)
         all_gastos.extend(page)
         paging = d.get("paginacion", {}) or {} if isinstance(d, dict) else {}
         if not paging.get("hay_mas"):
