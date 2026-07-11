@@ -2242,7 +2242,7 @@ with tab_balance:
 
         # Compras
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas)
-        total_comp_parc = sum(_saldo_comp(c) for c in comp_parciales)
+        total_comp_parc = sum(_pagado_comp(c) for c in comp_parciales)
         total_comp_pend = sum(float(c.get("total") or 0) for c in comp_pendientes)
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
         st.markdown(f"**Compras — $ {_pesos(total_compras)}** · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
@@ -2253,7 +2253,7 @@ with tab_balance:
         _bal_metric(_ec4, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575")
         for _label, _lista, _tot_fn in [
             ("Pagado",    comp_pagadas,    lambda c: float(c.get("total") or 0)),
-            ("Parcial",   comp_parciales,  _saldo_comp),
+            ("Parcial",   comp_parciales,  _pagado_comp),
             ("Pendiente", comp_pendientes, lambda c: float(c.get("total") or 0)),
             ("Anulado",   comp_anuladas,   lambda c: float(c.get("total") or 0)),
         ]:
@@ -2282,7 +2282,7 @@ with tab_balance:
 
         # Gastos
         total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados)
-        total_gas_parc = sum(_saldo_gasto(g) for g in gas_parciales)
+        total_gas_parc = sum(_pagado_gasto(g) for g in gas_parciales)
         total_gas_pend = sum(float(g.get("total") or 0) for g in gas_pendientes)
         total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
         st.markdown(f"**Gastos — $ {_pesos(total_gastos)}** · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
@@ -2293,7 +2293,7 @@ with tab_balance:
         _bal_metric(_eg4, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575")
         for _label, _lista, _tot_fn in [
             ("Pagado",    gas_pagados,    lambda g: float(g.get("total") or 0)),
-            ("Parcial",   gas_parciales,  _saldo_gasto),
+            ("Parcial",   gas_parciales,  _pagado_gasto),
             ("Pendiente", gas_pendientes, lambda g: float(g.get("total") or 0)),
             ("Anulado",   gas_anulados,   lambda g: float(g.get("total") or 0)),
         ]:
