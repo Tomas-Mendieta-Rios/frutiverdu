@@ -1685,10 +1685,10 @@ def _render_movimiento_caja(cobros, pagos):
             _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
             if _signo == 1:
                 _t["Entradas"] += _tm
-                _t["detalle"].append({"Fecha": _tf, "Tipo": "Entrada", "Cat.": "Transferencia", "Concepto": f"Desde {_orig} — {_conc}", "Proveedor": "", "Cobro #": "", "Pago #": "", "Cheque": "", "Monto": _tm, "imputaciones": []})
+                _t["detalle"].append({"Fecha": _tf, "Tipo": "Entrada", "Cat.": "Transferencia", "Desde": _orig, "Hacia": _dest, "Concepto": _conc, "Proveedor": "", "Cobro #": "", "Pago #": "", "Cheque": "", "Monto": _tm, "imputaciones": []})
             else:
                 _t["Sal. Compras"] += _tm
-                _t["detalle"].append({"Fecha": _tf, "Tipo": "Salida", "Cat.": "Transferencia", "Concepto": f"Hacia {_dest} — {_conc}", "Proveedor": "", "Cobro #": "", "Pago #": "", "Cheque": "", "Monto": _tm, "imputaciones": []})
+                _t["detalle"].append({"Fecha": _tf, "Tipo": "Salida", "Cat.": "Transferencia", "Desde": _orig, "Hacia": _dest, "Concepto": _conc, "Proveedor": "", "Cobro #": "", "Pago #": "", "Cheque": "", "Monto": _tm, "imputaciones": []})
 
     # Ajustes de caja (inicial + ajustes del período)
     _ajustes_todos = db.cargar_ajustes_caja()
@@ -1841,7 +1841,7 @@ def _render_movimiento_caja(cobros, pagos):
             _tot_et = sum(r["Monto"] for r in _ent_transf)
             with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — $ {_tot_et:,.0f}"):
                 st.dataframe(
-                    pd.DataFrame(_ent_transf)[["Fecha", "Concepto", "Monto"]],
+                    pd.DataFrame(_ent_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
@@ -1849,7 +1849,7 @@ def _render_movimiento_caja(cobros, pagos):
             _tot_st = sum(r["Monto"] for r in _sal_transf)
             with st.expander(f"Salidas — Transferencias ({len(_sal_transf)}) — $ {_tot_st:,.0f}"):
                 st.dataframe(
-                    pd.DataFrame(_sal_transf)[["Fecha", "Concepto", "Monto"]],
+                    pd.DataFrame(_sal_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
