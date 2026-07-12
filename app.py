@@ -3054,11 +3054,6 @@ with tab_comprar:
     ts_comprar_ph = st.empty()
 
     with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
-        boton_actualizar = st.form_submit_button(
-            "🔄 Actualizar",
-            type="primary",
-            use_container_width=True,
-        )
         col_fc1, col_fc2, col_fc3 = st.columns([1.5, 1.2, 1.2])
         with col_fc1:
             fechas_entrega = st.multiselect(
@@ -3084,6 +3079,11 @@ with tab_comprar:
                 index=DIAS_SEMANA.index(def_dia_est),
                 key="comprar_dia_estimado",
             )
+        boton_actualizar = st.form_submit_button(
+            "🔄 Calcular",
+            type="primary",
+            use_container_width=True,
+        )
 
     if boton_actualizar:
         try:
