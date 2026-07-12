@@ -1610,7 +1610,7 @@ def _render_movimiento_caja(cobros, pagos):
                 "Proveedor":    "",
                 "Cobro #":      _c.get("nro_comprobante") or "—",
                 "Pago #":       "",
-                "Cheque":       "",
+                "Cheque":       (_cob.get("descripcion") or _cob.get("tipo_valor") or "") if "CHEQUE" in (_cob.get("tipo_valor") or _cob.get("descripcion") or "").upper() else "",
                 "Monto":        _monto,
                 "Total factura": _tot_fac_ref,
                 "Cobrado total": _tot_cob_ref,
@@ -1871,7 +1871,8 @@ def _render_movimiento_caja(cobros, pagos):
                 return pd.DataFrame()
             _df = pd.DataFrame(rows)
             _agg = {"Monto": "sum", "Fecha": "first", "Cliente": "first",
-                    "Facturas": lambda x: ", ".join(dict.fromkeys(v for v in x if str(v).strip()))}
+                    "Facturas": lambda x: ", ".join(dict.fromkeys(v for v in x if str(v).strip())),
+                    "Cheque": lambda x: ", ".join(v for v in x if str(v).strip())}
             for _ec in ["Total factura", "Cobrado total", "Saldo"]:
                 if _ec in _df.columns:
                     _agg[_ec] = "first"
@@ -1882,9 +1883,12 @@ def _render_movimiento_caja(cobros, pagos):
         _tot_ent = _df_ent["Monto"].sum() if not _df_ent.empty else 0.0
         with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
             if not _df_ent.empty:
+                _tiene_cheque_ent = _df_ent["Cheque"].astype(str).str.strip().ne("").any()
+                _cols_ent = ["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]
+                if _tiene_cheque_ent:
+                    _cols_ent.insert(4, "Cheque")
                 st.dataframe(
-                    _df_ent[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
-                      .rename(columns={"Facturas": "Facturas cobradas"}),
+                    _df_ent[_cols_ent].rename(columns={"Facturas": "Facturas cobradas"}),
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
