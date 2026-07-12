@@ -3782,53 +3782,45 @@ with tab_stock:
     # ultima guardada o a hoy si nunca se guardo.
     fecha_conteo_default = _default_or_saved("st_teorico_fecha_conteo", date.today())
 
-    # Sin on_change: cambiar fechas no escribe nada. Las fechas se persisten
-    # solo cuando se aprieta Calcular (junto con el resultado).
-
-    # Las 4 fechas + boton Actualizar van adentro de un st.form.
-    # Asi cambiar fechas NO dispara rerun (sin spinner). Solo el submit
-    # del form (Actualizar) re-ejecuta el calculo.
-    with st.form("form_params_teorico", border=False):
-        col_t1, col_t2, col_t3, col_t4 = st.columns([1, 1, 1, 1])
-        with col_t1:
-            f0 = st.date_input(
-                "📦 Stock inicial",
-                value=f0_default,
-                key="st_teorico_f0",
-                format="DD/MM/YYYY",
-                help="Día con conteo físico cargado en Stock.",
-            )
-        with col_t2:
-            fc = st.date_input(
-                "🛒 Compras",
-                value=fc_default,
-                key="st_teorico_fc",
-                format="DD/MM/YYYY",
-                help="Día de la compra a sumar.",
-            )
-        with col_t3:
-            fp = st.date_input(
-                "📋 Pedidos",
-                value=fp_default,
-                key="st_teorico_fp",
-                format="DD/MM/YYYY",
-                help="Día de entrega del pedido a restar.",
-            )
-        with col_t4:
-            fecha_conteo = st.date_input(
-                "📅 Stock",
-                value=fecha_conteo_default,
-                key="fecha_conteo_real",
-                format="DD/MM/YYYY",
-                help="Día con el que se guardará el Stock al apretar Guardar.",
-            )
-        actualizar = st.form_submit_button(
-            "🔄 Calcular",
-            type="primary",
-            use_container_width=True,
+    col_t1, col_t2, col_t3, col_t4 = st.columns([1, 1, 1, 1])
+    with col_t1:
+        f0 = st.date_input(
+            "📦 Stock inicial",
+            value=f0_default,
+            key="st_teorico_f0",
+            format="DD/MM/YYYY",
+            help="Día con conteo físico cargado en Stock.",
+        )
+    with col_t2:
+        fc = st.date_input(
+            "🛒 Compras",
+            value=fc_default,
+            key="st_teorico_fc",
+            format="DD/MM/YYYY",
+            help="Día de la compra a sumar.",
+        )
+    with col_t3:
+        fp = st.date_input(
+            "📋 Pedidos",
+            value=fp_default,
+            key="st_teorico_fp",
+            format="DD/MM/YYYY",
+            help="Día de entrega del pedido a restar.",
+        )
+    with col_t4:
+        fecha_conteo = st.date_input(
+            "📅 Stock",
+            value=fecha_conteo_default,
+            key="fecha_conteo_real",
+            format="DD/MM/YYYY",
+            help="Día con el que se guardará el Stock al apretar Guardar.",
         )
 
-    if actualizar:
+    if (
+        str(f0) != cfg_comprar.get("st_teorico_ultimo_f0", "")
+        or str(fc) != cfg_comprar.get("st_teorico_ultimo_fc", "")
+        or str(fp) != cfg_comprar.get("st_teorico_ultimo_fp", "")
+    ):
         try:
             db.guardar_config({
                 "st_teorico_ultimo_f0": str(f0),
@@ -3837,7 +3829,6 @@ with tab_stock:
             })
         except Exception:
             pass
-        st.cache_data.clear()
 
     # Calcular siempre al cargar (igual que Total a comprar)
     fechas_actuales = db.fechas_stock()
