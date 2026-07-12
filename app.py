@@ -1957,9 +1957,9 @@ def _render_movimiento_caja(cobros, pagos):
                     if _es_parcial_titulo:
                         _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Total comprobante", "Pagado total", "Saldo"]
                         if _tiene_cheque:
-                            _cols_sel.insert(4, "Cheque")
+                            _cols_sel.insert(3, "Cheque")
                     elif _tiene_cheque:
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Cheque", "Monto"]
+                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Cheque", "Concepto", "Monto"]
                     else:
                         _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Monto"]
                     _col_cfg = {"Fecha": _cfg_fecha, "Monto": _cfg_monto}
