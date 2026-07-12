@@ -2400,20 +2400,26 @@ with tab_balance:
                     for _rubro, _ritems in sorted(_by_rubro.items()):
                         _rtot = sum(_tot_fn(g) for g in _ritems)
                         with st.expander(f"{_rubro} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
-                            _rows = [{
-                                "Fecha":       _fmt_fecha(g.get("fecha")),
-                                "Sub Rubro":   g.get("sub_rubro_nombre") or "—",
-                                "Proveedor":   g.get("proveedor") or "—",
-                                "Items":       ", ".join(d.get("item","") for d in (g.get("detalles") or []) if (d.get("item") or "").strip()),
-                                "Comprobante": g.get("nro_comprobante") or "—",
-                                "Total":       float(g.get("total") or 0),
-                                "Pagado":      _pagado_gasto(g),
-                            } for g in sorted(_ritems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config={
-                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
-                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
-                                         })
+                            _by_sub = {}
+                            for _g in _ritems:
+                                _sk = _g.get("sub_rubro_nombre") or "Sin sub rubro"
+                                _by_sub.setdefault(_sk, []).append(_g)
+                            for _sub, _sitems in sorted(_by_sub.items()):
+                                _stot = sum(_tot_fn(g) for g in _sitems)
+                                with st.expander(f"{_sub} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                    _rows = [{
+                                        "Fecha":       _fmt_fecha(g.get("fecha")),
+                                        "Proveedor":   g.get("proveedor") or "—",
+                                        "Items":       ", ".join(d.get("item","") for d in (g.get("detalles") or []) if (d.get("item") or "").strip()),
+                                        "Comprobante": g.get("nro_comprobante") or "—",
+                                        "Total":       float(g.get("total") or 0),
+                                        "Pagado":      _pagado_gasto(g),
+                                    } for g in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                 column_config={
+                                                     "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
+                                                     "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
+                                                 })
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
