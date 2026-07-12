@@ -2903,6 +2903,7 @@ with tab_grupo_config:
         tab_probar,
         tab_migracion,
         tab_cajas,
+        tab_gastos_catalogo,
     ) = st.tabs(
         [
             "Mapeo Wix↔DUX",
@@ -2916,6 +2917,7 @@ with tab_grupo_config:
             "Probar conversión",
             "📦 Migrar desde Sheets",
             "💰 Cajas",
+            "📋 Items Gastos",
         ]
     )
 
@@ -5915,6 +5917,74 @@ with tab_cajas:
         except Exception as _e_gc:
             st.error(f"❌ No se pudieron guardar las cajas: {_e_gc}")
 
+
+
+with tab_gastos_catalogo:
+    st.subheader("📋 Catálogo de Items de Gastos")
+    st.caption(
+        "Importá un Excel con las columnas: Cod Producto, Gasto, Rubro, Sub Rubro, Proveedor. "
+        "La importación reemplaza todo el catálogo existente."
+    )
+
+    _cat_actual = db.cargar_gastos_catalogo()
+    if not _cat_actual.empty:
+        st.markdown(f"**Catálogo actual — {len(_cat_actual)} items**")
+        _cols_cat = [c for c in ["cod_producto", "gasto", "rubro", "sub_rubro", "proveedor"] if c in _cat_actual.columns]
+        st.dataframe(
+            _cat_actual[_cols_cat].rename(columns={
+                "cod_producto": "Cod Producto",
+                "gasto":        "Gasto",
+                "rubro":        "Rubro",
+                "sub_rubro":    "Sub Rubro",
+                "proveedor":    "Proveedor",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
+        if st.button("🗑 Borrar todo el catálogo", type="secondary", key="btn_borrar_cat_gastos"):
+            db.guardar_gastos_catalogo([])
+            st.success("Catálogo borrado.")
+            st.rerun()
+    else:
+        st.info("El catálogo está vacío. Importá un Excel para empezar.")
+
+    st.divider()
+    st.markdown("**Importar desde Excel**")
+    _archivo_cat = st.file_uploader(
+        "Seleccioná el archivo Excel",
+        type=["xlsx", "xls"],
+        key="uploader_gastos_catalogo",
+    )
+
+    if _archivo_cat:
+        try:
+            _df_excel = pd.read_excel(_archivo_cat, dtype=str).fillna("")
+            _col_map = {
+                "Cod Producto": "cod_producto",
+                "Gasto":        "gasto",
+                "Rubro":        "rubro",
+                "Sub Rubro":    "sub_rubro",
+                "Proveedor":    "proveedor",
+            }
+            _cols_faltantes = [c for c in _col_map if c not in _df_excel.columns]
+            if _cols_faltantes:
+                st.error(f"Columnas faltantes en el Excel: {', '.join(_cols_faltantes)}")
+            else:
+                _df_import = _df_excel.rename(columns=_col_map)[list(_col_map.values())]
+                _df_import = _df_import[_df_import["gasto"].str.strip().ne("")]
+                st.markdown(f"**Vista previa — {len(_df_import)} items**")
+                st.dataframe(
+                    _df_import.rename(columns={v: k for k, v in _col_map.items()}),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                if st.button("✅ Importar y reemplazar catálogo", type="primary", key="btn_importar_cat_gastos"):
+                    _registros = _df_import.to_dict(orient="records")
+                    db.guardar_gastos_catalogo(_registros)
+                    st.success(f"✅ {len(_registros)} items importados correctamente.")
+                    st.rerun()
+        except Exception as _e_imp:
+            st.error(f"Error al leer el archivo: {_e_imp}")
 
 
 #python -m streamlit run app.py

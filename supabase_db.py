@@ -146,6 +146,32 @@ def guardar_subrubros(registros):
         client.table("subrubros").insert(registros).execute()
 
 
+# ---------------- GASTOS CATÁLOGO ----------------
+
+@st.cache_data(ttl=600)
+def cargar_gastos_catalogo():
+    client = get_client()
+    resp = client.table("gastos_catalogo").select("*").order("rubro").order("sub_rubro").order("gasto").execute()
+    df = pd.DataFrame(resp.data or [])
+    if df.empty:
+        return pd.DataFrame(columns=["id", "cod_producto", "gasto", "rubro", "sub_rubro", "proveedor"])
+    return _drop_meta(df)
+
+
+def guardar_gastos_catalogo(registros):
+    client = get_client()
+    client.table("gastos_catalogo").delete().neq("id", -1).execute()
+    if registros:
+        client.table("gastos_catalogo").insert(registros).execute()
+    st.cache_data.clear()
+
+
+def eliminar_gastos_catalogo_item(item_id):
+    client = get_client()
+    client.table("gastos_catalogo").delete().eq("id", item_id).execute()
+    st.cache_data.clear()
+
+
 # ---------------- COMPUESTOS ----------------
 
 def cargar_compuestos():
