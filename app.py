@@ -5301,6 +5301,15 @@ with tab_eg_gastos:
         st.error(msg_error_sheets("leer gastos", e))
         gastos_saved = []
 
+    _cat_df = db.cargar_gastos_catalogo()
+    _cat_lookup = {} if _cat_df.empty else dict(zip(_cat_df["cod_producto"].astype(str), _cat_df["gasto"]))
+
+    def _nombre_item(d):
+        nombre = d.get("item", "") or ""
+        if not nombre.strip():
+            nombre = _cat_lookup.get(str(d.get("cod_item", "") or "").strip(), "") or d.get("cod_item", "") or ""
+        return nombre
+
     if not gastos_saved:
         st.info("Todavía no hay gastos. Andá a **🔄 Sincronizar**.")
     else:
@@ -5312,7 +5321,7 @@ with tab_eg_gastos:
             "Fecha":       _fmt_fecha(g.get("fecha")),
             "Proveedor":   g.get("proveedor") or "—",
             "Rubro":       " / ".join(filter(None, [g.get("rubro_nombre"), g.get("sub_rubro_nombre")])) or g.get("gasto") or "—",
-            "Items":       ", ".join(d.get("item","") or d.get("cod_item","") for d in (g.get("detalles") or []) if (d.get("item") or d.get("cod_item"))),
+            "Items":       ", ".join(_nombre_item(d) for d in (g.get("detalles") or []) if _nombre_item(d).strip()),
             "Total":       float(g.get("total") or 0),
         } for g in gastos_sorted]
         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
