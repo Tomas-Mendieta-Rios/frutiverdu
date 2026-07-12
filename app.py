@@ -2413,7 +2413,7 @@ with tab_balance:
                                         "Items":       ", ".join(d.get("item","") for d in (g.get("detalles") or []) if (d.get("item") or "").strip()),
                                         "Comprobante": g.get("nro_comprobante") or "—",
                                         "Total":       float(g.get("total") or 0),
-                                        "Pagado":      _pagado_gasto(g),
+                                        **( {"Pagado": _pagado_gasto(g)} if _label == "Parcial" else {}),
                                     } for g in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                                     st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                                  column_config={
