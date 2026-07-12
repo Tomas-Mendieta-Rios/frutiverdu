@@ -4601,71 +4601,16 @@ with tab_dux_rubros:
     if not token:
         st.error("Falta configurar el token de DUX en `.streamlit/secrets.toml`.")
     else:
-        # ---- RUBROS ----
-        st.subheader("Rubros")
-        col_r1, col_r2 = st.columns([3, 1])
-        with col_r1:
-            sincronizar_rubros = st.button(
-                "🔄 Sincronizar rubros desde DUX",
-                type="primary",
-                key="dux_sincronizar_rubros",
-                use_container_width=True,
-            )
-
-        if sincronizar_rubros:
-            url_r = f"{base_url}/rubros"
-            headers_r = {"accept": "application/json", "authorization": token}
-            params_r = {"id_empresa": id_empresa_default}
-            try:
-                resp_r = requests.get(url_r, headers=headers_r, params=params_r, timeout=30)
-            except requests.RequestException as e:
-                st.error(msg_error_red("DUX", e))
-                resp_r = None
-
-            if resp_r is not None:
-                if resp_r.status_code != 200:
-                    st.error(msg_error_http("DUX", resp_r.status_code, resp_r.text))
-                else:
-                    try:
-                        data_r = resp_r.json()
-                    except ValueError:
-                        data_r = None
-                        st.error("❌ DUX devolvió una respuesta inválida para rubros.")
-
-                    if data_r is not None:
-                        items_r = data_r if isinstance(data_r, list) else data_r.get("results", [])
-                        registros_r = [
-                            {"id": r.get("id_rubro"), "nombre": str(r.get("rubro", "") or "").strip()}
-                            for r in (items_r or [])
-                            if r.get("id_rubro") is not None and r.get("eliminado", "N") == "N"
-                        ]
-                        db.guardar_rubros(registros_r)
-                        st.success(f"✅ {len(registros_r)} rubros sincronizados.")
-
-        st.divider()
-        st.caption("Rubros cargados")
-        try:
-            df_rubros = db.cargar_rubros()
-            if not df_rubros.empty:
-                cols_r = [c for c in ["id", "nombre"] if c in df_rubros.columns]
-                st.dataframe(df_rubros[cols_r].sort_values("nombre").reset_index(drop=True), use_container_width=False, hide_index=True)
-            else:
-                st.info("Sin rubros. Apretá **Sincronizar rubros**.")
-        except Exception as e:
-            st.error(msg_error_sheets("leer rubros", e))
-
-        st.divider()
-
-        # ---- SUBRUBROS ----
-        st.subheader("Subrubros")
-        sincronizar_subrubros = st.button(
-            "🔄 Sincronizar subrubros desde DUX",
+        # ---- RUBROS Y SUBRUBROS (un solo endpoint) ----
+        st.subheader("Rubros y Subrubros")
+        sincronizar_rubros = st.button(
+            "🔄 Sincronizar desde DUX",
             type="primary",
-            key="dux_sincronizar_subrubros",
+            key="dux_sincronizar_rubros",
             use_container_width=True,
         )
 
-        if sincronizar_subrubros:
+        if sincronizar_rubros:
             url_sr = f"{base_url}/subrubros"
             headers_sr = {"accept": "application/json", "authorization": token}
             params_sr = {"id_empresa": id_empresa_default}
@@ -4683,35 +4628,59 @@ with tab_dux_rubros:
                         data_sr = resp_sr.json()
                     except ValueError:
                         data_sr = None
-                        st.error("❌ DUX devolvió una respuesta inválida para subrubros.")
+                        st.error("❌ DUX devolvió una respuesta inválida.")
 
                     if data_sr is not None:
                         items_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
+
+                        # Rubros únicos extraídos del mismo endpoint
+                        rubros_vistos = {}
+                        for sr in (items_sr or []):
+                            rid = sr.get("id_rubro")
+                            if rid is not None and rid not in rubros_vistos:
+                                rubros_vistos[rid] = str(sr.get("rubro", "") or "").strip()
+                        registros_r = [{"id": rid, "nombre": nombre} for rid, nombre in rubros_vistos.items()]
+                        db.guardar_rubros(registros_r)
+
+                        # Subrubros: id único = id_rubro * 10000 + id_sub_rubro
                         registros_sr = []
                         for sr in (items_sr or []):
+                            rid = sr.get("id_rubro")
                             sid = sr.get("id_sub_rubro")
-                            if sid is None:
+                            if rid is None or sid is None:
                                 continue
                             registros_sr.append({
-                                "id": sid,
-                                "nombre": str(sr.get("sub_rubro", "") or "").strip(),
-                                "rubro_id": sr.get("id_rubro"),
+                                "id":          rid * 10000 + sid,
+                                "nombre":      str(sr.get("sub_rubro", "") or "").strip(),
+                                "rubro_id":    rid,
                                 "rubro_nombre": str(sr.get("rubro", "") or "").strip(),
                             })
                         db.guardar_subrubros(registros_sr)
-                        st.success(f"✅ {len(registros_sr)} subrubros sincronizados.")
+                        st.success(f"✅ {len(registros_r)} rubros y {len(registros_sr)} subrubros sincronizados.")
 
         st.divider()
-        st.caption("Subrubros cargados")
-        try:
-            df_subrubros = db.cargar_subrubros()
-            if not df_subrubros.empty:
-                cols_sr = [c for c in ["id", "nombre", "rubro_nombre"] if c in df_subrubros.columns]
-                st.dataframe(df_subrubros[cols_sr].sort_values("nombre").reset_index(drop=True), use_container_width=False, hide_index=True)
-            else:
-                st.info("Sin subrubros. Apretá **Sincronizar subrubros**.")
-        except Exception as e:
-            st.error(msg_error_sheets("leer subrubros", e))
+        _rc, _src = st.columns(2)
+        with _rc:
+            st.caption("Rubros")
+            try:
+                df_rubros = db.cargar_rubros()
+                if not df_rubros.empty:
+                    st.dataframe(df_rubros[["nombre"]].sort_values("nombre").reset_index(drop=True), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Sin rubros.")
+            except Exception as e:
+                st.error(msg_error_sheets("leer rubros", e))
+        with _src:
+            st.caption("Subrubros")
+            try:
+                df_subrubros = db.cargar_subrubros()
+                if not df_subrubros.empty:
+                    cols_sr = [c for c in ["rubro_nombre", "nombre"] if c in df_subrubros.columns]
+                    st.dataframe(df_subrubros[cols_sr].sort_values(["rubro_nombre", "nombre"]).reset_index(drop=True), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Sin subrubros.")
+            except Exception as e:
+                st.error(msg_error_sheets("leer subrubros", e))
 
     ts_dux_rubros = db.ultima_carga("dux_rubros")
     ts_dux_rubros_ph.caption(f"🕒 Última actualización rubros: **{_fmt_ts(ts_dux_rubros)}**")

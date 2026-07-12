@@ -1308,7 +1308,7 @@ def cargar_gastos():
     if not resp_gastos.data:
         return []
 
-    all_items_gasto = _fetch_all(client, "gastos_items_con_nombre")
+    all_items_gasto = _fetch_all(client, "gastos_items")
     prods = _productos_lookup()
     items_por_gasto = {}
     for it in all_items_gasto:
@@ -1317,7 +1317,7 @@ def cargar_gastos():
             cod = str(it.get("cod_item") or "")
             items_por_gasto.setdefault(gid, []).append({
                 "cod_item": it.get("cod_item"),
-                "item": it.get("item") or it.get("nombre_catalogo") or prods.get(cod, ""),
+                "item": it.get("item") or prods.get(cod, ""),
                 "ctd": it.get("ctd"),
                 "precio_uni": it.get("precio_uni"),
                 "porc_desc": it.get("porc_desc"),
