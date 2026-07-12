@@ -2,7 +2,11 @@ import hashlib
 import io
 import re
 import time
+import warnings
 from datetime import date, timedelta, datetime, timezone
+
+warnings.filterwarnings("ignore", message=".*use_container_width.*")
+warnings.filterwarnings("ignore", message=".*label.*got an empty value.*")
 
 import requests
 import streamlit as st
@@ -2389,19 +2393,21 @@ with tab_balance:
             if _lista:
                 _tot_lbl = sum(_tot_fn(g) for g in _lista)
                 with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
-                    _by_prov = {}
+                    _by_rubro = {}
                     for _g in _lista:
-                        _by_prov.setdefault(_g.get("proveedor") or "—", []).append(_g)
-                    for _prov, _pitems in sorted(_by_prov.items()):
-                        _ptot = sum(_tot_fn(g) for g in _pitems)
-                        with st.expander(f"{_prov} — {len(_pitems)} gasto{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
+                        _rk = _g.get("rubro_nombre") or _g.get("gasto") or "Sin rubro"
+                        _by_rubro.setdefault(_rk, []).append(_g)
+                    for _rubro, _ritems in sorted(_by_rubro.items()):
+                        _rtot = sum(_tot_fn(g) for g in _ritems)
+                        with st.expander(f"{_rubro} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
                             _rows = [{
                                 "Fecha":       _fmt_fecha(g.get("fecha")),
-                                "Rubro":       " / ".join(filter(None, [g.get("rubro_nombre"), g.get("sub_rubro_nombre")])) or g.get("gasto") or "—",
+                                "Sub Rubro":   g.get("sub_rubro_nombre") or "—",
+                                "Proveedor":   g.get("proveedor") or "—",
                                 "Comprobante": g.get("nro_comprobante") or "—",
                                 "Total":       float(g.get("total") or 0),
                                 "Pagado":      _pagado_gasto(g),
-                            } for g in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                            } for g in sorted(_ritems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={
                                              "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
