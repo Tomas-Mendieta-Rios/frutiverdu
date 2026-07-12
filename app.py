@@ -1864,22 +1864,37 @@ def _render_movimiento_caja(cobros, pagos):
 
         _entradas_real      = [r for r in _entradas if r.get("Cat.") != "Transferencia" and not r.get("_parcial")]
         _entradas_real_parc = [r for r in _entradas if r.get("Cat.") != "Transferencia" and r.get("_parcial")]
-        _tot_ent = sum(r["Monto"] for r in _entradas_real)
-        with st.expander(f"Entradas ({len(_entradas_real)}) — {_fmt_monto(_tot_ent)}"):
-            if _entradas_real:
+
+        # Dedup cobros: un cobro puede tener múltiples cobranza lines en la misma caja
+        def _dedup_cobros(rows):
+            if not rows:
+                return pd.DataFrame()
+            _df = pd.DataFrame(rows)
+            _agg = {"Monto": "sum", "Fecha": "first", "Cliente": "first",
+                    "Facturas": lambda x: ", ".join(dict.fromkeys(v for v in x if str(v).strip()))}
+            for _ec in ["Total factura", "Cobrado total", "Saldo"]:
+                if _ec in _df.columns:
+                    _agg[_ec] = "first"
+            return _df.groupby("Cobro #", sort=False).agg(_agg).reset_index()
+
+        _df_ent      = _dedup_cobros(_entradas_real)
+        _df_ent_parc = _dedup_cobros(_entradas_real_parc)
+        _tot_ent = _df_ent["Monto"].sum() if not _df_ent.empty else 0.0
+        with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
+            if not _df_ent.empty:
                 st.dataframe(
-                    pd.DataFrame(_entradas_real)[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
+                    _df_ent[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]]
                       .rename(columns={"Facturas": "Facturas cobradas"}),
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
             else:
                 st.caption("Sin entradas en el período.")
-        if _entradas_real_parc:
-            _tot_ent_parc = sum(r["Monto"] for r in _entradas_real_parc)
-            with st.expander(f"Entradas — Parciales ({len(_entradas_real_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
+        if not _df_ent_parc.empty:
+            _tot_ent_parc = _df_ent_parc["Monto"].sum()
+            with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
                 st.dataframe(
-                    pd.DataFrame(_entradas_real_parc)[["Cobro #", "Fecha", "Cliente", "Facturas", "Total factura", "Cobrado total", "Saldo"]]
+                    _df_ent_parc[["Cobro #", "Fecha", "Cliente", "Facturas", "Total factura", "Cobrado total", "Saldo"]]
                       .rename(columns={"Facturas": "Facturas"}),
                     use_container_width=True, hide_index=True,
                     column_config={
