@@ -3912,13 +3912,6 @@ with tab_stock:
                     or abs(float(row.get("− Pedidos", 0))) > 1e-6
                 )
             n_con_mov = sum(1 for _, r in df_teorico_r.iterrows() if _tiene_mov(r))
-            n_stock_ini = int((df_teorico_r["Stock inicial"] > 0.001).sum())
-            st.success(
-                f"✅ {n_con_mov} productos con movimientos. "
-                f"Stock inicial ({_fmt_fecha(f0)}): {n_stock_ini} códigos. "
-                f"Compras del {_fmt_fecha(fc)}: {len(map_compras)} códigos. "
-                f"Pedidos entregados el {_fmt_fecha(fp)}: {len(map_pedidos)} códigos."
-            )
 
             _prod_nombre = dict(zip(
                 productos["codigo"].astype(str),
