@@ -2404,6 +2404,7 @@ with tab_balance:
                                 "Fecha":       _fmt_fecha(g.get("fecha")),
                                 "Sub Rubro":   g.get("sub_rubro_nombre") or "—",
                                 "Proveedor":   g.get("proveedor") or "—",
+                                "Items":       ", ".join(d.get("item","") for d in (g.get("detalles") or []) if (d.get("item") or "").strip()),
                                 "Comprobante": g.get("nro_comprobante") or "—",
                                 "Total":       float(g.get("total") or 0),
                                 "Pagado":      _pagado_gasto(g),
