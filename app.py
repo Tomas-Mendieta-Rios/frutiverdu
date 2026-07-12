@@ -1897,9 +1897,12 @@ def _render_movimiento_caja(cobros, pagos):
         if not _df_ent_parc.empty:
             _tot_ent_parc = _df_ent_parc["Monto"].sum()
             with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
+                _tiene_cheque_parc = _df_ent_parc["Cheque"].astype(str).str.strip().ne("").any()
+                _cols_parc = ["Cobro #", "Fecha", "Cliente", "Facturas", "Total factura", "Cobrado total", "Saldo"]
+                if _tiene_cheque_parc:
+                    _cols_parc.insert(3, "Cheque")
                 st.dataframe(
-                    _df_ent_parc[["Cobro #", "Fecha", "Cliente", "Facturas", "Total factura", "Cobrado total", "Saldo"]]
-                      .rename(columns={"Facturas": "Facturas"}),
+                    _df_ent_parc[_cols_parc],
                     use_container_width=True, hide_index=True,
                     column_config={
                         "Fecha":         _cfg_fecha,
