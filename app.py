@@ -3051,46 +3051,60 @@ with tab_comprar:
     if cfg_comprar.get("comprar_dia_estimado") in DIAS_SEMANA:
         def_dia_est = cfg_comprar["comprar_dia_estimado"]
 
-    col_fc1, col_fc2, col_fc3 = st.columns([1.5, 1.2, 1.2])
-    with col_fc1:
-        fechas_entrega = st.multiselect(
-            "📦 Fechas de entrega",
-            options=fechas_entrega_disp,
-            default=def_fent_list,
-            key="comprar_fechas_entrega",
-            format_func=_fmt_fecha,
-            help="Elegí una o más fechas. Los pedidos de todas ellas se suman.",
-        )
-    with col_fc2:
-        fecha_stock_sel = st.date_input(
-            "📦 Fecha de stock",
-            value=def_fstk,
-            key="comprar_fecha_stock",
-            format="DD/MM/YYYY",
-        )
-    with col_fc3:
-        dia_estimado_sel = st.selectbox(
-            "📈 Día de estimado",
-            options=DIAS_SEMANA,
-            format_func=lambda d: DIAS_DISPLAY[d],
-            index=DIAS_SEMANA.index(def_dia_est),
-            key="comprar_dia_estimado",
-        )
+    ts_comprar_ph = st.empty()
 
-    _fent_str = ",".join(fechas_entrega) if fechas_entrega else ""
-    if (
-        _fent_str != cfg_comprar.get("comprar_fechas_entrega", "")
-        or str(fecha_stock_sel) != cfg_comprar.get("comprar_fecha_stock", "")
-        or str(dia_estimado_sel) != cfg_comprar.get("comprar_dia_estimado", "")
-    ):
+    with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
+        boton_actualizar = st.form_submit_button(
+            "🔄 Actualizar",
+            type="primary",
+            use_container_width=True,
+        )
+        col_fc1, col_fc2, col_fc3 = st.columns([1.5, 1.2, 1.2])
+        with col_fc1:
+            fechas_entrega = st.multiselect(
+                "📦 Fechas de entrega",
+                options=fechas_entrega_disp,
+                default=def_fent_list,
+                key="comprar_fechas_entrega",
+                format_func=_fmt_fecha,
+                help="Elegí una o más fechas. Los pedidos de todas ellas se suman.",
+            )
+        with col_fc2:
+            fecha_stock_sel = st.date_input(
+                "📦 Fecha de stock",
+                value=def_fstk,
+                key="comprar_fecha_stock",
+                format="DD/MM/YYYY",
+            )
+        with col_fc3:
+            dia_estimado_sel = st.selectbox(
+                "📈 Día de estimado",
+                options=DIAS_SEMANA,
+                format_func=lambda d: DIAS_DISPLAY[d],
+                index=DIAS_SEMANA.index(def_dia_est),
+                key="comprar_dia_estimado",
+            )
+
+    if boton_actualizar:
         try:
+            ts_actualizar = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             db.guardar_config({
-                "comprar_fechas_entrega": _fent_str,
+                "comprar_fechas_entrega": ",".join(fechas_entrega) if fechas_entrega else "",
                 "comprar_fecha_stock": str(fecha_stock_sel),
                 "comprar_dia_estimado": str(dia_estimado_sel),
+                "comprar_ultima_actualizacion": ts_actualizar,
             })
+            cfg_comprar["comprar_ultima_actualizacion"] = ts_actualizar
         except Exception:
             pass
+        st.cache_data.clear()
+
+    ts_actualizar_ultimo = cfg_comprar.get("comprar_ultima_actualizacion")
+    ts_comprar_ph.caption(
+        f"🕒 Última actualización: **{_fmt_ts(ts_actualizar_ultimo)}**"
+    )
 
     if str(fecha_stock_sel) not in (fechas_stock_disp or []):
         st.warning(
