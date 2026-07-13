@@ -1387,8 +1387,8 @@ pagos_bal        = db.cargar_pagos_proveedores()
 )
 
 with tab_tesoreria:
-    _sub_resumen, _sub_pendientes, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
-        "📊 Resumen", "⏳ Pendientes y deudores", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
+    _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
+        "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
     ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -1402,7 +1402,7 @@ with tab_egresos:
     tab_eg_compras, tab_eg_gastos, tab_eg_pagos = st.tabs(["💰 Compras", "📄 Gastos", "💳 Pagos proveedores"])
 
 with tab_ingresos:
-    tab_ing_facturas, tab_ing_cobros, tab_ing_cobros_wix = st.tabs(["🧾 Facturas DUX", "💵 Cobros DUX", "💳 Cobros Wix"])
+    tab_ing_facturas, tab_ing_cobros = st.tabs(["🧾 Facturas DUX", "💵 Cobros DUX"])
 
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
