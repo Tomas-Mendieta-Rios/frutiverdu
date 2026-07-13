@@ -2022,7 +2022,7 @@ with tab_balance:
     def _pesos(v):
         return f"{float(v or 0):,.2f}"
 
-    _bal_nav = st.radio("", ["Resumen", "Pendientes & Deudores"], horizontal=True, key="bal_nav", label_visibility="collapsed")
+    _bal_nav = st.radio("Vista", ["Resumen", "Pendientes & Deudores"], horizontal=True, key="bal_nav", label_visibility="collapsed")
 
     _cfg_bal = db.cargar_config()
 
