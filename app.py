@@ -2071,6 +2071,19 @@ with tab_balance:
         def _pend_saldo_g(g):
             return max(0.0, float(g.get("total") or 0) - _pend_pagado_g(g))
 
+        # Monto cobrado real por factura (via imputaciones de cobros)
+        _pend_cobrado_por_fac = {}
+        for _cob in cobros_bal:
+            for _imp in (_cob.get("imputaciones") or []):
+                _fid = str(_imp.get("id_comp_venta") or "")
+                if _fid:
+                    _pend_cobrado_por_fac[_fid] = _pend_cobrado_por_fac.get(_fid, 0.0) + float(_imp.get("monto_imputado") or 0)
+
+        def _pend_cobrado_f(f):
+            return min(float(f.get("total") or 0), _pend_cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
+        def _pend_saldo_f(f):
+            return max(0.0, float(f.get("total") or 0) - _pend_cobrado_f(f))
+
         # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
         _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA" and _pend_en_rango(c.get("fecha"))]
         _gas_pend_hist  = [g for g in gastos_bal       if g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA" and _pend_en_rango(g.get("fecha"))]
@@ -2146,9 +2159,9 @@ with tab_balance:
         st.divider()
 
         # ── DEUDORES (lo que nos deben) ────────────────────────────────────
-        _fac_deud  = [f for f in facturas_bal     if not f.get("con_cobro") and str(f.get("anulada","N")).upper() != "S" and _pend_en_rango(f.get("fecha_comp"))]
+        _fac_deud  = [f for f in facturas_bal     if str(f.get("anulada","N")).upper() != "S" and _pend_saldo_f(f) > 0 and _pend_en_rango(f.get("fecha_comp"))]
         _wix_deud  = [p for p in pedidos_wix_bal  if str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED" and _pend_en_rango(p.get("createdDate"))]
-        _total_deud_dux = sum(float(f.get("total") or 0) for f in _fac_deud)
+        _total_deud_dux = sum(_pend_saldo_f(f) for f in _fac_deud)
         _total_deud_wix = sum(_wix_monto(p) for p in _wix_deud)
         _total_deud     = _total_deud_dux + _total_deud_wix
 
@@ -2166,16 +2179,27 @@ with tab_balance:
                 for _f in _fac_deud:
                     _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                     _by_cli_dux.setdefault(_cli, []).append(_f)
-                for _cli, _citems in sorted(_by_cli_dux.items(), key=lambda kv: sum(float(f.get("total") or 0) for f in kv[1]), reverse=True):
-                    _ctot = sum(float(f.get("total") or 0) for f in _citems)
+                for _cli, _citems in sorted(_by_cli_dux.items(), key=lambda kv: sum(_pend_saldo_f(f) for f in kv[1]), reverse=True):
+                    _ctot = sum(_pend_saldo_f(f) for f in _citems)
                     with st.expander(f"{_cli} ({len(_citems)}) — $ {_pesos(_ctot)}"):
-                        _rows = [{
-                            "Fecha":       _fmt_fecha(f.get("fecha_comp")),
-                            "Comprobante": f"{f.get('tipo_comp','')} {f.get('letra_comp','')} {f.get('nro_pto_vta','')}-{f.get('nro_comp','')}".strip(),
-                            "Total":       float(f.get("total") or 0),
-                        } for f in sorted(_citems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                     column_config={"Total": _cfg_monto})
+                        _rows = []
+                        for _f in sorted(_citems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                            _es_parc = _pend_cobrado_f(_f) > 0
+                            _row = {
+                                "Fecha":       _fmt_fecha(_f.get("fecha_comp")),
+                                "Estado":      "Parcial" if _es_parc else "Pendiente",
+                                "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
+                                "Total":       float(_f.get("total") or 0),
+                            }
+                            if _es_parc:
+                                _row["Cobrado"] = _pend_cobrado_f(_f)
+                                _row["Saldo"]   = _pend_saldo_f(_f)
+                            _rows.append(_row)
+                        _fcfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
+                        if any("Cobrado" in r for r in _rows):
+                            _fcfg["Cobrado"] = st.column_config.NumberColumn("Cobrado", format="$ %,.2f")
+                            _fcfg["Saldo"]   = st.column_config.NumberColumn("Saldo",   format="$ %,.2f")
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_fcfg)
 
         # Wix deudores
         with st.expander(f"Wix sin cobrar ({len(_wix_deud)}) — $ {_pesos(_total_deud_wix)}"):
