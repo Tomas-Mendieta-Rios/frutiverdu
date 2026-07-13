@@ -3044,7 +3044,6 @@ with tab_sync:
             ("Pedidos DUX",          _sync_pedidos_dux),
             ("Facturas",             _sync_facturas),
             ("Cobros",               _sync_cobros),
-            ("Percepciones",         _sync_percepciones),
         ]
         _n_steps   = len(_sync_steps)
         _prog_bar  = st.progress(0, text="0%")
@@ -3070,6 +3069,16 @@ with tab_sync:
         _errors = [(_slabel, _msg) for _ok, _slabel, _msg in _results if not _ok]
         for _slabel, _msg in _errors:
             st.error(_msg)
+
+    st.divider()
+    st.markdown("**Catálogos** *(sincronizar manualmente cuando cambien)*")
+    if st.button("📋 Sincronizar Percepciones e Impuestos", use_container_width=True):
+        with st.spinner("Sincronizando percepciones..."):
+            _ok_p, _n_p, _msg_p = _sync_percepciones(None, None)
+        if _ok_p:
+            st.success(_msg_p)
+        else:
+            st.error(_msg_p)
 
 with tab_grupo_config:
     tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
