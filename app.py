@@ -1930,12 +1930,10 @@ def _render_movimiento_caja(cobros, pagos):
             for _mc in _medios_cols:
                 _df_ent_parc[_mc] = _df_ent_parc["Cobro #"].map(lambda n, k=_mc: (_cobro_medios_lkp.get(n) or {}).get(k, 0))
             with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
-                _cols_parc = ["Cobro #", "Fecha", "Cliente", "Facturas"] + _medios_cols + ["Total factura", "Cobrado total", "Saldo"]
+                _cols_parc = ["Cobro #", "Fecha", "Cliente", "Facturas"] + _medios_cols + ["Monto"]
                 _cc_parc = {
-                    "Fecha":         _cfg_fecha,
-                    "Total factura": st.column_config.NumberColumn("Total factura", format="$ %,.0f"),
-                    "Cobrado total": st.column_config.NumberColumn("Cobrado total", format="$ %,.0f"),
-                    "Saldo":         st.column_config.NumberColumn("Saldo",         format="$ %,.0f"),
+                    "Fecha":  _cfg_fecha,
+                    "Monto":  _cfg_monto,
                 }
                 for _mc in _medios_cols:
                     _cc_parc[_mc] = st.column_config.NumberColumn(_mc.title(), format="$ %,.0f")
