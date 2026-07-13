@@ -1888,16 +1888,14 @@ def _render_movimiento_caja(cobros, pagos):
             return _df.groupby("Cobro #", sort=False).agg(_agg).reset_index()
 
         _df_ent = _dedup_cobros(_entradas_real + _entradas_real_parc)
-        _tot_ent = _df_ent["Monto"].sum() if not _df_ent.empty else 0.0
-        with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
-            if not _df_ent.empty:
+        if not _df_ent.empty:
+            _tot_ent = _df_ent["Monto"].sum()
+            with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
                 st.dataframe(
                     _df_ent[["Cobro #", "Fecha", "Cliente", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
-            else:
-                st.caption("Sin entradas en el período.")
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
             with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
