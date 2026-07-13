@@ -2127,7 +2127,6 @@ with tab_balance:
                             _rows = [{
                                 "Fecha":       _fmt_fecha(_c.get("fecha")),
                                 "Comprobante": _c.get("nro_comprobante") or "—",
-                                "Condición":   _c.get("condicion_pago") or "—",
                                 "Total":       float(_c.get("total") or 0),
                                 **( {"Pagado": _pend_pagado_c(_c), "Saldo": _pend_saldo_c(_c)} if _lbl == "Parciales" else {} ),
                             } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
