@@ -2775,23 +2775,51 @@ with _stab_saldo_ini:
 
 with _stab_iva:
     st.subheader("🧾 Posición IVA Débito")
-    st.caption(f"Período: {bal_desde.strftime('%d/%m/%Y')} → {bal_hasta.strftime('%d/%m/%Y')} · Solo facturas de venta (crédito fiscal de compras no disponible)")
 
-    _iva_neto_gravado = sum(float(f.get("monto_gravado") or 0) for f in facturas_vig)
-    _iva_debito       = sum(float(f.get("monto_iva") or 0) for f in facturas_vig)
-    _iva_exento       = sum(float(f.get("monto_exento") or 0) for f in facturas_vig)
+    _hoy_iva = date.today()
+    try:
+        _iva_desde_def = date.fromisoformat(_cfg_bal.get("iva_desde", ""))
+    except Exception:
+        _iva_desde_def = _hoy_iva.replace(day=1)
+    try:
+        _iva_hasta_def = date.fromisoformat(_cfg_bal.get("iva_hasta", ""))
+    except Exception:
+        _iva_hasta_def = _hoy_iva
 
+    with st.form("form_iva_fechas", border=False):
+        _ivc1, _ivc2 = st.columns(2)
+        with _ivc1:
+            _iva_desde = st.date_input("Desde", value=_iva_desde_def, key="iva_desde_in", format="DD/MM/YYYY")
+        with _ivc2:
+            _iva_hasta = st.date_input("Hasta", value=_iva_hasta_def, key="iva_hasta_in", format="DD/MM/YYYY")
+        _btn_iva = st.form_submit_button("Calcular", type="primary", use_container_width=True)
+    if _btn_iva:
+        db.guardar_config({"iva_desde": str(_iva_desde), "iva_hasta": str(_iva_hasta)})
+
+    def _iva_en_rango(fecha_str):
+        try:
+            return _iva_desde <= pd.to_datetime(str(fecha_str or "")).date() <= _iva_hasta
+        except Exception:
+            return False
+
+    _facturas_iva = [f for f in facturas_bal if _iva_en_rango(f.get("fecha_comp")) and str(f.get("anulada", "N")).upper() != "S"]
+
+    _iva_neto_gravado = sum(float(f.get("monto_gravado") or 0) for f in _facturas_iva)
+    _iva_debito       = sum(float(f.get("monto_iva") or 0) for f in _facturas_iva)
+    _iva_exento       = sum(float(f.get("monto_exento") or 0) for f in _facturas_iva)
+
+    st.caption(f"Solo facturas de venta · crédito fiscal de compras no disponible")
     st.divider()
     _iv1, _iv2, _iv3 = st.columns(3)
     _bal_metric(_iv1, "Neto Gravado",        f"$ {_pesos(_iva_neto_gravado)}", "#1565c0")
     _bal_metric(_iv2, "IVA Débito Fiscal",   f"$ {_pesos(_iva_debito)}",       "#6a1b9a")
     _bal_metric(_iv3, "Exento / No gravado", f"$ {_pesos(_iva_exento)}",       "#757575")
 
-    if facturas_vig:
+    if _facturas_iva:
         st.divider()
-        st.markdown(f"**Detalle por factura — {len(facturas_vig)} comprobantes**")
+        st.markdown(f"**Detalle por factura — {len(_facturas_iva)} comprobantes**")
         _iva_rows = []
-        for _f in sorted(facturas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+        for _f in sorted(_facturas_iva, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
             _iva_rows.append({
                 "Fecha":        _fmt_fecha(_f.get("fecha_comp")),
                 "Comprobante":  f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
