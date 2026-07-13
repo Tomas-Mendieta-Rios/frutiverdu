@@ -698,6 +698,22 @@ def asignar_cajas_pedidos_wix(asignaciones):
     cargar_pedidos_wix.clear()
 
 
+def cargar_fechas_pago_wix():
+    """Devuelve dict {order_id: fecha_pago}."""
+    client = get_client()
+    resp = client.table("fechas_pago_wix").select("order_id,fecha_pago").execute()
+    return {r["order_id"]: r["fecha_pago"] for r in (resp.data or [])}
+
+
+def guardar_fechas_pago_wix(fechas):
+    """fechas: dict {order_id: fecha_pago_str | None}"""
+    client = get_client()
+    for order_id, fecha_pago in fechas.items():
+        client.table("fechas_pago_wix").upsert(
+            {"order_id": str(order_id), "fecha_pago": str(fecha_pago) if fecha_pago else None}
+        ).execute()
+
+
 # ---------------- PEDIDOS WIX ----------------
 
 @st.cache_data(ttl=600)

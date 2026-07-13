@@ -1387,8 +1387,8 @@ pagos_bal        = db.cargar_pagos_proveedores()
 )
 
 with tab_tesoreria:
-    _sub_resumen, _sub_pendientes, tab_ing_cobros, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
-        "📊 Resumen", "⏳ Pendientes y deudores", "💵 Cobros DUX", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
+    _sub_resumen, _sub_pendientes, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
+        "📊 Resumen", "⏳ Pendientes y deudores", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
     ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -1402,7 +1402,7 @@ with tab_egresos:
     tab_eg_compras, tab_eg_gastos, tab_eg_pagos = st.tabs(["💰 Compras", "📄 Gastos", "💳 Pagos proveedores"])
 
 with tab_ingresos:
-    tab_ing_facturas, tab_ing_cobros_wix = st.tabs(["🧾 Facturas DUX", "💳 Cobros Wix"])
+    tab_ing_facturas, tab_ing_cobros, tab_ing_cobros_wix = st.tabs(["🧾 Facturas DUX", "💵 Cobros DUX", "💳 Cobros Wix"])
 
 with tab_grupo_pedidos:
     tab_dux, tab_wix = st.tabs(["DUX", "Wix"])
@@ -2830,6 +2830,12 @@ with tab_ingresos:
                 reverse=True,
             )[:100]
 
+            _sels_wix_cob = db.cargar_selecciones("wix")
+            try:
+                _fechas_pago_cob = db.cargar_fechas_pago_wix()
+            except Exception:
+                _fechas_pago_cob = {}
+
             _pay_map = {"PAID": "✅ Pagado", "UNPAID": "❌ Sin pagar", "PENDING": "🟡 Pendiente",
                         "PARTIALLY_REFUNDED": "🟠 Parcial", "FULLY_REFUNDED": "⚫ Reembolsado"}
             _ful_map = {"FULFILLED": "✅ Entregado", "NOT_FULFILLED": "⏳ Pendiente",
@@ -2845,6 +2851,11 @@ with tab_ingresos:
                     or "—"
                 )
                 _caja_id_c = _o.get("caja_id")
+                _fecha_pago_raw = _fechas_pago_cob.get(_oid_c)
+                try:
+                    _fecha_pago_val = date.fromisoformat(_fecha_pago_raw) if _fecha_pago_raw else None
+                except Exception:
+                    _fecha_pago_val = None
                 _filas_cob.append({
                     "_order_id": _oid_c,
                     "Pedido": f"#{_nro_c}",
@@ -2852,34 +2863,44 @@ with tab_ingresos:
                     "Total": (_o.get("priceSummary", {}) or {}).get("total", {}).get("formattedAmount", ""),
                     "Pago": _pay_map.get(str(_o.get("paymentStatus") or "").upper(), "—"),
                     "Entrega": _ful_map.get(str(_o.get("fulfillmentStatus") or "").upper(), "—"),
+                    "F. pedido": _fmt_fecha(_o.get("createdDate")),
+                    "F. entrega": _fmt_fecha(_sels_wix_cob.get(_oid_c)),
+                    "F. pago": _fecha_pago_val,
                     "Caja": _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None,
                 })
 
             _df_cob = pd.DataFrame(_filas_cob)
             with st.form("form_cobros_wix_cajas", border=False):
                 _edited_cob = st.data_editor(
-                    _df_cob[["Pedido", "Cliente", "Total", "Pago", "Entrega", "Caja"]],
+                    _df_cob[["Pedido", "Cliente", "Total", "Pago", "Entrega", "F. pedido", "F. entrega", "F. pago", "Caja"]],
                     use_container_width=True,
                     hide_index=True,
-                    disabled=["Pedido", "Cliente", "Total", "Pago", "Entrega"],
+                    disabled=["Pedido", "Cliente", "Total", "Pago", "Entrega", "F. pedido", "F. entrega"],
                     column_config={
                         "Caja": st.column_config.SelectboxColumn(
                             "Caja", options=_cajas_names_cob, required=False,
                         ),
+                        "F. pago": st.column_config.DateColumn(
+                            "F. pago", format="DD/MM/YYYY", required=False,
+                        ),
                     },
                 )
                 _guardar_cob = st.form_submit_button(
-                    "💾 Guardar cajas", type="primary", use_container_width=True
+                    "💾 Guardar", type="primary", use_container_width=True
                 )
             if _guardar_cob:
                 _asign_cob = {}
+                _fechas_pago_nuevas = {}
                 for _i, _row in _edited_cob.iterrows():
                     _oid_k = _df_cob.iloc[_i]["_order_id"]
                     _cn = _row["Caja"]
                     _asign_cob[_oid_k] = _cajas_por_nombre_cob.get(_cn) if _cn else None
+                    _fp = _row["F. pago"]
+                    _fechas_pago_nuevas[_oid_k] = str(_fp) if _fp is not None else None
                 try:
                     db.asignar_cajas_pedidos_wix(_asign_cob)
-                    st.success(f"✅ Cajas guardadas para {len(_asign_cob)} pedidos.")
+                    db.guardar_fechas_pago_wix(_fechas_pago_nuevas)
+                    st.success("✅ Guardado.")
                 except Exception as _e_cob:
                     st.error(f"❌ {_e_cob}")
 
