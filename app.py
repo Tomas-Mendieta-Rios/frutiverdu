@@ -2774,7 +2774,7 @@ with _stab_saldo_ini:
                 )
 
 with _stab_iva:
-    st.subheader("🧾 Posición IVA Débito")
+    st.subheader("🧾 Posición IVA")
 
     _hoy_iva = date.today()
     try:
@@ -2806,14 +2806,11 @@ with _stab_iva:
 
     _iva_neto_gravado = sum(float(f.get("monto_gravado") or 0) for f in _facturas_iva)
     _iva_debito       = sum(float(f.get("monto_iva") or 0) for f in _facturas_iva)
-    _iva_exento       = sum(float(f.get("monto_exento") or 0) for f in _facturas_iva)
 
-    st.caption(f"Solo facturas de venta · crédito fiscal de compras no disponible")
     st.divider()
-    _iv1, _iv2, _iv3 = st.columns(3)
-    _bal_metric(_iv1, "Neto Gravado",        f"$ {_pesos(_iva_neto_gravado)}", "#1565c0")
-    _bal_metric(_iv2, "IVA Débito Fiscal",   f"$ {_pesos(_iva_debito)}",       "#6a1b9a")
-    _bal_metric(_iv3, "Exento / No gravado", f"$ {_pesos(_iva_exento)}",       "#757575")
+    _iv1, _iv2 = st.columns(2)
+    _bal_metric(_iv1, "Neto Gravado",      f"$ {_pesos(_iva_neto_gravado)}", "#1565c0")
+    _bal_metric(_iv2, "IVA Débito Fiscal", f"$ {_pesos(_iva_debito)}",       "#6a1b9a")
 
     if not _facturas_iva:
         st.info("No hay facturas en el período seleccionado.")
