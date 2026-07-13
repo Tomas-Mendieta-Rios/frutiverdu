@@ -2950,46 +2950,37 @@ with tab_sync:
         )
 
     if sincronizar_todo:
-        _dux_tasks = [
-            ("Gastos (DUX)", _sync_gastos),
-            ("Pagos proveedores (DUX)", _sync_pagos_proveedores),
-            ("Compras (DUX)", _sync_compras),
-            ("Pedidos DUX", _sync_pedidos_dux),
-            ("Facturas (DUX)", _sync_facturas),
-            ("Cobros (DUX)", _sync_cobros),
+        # Orden: DUX[0], Wix (en el gap del rate limit), DUX[1..n]
+        _sync_steps = [
+            ("Gastos",               _sync_gastos),
+            ("Pedidos Wix",          _sync_pedidos_wix),
+            ("Pagos a proveedores",  _sync_pagos_proveedores),
+            ("Compras",              _sync_compras),
+            ("Pedidos DUX",          _sync_pedidos_dux),
+            ("Facturas",             _sync_facturas),
+            ("Cobros",               _sync_cobros),
         ]
-        # Wix corre dentro del sleep de rate limit de DUX: gap gratis.
-        _wix_queue = [
-            ("Pedidos Wix", _sync_pedidos_wix),
-        ]
-        for _i, (_label, _fn) in enumerate(_dux_tasks):
-            if _i > 0:
-                if _wix_queue:
-                    _wlabel, _wfn = _wix_queue.pop(0)
-                    _t0 = time.time()
-                    with st.spinner(f"Sincronizando {_wlabel}..."):
-                        try:
-                            _ok, _n, _msg = _wfn(sync_desde, sync_hasta)
-                        except Exception as _e:
-                            _ok, _msg = False, msg_error_sheets(_wlabel, _e)
-                    (st.success if _ok else st.error)(_msg)
-                    _remaining = DUX_RATE_LIMIT_SECONDS - (time.time() - _t0)
-                    if _remaining > 0:
-                        time.sleep(_remaining)
-                else:
-                    time.sleep(DUX_RATE_LIMIT_SECONDS)
-            with st.spinner(f"Sincronizando {_label}..."):
-                try:
-                    _ok, _n, _msg = _fn(sync_desde, sync_hasta)
-                except Exception as _e:
-                    _ok, _msg = False, msg_error_sheets(_label, _e)
-            (st.success if _ok else st.error)(_msg)
-        for _wlabel, _wfn in _wix_queue:
-            with st.spinner(f"Sincronizando {_wlabel}..."):
-                try:
-                    _ok, _n, _msg = _wfn(sync_desde, sync_hasta)
-                except Exception as _e:
-                    _ok, _msg = False, msg_error_sheets(_wlabel, _e)
+        _n_steps   = len(_sync_steps)
+        _prog_bar  = st.progress(0, text="Iniciando sincronización...")
+        _results   = []
+
+        for _si, (_slabel, _sfn) in enumerate(_sync_steps):
+            _prog_bar.progress(_si / _n_steps, text=f"Sincronizando {_slabel}…")
+            # Rate-limit gap entre llamadas DUX (Wix ya corrió en el primer gap)
+            if _si == 2:
+                # gap cubierto por la llamada a Wix; completar si sobró tiempo
+                pass
+            elif _si > 1:
+                time.sleep(DUX_RATE_LIMIT_SECONDS)
+            try:
+                _ok, _n, _msg = _sfn(sync_desde, sync_hasta)
+            except Exception as _e:
+                _ok, _msg = False, msg_error_sheets(_slabel, _e)
+            _results.append((_ok, _slabel, _msg))
+
+        _prog_bar.progress(1.0, text="✅ Sincronización completa")
+
+        for _ok, _slabel, _msg in _results:
             (st.success if _ok else st.error)(_msg)
 
 with tab_grupo_config:
