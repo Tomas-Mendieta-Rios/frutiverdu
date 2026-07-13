@@ -2787,11 +2787,13 @@ with _stab_iva:
         _iva_hasta_def = _hoy_iva
 
     with st.form("form_iva_fechas", border=False):
-        _ivc1, _ivc2 = st.columns(2)
+        _ivc1, _ivc2, _ivc3 = st.columns(3)
         with _ivc1:
             _iva_desde = st.date_input("Desde", value=_iva_desde_def, key="iva_desde_in", format="DD/MM/YYYY")
         with _ivc2:
             _iva_hasta = st.date_input("Hasta", value=_iva_hasta_def, key="iva_hasta_in", format="DD/MM/YYYY")
+        with _ivc3:
+            _sim_target = st.number_input("IVA que quiero pagar ($)", min_value=0.0, value=0.0, step=10000.0, format="%.0f", key="sim_iva_target")
         _btn_iva = st.form_submit_button("Calcular", type="primary", use_container_width=True)
     if _btn_iva:
         db.guardar_config({"iva_desde": str(_iva_desde), "iva_hasta": str(_iva_hasta)})
@@ -2811,16 +2813,6 @@ with _stab_iva:
         st.info("No hay facturas en el período seleccionado.")
 
     st.divider()
-    _sim_target = st.number_input(
-        "IVA que quiero pagar ($)",
-        min_value=0.0,
-        max_value=float(_iva_debito) if _iva_debito > 0 else 999_999_999.0,
-        value=0.0,
-        step=10000.0,
-        format="%.0f",
-        key="sim_iva_target",
-    )
-
     _sim_credito_needed = max(0.0, _iva_debito - _sim_target)
     _sim_facturas_needed = _sim_credito_needed / 0.105
 
