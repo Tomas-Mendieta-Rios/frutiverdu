@@ -2807,17 +2807,10 @@ with _stab_iva:
     _iva_neto_gravado = sum(float(f.get("monto_gravado") or 0) for f in _facturas_iva)
     _iva_debito       = sum(float(f.get("monto_iva") or 0) for f in _facturas_iva)
 
-    st.divider()
-    _iv1, _iv2 = st.columns(2)
-    _bal_metric(_iv1, "Neto Gravado",      f"$ {_pesos(_iva_neto_gravado)}", "#1565c0")
-    _bal_metric(_iv2, "IVA Débito Fiscal", f"$ {_pesos(_iva_debito)}",       "#6a1b9a")
-
     if not _facturas_iva:
         st.info("No hay facturas en el período seleccionado.")
 
     st.divider()
-    st.markdown("**🧮 Simulador — ¿Cuánto necesito en facturas de compra?**")
-    st.caption("Ingresá el IVA que querés pagar y te calcula el crédito fiscal necesario.")
     _sim_target = st.number_input(
         "IVA que quiero pagar ($)",
         min_value=0.0,
@@ -2831,10 +2824,11 @@ with _stab_iva:
     _sim_credito_needed = max(0.0, _iva_debito - _sim_target)
     _sim_facturas_needed = _sim_credito_needed / 0.105
 
-    _sc1, _sc2, _sc3 = st.columns(3)
-    _bal_metric(_sc1, "IVA Débito",               f"$ {_pesos(_iva_debito)}",          "#6a1b9a")
-    _bal_metric(_sc2, "Crédito fiscal necesario",  f"$ {_pesos(_sim_credito_needed)}",  "#1565c0")
-    _bal_metric(_sc3, "Facturas de compra (10.5%)", f"$ {_pesos(_sim_facturas_needed)}", "#2e7d32")
+    _sc1, _sc2, _sc3, _sc4 = st.columns(4)
+    _bal_metric(_sc1, "Neto Gravado",              f"$ {_pesos(_iva_neto_gravado)}",     "#1565c0")
+    _bal_metric(_sc2, "IVA Débito",                f"$ {_pesos(_iva_debito)}",           "#6a1b9a")
+    _bal_metric(_sc3, "Crédito fiscal necesario",  f"$ {_pesos(_sim_credito_needed)}",   "#e65100")
+    _bal_metric(_sc4, "Facturas de compra (10.5%)", f"$ {_pesos(_sim_facturas_needed)}", "#2e7d32")
 
 with _stab_transferencias:
     st.subheader("Transferencias entre cajas")
