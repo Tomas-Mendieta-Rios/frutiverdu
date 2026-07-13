@@ -2945,7 +2945,7 @@ with tab_sync:
                 "Hasta", value=_sync_hasta_default, key="sync_central_hasta", format="DD/MM/YYYY"
             )
         sincronizar_todo = st.form_submit_button(
-            "🔄 Sincronizar todo", type="primary", use_container_width=True
+            "🔄 Sincronizar", type="primary", use_container_width=True
         )
 
     if sincronizar_todo:
@@ -2960,11 +2960,12 @@ with tab_sync:
             ("Cobros",               _sync_cobros),
         ]
         _n_steps   = len(_sync_steps)
-        _prog_bar  = st.progress(0)
+        _prog_bar  = st.progress(0, text="0%")
         _results   = []
 
         for _si, (_slabel, _sfn) in enumerate(_sync_steps):
-            _prog_bar.progress(_si / _n_steps)
+            _pct = int(_si / _n_steps * 100)
+            _prog_bar.progress(_si / _n_steps, text=f"{_pct}%")
             # Rate-limit gap entre llamadas DUX (Wix ya corrió en el primer gap)
             if _si == 2:
                 # gap cubierto por la llamada a Wix; completar si sobró tiempo
@@ -2977,7 +2978,7 @@ with tab_sync:
                 _ok, _msg = False, msg_error_sheets(_slabel, _e)
             _results.append((_ok, _slabel, _msg))
 
-        _prog_bar.progress(1.0)
+        _prog_bar.progress(1.0, text="100%")
 
         _errors = [(_slabel, _msg) for _ok, _slabel, _msg in _results if not _ok]
         for _slabel, _msg in _errors:
