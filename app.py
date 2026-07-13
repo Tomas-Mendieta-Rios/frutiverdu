@@ -2979,8 +2979,9 @@ with tab_sync:
 
         _prog_bar.progress(1.0)
 
-        for _ok, _slabel, _msg in _results:
-            (st.success if _ok else st.error)(_msg)
+        _errors = [(_slabel, _msg) for _ok, _slabel, _msg in _results if not _ok]
+        for _slabel, _msg in _errors:
+            st.error(_msg)
 
 with tab_grupo_config:
     (
