@@ -1,5 +1,6 @@
 import hashlib
 import io
+import logging
 import re
 import time
 import warnings
@@ -7,6 +8,10 @@ from datetime import date, timedelta, datetime, timezone
 
 warnings.filterwarnings("ignore", message=".*use_container_width.*")
 warnings.filterwarnings("ignore", message=".*label.*got an empty value.*")
+
+# Silenciar deprecation warnings de Streamlit que inundan los logs
+logging.getLogger("streamlit.elements.lib.policies").setLevel(logging.ERROR)
+logging.getLogger("streamlit.elements.widgets.radio").setLevel(logging.ERROR)
 
 import requests
 import streamlit as st
