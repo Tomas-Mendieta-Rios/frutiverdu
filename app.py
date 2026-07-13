@@ -2091,7 +2091,7 @@ with tab_balance:
                 _by_prov_comp = {}
                 for _c in _comp_pend_hist:
                     _by_prov_comp.setdefault(_c.get("proveedor") or "—", []).append(_c)
-                for _prov, _pitems in sorted(_by_prov_comp.items()):
+                for _prov, _pitems in sorted(_by_prov_comp.items(), key=lambda kv: sum(_pend_saldo_c(c) for c in kv[1]), reverse=True):
                     _ptot = sum(_pend_saldo_c(c) for c in _pitems)
                     with st.expander(f"{_prov} ({len(_pitems)}) — $ {_pesos(_ptot)}"):
                         _rows = []
@@ -2121,7 +2121,7 @@ with tab_balance:
                 _by_prov_gas = {}
                 for _g in _gas_pend_hist:
                     _by_prov_gas.setdefault(_g.get("proveedor") or "—", []).append(_g)
-                for _prov, _pitems in sorted(_by_prov_gas.items()):
+                for _prov, _pitems in sorted(_by_prov_gas.items(), key=lambda kv: sum(_pend_saldo_g(g) for g in kv[1]), reverse=True):
                     _ptot = sum(_pend_saldo_g(g) for g in _pitems)
                     with st.expander(f"{_prov} ({len(_pitems)}) — $ {_pesos(_ptot)}"):
                         _rows = []
@@ -2167,7 +2167,7 @@ with tab_balance:
                 for _f in _fac_deud:
                     _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                     _by_cli_dux.setdefault(_cli, []).append(_f)
-                for _cli, _citems in sorted(_by_cli_dux.items()):
+                for _cli, _citems in sorted(_by_cli_dux.items(), key=lambda kv: sum(float(f.get("total") or 0) for f in kv[1]), reverse=True):
                     _ctot = sum(float(f.get("total") or 0) for f in _citems)
                     with st.expander(f"{_cli} ({len(_citems)}) — $ {_pesos(_ctot)}"):
                         _rows = [{
@@ -2188,7 +2188,7 @@ with tab_balance:
                     _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
                     _cli = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
                     _by_cli_wix.setdefault(_cli, []).append(_p)
-                for _cli, _citems in sorted(_by_cli_wix.items()):
+                for _cli, _citems in sorted(_by_cli_wix.items(), key=lambda kv: sum(_wix_monto(p) for p in kv[1]), reverse=True):
                     _ctot = sum(_wix_monto(p) for p in _citems)
                     with st.expander(f"{_cli} ({len(_citems)}) — $ {_pesos(_ctot)}"):
                         _rows = [{
