@@ -2126,7 +2126,7 @@ with tab_balance:
                                 "Total":       float(_c.get("total") or 0),
                                 "Pagado":      _pend_pagado_c(_c),
                                 "Saldo":       _pend_saldo_c(_c),
-                            } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                            } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""))]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config={
                                 "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
                                 "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
@@ -2158,7 +2158,7 @@ with tab_balance:
                                 "Total":       float(_g.get("total") or 0),
                                 "Pagado":      _pend_pagado_g(_g),
                                 "Saldo":       _pend_saldo_g(_g),
-                            } for _g in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                            } for _g in sorted(_lst, key=lambda x: str(x.get("fecha") or ""))]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config={
                                 "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
                                 "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
@@ -2201,7 +2201,7 @@ with tab_balance:
                                 "Total":       float(_f.get("total") or 0),
                                 "Cobrado":     _pend_cobrado_f(_f),
                                 "Saldo":       _pend_saldo_f(_f),
-                            } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
+                            } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""))]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config={
                                 "Total":   st.column_config.NumberColumn("Total",   format="$ %,.2f"),
                                 "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.2f"),
@@ -2225,7 +2225,7 @@ with tab_balance:
                         "Fecha":    _fmt_fecha(_p.get("createdDate")),
                         "Pedido #": _p.get("number") or _p.get("id") or "—",
                         "Total":    _wix_monto(_p),
-                    } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
+                    } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""))]
                     st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                  column_config={"Total": _cfg_monto})
 
