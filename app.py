@@ -4501,8 +4501,10 @@ with tab_dux:
                         if items:
                             with st.expander("Ver productos"):
                                 filas = [extraer_item_dux(it) for it in items]
+                                _df_items = pd.DataFrame(filas)
+                                _cols_show = [c for c in ["producto", "cantidad"] if c in _df_items.columns]
                                 st.dataframe(
-                                    pd.DataFrame(filas),
+                                    _df_items[_cols_show],
                                     use_container_width=False,
                                     hide_index=True,
                                 )
