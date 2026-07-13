@@ -1348,6 +1348,28 @@ def _sync_cobros(fecha_desde, fecha_hasta):
     return True, len(all_cobros), f"✅ {len(all_cobros)} cobros sincronizados."
 
 
+def _sync_percepciones(fecha_desde, fecha_hasta):
+    dux_cfg = st.secrets.get("dux", {})
+    _token = dux_cfg.get("token", "")
+    _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
+    url = f"{_base_url}/percepcionesImpuestos"
+    headers = {"accept": "application/json", "authorization": f"Bearer {_token}"}
+    try:
+        r = requests.get(url, headers=headers, timeout=20)
+    except requests.RequestException as e:
+        return False, 0, msg_error_red("DUX (percepciones)", e)
+    if r.status_code != 200:
+        return False, 0, msg_error_http("DUX (percepciones)", r.status_code, r.text)
+    try:
+        data = r.json()
+    except ValueError:
+        return False, 0, "❌ DUX devolvió una respuesta inválida (percepciones)."
+    if not isinstance(data, list):
+        return False, 0, "❌ Formato inesperado en respuesta de percepciones."
+    db.guardar_percepciones_impuestos(data)
+    return True, len(data), f"✅ {len(data)} percepciones sincronizadas."
+
+
 # Datos de balance cargados aquí (fuera de cualquier tab) para que el árbol
 # de widgets sea siempre consistente y no haya desincronización de tabs.
 facturas_bal     = db.cargar_facturas()
@@ -3022,6 +3044,7 @@ with tab_sync:
             ("Pedidos DUX",          _sync_pedidos_dux),
             ("Facturas",             _sync_facturas),
             ("Cobros",               _sync_cobros),
+            ("Percepciones",         _sync_percepciones),
         ]
         _n_steps   = len(_sync_steps)
         _prog_bar  = st.progress(0, text="0%")

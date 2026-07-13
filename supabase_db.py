@@ -714,6 +714,32 @@ def guardar_fechas_pago_wix(fechas):
         ).execute()
 
 
+# ---------------- PERCEPCIONES E IMPUESTOS ----------------
+
+@st.cache_data(ttl=3600)
+def cargar_percepciones_impuestos():
+    client = get_client()
+    resp = client.table("percepciones_impuestos").select("*").order("percepcion_impuesto").execute()
+    return resp.data or []
+
+
+def guardar_percepciones_impuestos(data):
+    client = get_client()
+    rows = [
+        {
+            "id_percepcion_impuesto":  p["id_percepcion_impuesto"],
+            "percepcion_impuesto":     p.get("percepcion_impuesto"),
+            "tipo_percepcion_impuesto": p.get("tipo_percepcion_impuesto"),
+            "jurisdiccion":            p.get("jurisdiccion"),
+            "descripcion":             p.get("descripcion"),
+        }
+        for p in data
+    ]
+    if rows:
+        client.table("percepciones_impuestos").upsert(rows).execute()
+    cargar_percepciones_impuestos.clear()
+
+
 # ---------------- PEDIDOS WIX ----------------
 
 @st.cache_data(ttl=600)
