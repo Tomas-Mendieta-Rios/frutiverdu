@@ -2037,16 +2037,16 @@ with tab_balance:
         except Exception:
             _pend_hasta_def = date.today()
 
-        _periodo_pend = st.date_input(
-            "Período", value=(_pend_desde_def, _pend_hasta_def),
-            key="pend_periodo", format="DD/MM/YYYY",
-        )
-        if isinstance(_periodo_pend, (list, tuple)) and len(_periodo_pend) == 2:
-            _pend_desde, _pend_hasta = _periodo_pend
-            if str(_pend_desde) != _cfg_bal.get("pend_desde") or str(_pend_hasta) != _cfg_bal.get("pend_hasta"):
-                db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
-        else:
-            _pend_desde, _pend_hasta = _pend_desde_def, _pend_hasta_def
+        with st.form("form_pend_fechas"):
+            _fc1, _fc2, _fc3 = st.columns([2, 2, 1])
+            with _fc1:
+                _pend_desde = st.date_input("Desde", value=_pend_desde_def, key="pend_desde_in", format="DD/MM/YYYY")
+            with _fc2:
+                _pend_hasta = st.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta_in", format="DD/MM/YYYY")
+            with _fc3:
+                _btn_pend = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
+        if _btn_pend:
+            db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
 
         def _pend_en_rango(fecha_str):
             try:
