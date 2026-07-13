@@ -2865,7 +2865,7 @@ with tab_ingresos:
                     "Entrega": _ful_map.get(str(_o.get("fulfillmentStatus") or "").upper(), "—"),
                     "F. pedido": _fmt_fecha(_o.get("createdDate")),
                     "F. entrega": _fmt_fecha(_sels_wix_cob.get(_oid_c)),
-                    "F. pago": _fmt_fecha(_fecha_pago_raw) if _fecha_pago_raw else "",
+                    "F. pago": _fecha_pago_val,
                     "Caja": _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None,
                 })
 
@@ -2880,8 +2880,8 @@ with tab_ingresos:
                         "Caja": st.column_config.SelectboxColumn(
                             "Caja", options=_cajas_names_cob, required=False,
                         ),
-                        "F. pago": st.column_config.TextColumn(
-                            "F. pago", help="DD/MM/AAAA", max_chars=10,
+                        "F. pago": st.column_config.DateColumn(
+                            "F. pago", format="DD/MM/YYYY",
                         ),
                     },
                 )
@@ -2895,15 +2895,8 @@ with tab_ingresos:
                     _oid_k = _df_cob.iloc[_i]["_order_id"]
                     _cn = _row["Caja"]
                     _asign_cob[_oid_k] = _cajas_por_nombre_cob.get(_cn) if _cn else None
-                    _fp = str(_row.get("F. pago") or "").strip()
-                    if _fp:
-                        try:
-                            _d, _m, _y = _fp.split("/")
-                            _fechas_pago_nuevas[_oid_k] = f"{_y}-{_m.zfill(2)}-{_d.zfill(2)}"
-                        except Exception:
-                            _fechas_pago_nuevas[_oid_k] = None
-                    else:
-                        _fechas_pago_nuevas[_oid_k] = None
+                    _fp = _row["F. pago"]
+                    _fechas_pago_nuevas[_oid_k] = str(_fp) if _fp is not None else None
                 try:
                     db.asignar_cajas_pedidos_wix(_asign_cob)
                     db.guardar_fechas_pago_wix(_fechas_pago_nuevas)
