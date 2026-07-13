@@ -1536,22 +1536,28 @@ def _render_movimiento_caja(cobros, pagos):
 
     _default_desde = max(_hoy.replace(day=1), _fecha_min)
 
-    _saved = st.session_state.get("movcaja_desde_saved", _default_desde)
-    if not isinstance(_saved, date):
-        _saved = _default_desde
-    if _saved < _fecha_min:
-        _saved = _fecha_min
-    if _saved > _hasta:
-        _saved = _hasta
+    _cfg_caja = db.cargar_config()
+    try:
+        _desde_def = date.fromisoformat(_cfg_caja.get("caja_desde", ""))
+    except Exception:
+        _desde_def = _default_desde
+    try:
+        _hasta_def = date.fromisoformat(_cfg_caja.get("caja_hasta", ""))
+    except Exception:
+        _hasta_def = _hasta
+    _desde_def = max(_fecha_min, min(_desde_def, _hasta))
+    _hasta_def = max(_fecha_min, min(_hasta_def, _hasta))
 
-    _desde = st.date_input(
-        "Ver desde",
-        value=_saved,
-        min_value=_fecha_min,
-        max_value=_hasta,
-        key="movcaja_desde_saved",
-        format="DD/MM/YYYY",
-    )
+    with st.form("form_caja_fechas", border=False):
+        _cc1, _cc2 = st.columns(2)
+        with _cc1:
+            _desde = st.date_input("Desde", value=_desde_def, key="caja_desde_in", format="DD/MM/YYYY")
+        with _cc2:
+            _hasta_in = st.date_input("Hasta", value=_hasta_def, key="caja_hasta_in", format="DD/MM/YYYY")
+        _btn_caja = st.form_submit_button("Calcular", type="primary", use_container_width=True)
+    if _btn_caja:
+        db.guardar_config({"caja_desde": str(_desde), "caja_hasta": str(_hasta_in)})
+    _hasta = _hasta_in
     _hasta_label = _hasta.strftime('%d/%m/%Y')
     _hasta_suffix = " (hoy)" if _hasta == _hoy else ""
 
