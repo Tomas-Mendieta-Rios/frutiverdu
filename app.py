@@ -2914,6 +2914,7 @@ with tab_ingresos:
             _ful_map = {"FULFILLED": "✅ Entregado", "NOT_FULFILLED": "⏳ Pendiente",
                         "PARTIALLY_FULFILLED": "🔶 Parcial"}
             with st.form("form_cobros_wix_cajas", border=False):
+                _guardar_cob = st.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
                 _nuevas_fpago_cob = {}
                 _nuevas_cajas_cob = {}
                 for _o in _wix_sorted_cob:
@@ -2966,7 +2967,6 @@ with tab_ingresos:
                     _nuevas_fpago_cob[_oid_c] = str(_fp_new) if _fp_new is not None else None
                     _nuevas_cajas_cob[_oid_c] = _cajas_por_nombre_cob.get(_caja_new) if _caja_new != "—" else None
 
-                _guardar_cob = st.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
             if _guardar_cob:
                 try:
                     db.asignar_cajas_pedidos_wix(_nuevas_cajas_cob)
