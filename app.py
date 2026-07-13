@@ -1887,26 +1887,17 @@ def _render_movimiento_caja(cobros, pagos):
                     _agg[_ec] = "first"
             return _df.groupby("Cobro #", sort=False).agg(_agg).reset_index()
 
-        _df_ent      = _dedup_cobros(_entradas_real)
-        _df_ent_parc = _dedup_cobros(_entradas_real_parc)
+        _df_ent = _dedup_cobros(_entradas_real + _entradas_real_parc)
         _tot_ent = _df_ent["Monto"].sum() if not _df_ent.empty else 0.0
         with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
             if not _df_ent.empty:
                 st.dataframe(
-                    _df_ent[["Fecha", "Cliente", "Monto"]],
+                    _df_ent[["Cobro #", "Fecha", "Cliente", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
             else:
                 st.caption("Sin entradas en el período.")
-        if not _df_ent_parc.empty:
-            _tot_ent_parc = _df_ent_parc["Monto"].sum()
-            with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
-                st.dataframe(
-                    _df_ent_parc[["Fecha", "Cliente", "Monto"]],
-                    use_container_width=True, hide_index=True,
-                    column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
-                )
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
             with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
@@ -1924,49 +1915,25 @@ def _render_movimiento_caja(cobros, pagos):
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
         for _titulo, _rows in [
-            ("Salidas — Compras", _sal_compras),
-            ("Salidas — Compras Parciales", _sal_compras_parc),
-            ("Salidas — Gastos", _sal_gastos),
-            ("Salidas — Gastos Parciales", _sal_gastos_parc),
-            ("Salidas — Otros", _sal_otros),
+            ("Salidas — Compras", _sal_compras + _sal_compras_parc),
+            ("Salidas — Gastos",  _sal_gastos  + _sal_gastos_parc),
+            ("Salidas — Otros",   _sal_otros),
         ]:
             if _rows:
-                _tot_rows = sum(r["Monto"] for r in _rows)
-                _n_rows = len({r["Pago #"] for r in _rows})
-                with st.expander(f"{_titulo} ({_n_rows}) — {_fmt_monto(_tot_rows)}"):
-                    if _titulo in ("Salidas — Compras", "Salidas — Compras Parciales"):
-                        _cols_rename = {"Concepto": "Comprobante compra"}
-                    elif _titulo in ("Salidas — Gastos", "Salidas — Gastos Parciales"):
-                        _cols_rename = {"Concepto": "Comprobante gasto"}
-                    else:
-                        _cols_rename = {"Concepto": "Comprobante"}
-                    _df_rows = pd.DataFrame(_rows)
-                    # Agrupar por Pago # para no mostrar duplicados cuando hay múltiples lineas_pago en la misma caja
-                    _agg_dict = {"Monto": "sum", "Fecha": "first", "Proveedor": "first", "Concepto": "first",
-                                 "Cheque": lambda x: ", ".join(v for v in x if str(v).strip())}
-                    for _ec in ["Total comprobante", "Pagado total", "Saldo", "Total factura", "Cobrado total"]:
-                        if _ec in _df_rows.columns:
-                            _agg_dict[_ec] = "first"
-                    _df_rows = _df_rows.groupby("Pago #", sort=False).agg(_agg_dict).reset_index()
-                    _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
-                    _es_parcial_titulo = "Parciales" in _titulo
-                    if _es_parcial_titulo:
-                        _cols_sel = ["Fecha", "Proveedor", "Total comprobante", "Pagado total", "Saldo"]
-                        if _tiene_cheque:
-                            _cols_sel.insert(2, "Cheque")
-                    elif _tiene_cheque:
-                        _cols_sel = ["Fecha", "Proveedor", "Cheque", "Monto"]
-                    else:
-                        _cols_sel = ["Fecha", "Proveedor", "Monto"]
-                    _col_cfg = {"Fecha": _cfg_fecha, "Monto": _cfg_monto}
-                    if _es_parcial_titulo:
-                        _col_cfg["Total comprobante"] = st.column_config.NumberColumn("Total comprobante", format="$ %,.0f")
-                        _col_cfg["Pagado total"]      = st.column_config.NumberColumn("Pagado total",      format="$ %,.0f")
-                        _col_cfg["Saldo"]             = st.column_config.NumberColumn("Saldo",             format="$ %,.0f")
+                _df_rows = pd.DataFrame(_rows)
+                _agg_dict = {"Monto": "sum", "Fecha": "first", "Proveedor": "first",
+                             "Cheque": lambda x: ", ".join(v for v in x if str(v).strip())}
+                _df_rows = _df_rows.groupby("Pago #", sort=False).agg(_agg_dict).reset_index()
+                _tot_rows = _df_rows["Monto"].sum()
+                _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
+                _cols_sel = ["Pago #", "Fecha", "Proveedor", "Monto"]
+                if _tiene_cheque:
+                    _cols_sel.insert(3, "Cheque")
+                with st.expander(f"{_titulo} ({len(_df_rows)}) — {_fmt_monto(_tot_rows)}"):
                     st.dataframe(
                         _df_rows[_cols_sel],
                         use_container_width=True, hide_index=True,
-                        column_config=_col_cfg,
+                        column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                     )
         _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
         if _aj_caja_periodo:
