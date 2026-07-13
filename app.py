@@ -1577,6 +1577,18 @@ def _render_movimiento_caja(cobros, pagos):
             if _nro:
                 _pag_por_comp_all[_nro] = _pag_por_comp_all.get(_nro, 0.0) + float(_ix.get("monto_imputado") or 0)
 
+    # Lookup: nro_comprobante → {caja_key: monto} para mostrar desglose por medio de pago
+    _cobro_medios_lkp = {}
+    for _cx in cobros:
+        _cnro = _cx.get("nro_comprobante")
+        if not _cnro:
+            continue
+        for _cm in _cx.get("cobranza", []):
+            _cmk = _caja_key(_cm.get("tipo_valor"), _cm.get("descripcion"))
+            _cmm = float(_cm.get("monto") or 0)
+            _cobro_medios_lkp.setdefault(_cnro, {})
+            _cobro_medios_lkp[_cnro][_cmk] = _cobro_medios_lkp[_cnro].get(_cmk, 0) + _cmm
+
     for _c in cobros:
         try:
             _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
@@ -1905,20 +1917,24 @@ def _render_movimiento_caja(cobros, pagos):
                 st.caption("Sin entradas en el período.")
         if not _df_ent_parc.empty:
             _tot_ent_parc = _df_ent_parc["Monto"].sum()
+            # Columnas por medio de pago
+            _medios_cols = sorted({mk for nro in _df_ent_parc["Cobro #"] for mk in (_cobro_medios_lkp.get(nro) or {})})
+            for _mc in _medios_cols:
+                _df_ent_parc[_mc] = _df_ent_parc["Cobro #"].map(lambda n, k=_mc: (_cobro_medios_lkp.get(n) or {}).get(k, 0))
             with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
-                _tiene_cheque_parc = _df_ent_parc["Cheque"].astype(str).str.strip().ne("").any()
-                _cols_parc = ["Cobro #", "Fecha", "Cliente", "Facturas", "Total factura", "Cobrado total", "Saldo"]
-                if _tiene_cheque_parc:
-                    _cols_parc.insert(3, "Cheque")
+                _cols_parc = ["Cobro #", "Fecha", "Cliente", "Facturas"] + _medios_cols + ["Total factura", "Cobrado total", "Saldo"]
+                _cc_parc = {
+                    "Fecha":         _cfg_fecha,
+                    "Total factura": st.column_config.NumberColumn("Total factura", format="$ %,.0f"),
+                    "Cobrado total": st.column_config.NumberColumn("Cobrado total", format="$ %,.0f"),
+                    "Saldo":         st.column_config.NumberColumn("Saldo",         format="$ %,.0f"),
+                }
+                for _mc in _medios_cols:
+                    _cc_parc[_mc] = st.column_config.NumberColumn(_mc.title(), format="$ %,.0f")
                 st.dataframe(
                     _df_ent_parc[_cols_parc],
                     use_container_width=True, hide_index=True,
-                    column_config={
-                        "Fecha":         _cfg_fecha,
-                        "Total factura": st.column_config.NumberColumn("Total factura", format="$ %,.0f"),
-                        "Cobrado total": st.column_config.NumberColumn("Cobrado total", format="$ %,.0f"),
-                        "Saldo":         st.column_config.NumberColumn("Saldo",         format="$ %,.0f"),
-                    },
+                    column_config=_cc_parc,
                 )
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
