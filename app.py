@@ -2942,7 +2942,7 @@ with tab_ingresos:
                         _ci, _cd, _cc = st.columns([5, 2, 2])
                         with _ci:
                             st.markdown(f"**#{_nro_c} — {_nombre_c} · {_total_c}**")
-                            _info2 = f" · 🚚 entrega {_fent_c}" if _fent_c and _fent_c != "—" else ""
+                            _info2 = f" · 🚚 entrega {_fent_c}" if _fent_c and _fent_c != "—" else " · 🚚 —"
                             st.caption(f"{_pay_c} · {_ful_c} · 📅 pedido {_fped_c}{_info2}")
                         with _cd:
                             _fp_new = st.date_input(
