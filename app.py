@@ -2916,7 +2916,6 @@ with tab_ingresos:
 
 with tab_sync:
     st.subheader("🔄 Sincronizar")
-    st.caption("Trae y guarda Gastos, Compras, Pedidos DUX y Pedidos Wix de una sola vez.")
 
     _hoy_sync = date.today()
     _cfg_sync = db.cargar_config()
@@ -2961,11 +2960,11 @@ with tab_sync:
             ("Cobros",               _sync_cobros),
         ]
         _n_steps   = len(_sync_steps)
-        _prog_bar  = st.progress(0, text="Iniciando sincronización...")
+        _prog_bar  = st.progress(0)
         _results   = []
 
         for _si, (_slabel, _sfn) in enumerate(_sync_steps):
-            _prog_bar.progress(_si / _n_steps, text=f"Sincronizando {_slabel}…")
+            _prog_bar.progress(_si / _n_steps)
             # Rate-limit gap entre llamadas DUX (Wix ya corrió en el primer gap)
             if _si == 2:
                 # gap cubierto por la llamada a Wix; completar si sobró tiempo
@@ -2978,7 +2977,7 @@ with tab_sync:
                 _ok, _msg = False, msg_error_sheets(_slabel, _e)
             _results.append((_ok, _slabel, _msg))
 
-        _prog_bar.progress(1.0, text="✅ Sincronización completa")
+        _prog_bar.progress(1.0)
 
         for _ok, _slabel, _msg in _results:
             (st.success if _ok else st.error)(_msg)
