@@ -2038,13 +2038,12 @@ with tab_balance:
             _pend_hasta_def = date.today()
 
         with st.form("form_pend_fechas"):
-            _fc1, _fc2, _fc3 = st.columns([2, 2, 1])
+            _fc1, _fc2 = st.columns(2)
             with _fc1:
                 _pend_desde = st.date_input("Desde", value=_pend_desde_def, key="pend_desde_in", format="DD/MM/YYYY")
             with _fc2:
                 _pend_hasta = st.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta_in", format="DD/MM/YYYY")
-            with _fc3:
-                _btn_pend = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
+            _btn_pend = st.form_submit_button("🔄 Calcular", type="primary", use_container_width=True)
         if _btn_pend:
             db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
 
