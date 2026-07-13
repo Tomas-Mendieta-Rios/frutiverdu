@@ -3070,16 +3070,6 @@ with tab_sync:
         for _slabel, _msg in _errors:
             st.error(_msg)
 
-    st.divider()
-    st.markdown("**Catálogos** *(sincronizar manualmente cuando cambien)*")
-    if st.button("📋 Sincronizar Percepciones e Impuestos", use_container_width=True):
-        with st.spinner("Sincronizando percepciones..."):
-            _ok_p, _n_p, _msg_p = _sync_percepciones(None, None)
-        if _ok_p:
-            st.success(_msg_p)
-        else:
-            st.error(_msg_p)
-
 with tab_grupo_config:
     tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
         ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos"]
@@ -3095,6 +3085,7 @@ with tab_grupo_config_avanzada:
         tab_migracion,
         tab_cajas,
         tab_gastos_catalogo,
+        tab_percepciones,
     ) = st.tabs(
         [
             "DUX Productos",
@@ -3105,6 +3096,7 @@ with tab_grupo_config_avanzada:
             "📦 Migrar desde Sheets",
             "💰 Cajas",
             "📋 Items Gastos",
+            "🧾 Percepciones",
         ]
     )
 
@@ -6143,6 +6135,36 @@ with tab_gastos_catalogo:
                     st.rerun()
         except Exception as _e_imp:
             st.error(f"Error al leer el archivo: {_e_imp}")
+
+with tab_percepciones:
+    st.subheader("🧾 Percepciones e Impuestos")
+    st.caption("Catálogo de percepciones e impuestos de DUX. Sincronizá manualmente cuando sea necesario.")
+
+    if st.button("🔄 Sincronizar Percepciones", type="primary", key="btn_sync_percepciones"):
+        _ok_p, _n_p, _msg_p = _sync_percepciones(None, None)
+        if _ok_p:
+            st.success(_msg_p)
+            st.rerun()
+        else:
+            st.error(_msg_p)
+
+    _percepciones_data = db.cargar_percepciones_impuestos()
+    if _percepciones_data:
+        _df_perc = pd.DataFrame(_percepciones_data)
+        _cols_perc = [c for c in ["id_percepcion_impuesto", "percepcion_impuesto", "tipo_percepcion_impuesto", "jurisdiccion", "descripcion"] if c in _df_perc.columns]
+        st.dataframe(
+            _df_perc[_cols_perc].rename(columns={
+                "id_percepcion_impuesto":   "ID",
+                "percepcion_impuesto":      "Nombre",
+                "tipo_percepcion_impuesto": "Tipo",
+                "jurisdiccion":             "Jurisdicción",
+                "descripcion":              "Descripción",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No hay percepciones cargadas. Sincronizá para obtener los datos de DUX.")
 
 
 #python -m streamlit run app.py
