@@ -2245,16 +2245,15 @@ with tab_balance:
         except Exception:
             _bal_hasta_def = _hoy_bal
 
-        _periodo_bal = st.date_input(
-            "Período", value=(_bal_desde_def, _bal_hasta_def),
-            key="bal_periodo", format="DD/MM/YYYY",
-        )
-        if isinstance(_periodo_bal, (list, tuple)) and len(_periodo_bal) == 2:
-            bal_desde, bal_hasta = _periodo_bal
-            if str(bal_desde) != _cfg_bal.get("bal_desde") or str(bal_hasta) != _cfg_bal.get("bal_hasta"):
-                db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
-        else:
-            bal_desde, bal_hasta = _bal_desde_def, _bal_hasta_def
+        with st.form("form_bal_fechas", border=False):
+            _bc1, _bc2 = st.columns(2)
+            with _bc1:
+                bal_desde = st.date_input("Desde", value=_bal_desde_def, key="bal_desde_in", format="DD/MM/YYYY")
+            with _bc2:
+                bal_hasta = st.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta_in", format="DD/MM/YYYY")
+            _btn_bal = st.form_submit_button("Guardar", type="primary", use_container_width=True)
+        if _btn_bal:
+            db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
 
         def _en_rango(fecha_str):
             try:
