@@ -2933,8 +2933,8 @@ with tab_ingresos:
                     except Exception:
                         _fecha_pago_val = None
                     _total_c = (_o.get("priceSummary", {}) or {}).get("total", {}).get("formattedAmount", "")
-                    _pay_c = _pay_map.get(str(_o.get("paymentStatus") or "").upper(), "—")
-                    _ful_c = _ful_map.get(str(_o.get("fulfillmentStatus") or "").upper(), "—")
+                    _pay_c = _pay_map.get(str(_o.get("paymentStatus") or "").upper(), "❌ Sin pagar")
+                    _ful_c = _ful_map.get(str(_o.get("fulfillmentStatus") or "").upper(), "⏳ No entregado")
                     _fped_c = _fmt_fecha(_o.get("createdDate"))
                     _fent_c = _fmt_fecha(_sels_wix_cob.get(_oid_c))
 
