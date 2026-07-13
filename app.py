@@ -1372,6 +1372,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
     tab_tesoreria,
     tab_sync,
     tab_grupo_config,
+    tab_grupo_config_avanzada,
 ) = st.tabs(
     [
         "🛒 Total a comprar",
@@ -1382,6 +1383,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
         "🏦 Tesorería",
         "🔄 Sincronizar",
         "⚙️ Configuración",
+        "🔧 Config. avanzada",
     ],
     key="main_tabs",
 )
@@ -2973,29 +2975,26 @@ with tab_sync:
             st.error(_msg)
 
 with tab_grupo_config:
+    tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
+        ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos"]
+    )
+
+with tab_grupo_config_avanzada:
     (
-        tab_mapeo,
-        tab_packs,
-        tab_mixes,
         tab_dux_productos,
         tab_dux_rubros,
         tab_wix_productos,
         tab_proveedores,
-        tab_editar,
         tab_probar,
         tab_migracion,
         tab_cajas,
         tab_gastos_catalogo,
     ) = st.tabs(
         [
-            "Mapeo Wix↔DUX",
-            "Packs Wix",
-            "Mixes DUX",
             "DUX Productos",
             "DUX Rubros",
             "Wix Productos",
             "Proveedores",
-            "Relacionar productos",
             "Probar conversión",
             "📦 Migrar desde Sheets",
             "💰 Cajas",
