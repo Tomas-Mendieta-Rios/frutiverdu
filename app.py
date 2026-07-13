@@ -2130,7 +2130,7 @@ with tab_balance:
                                 "Condición":   _c.get("condicion_pago") or "—",
                                 "Total":       float(_c.get("total") or 0),
                                 **( {"Pagado": _pend_pagado_c(_c), "Saldo": _pend_saldo_c(_c)} if _lbl == "Parciales" else {} ),
-                            } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""))]
+                            } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             _ccfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
                             if _lbl == "Parciales":
                                 _ccfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
@@ -2161,7 +2161,7 @@ with tab_balance:
                                 "Comprobante": _g.get("nro_comprobante") or "—",
                                 "Total":       float(_g.get("total") or 0),
                                 **( {"Pagado": _pend_pagado_g(_g), "Saldo": _pend_saldo_g(_g)} if _lbl == "Parciales" else {} ),
-                            } for _g in sorted(_lst, key=lambda x: str(x.get("fecha") or ""))]
+                            } for _g in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                             _gcfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
                             if _lbl == "Parciales":
                                 _gcfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
@@ -2204,7 +2204,7 @@ with tab_balance:
                                 "Total":       float(_f.get("total") or 0),
                                 **( {"Cobrado": _pend_cobrado_f(_f), "Saldo": _pend_saldo_f(_f)} if _lbl == "Parciales" else {} ),
                                 "PDF":         _f.get("url_factura") or None,
-                            } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""))]
+                            } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
                             _fcfg = {
                                 "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
                                 "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
@@ -2231,7 +2231,7 @@ with tab_balance:
                         "Fecha":    _fmt_fecha(_p.get("createdDate")),
                         "Pedido #": _p.get("number") or _p.get("id") or "—",
                         "Total":    _wix_monto(_p),
-                    } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""))]
+                    } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
                     st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                  column_config={"Total": _cfg_monto})
 
