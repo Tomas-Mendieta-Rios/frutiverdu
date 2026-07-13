@@ -1763,7 +1763,10 @@ def _render_movimiento_caja(cobros, pagos):
         _wcaja_id = _wo.get("caja_id")
         if not _wcaja_id:
             continue
-        _wck = _cajas_map.get(_wcaja_id)
+        try:
+            _wck = _cajas_map.get(int(_wcaja_id)) or _cajas_map.get(str(_wcaja_id))
+        except (TypeError, ValueError):
+            _wck = None
         if not _wck:
             continue
         _wmonto = _wix_monto(_wo)
@@ -1891,7 +1894,10 @@ def _render_movimiento_caja(cobros, pagos):
         _wcaja_id = _wo.get("caja_id")
         if not _wcaja_id:
             continue
-        _wck = _cajas_map.get(_wcaja_id)
+        try:
+            _wck = _cajas_map.get(int(_wcaja_id)) or _cajas_map.get(str(_wcaja_id))
+        except (TypeError, ValueError):
+            _wck = None
         if not _wck:
             continue
         if _wf < _ini_fecha_hist.get(_wck, date.min):
