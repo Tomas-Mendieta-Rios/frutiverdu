@@ -1353,7 +1353,7 @@ def _sync_percepciones(fecha_desde, fecha_hasta):
     _token = dux_cfg.get("token", "")
     _base_url = dux_cfg.get("base_url", "https://erp.duxsoftware.com.ar/WSERP/rest/services")
     url = f"{_base_url}/percepcionesImpuestos"
-    headers = {"accept": "application/json", "authorization": f"Bearer {_token}"}
+    headers = {"accept": "application/json", "authorization": _token}
     try:
         r = requests.get(url, headers=headers, timeout=20)
     except requests.RequestException as e:
