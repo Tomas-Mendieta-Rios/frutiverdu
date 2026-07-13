@@ -1893,7 +1893,7 @@ def _render_movimiento_caja(cobros, pagos):
         with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
             if not _df_ent.empty:
                 st.dataframe(
-                    _df_ent[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]].rename(columns={"Facturas": "Facturas cobradas"}),
+                    _df_ent[["Fecha", "Cliente", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
@@ -1903,7 +1903,7 @@ def _render_movimiento_caja(cobros, pagos):
             _tot_ent_parc = _df_ent_parc["Monto"].sum()
             with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
                 st.dataframe(
-                    _df_ent_parc[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]],
+                    _df_ent_parc[["Fecha", "Cliente", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
@@ -1951,20 +1951,20 @@ def _render_movimiento_caja(cobros, pagos):
                     _tiene_cheque = _df_rows["Cheque"].astype(str).str.strip().ne("").any()
                     _es_parcial_titulo = "Parciales" in _titulo
                     if _es_parcial_titulo:
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Total comprobante", "Pagado total", "Saldo"]
+                        _cols_sel = ["Fecha", "Proveedor", "Total comprobante", "Pagado total", "Saldo"]
                         if _tiene_cheque:
-                            _cols_sel.insert(3, "Cheque")
+                            _cols_sel.insert(2, "Cheque")
                     elif _tiene_cheque:
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Cheque", "Concepto", "Monto"]
+                        _cols_sel = ["Fecha", "Proveedor", "Cheque", "Monto"]
                     else:
-                        _cols_sel = ["Pago #", "Fecha", "Proveedor", "Concepto", "Monto"]
+                        _cols_sel = ["Fecha", "Proveedor", "Monto"]
                     _col_cfg = {"Fecha": _cfg_fecha, "Monto": _cfg_monto}
                     if _es_parcial_titulo:
                         _col_cfg["Total comprobante"] = st.column_config.NumberColumn("Total comprobante", format="$ %,.0f")
                         _col_cfg["Pagado total"]      = st.column_config.NumberColumn("Pagado total",      format="$ %,.0f")
                         _col_cfg["Saldo"]             = st.column_config.NumberColumn("Saldo",             format="$ %,.0f")
                     st.dataframe(
-                        _df_rows[_cols_sel].rename(columns=_cols_rename),
+                        _df_rows[_cols_sel],
                         use_container_width=True, hide_index=True,
                         column_config=_col_cfg,
                     )
