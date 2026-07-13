@@ -2815,32 +2815,7 @@ with _stab_iva:
     _bal_metric(_iv2, "IVA Débito Fiscal",   f"$ {_pesos(_iva_debito)}",       "#6a1b9a")
     _bal_metric(_iv3, "Exento / No gravado", f"$ {_pesos(_iva_exento)}",       "#757575")
 
-    if _facturas_iva:
-        st.divider()
-        st.markdown(f"**Detalle por factura — {len(_facturas_iva)} comprobantes**")
-        _iva_rows = []
-        for _f in sorted(_facturas_iva, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-            _iva_rows.append({
-                "Fecha":        _fmt_fecha(_f.get("fecha_comp")),
-                "Comprobante":  f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
-                "Cliente":      f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—",
-                "Neto Gravado": float(_f.get("monto_gravado") or 0),
-                "IVA":          float(_f.get("monto_iva") or 0),
-                "Exento":       float(_f.get("monto_exento") or 0),
-                "Total":        float(_f.get("total") or 0),
-            })
-        st.dataframe(
-            pd.DataFrame(_iva_rows),
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Neto Gravado": st.column_config.NumberColumn("Neto Gravado", format="$ %,.2f"),
-                "IVA":          st.column_config.NumberColumn("IVA",          format="$ %,.2f"),
-                "Exento":       st.column_config.NumberColumn("Exento",       format="$ %,.2f"),
-                "Total":        st.column_config.NumberColumn("Total",        format="$ %,.2f"),
-            },
-        )
-    else:
+    if not _facturas_iva:
         st.info("No hay facturas en el período seleccionado.")
 
     st.divider()
