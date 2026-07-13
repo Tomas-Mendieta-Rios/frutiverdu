@@ -2124,14 +2124,13 @@ with tab_balance:
                                 "Comprobante": _c.get("nro_comprobante") or "—",
                                 "Condición":   _c.get("condicion_pago") or "—",
                                 "Total":       float(_c.get("total") or 0),
-                                "Pagado":      _pend_pagado_c(_c),
-                                "Saldo":       _pend_saldo_c(_c),
+                                **( {"Pagado": _pend_pagado_c(_c), "Saldo": _pend_saldo_c(_c)} if _lbl == "Parciales" else {} ),
                             } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""))]
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config={
-                                "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
-                                "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
-                                "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.2f"),
-                            })
+                            _ccfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
+                            if _lbl == "Parciales":
+                                _ccfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
+                                _ccfg["Saldo"]  = st.column_config.NumberColumn("Saldo",  format="$ %,.2f")
+                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_ccfg)
 
         # Gastos: agrupar por Proveedor → Parcial/Pendiente adentro
         _pend_big("Gastos", _pesos(_total_pend_gas), "#c62828")
@@ -2156,14 +2155,13 @@ with tab_balance:
                                 "Rubro":       " / ".join(filter(None, [_g.get("rubro_nombre"), _g.get("sub_rubro_nombre")])) or _g.get("gasto") or "—",
                                 "Comprobante": _g.get("nro_comprobante") or "—",
                                 "Total":       float(_g.get("total") or 0),
-                                "Pagado":      _pend_pagado_g(_g),
-                                "Saldo":       _pend_saldo_g(_g),
+                                **( {"Pagado": _pend_pagado_g(_g), "Saldo": _pend_saldo_g(_g)} if _lbl == "Parciales" else {} ),
                             } for _g in sorted(_lst, key=lambda x: str(x.get("fecha") or ""))]
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config={
-                                "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
-                                "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
-                                "Saldo":  st.column_config.NumberColumn("Saldo",  format="$ %,.2f"),
-                            })
+                            _gcfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
+                            if _lbl == "Parciales":
+                                _gcfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
+                                _gcfg["Saldo"]  = st.column_config.NumberColumn("Saldo",  format="$ %,.2f")
+                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_gcfg)
 
         st.divider()
 
@@ -2199,16 +2197,17 @@ with tab_balance:
                                 "Fecha":       _fmt_fecha(_f.get("fecha_comp")),
                                 "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
                                 "Total":       float(_f.get("total") or 0),
-                                "Cobrado":     _pend_cobrado_f(_f),
-                                "Saldo":       _pend_saldo_f(_f),
+                                **( {"Cobrado": _pend_cobrado_f(_f), "Saldo": _pend_saldo_f(_f)} if _lbl == "Parciales" else {} ),
                                 "PDF":         _f.get("url_factura") or None,
                             } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""))]
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config={
-                                "Total":   st.column_config.NumberColumn("Total",   format="$ %,.2f"),
-                                "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.2f"),
-                                "Saldo":   st.column_config.NumberColumn("Saldo",   format="$ %,.2f"),
-                                "PDF":     st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
-                            })
+                            _fcfg = {
+                                "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
+                                "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
+                            }
+                            if _lbl == "Parciales":
+                                _fcfg["Cobrado"] = st.column_config.NumberColumn("Cobrado", format="$ %,.2f")
+                                _fcfg["Saldo"]   = st.column_config.NumberColumn("Saldo",   format="$ %,.2f")
+                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_fcfg)
 
         # Wix: agrupar por Cliente (no hay parciales en Wix)
         _pend_big("Wix (pedidos)", _pesos(_total_deud_wix), "#e65100")
