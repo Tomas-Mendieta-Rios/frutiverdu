@@ -2937,32 +2937,32 @@ with tab_ingresos:
                     _fped_c = _fmt_fecha(_o.get("createdDate"))
                     _fent_c = _fmt_fecha(_sels_wix_cob.get(_oid_c))
 
-                    _ci, _cd, _cc = st.columns([5, 2, 2])
-                    with _ci:
-                        _info2 = f" · 🚚 entrega {_fent_c}" if _fent_c and _fent_c != "—" else ""
-                        st.markdown(
-                            f"**#{_nro_c}** — {_nombre_c} · {_total_c} · {_pay_c} · {_ful_c}  \n"
-                            f"📅 pedido {_fped_c}{_info2}"
-                        )
-                    with _cd:
-                        _fp_new = st.date_input(
-                            "F. pago",
-                            value=_fecha_pago_val,
-                            key=f"fpago_{_oid_c}",
-                            format="DD/MM/YYYY",
-                            label_visibility="collapsed",
-                        )
-                    with _cc:
-                        _current_caja_c = _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None
-                        _caja_opts_c = ["—"] + _cajas_names_cob
-                        _caja_idx_c = _caja_opts_c.index(_current_caja_c) if _current_caja_c in _caja_opts_c else 0
-                        _caja_new = st.selectbox(
-                            "Caja",
-                            options=_caja_opts_c,
-                            index=_caja_idx_c,
-                            key=f"caja_{_oid_c}",
-                            label_visibility="collapsed",
-                        )
+                    with st.container(border=True):
+                        _ci, _cd, _cc = st.columns([5, 2, 2])
+                        with _ci:
+                            st.markdown(f"**#{_nro_c} — {_nombre_c} · {_total_c}**")
+                            st.markdown(f"{_pay_c} · {_ful_c}")
+                            _info2 = f" · 🚚 entrega {_fent_c}" if _fent_c and _fent_c != "—" else ""
+                            st.caption(f"📅 pedido {_fped_c}{_info2}")
+                        with _cd:
+                            _fp_new = st.date_input(
+                                "F. pago",
+                                value=_fecha_pago_val,
+                                key=f"fpago_{_oid_c}",
+                                format="DD/MM/YYYY",
+                                label_visibility="collapsed",
+                            )
+                        with _cc:
+                            _current_caja_c = _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None
+                            _caja_opts_c = ["—"] + _cajas_names_cob
+                            _caja_idx_c = _caja_opts_c.index(_current_caja_c) if _current_caja_c in _caja_opts_c else 0
+                            _caja_new = st.selectbox(
+                                "Caja",
+                                options=_caja_opts_c,
+                                index=_caja_idx_c,
+                                key=f"caja_{_oid_c}",
+                                label_visibility="collapsed",
+                            )
                     _nuevas_fpago_cob[_oid_c] = str(_fp_new) if _fp_new is not None else None
                     _nuevas_cajas_cob[_oid_c] = _cajas_por_nombre_cob.get(_caja_new) if _caja_new != "—" else None
 
