@@ -1577,18 +1577,6 @@ def _render_movimiento_caja(cobros, pagos):
             if _nro:
                 _pag_por_comp_all[_nro] = _pag_por_comp_all.get(_nro, 0.0) + float(_ix.get("monto_imputado") or 0)
 
-    # Lookup: nro_comprobante → {caja_key: monto} para mostrar desglose por medio de pago
-    _cobro_medios_lkp = {}
-    for _cx in cobros:
-        _cnro = _cx.get("nro_comprobante")
-        if not _cnro:
-            continue
-        for _cm in _cx.get("cobranza", []):
-            _cmk = _caja_key(_cm.get("tipo_valor"), _cm.get("descripcion"))
-            _cmm = float(_cm.get("monto") or 0)
-            _cobro_medios_lkp.setdefault(_cnro, {})
-            _cobro_medios_lkp[_cnro][_cmk] = _cobro_medios_lkp[_cnro].get(_cmk, 0) + _cmm
-
     for _c in cobros:
         try:
             _f = pd.to_datetime(str(_c.get("fecha") or "")).date()
@@ -1904,22 +1892,10 @@ def _render_movimiento_caja(cobros, pagos):
         _tot_ent = _df_ent["Monto"].sum() if not _df_ent.empty else 0.0
         with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
             if not _df_ent.empty:
-                _medios_ent = sorted({mk for nro in _df_ent["Cobro #"] for mk in (_cobro_medios_lkp.get(nro) or {})})
-                _mostrar_medios_ent = len(_medios_ent) > 1 or any(len(_cobro_medios_lkp.get(nro) or {}) > 1 for nro in _df_ent["Cobro #"])
-                if _mostrar_medios_ent:
-                    for _mc in _medios_ent:
-                        _df_ent[_mc] = _df_ent["Cobro #"].map(lambda n, k=_mc: (_cobro_medios_lkp.get(n) or {}).get(k, 0))
-                    _cols_ent = ["Cobro #", "Fecha", "Cliente", "Facturas"] + _medios_ent + ["Monto"]
-                    _cc_ent = {"Fecha": _cfg_fecha, "Monto": _cfg_monto}
-                    for _mc in _medios_ent:
-                        _cc_ent[_mc] = st.column_config.NumberColumn(_mc.title(), format="$ %,.0f")
-                else:
-                    _cols_ent = ["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]
-                    _cc_ent = {"Fecha": _cfg_fecha, "Monto": _cfg_monto}
                 st.dataframe(
-                    _df_ent[_cols_ent].rename(columns={"Facturas": "Facturas cobradas"}),
+                    _df_ent[["Cobro #", "Fecha", "Cliente", "Facturas", "Monto"]].rename(columns={"Facturas": "Facturas cobradas"}),
                     use_container_width=True, hide_index=True,
-                    column_config=_cc_ent,
+                    column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
             else:
                 st.caption("Sin entradas en el período.")
