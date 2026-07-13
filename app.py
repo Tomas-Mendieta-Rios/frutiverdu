@@ -2846,28 +2846,23 @@ with _stab_iva:
     st.divider()
     st.markdown("**🧮 Simulador — ¿Cuánto necesito en facturas de compra?**")
     st.caption("Ingresá el IVA que querés pagar y te calcula el crédito fiscal necesario.")
-    _sim_col1, _sim_col2 = st.columns([2, 1])
-    with _sim_col1:
-        _sim_target = st.number_input(
-            "IVA que quiero pagar ($)",
-            min_value=0.0,
-            max_value=float(_iva_debito) if _iva_debito > 0 else 999_999_999.0,
-            value=0.0,
-            step=10000.0,
-            format="%.0f",
-            key="sim_iva_target",
-        )
-    with _sim_col2:
-        _sim_alicuota = st.selectbox("Alícuota compras", ["10.5%", "21%"], key="sim_alicuota")
+    _sim_target = st.number_input(
+        "IVA que quiero pagar ($)",
+        min_value=0.0,
+        max_value=float(_iva_debito) if _iva_debito > 0 else 999_999_999.0,
+        value=0.0,
+        step=10000.0,
+        format="%.0f",
+        key="sim_iva_target",
+    )
 
-    _sim_alic_val = 0.105 if _sim_alicuota == "10.5%" else 0.21
     _sim_credito_needed = max(0.0, _iva_debito - _sim_target)
-    _sim_facturas_needed = _sim_credito_needed / _sim_alic_val if _sim_alic_val > 0 else 0.0
+    _sim_facturas_needed = _sim_credito_needed / 0.105
 
     _sc1, _sc2, _sc3 = st.columns(3)
-    _bal_metric(_sc1, "IVA Débito",            f"$ {_pesos(_iva_debito)}",          "#6a1b9a")
-    _bal_metric(_sc2, "Crédito fiscal necesario", f"$ {_pesos(_sim_credito_needed)}", "#1565c0")
-    _bal_metric(_sc3, f"Facturas de compra ({_sim_alicuota})", f"$ {_pesos(_sim_facturas_needed)}", "#2e7d32")
+    _bal_metric(_sc1, "IVA Débito",               f"$ {_pesos(_iva_debito)}",          "#6a1b9a")
+    _bal_metric(_sc2, "Crédito fiscal necesario",  f"$ {_pesos(_sim_credito_needed)}",  "#1565c0")
+    _bal_metric(_sc3, "Facturas de compra (10.5%)", f"$ {_pesos(_sim_facturas_needed)}", "#2e7d32")
 
 with _stab_transferencias:
     st.subheader("Transferencias entre cajas")
