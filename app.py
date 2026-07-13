@@ -2042,7 +2042,7 @@ with tab_balance:
         except Exception:
             _pend_hasta_def = date.today()
 
-        with st.form("form_pend_fechas"):
+        with st.form("form_pend_fechas", border=False):
             _fc1, _fc2 = st.columns(2)
             with _fc1:
                 _pend_desde = st.date_input("Desde", value=_pend_desde_def, key="pend_desde_in", format="DD/MM/YYYY")
