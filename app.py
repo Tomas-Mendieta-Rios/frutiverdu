@@ -224,52 +224,58 @@ EXCEPCIONES = {
 
 st.title("Frutiverdu")
 
-# Password gate: si en secrets.toml hay [app] password = "...", la pide al entrar.
-# Despues del primer login, se persiste un token en la URL (?t=...) para que
+# Login por usuario: cada usuario tiene su propia contraseña en secrets.toml [usuarios].
+# Flujo: 1) elegir usuario con botones, 2) ingresar contraseña.
+# Tras el login exitoso se persiste un token en la URL (?u=...&t=...) para que
 # recargas y nuevas pestañas no vuelvan a pedir la contraseña.
-_app_password_esperada = st.secrets.get("app", {}).get("password", "")
-_app_token = (
-    hashlib.sha256(_app_password_esperada.encode()).hexdigest()[:24]
-    if _app_password_esperada
-    else ""
-)
-if _app_token and st.query_params.get("t") == _app_token:
-    st.session_state["_authed"] = True
-
-if _app_password_esperada and not st.session_state.get("_authed", False):
-    st.markdown("### Ingresá la contraseña para continuar")
-    _pw_input = st.text_input(
-        "Contraseña",
-        type="password",
-        key="_pw_input",
-        label_visibility="collapsed",
-    )
-    if st.button("Entrar", type="primary", key="_pw_entrar"):
-        if _pw_input == _app_password_esperada:
-            st.session_state["_authed"] = True
-            st.query_params["t"] = _app_token
-            st.rerun()
-        else:
-            st.error("Contraseña incorrecta.")
-    st.stop()
-
-# Multi-usuario: identificar quien esta usando la app + avisar si hay otros activos
-USUARIOS_APP = ["Carlos", "Ariel", "Tomás", "Claudia", "Otro"]
+_usuarios_passwords = st.secrets.get("usuarios", {})
+USUARIOS_APP = list(_usuarios_passwords.keys()) if _usuarios_passwords else ["Carlos", "Ariel", "Tomás", "Claudia", "Otro"]
 PRESENCIA_WINDOW = 600  # 10 min — considerado "activo" si dio señal en este lapso
 HEARTBEAT_INTERVAL = 300  # 5 min — refrescamos nuestra presencia cada este lapso
 
-if "usuario_app" not in st.session_state:
-    st.markdown("### ¿Quién sos?")
-    cols_pick = st.columns(len(USUARIOS_APP))
-    for i_pick, u_pick in enumerate(USUARIOS_APP):
-        if cols_pick[i_pick].button(u_pick, key=f"pick_user_{u_pick}", use_container_width=True):
-            st.session_state["usuario_app"] = u_pick
+# Restaurar sesión desde URL params
+_url_user = st.query_params.get("u", "")
+_url_token = st.query_params.get("t", "")
+if _url_user and _url_token and _url_user in _usuarios_passwords:
+    _expected_token = hashlib.sha256((_url_user + _usuarios_passwords[_url_user]).encode()).hexdigest()[:24]
+    if _url_token == _expected_token:
+        st.session_state["_authed"] = True
+        if "usuario_app" not in st.session_state:
+            st.session_state["usuario_app"] = _url_user
+
+if not st.session_state.get("_authed", False):
+    if "_login_usuario" not in st.session_state:
+        st.markdown("### ¿Quién sos?")
+        cols_pick = st.columns(len(USUARIOS_APP))
+        for i_pick, u_pick in enumerate(USUARIOS_APP):
+            if cols_pick[i_pick].button(u_pick, key=f"pick_user_{u_pick}", use_container_width=True):
+                st.session_state["_login_usuario"] = u_pick
+                st.rerun()
+        st.stop()
+
+    _login_usuario = st.session_state["_login_usuario"]
+    st.markdown(f"### Hola, {_login_usuario}. Ingresá tu contraseña:")
+    _pw_input = st.text_input("Contraseña", type="password", key="_pw_input", label_visibility="collapsed")
+    col_volver, col_entrar = st.columns([1, 3])
+    if col_volver.button("← Volver", key="_pw_volver"):
+        del st.session_state["_login_usuario"]
+        st.rerun()
+    if col_entrar.button("Entrar", type="primary", key="_pw_entrar"):
+        _pw_esperada = _usuarios_passwords.get(_login_usuario, "")
+        if _pw_esperada and _pw_input == _pw_esperada:
+            st.session_state["_authed"] = True
+            st.session_state["usuario_app"] = _login_usuario
+            _token = hashlib.sha256((_login_usuario + _pw_esperada).encode()).hexdigest()[:24]
+            st.query_params["u"] = _login_usuario
+            st.query_params["t"] = _token
             try:
-                db.guardar_config({f"presencia_{u_pick}": str(int(time.time()))})
+                db.guardar_config({f"presencia_{_login_usuario}": str(int(time.time()))})
                 st.session_state["_ultimo_heartbeat"] = time.time()
             except Exception:
                 pass
             st.rerun()
+        else:
+            st.error("Contraseña incorrecta.")
     st.stop()
 
 _usuario_actual = st.session_state["usuario_app"]
