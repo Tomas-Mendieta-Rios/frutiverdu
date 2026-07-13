@@ -2201,11 +2201,13 @@ with tab_balance:
                                 "Total":       float(_f.get("total") or 0),
                                 "Cobrado":     _pend_cobrado_f(_f),
                                 "Saldo":       _pend_saldo_f(_f),
+                                "PDF":         _f.get("url_factura") or None,
                             } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""))]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config={
                                 "Total":   st.column_config.NumberColumn("Total",   format="$ %,.2f"),
                                 "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.2f"),
                                 "Saldo":   st.column_config.NumberColumn("Saldo",   format="$ %,.2f"),
+                                "PDF":     st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
                             })
 
         # Wix: agrupar por Cliente (no hay parciales en Wix)
