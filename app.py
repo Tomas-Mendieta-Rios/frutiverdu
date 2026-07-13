@@ -2915,8 +2915,6 @@ with tab_ingresos:
                     st.error(f"❌ {_e_cob}")
 
 with tab_sync:
-    st.subheader("🔄 Sincronizar")
-
     _hoy_sync = date.today()
     _cfg_sync = db.cargar_config()
     try:
