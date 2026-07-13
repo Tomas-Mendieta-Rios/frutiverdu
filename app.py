@@ -2802,7 +2802,7 @@ with _stab_iva:
         except Exception:
             return False
 
-    _facturas_iva = [f for f in facturas_bal if _iva_en_rango(f.get("fecha_comp")) and str(f.get("anulada", "N")).upper() != "S"]
+    _facturas_iva = [f for f in facturas_bal if _iva_en_rango(f.get("fecha_comp")) and str(f.get("anulada", "N")).upper() != "S" and str(f.get("letra_comp") or "").upper() == "A"]
 
     _iva_neto_gravado = sum(float(f.get("monto_gravado") or 0) for f in _facturas_iva)
     _iva_debito       = sum(float(f.get("monto_iva") or 0) for f in _facturas_iva)
