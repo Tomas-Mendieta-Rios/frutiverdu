@@ -1925,18 +1925,18 @@ def _render_movimiento_caja(cobros, pagos):
                 st.caption("Sin entradas en el período.")
         if not _df_ent_parc.empty:
             _tot_ent_parc = _df_ent_parc["Monto"].sum()
-            # Columnas por medio de pago
+            # Columnas por medio de pago (solo si hay mezcla)
             _medios_cols = sorted({mk for nro in _df_ent_parc["Cobro #"] for mk in (_cobro_medios_lkp.get(nro) or {})})
-            for _mc in _medios_cols:
-                _df_ent_parc[_mc] = _df_ent_parc["Cobro #"].map(lambda n, k=_mc: (_cobro_medios_lkp.get(n) or {}).get(k, 0))
-            with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
-                _cols_parc = ["Cobro #", "Fecha", "Cliente", "Facturas"] + _medios_cols + ["Monto"]
-                _cc_parc = {
-                    "Fecha":  _cfg_fecha,
-                    "Monto":  _cfg_monto,
-                }
+            _mostrar_medios_parc = len(_medios_cols) > 1 or any(len(_cobro_medios_lkp.get(nro) or {}) > 1 for nro in _df_ent_parc["Cobro #"])
+            if _mostrar_medios_parc:
                 for _mc in _medios_cols:
-                    _cc_parc[_mc] = st.column_config.NumberColumn(_mc.title(), format="$ %,.0f")
+                    _df_ent_parc[_mc] = _df_ent_parc["Cobro #"].map(lambda n, k=_mc: (_cobro_medios_lkp.get(n) or {}).get(k, 0))
+            with st.expander(f"Entradas — Parciales ({len(_df_ent_parc)}) — {_fmt_monto(_tot_ent_parc)}"):
+                _cols_parc = ["Cobro #", "Fecha", "Cliente", "Facturas"] + (_medios_cols if _mostrar_medios_parc else []) + ["Monto"]
+                _cc_parc = {"Fecha": _cfg_fecha, "Monto": _cfg_monto}
+                if _mostrar_medios_parc:
+                    for _mc in _medios_cols:
+                        _cc_parc[_mc] = st.column_config.NumberColumn(_mc.title(), format="$ %,.0f")
                 st.dataframe(
                     _df_ent_parc[_cols_parc],
                     use_container_width=True, hide_index=True,
