@@ -2251,7 +2251,7 @@ with tab_balance:
                 bal_desde = st.date_input("Desde", value=_bal_desde_def, key="bal_desde_in", format="DD/MM/YYYY")
             with _bc2:
                 bal_hasta = st.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta_in", format="DD/MM/YYYY")
-            _btn_bal = st.form_submit_button("Guardar", type="primary", use_container_width=True)
+            _btn_bal = st.form_submit_button("Calcular", type="primary", use_container_width=True)
         if _btn_bal:
             db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
 
