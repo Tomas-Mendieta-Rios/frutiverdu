@@ -1411,8 +1411,8 @@ pagos_bal        = db.cargar_pagos_proveedores()
 )
 
 with tab_tesoreria:
-    _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
-        "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
+    _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini, _stab_iva = st.tabs([
+        "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial", "🧾 Posición IVA",
     ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -2772,6 +2772,48 @@ with _stab_saldo_ini:
                         "Saldo inicial": st.column_config.NumberColumn("Saldo inicial", format="$ %.0f"),
                     },
                 )
+
+with _stab_iva:
+    st.subheader("🧾 Posición IVA Débito")
+    st.caption(f"Período: {bal_desde.strftime('%d/%m/%Y')} → {bal_hasta.strftime('%d/%m/%Y')} · Solo facturas de venta (crédito fiscal de compras no disponible)")
+
+    _iva_neto_gravado = sum(float(f.get("monto_gravado") or 0) for f in facturas_vig)
+    _iva_debito       = sum(float(f.get("monto_iva") or 0) for f in facturas_vig)
+    _iva_exento       = sum(float(f.get("monto_exento") or 0) for f in facturas_vig)
+
+    st.divider()
+    _iv1, _iv2, _iv3 = st.columns(3)
+    _bal_metric(_iv1, "Neto Gravado",        f"$ {_pesos(_iva_neto_gravado)}", "#1565c0")
+    _bal_metric(_iv2, "IVA Débito Fiscal",   f"$ {_pesos(_iva_debito)}",       "#6a1b9a")
+    _bal_metric(_iv3, "Exento / No gravado", f"$ {_pesos(_iva_exento)}",       "#757575")
+
+    if facturas_vig:
+        st.divider()
+        st.markdown(f"**Detalle por factura — {len(facturas_vig)} comprobantes**")
+        _iva_rows = []
+        for _f in sorted(facturas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+            _iva_rows.append({
+                "Fecha":        _fmt_fecha(_f.get("fecha_comp")),
+                "Comprobante":  f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
+                "Cliente":      f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—",
+                "Neto Gravado": float(_f.get("monto_gravado") or 0),
+                "IVA":          float(_f.get("monto_iva") or 0),
+                "Exento":       float(_f.get("monto_exento") or 0),
+                "Total":        float(_f.get("total") or 0),
+            })
+        st.dataframe(
+            pd.DataFrame(_iva_rows),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Neto Gravado": st.column_config.NumberColumn("Neto Gravado", format="$ %,.2f"),
+                "IVA":          st.column_config.NumberColumn("IVA",          format="$ %,.2f"),
+                "Exento":       st.column_config.NumberColumn("Exento",       format="$ %,.2f"),
+                "Total":        st.column_config.NumberColumn("Total",        format="$ %,.2f"),
+            },
+        )
+    else:
+        st.info("No hay facturas en el período seleccionado.")
 
 with _stab_transferencias:
     st.subheader("Transferencias entre cajas")
