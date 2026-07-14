@@ -2479,12 +2479,18 @@ if _sub_resumen:
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
-        st.markdown("<div style='background:#eef2f7;border-radius:10px;padding:14px 24px;margin-bottom:6px'><h2 style='text-align:center;margin:0'>Ingresos</h2></div>", unsafe_allow_html=True)
-        _ti1, _ti2, _ti3, _ti4 = st.columns(4)
-        _bal_metric(_ti1, "Facturado",  f"$ {_pesos(total_ingresos)}", "#1a1a1a")
-        _bal_metric(_ti2, "Cobrado",    f"$ {_pesos(total_ing_cobr)}", "#2e7d32")
-        _bal_metric(_ti3, "Pendiente",  f"$ {_pesos(total_ing_pend)}", "#c62828")
-        _bal_metric(_ti4, "Anulado",    f"$ {_pesos(total_ing_anul)}", "#757575")
+        def _metric_cell(label, value, color):
+            return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p></div>"
+        st.markdown(f"""
+<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px'>
+    {_metric_cell("Facturado", f"$ {_pesos(total_ingresos)}", "#1a1a1a")}
+    {_metric_cell("Cobrado",   f"$ {_pesos(total_ing_cobr)}", "#2e7d32")}
+    {_metric_cell("Pendiente", f"$ {_pesos(total_ing_pend)}", "#c62828")}
+    {_metric_cell("Anulado",   f"$ {_pesos(total_ing_anul)}", "#757575")}
+  </div>
+</div>""", unsafe_allow_html=True)
 
         # Facturas DUX
         st.markdown(f"#### DUX · {len(facturas_vig)} facturas")
@@ -2572,12 +2578,16 @@ if _sub_resumen:
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
-        st.markdown("<div style='background:#eef2f7;border-radius:10px;padding:14px 24px;margin-bottom:6px'><h2 style='text-align:center;margin:0'>Egresos</h2></div>", unsafe_allow_html=True)
-        _te1, _te2, _te3, _te4 = st.columns(4)
-        _bal_metric(_te1, "Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")
-        _bal_metric(_te2, "Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")
-        _bal_metric(_te3, "Pendiente", f"$ {_pesos(total_egr_pend)}","#c62828")
-        _bal_metric(_te4, "Anulado",   f"$ {_pesos(total_egr_anul)}","#757575")
+        st.markdown(f"""
+<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Egresos</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px'>
+    {_metric_cell("Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")}
+    {_metric_cell("Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")}
+    {_metric_cell("Pendiente", f"$ {_pesos(total_egr_pend)}", "#c62828")}
+    {_metric_cell("Anulado",   f"$ {_pesos(total_egr_anul)}", "#757575")}
+  </div>
+</div>""", unsafe_allow_html=True)
 
         # Compras
         st.markdown(f"#### Compras · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
@@ -2659,19 +2669,23 @@ if _sub_resumen:
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
-        st.markdown("<h2 style='text-align:center'>Resultado</h2>", unsafe_allow_html=True)
-        _ing_real  = total_fac_cobr + total_wix_cobr
-        _egr_real  = total_comp_pag + total_gas_pag
-        _res_real  = _ing_real - _egr_real
-        _rf1, _rf2 = st.columns(2)
-        _fic_color = "#2e7d32" if resultado >= 0 else "#c62828"
-        _fic_signo = "+" if resultado >= 0 else ""
+        _ing_real   = total_fac_cobr + total_wix_cobr
+        _egr_real   = total_comp_pag + total_gas_pag
+        _res_real   = _ing_real - _egr_real
+        _fic_color  = "#2e7d32" if resultado >= 0 else "#c62828"
+        _fic_signo  = "+" if resultado >= 0 else ""
         _real_color = "#2e7d32" if _res_real >= 0 else "#c62828"
         _real_signo = "+" if _res_real >= 0 else ""
-        _bal_metric(_rf1, "Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color,
-                    sub="Facturado − Comprado/Gastado")
-        _bal_metric(_rf2, "Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color,
-                    sub="Cobrado − Pagado")
+        def _metric_cell_sub(label, value, color, sub):
+            return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p><p style='margin:0;font-size:0.75rem;color:#999'>{sub}</p></div>"
+        st.markdown(f"""
+<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+    {_metric_cell_sub("Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
+    {_metric_cell_sub("Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
+  </div>
+</div>""", unsafe_allow_html=True)
 
 
 if _stab_movimientos:
