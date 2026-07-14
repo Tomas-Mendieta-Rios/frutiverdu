@@ -2212,7 +2212,7 @@ if _sub_pendientes:
         # helpers de visualización
         def _pend_big(label, valor, color):
             st.markdown(
-                f'<p style="margin:16px 0 2px 0;font-size:0.85rem;font-weight:600;color:#777;">{label}</p>'
+                f'<p style="margin:24px 0 2px 0;font-size:1rem;font-weight:700;color:#1a1a1a;">{label}</p>'
                 f'<p style="margin:0 0 6px 0;font-size:1.5rem;font-weight:700;color:{color};">$ {valor}</p>',
                 unsafe_allow_html=True,
             )
@@ -2224,7 +2224,7 @@ if _sub_pendientes:
         _total_pend_gas  = sum(_pend_saldo_g(g) for g in _gas_pend_hist)
         _total_pend      = _total_pend_comp + _total_pend_gas
 
-        st.subheader(f"Pagos pendientes — $ {_pesos(_total_pend)}")
+        st.subheader(f"A pagar a proveedores — $ {_pesos(_total_pend)}")
 
         # Compras: agrupar por Proveedor → Parcial/Pendiente adentro
         _pend_big("Compras", _pesos(_total_pend_comp), "#c62828")
@@ -2296,10 +2296,10 @@ if _sub_pendientes:
         _total_deud_wix = sum(_wix_monto(p) for p in _wix_deud)
         _total_deud     = _total_deud_dux + _total_deud_wix
 
-        st.subheader(f"Deudores — $ {_pesos(_total_deud)}")
+        st.subheader(f"A cobrar a clientes — $ {_pesos(_total_deud)}")
 
         # DUX: agrupar por Cliente → Parcial/Pendiente adentro
-        _pend_big("DUX (facturas)", _pesos(_total_deud_dux), "#e65100")
+        _pend_big("DUX", _pesos(_total_deud_dux), "#c62828")
         if not _fac_deud:
             st.caption("Sin facturas pendientes de cobro en el rango seleccionado.")
         else:
@@ -2334,7 +2334,7 @@ if _sub_pendientes:
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_fcfg)
 
         # Wix: agrupar por Cliente (no hay parciales en Wix)
-        _pend_big("Wix (pedidos)", _pesos(_total_deud_wix), "#e65100")
+        _pend_big("Wix", _pesos(_total_deud_wix), "#c62828")
         if not _wix_deud:
             st.caption("Sin pedidos pendientes de cobro en el rango seleccionado.")
         else:
