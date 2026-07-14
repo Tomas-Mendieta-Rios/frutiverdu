@@ -2468,11 +2468,12 @@ if _sub_resumen:
         st.subheader(f"Ingresos — $ {_pesos(total_ingresos)}")
 
         # Facturas DUX
-        st.markdown(f"**DUX — $ {_pesos(total_facturas)}** · {len(facturas_vig)} facturas")
-        _c1, _c2, _c3 = st.columns(3)
-        _bal_metric(_c1, "Cobrado",   f"$ {_pesos(total_fac_cobr)}", "#2e7d32")
-        _bal_metric(_c2, "Pendiente", f"$ {_pesos(total_fac_pend)}", "#e65100")
-        _bal_metric(_c3, "Anulado",   f"$ {_pesos(total_fac_anul)}", "#757575")
+        st.markdown(f"**DUX** · {len(facturas_vig)} facturas")
+        _c1, _c2, _c3, _c4 = st.columns(4)
+        _bal_metric(_c1, "Facturado",  f"$ {_pesos(total_facturas)}",  "#1a1a1a")
+        _bal_metric(_c2, "Cobrado",    f"$ {_pesos(total_fac_cobr)}",  "#2e7d32")
+        _bal_metric(_c3, "Pendiente",  f"$ {_pesos(total_fac_pend)}",  "#c62828")
+        _bal_metric(_c4, "Anulado",    f"$ {_pesos(total_fac_anul)}",  "#757575")
         def _fac_saldo(f):
             _tot = float(f.get("total") or 0)
             _cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
@@ -2520,11 +2521,12 @@ if _sub_resumen:
 
         # Wix
         _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
-        st.markdown(f"**Wix — $ {_pesos(total_wix)}** · {_wix_fin_count} pedidos")
-        _w1, _w2, _w3 = st.columns(3)
-        _bal_metric(_w1, "Cobrado",    f"$ {_pesos(total_wix_cobr)}", "#2e7d32")
-        _bal_metric(_w2, "Pendiente", f"$ {_pesos(total_wix_pend)}", "#e65100")
-        _bal_metric(_w3, "Anulado",    f"$ {_pesos(total_wix_anul)}", "#757575")
+        st.markdown(f"**Wix** · {_wix_fin_count} pedidos")
+        _w1, _w2, _w3, _w4 = st.columns(4)
+        _bal_metric(_w1, "Facturado",  f"$ {_pesos(total_wix)}",      "#1a1a1a")
+        _bal_metric(_w2, "Cobrado",    f"$ {_pesos(total_wix_cobr)}",  "#2e7d32")
+        _bal_metric(_w3, "Pendiente",  f"$ {_pesos(total_wix_pend)}",  "#c62828")
+        _bal_metric(_w4, "Anulado",    f"$ {_pesos(total_wix_anul)}",  "#757575")
 
         for _label, _lista in [
             ("Cobrado",    wix_cobradas),
