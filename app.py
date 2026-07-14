@@ -2761,18 +2761,6 @@ if _sub_resumen:
 
 if _stab_movimientos:
     with _stab_movimientos:
-        with st.expander("🔍 Debug carga (temporal)", expanded=False):
-            _dbg_total_cob  = len(cobros_bal)
-            _dbg_total_cobz = sum(len(c.get("cobranza") or []) for c in cobros_bal)
-            _dbg_mp = [(c.get("nro_comprobante"), c.get("fecha"), cob.get("monto"))
-                       for c in cobros_bal for cob in (c.get("cobranza") or [])
-                       if cob.get("tipo_valor") == "CUENTA" and cob.get("descripcion") == "MP FRUTIVERDU"]
-            st.write(f"**cobros cargados:** {_dbg_total_cob} | **cobros_cobranza cargados:** {_dbg_total_cobz}")
-            st.write(f"**MP FRUTIVERDU (total, sin filtro fecha):** {len(_dbg_mp)} entradas")
-            import pandas as _dbg_pd
-            if _dbg_mp:
-                st.dataframe(_dbg_pd.DataFrame(_dbg_mp, columns=["Cobro #", "Fecha", "Monto"]).sort_values("Fecha"),
-                             use_container_width=True, hide_index=True)
         _render_movimiento_caja(cobros_bal, pagos_bal)
 
 if _stab_ajustes:
