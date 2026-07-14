@@ -121,45 +121,48 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
 
     cantidades = {}
     compras_raw = []
-    offset = 0
     page_size = 50
     max_pages = 50
 
-    for _ in range(max_pages):
-        params = {
-            "id_empresa": id_empresa,
-            "fecha_desde": pd.to_datetime(fecha_desde).strftime("%Y-%m-%d"),
-            "fecha_hasta": pd.to_datetime(fecha_hasta).strftime("%Y-%m-%d"),
-            "incluir_detalle": "true",
-            "limit": page_size,
-            "offset": offset,
-        }
-        try:
-            r = requests.get(url, params=params, headers=headers, timeout=20)
-            if r.status_code != 200:
+    for estado_filter in [None, "anulada"]:
+        offset = 0
+        for _ in range(max_pages):
+            params = {
+                "id_empresa": id_empresa,
+                "fecha_desde": pd.to_datetime(fecha_desde).strftime("%Y-%m-%d"),
+                "fecha_hasta": pd.to_datetime(fecha_hasta).strftime("%Y-%m-%d"),
+                "incluir_detalle": "true",
+                "limit": page_size,
+                "offset": offset,
+            }
+            if estado_filter:
+                params["estado"] = estado_filter
+            try:
+                r = requests.get(url, params=params, headers=headers, timeout=20)
+                if r.status_code != 200:
+                    break
+                d = r.json()
+            except Exception:
                 break
-            d = r.json()
-        except Exception:
-            break
 
-        datos = d.get("datos", []) or []
-        if not datos:
-            break
+            datos = d.get("datos", []) or []
+            if not datos:
+                break
 
-        for compra in datos:
-            compras_raw.append(compra)
-            for item in (compra.get("items", []) or []):
-                cod = str(item.get("cod_item", "") or "").strip()
-                if not cod:
-                    continue
-                try:
-                    ctd = float(item.get("ctd_recepcionada", 0) or 0)
-                except (ValueError, TypeError):
-                    continue
-                cantidades[cod] = cantidades.get(cod, 0.0) + ctd
+            for compra in datos:
+                compras_raw.append(compra)
+                for item in (compra.get("items", []) or []):
+                    cod = str(item.get("cod_item", "") or "").strip()
+                    if not cod:
+                        continue
+                    try:
+                        ctd = float(item.get("ctd_recepcionada", 0) or 0)
+                    except (ValueError, TypeError):
+                        continue
+                    cantidades[cod] = cantidades.get(cod, 0.0) + ctd
 
-        offset += len(datos)
-        time.sleep(2)
+            offset += len(datos)
+            time.sleep(2)
 
     return {"cantidades": cantidades, "compras": compras_raw}
 
