@@ -489,7 +489,7 @@ def guardar_selecciones(fuente, selecciones):
 
 def cargar_pedidos_dux():
     client = get_client()
-    resp_orders = client.table("pedidos_dux").select("*").execute()
+    resp_orders = client.table("pedidos_dux").select("*").limit(10000).execute()
     if not resp_orders.data:
         return []
 
@@ -745,7 +745,7 @@ def guardar_percepciones_impuestos(data):
 @st.cache_data(ttl=600)
 def cargar_pedidos_wix():
     client = get_client()
-    resp_orders = client.table("pedidos_wix").select("*").execute()
+    resp_orders = client.table("pedidos_wix").select("*").limit(10000).execute()
     if not resp_orders.data:
         return []
 
@@ -1104,7 +1104,7 @@ def cargar_comprobantes_compra():
     client = get_client()
     resp = client.table("comprobantes_compra").select(
         "id, nro_comprobante, fecha, proveedor, condicion_pago, total, estado, pago_pendiente"
-    ).execute()
+    ).limit(10000).execute()
     return resp.data or []
 
 
@@ -1346,7 +1346,7 @@ def cargar_stock_teorico_detalle():
 @st.cache_data(ttl=600)
 def cargar_gastos():
     client = get_client()
-    resp_gastos = client.table("gastos").select("*").execute()
+    resp_gastos = client.table("gastos").select("*").limit(10000).execute()
     if not resp_gastos.data:
         return []
 
@@ -1472,7 +1472,7 @@ def cargar_pagos_proveedores():
     client = get_client()
     resp = client.table("pagos_proveedores").select(
         "*, pagos_proveedores_lineas(*), pagos_proveedores_imputaciones(*)"
-    ).execute()
+    ).limit(10000).execute()
     if not resp.data:
         return []
     pagos = []
@@ -1577,7 +1577,7 @@ def cargar_cobros():
     client = get_client()
     resp = client.table("cobros").select(
         "*, cobros_cobranza(*), cobros_imputaciones(*)"
-    ).execute()
+    ).limit(10000).execute()
     if not resp.data:
         return []
     cobros = []
