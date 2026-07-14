@@ -981,7 +981,7 @@ def guardar_facturas(facturas):
 @st.cache_data(ttl=600)
 def cargar_facturas():
     client = get_client()
-    resp = client.table("facturas").select("*").order("fecha_comp", desc=True).execute()
+    resp = client.table("facturas").select("*").limit(10000).execute()
     if not resp.data:
         return []
 
