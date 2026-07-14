@@ -1470,17 +1470,24 @@ def guardar_gastos(gastos):
 @st.cache_data(ttl=600)
 def cargar_pagos_proveedores():
     client = get_client()
-    resp = client.table("pagos_proveedores").select(
-        "*, pagos_proveedores_lineas(*), pagos_proveedores_imputaciones(*)"
-    ).limit(10000).execute()
+    resp = client.table("pagos_proveedores").select("*").limit(10000).execute()
     if not resp.data:
         return []
+    lin_resp = client.table("pagos_proveedores_lineas").select("*").limit(50000).execute()
+    imp_resp = client.table("pagos_proveedores_imputaciones").select("*").limit(50000).execute()
+    lin_by_id = {}
+    for row in (lin_resp.data or []):
+        lin_by_id.setdefault(row["pago_id"], []).append(row)
+    imp_by_id = {}
+    for row in (imp_resp.data or []):
+        imp_by_id.setdefault(row["pago_id"], []).append(row)
     pagos = []
     for r in resp.data:
+        pid = r["id"]
         pagos.append({
-            **{k: v for k, v in r.items() if k not in ("pagos_proveedores_lineas", "pagos_proveedores_imputaciones")},
-            "lineas_pago":  r.get("pagos_proveedores_lineas") or [],
-            "imputaciones": r.get("pagos_proveedores_imputaciones") or [],
+            **r,
+            "lineas_pago":  lin_by_id.get(pid, []),
+            "imputaciones": imp_by_id.get(pid, []),
         })
     return pagos
 
@@ -1575,17 +1582,25 @@ def guardar_pagos_proveedores(pagos):
 @st.cache_data(ttl=600)
 def cargar_cobros():
     client = get_client()
-    resp = client.table("cobros").select(
-        "*, cobros_cobranza(*), cobros_imputaciones(*)"
-    ).limit(10000).execute()
+    resp = client.table("cobros").select("*").limit(10000).execute()
     if not resp.data:
         return []
+    # Queries separadas para evitar el límite implícito de 1000 filas en embedded resources
+    cob_resp = client.table("cobros_cobranza").select("*").limit(50000).execute()
+    imp_resp = client.table("cobros_imputaciones").select("*").limit(50000).execute()
+    cob_by_id = {}
+    for row in (cob_resp.data or []):
+        cob_by_id.setdefault(row["cobro_id"], []).append(row)
+    imp_by_id = {}
+    for row in (imp_resp.data or []):
+        imp_by_id.setdefault(row["cobro_id"], []).append(row)
     cobros = []
     for r in resp.data:
+        cid = r["id"]
         cobros.append({
-            **{k: v for k, v in r.items() if k not in ("cobros_cobranza", "cobros_imputaciones")},
-            "cobranza":     r.get("cobros_cobranza") or [],
-            "imputaciones": r.get("cobros_imputaciones") or [],
+            **r,
+            "cobranza":     cob_by_id.get(cid, []),
+            "imputaciones": imp_by_id.get(cid, []),
         })
     return cobros
 
