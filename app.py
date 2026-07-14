@@ -1993,10 +1993,8 @@ def _render_movimiento_caja(cobros, pagos):
         + _all_aj_sum.get(_cn, 0.0)
         for _cn in _inicial
     )
-    _total_ht_e = sum(_por_caja.get(_cn, {"Entradas": 0.0}).get("Entradas", 0.0) for _cn in _inicial)
-    _total_ht_s = sum(_por_caja.get(_cn, {"Sal. Compras": 0.0, "Sal. Gastos": 0.0}).get("Sal. Compras", 0.0)
-                    + _por_caja.get(_cn, {"Sal. Compras": 0.0, "Sal. Gastos": 0.0}).get("Sal. Gastos", 0.0)
-                    for _cn in _inicial)
+    _total_ht_e = sum(_hist_total.get(_cn, {"Entradas": 0.0})["Entradas"] for _cn in _inicial)
+    _total_ht_s = sum(_hist_total.get(_cn, {"Salidas": 0.0})["Salidas"]   for _cn in _inicial)
     st.subheader("Total general")
     _k1, _k2, _k3 = st.columns(3)
     def _metric_card_total(col, label, value, color):
@@ -2024,12 +2022,9 @@ def _render_movimiento_caja(cobros, pagos):
                 f'<div style="padding:4px 0;margin-bottom:14px;"><p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p><p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p></div>',
                 unsafe_allow_html=True,
             )
-        _v_per = _por_caja.get(_caja, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0})
-        _per_ent = _v_per.get("Entradas", 0.0)
-        _per_sal = _v_per.get("Sal. Compras", 0.0) + _v_per.get("Sal. Gastos", 0.0)
         _metric_card(_m1, "Saldo actual", _fmt_monto(_saldo_actual), "#1a73e8")
-        _metric_card(_m2, "Entradas",     _fmt_monto(_per_ent), "#2e7d32")
-        _metric_card(_m3, "Salidas",      _fmt_monto(_per_sal), "#c62828")
+        _metric_card(_m2, "Entradas",     _fmt_monto(_ht['Entradas']), "#2e7d32")
+        _metric_card(_m3, "Salidas",      _fmt_monto(_ht['Salidas']), "#c62828")
 
         _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
