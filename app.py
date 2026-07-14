@@ -1136,6 +1136,11 @@ def _sync_compras(fecha_desde, fecha_hasta):
     if compras_res is None:
         return False, 0, msg_error_http("DUX (compras)", 401)
     compras_raw = compras_res.get("compras", [])
+    # Deduplicar por id — la segunda pasada (ANULADA) tiene prioridad
+    _seen = {}
+    for c in compras_raw:
+        _seen[c.get("id_compra")] = c
+    compras_raw = list(_seen.values())
     n_items = sum(len(c.get("items", []) or []) for c in compras_raw)
     db.guardar_compras_sync(compras_raw)
     return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes sincronizados ({n_items} ítems)."
