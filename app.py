@@ -2459,13 +2459,32 @@ if _sub_resumen:
         total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
         total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_parciales + gas_pendientes)
 
+        total_ing_cobr  = total_fac_cobr + total_wix_cobr
+        total_ing_pend  = total_fac_pend + total_wix_pend
+        total_ing_anul  = total_fac_anul + total_wix_anul
+
+        total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
+        total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
+        total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
+        total_gas_pag   = sum(float(g.get("total") or 0) for g in gas_pagados) + sum(_pagado_gasto(g) for g in gas_parciales)
+        total_gas_pend  = sum(_saldo_gasto(g) for g in gas_parciales) + sum(float(g.get("total") or 0) for g in gas_pendientes)
+        total_gas_anul  = sum(float(g.get("total") or 0) for g in gas_anulados)
+        total_egr_pag   = total_comp_pag + total_gas_pag
+        total_egr_pend  = total_comp_pend + total_gas_pend
+        total_egr_anul  = total_comp_anul + total_gas_anul
+
         total_ingresos = total_facturas + total_wix
         total_egresos  = total_compras + total_gastos
         resultado      = total_ingresos - total_egresos
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
-        st.subheader(f"Ingresos — $ {_pesos(total_ingresos)}")
+        st.subheader("Ingresos")
+        _ti1, _ti2, _ti3, _ti4 = st.columns(4)
+        _bal_metric(_ti1, "Facturado",  f"$ {_pesos(total_ingresos)}", "#1a1a1a")
+        _bal_metric(_ti2, "Cobrado",    f"$ {_pesos(total_ing_cobr)}", "#2e7d32")
+        _bal_metric(_ti3, "Pendiente",  f"$ {_pesos(total_ing_pend)}", "#c62828")
+        _bal_metric(_ti4, "Anulado",    f"$ {_pesos(total_ing_anul)}", "#757575")
 
         # Facturas DUX
         st.markdown(f"**DUX** · {len(facturas_vig)} facturas")
@@ -2553,12 +2572,14 @@ if _sub_resumen:
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
-        st.subheader(f"Egresos — $ {_pesos(total_egresos)}")
+        st.subheader("Egresos")
+        _te1, _te2, _te3, _te4 = st.columns(4)
+        _bal_metric(_te1, "Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")
+        _bal_metric(_te2, "Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")
+        _bal_metric(_te3, "Pendiente", f"$ {_pesos(total_egr_pend)}","#c62828")
+        _bal_metric(_te4, "Anulado",   f"$ {_pesos(total_egr_anul)}","#757575")
 
         # Compras
-        total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
-        total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
-        total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
         st.markdown(f"**Compras** · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
         _ec1, _ec2, _ec3, _ec4 = st.columns(4)
         _bal_metric(_ec1, "Total",     f"$ {_pesos(total_compras)}",    "#1a1a1a")
@@ -2593,9 +2614,6 @@ if _sub_resumen:
                                          })
 
         # Gastos
-        total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados) + sum(_pagado_gasto(g) for g in gas_parciales)
-        total_gas_pend = sum(_saldo_gasto(g) for g in gas_parciales) + sum(float(g.get("total") or 0) for g in gas_pendientes)
-        total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
         st.markdown(f"**Gastos** · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
         _eg1, _eg2, _eg3, _eg4 = st.columns(4)
         _bal_metric(_eg1, "Total",     f"$ {_pesos(total_gastos)}",    "#1a1a1a")
