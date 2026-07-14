@@ -1470,8 +1470,8 @@ def guardar_gastos(gastos):
 @st.cache_data(ttl=600)
 def cargar_pagos_proveedores():
     client = get_client()
-    resp = client.table("pagos_proveedores").select("*").limit(10000).execute()
-    if not resp.data:
+    pago_rows = _fetch_all_rows(client, "pagos_proveedores")
+    if not pago_rows:
         return []
     lin_rows = _fetch_all_rows(client, "pagos_proveedores_lineas")
     imp_rows = _fetch_all_rows(client, "pagos_proveedores_imputaciones")
@@ -1482,7 +1482,7 @@ def cargar_pagos_proveedores():
     for row in imp_rows:
         imp_by_id.setdefault(int(row["pago_id"]), []).append(row)
     pagos = []
-    for r in resp.data:
+    for r in pago_rows:
         pid = int(r["id"])
         pagos.append({
             **r,
@@ -1596,8 +1596,8 @@ def _fetch_all_rows(client, table):
 @st.cache_data(ttl=600)
 def cargar_cobros():
     client = get_client()
-    resp = client.table("cobros").select("*").limit(10000).execute()
-    if not resp.data:
+    cobro_rows = _fetch_all_rows(client, "cobros")
+    if not cobro_rows:
         return []
     cob_rows = _fetch_all_rows(client, "cobros_cobranza")
     imp_rows = _fetch_all_rows(client, "cobros_imputaciones")
@@ -1608,7 +1608,7 @@ def cargar_cobros():
     for row in imp_rows:
         imp_by_id.setdefault(int(row["cobro_id"]), []).append(row)
     cobros = []
-    for r in resp.data:
+    for r in cobro_rows:
         cid = int(r["id"])
         cobros.append({
             **r,
