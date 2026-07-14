@@ -1996,6 +1996,54 @@ def _render_movimiento_caja(cobros, pagos):
         if _wf < _ini_fecha_hist.get(_wck, date.min):
             continue
         _hist_total.setdefault(_wck, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _wix_monto(_wo)
+
+    # Totales del período seleccionado (_desde/_hasta) — misma lógica que _hist_total
+    _periodo_total = {}
+    for _c in cobros:
+        _cf = _safe_date(_c.get("fecha"))
+        if _cf == date.min or not (_desde <= _cf <= _hasta):
+            continue
+        for _cob in _c.get("cobranza", []):
+            _ck = _caja_key(_cob.get("tipo_valor"), _cob.get("descripcion"))
+            _periodo_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += float(_cob.get("monto") or 0)
+    for _p in pagos:
+        _pf = _safe_date(_p.get("fecha"))
+        if _pf == date.min or not (_desde <= _pf <= _hasta):
+            continue
+        for _lin in _p.get("lineas_pago", []):
+            _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
+            _periodo_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"] += float(_lin.get("monto") or 0)
+    for _tr in _transferencias:
+        _trf = _safe_date(_tr.get("fecha"))
+        if _trf == date.min or not (_desde <= _trf <= _hasta):
+            continue
+        _horig = (_tr.get("origen")  or {}).get("nombre") or _cajas_map.get(_tr.get("origen_id"),  "—")
+        _hdest = (_tr.get("destino") or {}).get("nombre") or _cajas_map.get(_tr.get("destino_id"), "—")
+        _htm   = float(_tr.get("monto") or 0)
+        _periodo_total.setdefault(_horig, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]  += _htm
+        _periodo_total.setdefault(_hdest, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _htm
+    for _wo in _wix_orders_mov:
+        _oid = str(_wo.get("id") or "")
+        _fp_raw = _fechas_pago_mov.get(_oid)
+        if not _fp_raw:
+            continue
+        try:
+            _wf = date.fromisoformat(str(_fp_raw))
+        except Exception:
+            continue
+        if not (_desde <= _wf <= _hasta):
+            continue
+        _wcaja_id = _wo.get("caja_id")
+        if not _wcaja_id:
+            continue
+        try:
+            _wck = _cajas_map.get(int(_wcaja_id)) or _cajas_map.get(str(_wcaja_id))
+        except (TypeError, ValueError):
+            _wck = None
+        if not _wck:
+            continue
+        _periodo_total.setdefault(_wck, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _wix_monto(_wo)
+
     # ajustes desde la fecha de corte por caja (inclusive)
     _all_aj_sum = {}
     for _aj in _ajustes_todos:
@@ -2015,8 +2063,8 @@ def _render_movimiento_caja(cobros, pagos):
         + _all_aj_sum.get(_cn, 0.0)
         for _cn in _inicial
     )
-    _total_ht_e = sum(_hist_total.get(_cn, {"Entradas": 0.0})["Entradas"] for _cn in _inicial)
-    _total_ht_s = sum(_hist_total.get(_cn, {"Salidas": 0.0})["Salidas"]   for _cn in _inicial)
+    _total_per_e = sum(_periodo_total.get(_cn, {"Entradas": 0.0})["Entradas"] for _cn in _inicial)
+    _total_per_s = sum(_periodo_total.get(_cn, {"Salidas": 0.0})["Salidas"]   for _cn in _inicial)
     st.subheader("Total general")
     _k1, _k2, _k3 = st.columns(3)
     def _metric_card_total(col, label, value, color):
@@ -2025,8 +2073,8 @@ def _render_movimiento_caja(cobros, pagos):
             unsafe_allow_html=True,
         )
     _metric_card_total(_k1, "Saldo",    _fmt_monto(_total_saldo), "#1a73e8")
-    _metric_card_total(_k2, "Entradas", _fmt_monto(_total_ht_e),  "#2e7d32")
-    _metric_card_total(_k3, "Salidas",  _fmt_monto(_total_ht_s),  "#c62828")
+    _metric_card_total(_k2, "Entradas", _fmt_monto(_total_per_e),  "#2e7d32")
+    _metric_card_total(_k3, "Salidas",  _fmt_monto(_total_per_s),  "#c62828")
 
     if not _por_caja:
         st.info("No hay movimientos en el período seleccionado.")
@@ -2044,9 +2092,10 @@ def _render_movimiento_caja(cobros, pagos):
                 f'<div style="padding:4px 0;margin-bottom:14px;"><p style="margin:0;font-size:0.8rem;font-weight:600;color:#777;">{label}</p><p style="margin:2px 0 0 0;font-size:1.25rem;font-weight:700;color:{color};">{value}</p></div>',
                 unsafe_allow_html=True,
             )
+        _pt = _periodo_total.get(_caja, {"Entradas": 0.0, "Salidas": 0.0})
         _metric_card(_m1, "Saldo actual", _fmt_monto(_saldo_actual), "#1a73e8")
-        _metric_card(_m2, "Entradas",     _fmt_monto(_ht['Entradas']), "#2e7d32")
-        _metric_card(_m3, "Salidas",      _fmt_monto(_ht['Salidas']), "#c62828")
+        _metric_card(_m2, "Entradas",     _fmt_monto(_pt['Entradas']), "#2e7d32")
+        _metric_card(_m3, "Salidas",      _fmt_monto(_pt['Salidas']), "#c62828")
 
         _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
