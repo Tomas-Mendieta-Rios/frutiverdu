@@ -1392,6 +1392,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
     tab_grupo_pedidos,
     tab_grupo_diario,
     tab_tesoreria,
+    tab_iva,
     tab_sync,
     tab_grupo_config,
     tab_grupo_config_avanzada,
@@ -1403,6 +1404,7 @@ pagos_bal        = db.cargar_pagos_proveedores()
         "📋 Pedidos",
         "📦 Diario",
         "🏦 Tesorería",
+        "🧾 IVA",
         "🔄 Sincronizar",
         "⚙️ Configuración",
         "🔧 Config. avanzada",
@@ -1411,8 +1413,8 @@ pagos_bal        = db.cargar_pagos_proveedores()
 )
 
 with tab_tesoreria:
-    _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini, _stab_iva = st.tabs([
-        "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial", "🧾 Posición IVA",
+    _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
+        "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
     ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -2773,7 +2775,7 @@ with _stab_saldo_ini:
                     },
                 )
 
-with _stab_iva:
+with tab_iva:
     st.subheader("🧾 Posición IVA")
 
     _hoy_iva = date.today()
