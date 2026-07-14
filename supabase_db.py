@@ -1671,6 +1671,7 @@ def guardar_cobros(cobros):
         _all_cobranza = [l for cid in _cids_con_cobranza for l in cobranza_por_cobro[cid]]
         client.table("cobros_cobranza").insert(_all_cobranza).execute()
 
+    _cids_cobro = list(cobranza_por_cobro.keys())
     client.table("cobros_imputaciones").delete().in_("cobro_id", _cids_cobro).execute()
     _all_imput_c = [i for its in imput_por_cobro.values() for i in its]
     if _all_imput_c:
