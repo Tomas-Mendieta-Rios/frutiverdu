@@ -2479,7 +2479,7 @@ if _sub_resumen:
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
-        st.header("Ingresos")
+        st.markdown("<h2 style='text-align:center'>Ingresos</h2>", unsafe_allow_html=True)
         _ti1, _ti2, _ti3, _ti4 = st.columns(4)
         _bal_metric(_ti1, "Facturado",  f"$ {_pesos(total_ingresos)}", "#1a1a1a")
         _bal_metric(_ti2, "Cobrado",    f"$ {_pesos(total_ing_cobr)}", "#2e7d32")
@@ -2572,7 +2572,7 @@ if _sub_resumen:
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
-        st.header("Egresos")
+        st.markdown("<h2 style='text-align:center'>Egresos</h2>", unsafe_allow_html=True)
         _te1, _te2, _te3, _te4 = st.columns(4)
         _bal_metric(_te1, "Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")
         _bal_metric(_te2, "Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")
@@ -2659,7 +2659,7 @@ if _sub_resumen:
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
-        st.header("Resultado")
+        st.markdown("<h2 style='text-align:center'>Resultado</h2>", unsafe_allow_html=True)
         _ing_real  = total_fac_cobr + total_wix_cobr
         _egr_real  = total_comp_pag + total_gas_pag
         _res_real  = _ing_real - _egr_real
