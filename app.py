@@ -2479,7 +2479,7 @@ if _sub_resumen:
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
-        st.markdown("<h2 style='text-align:center'>Ingresos</h2>", unsafe_allow_html=True)
+        st.markdown("<div style='background:#eef2f7;border-radius:10px;padding:14px 24px;margin-bottom:6px'><h2 style='text-align:center;margin:0'>Ingresos</h2></div>", unsafe_allow_html=True)
         _ti1, _ti2, _ti3, _ti4 = st.columns(4)
         _bal_metric(_ti1, "Facturado",  f"$ {_pesos(total_ingresos)}", "#1a1a1a")
         _bal_metric(_ti2, "Cobrado",    f"$ {_pesos(total_ing_cobr)}", "#2e7d32")
@@ -2572,7 +2572,7 @@ if _sub_resumen:
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
-        st.markdown("<h2 style='text-align:center'>Egresos</h2>", unsafe_allow_html=True)
+        st.markdown("<div style='background:#eef2f7;border-radius:10px;padding:14px 24px;margin-bottom:6px'><h2 style='text-align:center;margin:0'>Egresos</h2></div>", unsafe_allow_html=True)
         _te1, _te2, _te3, _te4 = st.columns(4)
         _bal_metric(_te1, "Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")
         _bal_metric(_te2, "Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")
