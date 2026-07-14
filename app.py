@@ -2504,7 +2504,7 @@ if _sub_resumen:
 
         for _label, _lista, _lbl_fn in [
             ("Cobrado",  fac_cobradas,   _fac_cobrado),
-            ("Parcial",  fac_parciales,  _fac_saldo),
+            ("Parcial",  fac_parciales,  _fac_cobrado),
             ("Pendiente", fac_pendientes, _fac_saldo),
             ("Anulado",  facturas_anul,   lambda f: float(f.get("total") or 0)),
         ]:
