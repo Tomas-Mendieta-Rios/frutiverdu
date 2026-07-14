@@ -124,7 +124,7 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
     page_size = 50
     max_pages = 50
 
-    for estado_filter in [None, "anulada"]:
+    for estado_filter in [None, "ANULADA"]:
         offset = 0
         for _ in range(max_pages):
             params = {
@@ -150,6 +150,10 @@ def cargar_compras_dux_v2(fecha_desde, fecha_hasta):
                 break
 
             for compra in datos:
+                # La API no devuelve el campo estado en el response,
+                # lo inyectamos según el filtro usado
+                if estado_filter:
+                    compra["estado"] = estado_filter
                 compras_raw.append(compra)
                 for item in (compra.get("items", []) or []):
                     cod = str(item.get("cod_item", "") or "").strip()
