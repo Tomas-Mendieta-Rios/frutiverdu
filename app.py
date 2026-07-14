@@ -2559,11 +2559,12 @@ if _sub_resumen:
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
         total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
-        st.markdown(f"**Compras — $ {_pesos(total_compras)}** · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
-        _ec1, _ec2, _ec3 = st.columns(3)
-        _bal_metric(_ec1, "Pagado",    f"$ {_pesos(total_comp_pag)}",  "#2e7d32")
-        _bal_metric(_ec2, "Pendiente", f"$ {_pesos(total_comp_pend)}", "#e65100")
-        _bal_metric(_ec3, "Anulado",   f"$ {_pesos(total_comp_anul)}", "#757575")
+        st.markdown(f"**Compras** · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
+        _ec1, _ec2, _ec3, _ec4 = st.columns(4)
+        _bal_metric(_ec1, "Total",     f"$ {_pesos(total_compras)}",    "#1a1a1a")
+        _bal_metric(_ec2, "Pagado",    f"$ {_pesos(total_comp_pag)}",   "#2e7d32")
+        _bal_metric(_ec3, "Pendiente", f"$ {_pesos(total_comp_pend)}",  "#c62828")
+        _bal_metric(_ec4, "Anulado",   f"$ {_pesos(total_comp_anul)}",  "#757575")
         for _label, _lista, _tot_fn in [
             ("Pagado",    comp_pagadas,    lambda c: float(c.get("total") or 0)),
             ("Parcial",   comp_parciales,  _pagado_comp),
@@ -2595,11 +2596,12 @@ if _sub_resumen:
         total_gas_pag  = sum(float(g.get("total") or 0) for g in gas_pagados) + sum(_pagado_gasto(g) for g in gas_parciales)
         total_gas_pend = sum(_saldo_gasto(g) for g in gas_parciales) + sum(float(g.get("total") or 0) for g in gas_pendientes)
         total_gas_anul = sum(float(g.get("total") or 0) for g in gas_anulados)
-        st.markdown(f"**Gastos — $ {_pesos(total_gastos)}** · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
-        _eg1, _eg2, _eg3 = st.columns(3)
-        _bal_metric(_eg1, "Pagado",    f"$ {_pesos(total_gas_pag)}",  "#2e7d32")
-        _bal_metric(_eg2, "Pendiente", f"$ {_pesos(total_gas_pend)}", "#e65100")
-        _bal_metric(_eg3, "Anulado",   f"$ {_pesos(total_gas_anul)}", "#757575")
+        st.markdown(f"**Gastos** · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
+        _eg1, _eg2, _eg3, _eg4 = st.columns(4)
+        _bal_metric(_eg1, "Total",     f"$ {_pesos(total_gastos)}",    "#1a1a1a")
+        _bal_metric(_eg2, "Pagado",    f"$ {_pesos(total_gas_pag)}",   "#2e7d32")
+        _bal_metric(_eg3, "Pendiente", f"$ {_pesos(total_gas_pend)}",  "#c62828")
+        _bal_metric(_eg4, "Anulado",   f"$ {_pesos(total_gas_anul)}",  "#757575")
         for _label, _lista, _tot_fn in [
             ("Pagado",    gas_pagados,    lambda g: float(g.get("total") or 0)),
             ("Parcial",   gas_parciales,  _pagado_gasto),
