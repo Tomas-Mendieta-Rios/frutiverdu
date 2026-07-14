@@ -1664,10 +1664,11 @@ def guardar_cobros(cobros):
 
     client.table("cobros").upsert(cobro_rows, on_conflict="id").execute()
 
-    _cids_cobro = list(cobranza_por_cobro.keys())
-    client.table("cobros_cobranza").delete().in_("cobro_id", _cids_cobro).execute()
-    _all_cobranza = [l for ls in cobranza_por_cobro.values() for l in ls]
-    if _all_cobranza:
+    # Solo actualizar cobranza para cobros que traen líneas — no borrar los que vienen vacíos
+    _cids_con_cobranza = [cid for cid, lines in cobranza_por_cobro.items() if lines]
+    if _cids_con_cobranza:
+        client.table("cobros_cobranza").delete().in_("cobro_id", _cids_con_cobranza).execute()
+        _all_cobranza = [l for cid in _cids_con_cobranza for l in cobranza_por_cobro[cid]]
         client.table("cobros_cobranza").insert(_all_cobranza).execute()
 
     client.table("cobros_imputaciones").delete().in_("cobro_id", _cids_cobro).execute()
