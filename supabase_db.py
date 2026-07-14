@@ -1473,17 +1473,17 @@ def cargar_pagos_proveedores():
     resp = client.table("pagos_proveedores").select("*").limit(10000).execute()
     if not resp.data:
         return []
-    lin_resp = client.table("pagos_proveedores_lineas").select("*").limit(50000).execute()
-    imp_resp = client.table("pagos_proveedores_imputaciones").select("*").limit(50000).execute()
-    lin_by_id = {}
-    for row in (lin_resp.data or []):
-        lin_by_id.setdefault(row["pago_id"], []).append(row)
-    imp_by_id = {}
-    for row in (imp_resp.data or []):
-        imp_by_id.setdefault(row["pago_id"], []).append(row)
+    lin_rows = _fetch_all_rows(client, "pagos_proveedores_lineas")
+    imp_rows = _fetch_all_rows(client, "pagos_proveedores_imputaciones")
+    lin_by_id: dict = {}
+    for row in lin_rows:
+        lin_by_id.setdefault(int(row["pago_id"]), []).append(row)
+    imp_by_id: dict = {}
+    for row in imp_rows:
+        imp_by_id.setdefault(int(row["pago_id"]), []).append(row)
     pagos = []
     for r in resp.data:
-        pid = r["id"]
+        pid = int(r["id"])
         pagos.append({
             **r,
             "lineas_pago":  lin_by_id.get(pid, []),
@@ -1579,24 +1579,37 @@ def guardar_pagos_proveedores(pagos):
         client.table("pagos_proveedores_imputaciones").insert(_all_imput_p).execute()
 
 
+def _fetch_all_rows(client, table):
+    """Trae todas las filas de una tabla paginando de a 1000 para evitar límites del API."""
+    all_rows, offset, page = [], 0, 1000
+    while True:
+        resp = client.table(table).select("*").range(offset, offset + page - 1).execute()
+        if not resp.data:
+            break
+        all_rows.extend(resp.data)
+        if len(resp.data) < page:
+            break
+        offset += page
+    return all_rows
+
+
 @st.cache_data(ttl=600)
 def cargar_cobros():
     client = get_client()
     resp = client.table("cobros").select("*").limit(10000).execute()
     if not resp.data:
         return []
-    # Queries separadas para evitar el límite implícito de 1000 filas en embedded resources
-    cob_resp = client.table("cobros_cobranza").select("*").limit(50000).execute()
-    imp_resp = client.table("cobros_imputaciones").select("*").limit(50000).execute()
-    cob_by_id = {}
-    for row in (cob_resp.data or []):
-        cob_by_id.setdefault(row["cobro_id"], []).append(row)
-    imp_by_id = {}
-    for row in (imp_resp.data or []):
-        imp_by_id.setdefault(row["cobro_id"], []).append(row)
+    cob_rows = _fetch_all_rows(client, "cobros_cobranza")
+    imp_rows = _fetch_all_rows(client, "cobros_imputaciones")
+    cob_by_id: dict = {}
+    for row in cob_rows:
+        cob_by_id.setdefault(int(row["cobro_id"]), []).append(row)
+    imp_by_id: dict = {}
+    for row in imp_rows:
+        imp_by_id.setdefault(int(row["cobro_id"]), []).append(row)
     cobros = []
     for r in resp.data:
-        cid = r["id"]
+        cid = int(r["id"])
         cobros.append({
             **r,
             "cobranza":     cob_by_id.get(cid, []),
