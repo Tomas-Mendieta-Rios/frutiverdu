@@ -2479,7 +2479,7 @@ if _sub_resumen:
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
-        st.subheader("Ingresos")
+        st.header("Ingresos")
         _ti1, _ti2, _ti3, _ti4 = st.columns(4)
         _bal_metric(_ti1, "Facturado",  f"$ {_pesos(total_ingresos)}", "#1a1a1a")
         _bal_metric(_ti2, "Cobrado",    f"$ {_pesos(total_ing_cobr)}", "#2e7d32")
@@ -2487,7 +2487,7 @@ if _sub_resumen:
         _bal_metric(_ti4, "Anulado",    f"$ {_pesos(total_ing_anul)}", "#757575")
 
         # Facturas DUX
-        st.markdown(f"**DUX** · {len(facturas_vig)} facturas")
+        st.markdown(f"#### DUX · {len(facturas_vig)} facturas")
         _c1, _c2, _c3, _c4 = st.columns(4)
         _bal_metric(_c1, "Facturado",  f"$ {_pesos(total_facturas)}",  "#1a1a1a")
         _bal_metric(_c2, "Cobrado",    f"$ {_pesos(total_fac_cobr)}",  "#2e7d32")
@@ -2540,7 +2540,7 @@ if _sub_resumen:
 
         # Wix
         _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
-        st.markdown(f"**Wix** · {_wix_fin_count} pedidos")
+        st.markdown(f"#### Wix · {_wix_fin_count} pedidos")
         _w1, _w2, _w3, _w4 = st.columns(4)
         _bal_metric(_w1, "Facturado",  f"$ {_pesos(total_wix)}",      "#1a1a1a")
         _bal_metric(_w2, "Cobrado",    f"$ {_pesos(total_wix_cobr)}",  "#2e7d32")
@@ -2572,7 +2572,7 @@ if _sub_resumen:
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
-        st.subheader("Egresos")
+        st.header("Egresos")
         _te1, _te2, _te3, _te4 = st.columns(4)
         _bal_metric(_te1, "Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")
         _bal_metric(_te2, "Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")
@@ -2580,7 +2580,7 @@ if _sub_resumen:
         _bal_metric(_te4, "Anulado",   f"$ {_pesos(total_egr_anul)}","#757575")
 
         # Compras
-        st.markdown(f"**Compras** · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
+        st.markdown(f"#### Compras · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
         _ec1, _ec2, _ec3, _ec4 = st.columns(4)
         _bal_metric(_ec1, "Total",     f"$ {_pesos(total_compras)}",    "#1a1a1a")
         _bal_metric(_ec2, "Pagado",    f"$ {_pesos(total_comp_pag)}",   "#2e7d32")
@@ -2614,7 +2614,7 @@ if _sub_resumen:
                                          })
 
         # Gastos
-        st.markdown(f"**Gastos** · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
+        st.markdown(f"#### Gastos · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
         _eg1, _eg2, _eg3, _eg4 = st.columns(4)
         _bal_metric(_eg1, "Total",     f"$ {_pesos(total_gastos)}",    "#1a1a1a")
         _bal_metric(_eg2, "Pagado",    f"$ {_pesos(total_gas_pag)}",   "#2e7d32")
@@ -2659,7 +2659,7 @@ if _sub_resumen:
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
-        st.subheader("Resultado")
+        st.header("Resultado")
         _ing_real  = total_fac_cobr + total_wix_cobr
         _egr_real  = total_comp_pag + total_gas_pag
         _res_real  = _ing_real - _egr_real
