@@ -2527,15 +2527,18 @@ if _sub_resumen:
         total_egr_pend  = total_comp_pend + total_gas_pend + total_otros_egr_pend
         total_egr_anul  = total_comp_anul + total_gas_anul
 
-        total_ingresos = total_facturas + total_wix + total_otros_ing
-        total_egresos  = total_compras + total_gastos + total_otros_egr
-        resultado      = total_ingresos - total_egresos
-
-        # Ajustes de caja
+        # Ajustes de caja (calculados antes de los totales para incluirlos)
         _aj_cajas_map   = {c["id"]: c["nombre"] for c in db.cargar_cajas()}
         _aj_todos_f     = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste" and _en_rango(a.get("fecha"))]
         total_aj_pos    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) >= 0)
         total_aj_neg    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) < 0)
+
+        total_ingresos = total_facturas + total_wix + total_otros_ing + total_aj_pos
+        total_ing_cobr = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
+        total_ing_pend = total_fac_pend + total_wix_pend + total_otros_pend
+        total_egresos  = total_compras + total_gastos + total_otros_egr + abs(total_aj_neg)
+        total_egr_pag  = total_egr_pag + abs(total_aj_neg)
+        resultado      = total_ingresos - total_egresos
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
@@ -2830,8 +2833,8 @@ if _sub_resumen:
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
-        _ing_real   = total_fac_cobr + total_wix_cobr
-        _egr_real   = total_comp_pag + total_gas_pag
+        _ing_real   = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
+        _egr_real   = total_comp_pag + total_gas_pag + total_otros_egr_pag + abs(total_aj_neg)
         _res_real   = _ing_real - _egr_real
         _fic_color  = "#2e7d32" if resultado >= 0 else "#c62828"
         _fic_signo  = "+" if resultado >= 0 else ""
