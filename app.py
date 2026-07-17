@@ -2936,16 +2936,20 @@ if _stab_otros_ingresos:
 
         _oi_rubros = db.cargar_rubros_ingresos()
         _oi_cajas  = db.cargar_cajas()
-        _oi_rubro_map    = {r["id"]: r["nombre"] for r in _oi_rubros}
-        _oi_caja_map     = {c["id"]: c["nombre"] for c in _oi_cajas}
-        _oi_rubro_opts   = {r["nombre"]: r["id"] for r in _oi_rubros}
-        _oi_caja_opts    = {c["nombre"]: c["id"] for c in _oi_cajas}
+        _oi_rubro_map  = {r["id"]: r["nombre"] for r in _oi_rubros}
+        _oi_caja_map   = {c["id"]: c["nombre"] for c in _oi_cajas}
+        _oi_rubro_opts = {r["nombre"]: r["id"] for r in _oi_rubros}
+        _oi_caja_opts  = {c["nombre"]: c["id"] for c in _oi_cajas}
 
-        # ── Formulario nuevo ingreso ──────────────────────────────────────────
-        with st.expander("➕ Nuevo ingreso", expanded=False):
+        _oi_lista = db.cargar_otros_ingresos()
+
+        _oi_tab1, _oi_tab2, _oi_tab3 = st.tabs(["➕ Ingresar ingreso", "✏️ Editar / Eliminar", "📋 Todos los ingresos"])
+
+        # ── TAB 1: Nuevo ingreso ──────────────────────────────────────────────
+        with _oi_tab1:
             _oi_c1, _oi_c2 = st.columns(2)
             with _oi_c1:
-                _oi_fecha  = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
+                _oi_fecha     = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
                 _oi_monto_str = st.text_input("Monto ($)", value="", key="ni_monto")
                 try:
                     _oi_monto = float(_oi_monto_str.replace(",", ".")) if _oi_monto_str else 0.0
@@ -2957,8 +2961,7 @@ if _stab_otros_ingresos:
                 _oi_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
                 _oi_sub_opts  = {}
                 if _oi_rubro_sel:
-                    _oi_rid = _oi_rubro_opts[_oi_rubro_sel]
-                    _oi_subs = db.cargar_subrubros_ingresos(_oi_rid)
+                    _oi_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_oi_rubro_sel])
                     _oi_sub_opts = {s["nombre"]: s["id"] for s in _oi_subs}
                 _oi_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_oi_sub_opts.keys()), key="ni_subrubro")
             if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
@@ -2983,111 +2986,104 @@ if _stab_otros_ingresos:
                     except Exception as e:
                         st.error(f"Error al guardar: {e}")
 
-        # ── Listado ───────────────────────────────────────────────────────────
-        _oi_lista = db.cargar_otros_ingresos()
-        if not _oi_lista:
-            st.info("No hay ingresos cargados todavía.")
-        else:
-            _oi_rows = []
-            for _oi in _oi_lista:
-                _oi_rows.append({
-                    "ID": _oi["id"],
-                    "Fecha": _oi.get("fecha", ""),
-                    "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—"),
-                    "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
-                    "Monto": float(_oi.get("monto") or 0),
-                    "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
-                    "Descripción": _oi.get("descripcion") or "",
-                })
-            _oi_df = pd.DataFrame(_oi_rows)
-            st.dataframe(
-                _oi_df.drop(columns=["ID"]),
-                use_container_width=True,
-                hide_index=True,
-                column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
-            )
+        # ── TAB 2: Editar / Eliminar ──────────────────────────────────────────
+        with _oi_tab2:
+            if not _oi_lista:
+                st.info("No hay ingresos cargados todavía.")
+            else:
+                for _oi in _oi_lista:
+                    _oi_id    = _oi["id"]
+                    _oi_r_nm  = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
+                    _oi_s_nm  = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                    _oi_cj_nm = _oi_caja_map.get(_oi.get("caja_id"), "—")
+                    _oi_mn    = float(_oi.get("monto") or 0)
+                    _oi_fch   = _oi.get("fecha", "")
+                    _oi_dsc   = _oi.get("descripcion") or ""
 
-            _oi_labels = [
-                f"{r['Fecha']}  ·  {r['Rubro']} / {r['Subrubro']}  ·  $ {r['Monto']:,.0f}"
-                for r in _oi_rows
-            ]
-            _sel_label = st.selectbox(
-                "Seleccionar registro",
-                options=_oi_labels,
-                index=None,
-                placeholder="— elegir para editar o eliminar —",
-                key="oi_sel_row",
-            )
-            if _sel_label:
-                _sel_idx  = _oi_labels.index(_sel_label)
-                _oi_sel   = _oi_lista[_sel_idx]
-                _oi_id    = _oi_sel["id"]
-                _oi_r_nm  = (_oi_sel.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi_sel.get("rubro_id"), "—")
-                _oi_s_nm  = (_oi_sel.get("subrubros_ingresos") or {}).get("nombre") or "—"
-                _oi_cj_nm = _oi_caja_map.get(_oi_sel.get("caja_id"), "—")
-                _oi_mn    = float(_oi_sel.get("monto") or 0)
-                _oi_fch   = _oi_sel.get("fecha", "")
-                _oi_dsc   = _oi_sel.get("descripcion") or ""
-
-                _btn_c1, _btn_c2, _ = st.columns([1, 1, 4])
-                if _btn_c1.button("✏️ Editar", key="oi_edit_btn"):
-                    st.session_state[f"oi_editing_{_oi_id}"] = True
-                if _btn_c2.button("🗑️ Eliminar", key="oi_del_btn"):
-                    try:
-                        db.eliminar_otro_ingreso(_oi_id)
-                        db.cargar_otros_ingresos.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-
-                if st.session_state.get(f"oi_editing_{_oi_id}"):
-                    with st.form(f"form_edit_oi_{_oi_id}"):
-                        _e_c1, _e_c2 = st.columns(2)
-                        with _e_c1:
-                            _e_fecha = st.date_input("Fecha", value=pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(), format="DD/MM/YYYY", key=f"ef_{_oi_id}")
-                            _e_monto_str = st.text_input("Monto ($)", value=str(_oi_mn), key=f"em_{_oi_id}")
+                    _ca, _cb, _cc = st.columns([5, 1, 1])
+                    with _ca:
+                        st.markdown(f"**{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm} · **$ {_oi_mn:,.0f}**")
+                    with _cb:
+                        if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
+                            st.session_state[f"oi_editing_{_oi_id}"] = True
+                    with _cc:
+                        if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
                             try:
-                                _e_monto = float(_e_monto_str.replace(",", ".")) if _e_monto_str else 0.0
-                            except ValueError:
-                                _e_monto = 0.0
-                        with _e_c2:
-                            _e_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()),
-                                index=([""] + list(_oi_rubro_opts.keys())).index(_oi_r_nm) if _oi_r_nm in _oi_rubro_opts else 0,
-                                key=f"er_{_oi_id}")
-                            _e_sub_opts = {}
-                            if _e_rubro_sel:
-                                _e_rid = _oi_rubro_opts[_e_rubro_sel]
-                                _e_subs = db.cargar_subrubros_ingresos(_e_rid)
-                                _e_sub_opts = {s["nombre"]: s["id"] for s in _e_subs}
-                            _e_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_e_sub_opts.keys()),
-                                index=([""] + list(_e_sub_opts.keys())).index(_oi_s_nm) if _oi_s_nm in _e_sub_opts else 0,
-                                key=f"es_{_oi_id}")
-                        _e_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()),
-                            index=([""] + list(_oi_caja_opts.keys())).index(_oi_cj_nm) if _oi_cj_nm in _oi_caja_opts else 0,
-                            key=f"ec_{_oi_id}")
-                        _e_desc = st.text_input("Descripción", value=_oi_dsc, key=f"ed_{_oi_id}")
-                        _e_col1, _e_col2 = st.columns(2)
-                        _e_ok  = _e_col1.form_submit_button("Guardar", type="primary")
-                        _e_can = _e_col2.form_submit_button("Cancelar")
-                    if _e_ok:
-                        try:
-                            db.actualizar_otro_ingreso(
-                                id=_oi_id,
-                                fecha=_e_fecha,
-                                rubro_id=_oi_rubro_opts.get(_e_rubro_sel),
-                                subrubro_id=_e_sub_opts.get(_e_subrubro_sel),
-                                monto=_e_monto,
-                                caja_id=_oi_caja_opts.get(_e_caja_sel),
-                                descripcion=_e_desc,
-                            )
-                            db.cargar_otros_ingresos.clear()
+                                db.eliminar_otro_ingreso(_oi_id)
+                                db.cargar_otros_ingresos.clear()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                    if st.session_state.get(f"oi_editing_{_oi_id}"):
+                        with st.form(f"form_edit_oi_{_oi_id}"):
+                            _e_c1, _e_c2 = st.columns(2)
+                            with _e_c1:
+                                _e_fecha = st.date_input("Fecha", value=pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(), format="DD/MM/YYYY", key=f"ef_{_oi_id}")
+                                _e_monto_str = st.text_input("Monto ($)", value=str(_oi_mn), key=f"em_{_oi_id}")
+                                try:
+                                    _e_monto = float(_e_monto_str.replace(",", ".")) if _e_monto_str else 0.0
+                                except ValueError:
+                                    _e_monto = 0.0
+                            with _e_c2:
+                                _e_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()),
+                                    index=([""] + list(_oi_rubro_opts.keys())).index(_oi_r_nm) if _oi_r_nm in _oi_rubro_opts else 0,
+                                    key=f"er_{_oi_id}")
+                                _e_sub_opts = {}
+                                if _e_rubro_sel:
+                                    _e_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_e_rubro_sel])
+                                    _e_sub_opts = {s["nombre"]: s["id"] for s in _e_subs}
+                                _e_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_e_sub_opts.keys()),
+                                    index=([""] + list(_e_sub_opts.keys())).index(_oi_s_nm) if _oi_s_nm in _e_sub_opts else 0,
+                                    key=f"es_{_oi_id}")
+                            _e_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()),
+                                index=([""] + list(_oi_caja_opts.keys())).index(_oi_cj_nm) if _oi_cj_nm in _oi_caja_opts else 0,
+                                key=f"ec_{_oi_id}")
+                            _e_desc = st.text_input("Descripción", value=_oi_dsc, key=f"ed_{_oi_id}")
+                            _e_col1, _e_col2 = st.columns(2)
+                            _e_ok  = _e_col1.form_submit_button("Guardar", type="primary")
+                            _e_can = _e_col2.form_submit_button("Cancelar")
+                        if _e_ok:
+                            try:
+                                db.actualizar_otro_ingreso(
+                                    id=_oi_id,
+                                    fecha=_e_fecha,
+                                    rubro_id=_oi_rubro_opts.get(_e_rubro_sel),
+                                    subrubro_id=_e_sub_opts.get(_e_subrubro_sel),
+                                    monto=_e_monto,
+                                    caja_id=_oi_caja_opts.get(_e_caja_sel),
+                                    descripcion=_e_desc,
+                                )
+                                db.cargar_otros_ingresos.clear()
+                                st.session_state.pop(f"oi_editing_{_oi_id}", None)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                        if _e_can:
                             st.session_state.pop(f"oi_editing_{_oi_id}", None)
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
-                    if _e_can:
-                        st.session_state.pop(f"oi_editing_{_oi_id}", None)
-                        st.rerun()
+
+        # ── TAB 3: Todos los ingresos ─────────────────────────────────────────
+        with _oi_tab3:
+            if not _oi_lista:
+                st.info("No hay ingresos cargados todavía.")
+            else:
+                _oi_rows = []
+                for _oi in _oi_lista:
+                    _oi_rows.append({
+                        "Fecha": _oi.get("fecha", ""),
+                        "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—"),
+                        "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
+                        "Monto": float(_oi.get("monto") or 0),
+                        "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
+                        "Descripción": _oi.get("descripcion") or "",
+                    })
+                st.dataframe(
+                    pd.DataFrame(_oi_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
+                )
 
 if tab_iva:
     with tab_iva:
