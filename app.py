@@ -231,70 +231,35 @@ EXCEPCIONES = {
 
 st.title("Frutiverdu")
 
-# Login por usuario: cada usuario tiene su propia contraseña en secrets.toml [usuarios].
-# Flujo: 1) elegir usuario con botones, 2) ingresar contraseña.
-# Tras el login exitoso se persiste un token en la URL (?u=...&t=...) para que
-# recargas y nuevas pestañas no vuelvan a pedir la contraseña.
-_usuarios_passwords = st.secrets.get("usuarios", {})
-USUARIOS_APP = list(_usuarios_passwords.keys()) if _usuarios_passwords else ["Carlos", "Ariel", "Tomás", "Claudia", "Otro"]
 PRESENCIA_WINDOW = 600  # 10 min — considerado "activo" si dio señal en este lapso
 HEARTBEAT_INTERVAL = 300  # 5 min — refrescamos nuestra presencia cada este lapso
 
-# Si el auth nuevo (auth_user) está activo, sincronizarlo con el auth viejo
-# para que _usuario_actual y el tracking de presencia reflejen el usuario correcto.
-if st.session_state.get("auth_user"):
-    _au = st.session_state["auth_user"]
-    st.session_state["_authed"] = True
-    st.session_state["usuario_app"] = _au
+if "auth_user" not in st.session_state:
+    st.session_state["auth_user"] = None
 
-# Restaurar sesión desde URL params
-_url_user = st.query_params.get("u", "")
-_url_token = st.query_params.get("t", "")
-if _url_user and _url_token and _url_user in _usuarios_passwords:
-    _expected_token = hashlib.sha256((_url_user + _usuarios_passwords[_url_user]).encode()).hexdigest()[:24]
-    if _url_token == _expected_token:
-        st.session_state["_authed"] = True
-        if "usuario_app" not in st.session_state:
-            st.session_state["usuario_app"] = _url_user
-
-if not st.session_state.get("_authed", False):
-    if "_login_usuario" not in st.session_state:
-        st.markdown("### ¿Quién sos?")
-        cols_pick = st.columns(len(USUARIOS_APP))
-        for i_pick, u_pick in enumerate(USUARIOS_APP):
-            if cols_pick[i_pick].button(u_pick, key=f"pick_user_{u_pick}", use_container_width=True):
-                st.session_state["_login_usuario"] = u_pick
-                st.rerun()
-        st.stop()
-
-    _login_usuario = st.session_state["_login_usuario"]
-    st.markdown(f"### Hola, {_login_usuario}. Ingresá tu contraseña:")
-    _pw_input = st.text_input("Contraseña", type="password", key="_pw_input", label_visibility="collapsed")
-    col_volver, col_entrar = st.columns([1, 3])
-    if col_volver.button("← Volver", key="_pw_volver"):
-        del st.session_state["_login_usuario"]
-        st.rerun()
-    if col_entrar.button("Entrar", type="primary", key="_pw_entrar"):
-        _pw_esperada = _usuarios_passwords.get(_login_usuario, "")
-        if _pw_esperada and _pw_input == _pw_esperada:
-            st.session_state["_authed"] = True
-            st.session_state["usuario_app"] = _login_usuario
-            _token = hashlib.sha256((_login_usuario + _pw_esperada).encode()).hexdigest()[:24]
-            st.query_params["u"] = _login_usuario
-            st.query_params["t"] = _token
-            try:
-                db.guardar_config({f"presencia_{_login_usuario}": str(int(time.time()))})
-                st.session_state["_ultimo_heartbeat"] = time.time()
-            except Exception:
-                pass
+if st.session_state["auth_user"] is None:
+    st.title("🔒 Frutiverdu")
+    with st.form("login_form"):
+        _lu = st.text_input("Usuario")
+        _lp = st.text_input("Contraseña", type="password")
+        _lb = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
+    if _lb:
+        _users_cfg = st.secrets.get("users", {})
+        _udata = _users_cfg.get(_lu.lower(), {})
+        _stored = _udata.get("password_hash", "")
+        _salt = st.secrets.get("auth", {}).get("salt", "frutiverdu")
+        _input_hash = hashlib.sha256(f"{_salt}:{_lu.lower()}:{_lp}".encode()).hexdigest()
+        if _stored and _input_hash == _stored:
+            st.session_state["auth_user"] = _lu.lower()
+            st.session_state["usuario_app"] = _lu.lower()
+            st.session_state["_ultimo_heartbeat"] = 0
             st.rerun()
         else:
-            st.error("Contraseña incorrecta.")
+            st.error("Usuario o contraseña incorrectos.")
     st.stop()
 
-# Sesiones viejas pueden tener _authed=True sin usuario_app — forzar re-login.
 if "usuario_app" not in st.session_state:
-    st.session_state.pop("_authed", None)
+    st.session_state["auth_user"] = None
     st.rerun()
 _usuario_actual = st.session_state["usuario_app"]
 _ahora = int(time.time())
@@ -334,14 +299,14 @@ try:
 except Exception:
     pass
 
-if st.session_state.get("auth_user"):
-    _col_sesh, _col_logout = st.columns([8, 1])
-    with _col_sesh:
-        st.caption(f"👤 Sesión: **{_usuario_actual}**")
-    with _col_logout:
-        if st.button("Cerrar sesión", key="logout_top", use_container_width=True):
-            st.session_state["auth_user"] = None
-            st.rerun()
+_col_sesh, _col_logout = st.columns([8, 1])
+with _col_sesh:
+    st.caption(f"👤 Sesión: **{_usuario_actual}**")
+with _col_logout:
+    if st.button("Cerrar sesión", key="logout_top", use_container_width=True):
+        st.session_state["auth_user"] = None
+        st.session_state.pop("usuario_app", None)
+        st.rerun()
 
 
 def _slim_wix_order(o):
@@ -1405,36 +1370,11 @@ gastos_bal       = db.cargar_gastos()
 cobros_bal       = db.cargar_cobros()
 pagos_bal        = db.cargar_pagos_proveedores()
 
-# ── AUTH ─────────────────────────────────────────────────────────────────────────────────
+# ── AUTH ROLES ───────────────────────────────────────────────────────────────────────────
 _USER_ROLES = {"tomas": "full", "claudia": "full", "carlos": "carlos"}
 
 def _get_role(username):
     return _USER_ROLES.get((username or "").lower(), "restricted")
-
-if "auth_user" not in st.session_state:
-    st.session_state["auth_user"] = None
-
-if st.session_state["auth_user"] is None:
-    st.title("🔒 Frutiverdu")
-    with st.form("login_form"):
-        _lu = st.text_input("Usuario")
-        _lp = st.text_input("Contraseña", type="password")
-        _lb = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
-    if _lb:
-        import hashlib
-        _users_cfg = st.secrets.get("users", {})
-        _udata = _users_cfg.get(_lu.lower(), {})
-        _stored = _udata.get("password_hash", "")
-        _salt = st.secrets.get("auth", {}).get("salt", "frutiverdu")
-        _input_hash = hashlib.sha256(f"{_salt}:{_lu.lower()}:{_lp}".encode()).hexdigest()
-        if _stored and _input_hash == _stored:
-            st.session_state["auth_user"] = _lu.lower()
-            st.session_state["usuario_app"] = _lu.lower()
-            st.session_state["_authed"] = True
-            st.rerun()
-        else:
-            st.error("Usuario o contraseña incorrectos.")
-    st.stop()
 
 _logged_user = st.session_state["auth_user"]
 _role = _get_role(_logged_user)
