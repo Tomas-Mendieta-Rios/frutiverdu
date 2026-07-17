@@ -5017,6 +5017,7 @@ if tab_dux_rubros:
                     if len(page_sr) < _sr_limit:
                         break
                     _sr_offset += _sr_limit
+                    time.sleep(DUX_RATE_LIMIT_SECONDS)
 
                 if _sr_error:
                     st.error(_sr_error)
