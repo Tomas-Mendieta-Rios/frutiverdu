@@ -4676,10 +4676,10 @@ with tab_dux:
                 all_orders_saved, key=_nro_dux_sort, reverse=True
             )
 
-            # Mostrar los ultimos 50 por nro_pedido (independiente de fecha).
-            # Robusto a cambios de fecha en DUX. Los viejos siguen en gsheets
-            # y stock teorico los usa.
-            all_orders_sorted = all_orders_sorted[:100]
+            if "dux_n_show" not in st.session_state:
+                st.session_state["dux_n_show"] = 50
+            _dux_n_show = st.session_state["dux_n_show"]
+            all_orders_sorted = all_orders_sorted[:_dux_n_show]
 
             if not all_orders_sorted:
                 st.info("No hay pedidos sincronizados todavía.")
@@ -4777,6 +4777,13 @@ with tab_dux:
                     selecciones_dux = nuevas_selecciones_dux
                 except Exception as e:
                     st.error(msg_error_sheets("guardar selecciones DUX", e))
+
+            _total_dux = len(all_orders_saved)
+            if _dux_n_show < _total_dux:
+                _restantes = _total_dux - _dux_n_show
+                if st.button(f"Ver más ({_restantes} pedidos más)", key="dux_ver_mas"):
+                    st.session_state["dux_n_show"] += 50
+                    st.rerun()
 
         else:
             st.info(
