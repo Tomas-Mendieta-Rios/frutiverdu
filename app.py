@@ -2531,6 +2531,12 @@ if _sub_resumen:
         total_egresos  = total_compras + total_gastos + total_otros_egr
         resultado      = total_ingresos - total_egresos
 
+        # Ajustes de caja
+        _aj_cajas_map   = {c["id"]: c["nombre"] for c in db.cargar_cajas()}
+        _aj_todos_f     = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste" and _en_rango(a.get("fecha"))]
+        total_aj_pos    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) >= 0)
+        total_aj_neg    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) < 0)
+
         # ── INGRESOS ────────────────────────────────────────────────────────────
         st.divider()
         def _metric_cell(label, value, color):
@@ -2797,6 +2803,29 @@ if _sub_resumen:
                                                 } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                                                 st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                                              column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+
+        # ── AJUSTES DE CAJA ──────────────────────────────────────────────────────
+        if _aj_todos_f:
+            st.markdown(f"#### 🔧 Ajustes de caja · {len(_aj_todos_f)} registros")
+            _aj_mc1, _aj_mc2 = st.columns(2)
+            _bal_metric(_aj_mc1, "Positivos", f"$ {_pesos(total_aj_pos)}", "#2e7d32")
+            _bal_metric(_aj_mc2, "Negativos", f"$ {_pesos(abs(total_aj_neg))}", "#c62828")
+            for _aj_grp_lbl, _aj_grp_filter in [
+                ("Positivos", lambda a: float(a.get("monto") or 0) >= 0),
+                ("Negativos", lambda a: float(a.get("monto") or 0) < 0),
+            ]:
+                _aj_grp = [a for a in _aj_todos_f if _aj_grp_filter(a)]
+                if _aj_grp:
+                    _aj_grp_tot = sum(float(a.get("monto") or 0) for a in _aj_grp)
+                    with st.expander(f"{_aj_grp_lbl} ({len(_aj_grp)}) — $ {_pesos(abs(_aj_grp_tot))}"):
+                        _rows = [{
+                            "Fecha": _fmt_fecha(a.get("fecha")),
+                            "Caja":  _aj_cajas_map.get(a.get("caja_id"), "—"),
+                            "Monto": float(a.get("monto") or 0),
+                            "Nota":  a.get("nota") or "",
+                        } for a in sorted(_aj_grp, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
