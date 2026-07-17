@@ -446,7 +446,7 @@ def _convertir_wix_orders_a_dux(orders_filtrados):
 
 @st.cache_data(ttl=120, show_spinner=False)
 def _cargar_pedidos_dux_cached():
-    return db.cargar_pedidos_dux()
+    return db.cargar_pedidos_dux_recientes(limit=150)
 
 
 def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=None):

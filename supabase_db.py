@@ -535,6 +535,67 @@ def cargar_pedidos_dux():
     return pedidos
 
 
+def cargar_pedidos_dux_recientes(limit=150):
+    """Trae solo los últimos `limit` pedidos DUX con sus items. Mucho más rápido
+    que cargar_pedidos_dux() para mostrar en pantalla."""
+    client = get_client()
+    resp_orders = (
+        client.table("pedidos_dux")
+        .select("*")
+        .order("nro_pedido", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    if not resp_orders.data:
+        return []
+
+    order_ids = [str(r.get("order_id") or "") for r in resp_orders.data if r.get("order_id")]
+    all_items = []
+    if order_ids:
+        resp_items = client.table("pedidos_dux_items").select("*").in_("order_id", order_ids).execute()
+        all_items = resp_items.data or []
+
+    prods = _productos_lookup()
+    items_por_order = {}
+    for it in all_items:
+        oid = str(it.get("order_id") or "")
+        if oid:
+            cod = str(it.get("cod_item") or "")
+            items_por_order.setdefault(oid, []).append({
+                "cod_item": it.get("cod_item"),
+                "item": it.get("item") or prods.get(cod, ""),
+                "ctd": it.get("ctd"),
+                "precio_uni": it.get("precio_uni"),
+                "porc_desc": it.get("porc_desc"),
+                "porc_iva": it.get("porc_iva"),
+                "comentarios": it.get("comentarios"),
+                "ctd_facturada": it.get("ctd_facturada"),
+                "ctd_con_remito": it.get("ctd_con_remito"),
+            })
+
+    pedidos = []
+    for r in resp_orders.data:
+        oid = str(r.get("order_id") or "")
+        pedidos.append({
+            "id": oid,
+            "nro_pedido": r.get("nro_pedido"),
+            "fecha": r.get("fecha"),
+            "cliente": {"razon_social": r.get("cliente")},
+            "estado_facturacion": r.get("estado_facturacion"),
+            "estado_remito": r.get("estado_remito"),
+            "anulado": r.get("anulado", "N"),
+            "lugar_entrega": r.get("lugar_entrega"),
+            "monto_exento": r.get("monto_exento"),
+            "monto_gravado": r.get("monto_gravado"),
+            "monto_iva": r.get("monto_iva"),
+            "monto_descuento": r.get("monto_descuento"),
+            "total": r.get("total"),
+            "condicion_pago": r.get("condicion_pago"),
+            "detalles": items_por_order.get(oid, []),
+        })
+    return pedidos
+
+
 def guardar_pedidos_dux(pedidos):
     client = get_client()
     order_rows = []
