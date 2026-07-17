@@ -3151,11 +3151,14 @@ if _stab_otros_egresos:
             fecha  = st.date_input("Fecha de egreso", value=d.get("fecha", date.today()), format="DD/MM/YYYY", key=f"{pfx}_fecha")
             rubro  = st.selectbox("Rubro", options=[""] + list(_oe_rubro_opts.keys()), index=rubro_idx, key=f"{pfx}_rubro")
             sub_opts = {}
+            item_opts = []
             if rubro:
-                sub_opts = {s["nombre"]: s["id"] for s in db.cargar_subrubros_egresos(_oe_rubro_opts[rubro])}
+                sub_opts   = {s["nombre"]: s["id"] for s in db.cargar_subrubros_egresos(_oe_rubro_opts[rubro])}
+                item_opts  = [i["nombre"] for i in db.cargar_items_egresos(_oe_rubro_opts[rubro])]
             sub_nm_idx = ([""] + list(sub_opts.keys())).index(d.get("sub_nm", "")) if d.get("sub_nm") in sub_opts else 0
             subrubro = st.selectbox("Subrubro", options=[""] + list(sub_opts.keys()), index=sub_nm_idx, key=f"{pfx}_sub")
-            item   = st.text_input("Item", value=d.get("item", ""), key=f"{pfx}_item")
+            item_idx = ([""] + item_opts).index(d.get("item", "")) if d.get("item") in item_opts else 0
+            item = st.selectbox("Item", options=[""] + item_opts, index=item_idx, key=f"{pfx}_item")
             monto_str = st.text_input("Monto ($)", value=d.get("monto_str", ""), key=f"{pfx}_monto")
             try:
                 monto = float(monto_str.replace(",", ".")) if monto_str else 0.0
@@ -6617,6 +6620,25 @@ if tab_re:
             _re_sub_rows = [{"Rubro": _re_rubro_map.get(s["rubro_id"], "—"), "Subrubro": s["nombre"], "id": s["id"]} for s in _re_todos_subs]
             _re_sub_df = pd.DataFrame(_re_sub_rows)
             st.dataframe(_re_sub_df.drop(columns=["id"]), use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # ── Items ─────────────────────────────────────────────────────────────
+        with st.expander("➕ Agregar item", expanded=False):
+            _re_nuevo_item_rubro = st.selectbox("Rubro", options=list(_re_rubro_opts.keys()), key="re_nuevo_item_rubro") if _re_rubro_opts else None
+            _re_nuevo_item_nombre = st.text_input("Nombre del item", key="re_nuevo_item_nombre").strip().upper()
+            if st.button("Guardar item", key="re_guardar_item"):
+                if _re_nuevo_item_nombre and _re_nuevo_item_rubro:
+                    db.guardar_item_egreso(_re_nuevo_item_nombre, _re_rubro_opts[_re_nuevo_item_rubro])
+                    db.cargar_items_egresos.clear()
+                    st.rerun()
+
+        _re_todos_items = db.cargar_items_egresos()
+        if _re_todos_items:
+            st.markdown("**Items**")
+            _re_item_rows = [{"Rubro": _re_rubro_map.get(i["rubro_id"], "—"), "Item": i["nombre"], "id": i["id"]} for i in _re_todos_items]
+            _re_item_df = pd.DataFrame(_re_item_rows)
+            st.dataframe(_re_item_df.drop(columns=["id"]), use_container_width=True, hide_index=True)
 
 if tab_migracion:
     with tab_migracion:
