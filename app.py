@@ -2943,7 +2943,11 @@ if _stab_otros_ingresos:
                 _oi_c1, _oi_c2 = st.columns(2)
                 with _oi_c1:
                     _oi_fecha  = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
-                    _oi_monto  = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%.2f")
+                    _oi_monto_str = st.text_input("Monto ($)", value="")
+                    try:
+                        _oi_monto = float(_oi_monto_str.replace(",", ".")) if _oi_monto_str else 0.0
+                    except ValueError:
+                        _oi_monto = 0.0
                 with _oi_c2:
                     _oi_rubro_sel  = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
                     _oi_sub_opts   = {}
@@ -3013,7 +3017,11 @@ if _stab_otros_ingresos:
                             _e_c1, _e_c2 = st.columns(2)
                             with _e_c1:
                                 _e_fecha = st.date_input("Fecha", value=pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(), format="DD/MM/YYYY", key=f"ef_{_oi_id}")
-                                _e_monto = st.number_input("Monto ($)", value=_oi_mn, min_value=0.0, step=100.0, format="%.2f", key=f"em_{_oi_id}")
+                                _e_monto_str = st.text_input("Monto ($)", value=str(_oi_mn), key=f"em_{_oi_id}")
+                                try:
+                                    _e_monto = float(_e_monto_str.replace(",", ".")) if _e_monto_str else 0.0
+                                except ValueError:
+                                    _e_monto = 0.0
                             with _e_c2:
                                 _e_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()),
                                     index=([""] + list(_oi_rubro_opts.keys())).index(_oi_r_nm) if _oi_r_nm in _oi_rubro_opts else 0,
