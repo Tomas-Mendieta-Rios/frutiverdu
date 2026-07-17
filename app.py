@@ -1439,7 +1439,7 @@ tab_grupo_config_avanzada = _tabs_dict.get("tab_grupo_config_avanzada")
 
 # Sub-tab pre-init (in case parent tab is not visible for this role)
 _sub_resumen = _sub_pendientes = tab_ing_cobros_wix = None
-_stab_movimientos = _stab_transferencias = _stab_ajustes = _stab_saldo_ini = None
+_stab_movimientos = _stab_transferencias = _stab_ajustes = _stab_saldo_ini = _stab_otros_ingresos = None
 tab_eg_compras = tab_eg_gastos = tab_eg_pagos = None
 tab_ing_facturas = tab_ing_cobros = None
 tab_dux_productos = tab_dux_rubros = tab_wix_productos = None
@@ -1448,8 +1448,8 @@ tab_ing_cobros_wix = None
 
 if tab_tesoreria:
     with tab_tesoreria:
-        _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
-            "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
+        _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini, _stab_otros_ingresos = st.tabs([
+            "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial", "💰 Otros ingresos",
         ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -2498,7 +2498,7 @@ if _sub_resumen:
         total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
         total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_parciales + gas_pendientes)
 
-        total_ing_cobr  = total_fac_cobr + total_wix_cobr
+        total_ing_cobr  = total_fac_cobr + total_wix_cobr + total_otros_ing
         total_ing_pend  = total_fac_pend + total_wix_pend
         total_ing_anul  = total_fac_anul + total_wix_anul
 
@@ -2512,7 +2512,12 @@ if _sub_resumen:
         total_egr_pend  = total_comp_pend + total_gas_pend
         total_egr_anul  = total_comp_anul + total_gas_anul
 
-        total_ingresos = total_facturas + total_wix
+        # Otros ingresos
+        _otros_ing_todos = db.cargar_otros_ingresos()
+        _otros_ing_f     = [o for o in _otros_ing_todos if _en_rango(o.get("fecha"))]
+        total_otros_ing  = sum(float(o.get("monto") or 0) for o in _otros_ing_f)
+
+        total_ingresos = total_facturas + total_wix + total_otros_ing
         total_egresos  = total_compras + total_gastos
         resultado      = total_ingresos - total_egresos
 
@@ -2614,6 +2619,25 @@ if _sub_resumen:
                             } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={"Total": _cfg_monto})
+
+        # ── OTROS INGRESOS ──────────────────────────────────────────────────────
+        if _otros_ing_f:
+            st.markdown(f"#### 💰 Otros ingresos · {len(_otros_ing_f)} registros")
+            _c1, _c2 = st.columns(2)
+            _bal_metric(_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#2e7d32")
+            _bal_metric(_c2, "Registros", str(len(_otros_ing_f)), "#1a1a1a")
+            # Desglose por rubro
+            _oi_por_rubro = {}
+            for _oi in _otros_ing_f:
+                _oi_rn = (_oi.get("rubros_ingresos") or {}).get("nombre") or "—"
+                _oi_sn = (_oi.get("subrubros_ingresos") or {}).get("nombre") or ""
+                _key = f"{_oi_rn} / {_oi_sn}" if _oi_sn else _oi_rn
+                _oi_por_rubro[_key] = _oi_por_rubro.get(_key, 0.0) + float(_oi.get("monto") or 0)
+            with st.expander("Ver desglose por rubro"):
+                for _k, _v in sorted(_oi_por_rubro.items()):
+                    _da, _db = st.columns([4, 1])
+                    _da.write(_k)
+                    _db.write(f"$ {_pesos(_v)}")
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
@@ -2901,6 +2925,132 @@ if _stab_saldo_ini:
                             "Saldo inicial": st.column_config.NumberColumn("Saldo inicial", format="$ %.0f"),
                         },
                     )
+
+if _stab_otros_ingresos:
+    with _stab_otros_ingresos:
+        st.subheader("💰 Otros ingresos")
+
+        _oi_rubros = db.cargar_rubros_ingresos()
+        _oi_cajas  = db.cargar_cajas()
+        _oi_rubro_map    = {r["id"]: r["nombre"] for r in _oi_rubros}
+        _oi_caja_map     = {c["id"]: c["nombre"] for c in _oi_cajas}
+        _oi_rubro_opts   = {r["nombre"]: r["id"] for r in _oi_rubros}
+        _oi_caja_opts    = {c["nombre"]: c["id"] for c in _oi_cajas}
+
+        # ── Formulario nuevo ingreso ──────────────────────────────────────────
+        with st.expander("➕ Nuevo ingreso", expanded=False):
+            with st.form("form_nuevo_ingreso", clear_on_submit=True):
+                _oi_c1, _oi_c2 = st.columns(2)
+                with _oi_c1:
+                    _oi_fecha  = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
+                    _oi_monto  = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%.2f")
+                with _oi_c2:
+                    _oi_rubro_sel  = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
+                    _oi_sub_opts   = {}
+                    if _oi_rubro_sel:
+                        _oi_rid = _oi_rubro_opts[_oi_rubro_sel]
+                        _oi_subs = db.cargar_subrubros_ingresos(_oi_rid)
+                        _oi_sub_opts = {s["nombre"]: s["id"] for s in _oi_subs}
+                    _oi_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_oi_sub_opts.keys()), key="ni_subrubro")
+                _oi_caja_sel  = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()))
+                _oi_desc      = st.text_input("Descripción (opcional)")
+                _oi_guardar   = st.form_submit_button("Guardar", type="primary")
+
+            if _oi_guardar:
+                if not _oi_rubro_sel:
+                    st.error("Seleccioná un rubro.")
+                elif _oi_monto <= 0:
+                    st.error("El monto debe ser mayor a 0.")
+                else:
+                    try:
+                        db.guardar_otro_ingreso(
+                            fecha=_oi_fecha,
+                            rubro_id=_oi_rubro_opts.get(_oi_rubro_sel),
+                            subrubro_id=_oi_sub_opts.get(_oi_subrubro_sel),
+                            monto=_oi_monto,
+                            caja_id=_oi_caja_opts.get(_oi_caja_sel),
+                            descripcion=_oi_desc,
+                            usuario=_usuario_actual,
+                        )
+                        st.success("✅ Ingreso guardado.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al guardar: {e}")
+
+        # ── Listado ───────────────────────────────────────────────────────────
+        _oi_lista = db.cargar_otros_ingresos()
+        if not _oi_lista:
+            st.info("No hay ingresos cargados todavía.")
+        else:
+            for _oi in _oi_lista:
+                _oi_id    = _oi["id"]
+                _oi_r_nm  = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
+                _oi_s_nm  = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                _oi_cj_nm = _oi_caja_map.get(_oi.get("caja_id"), "—")
+                _oi_mn    = float(_oi.get("monto") or 0)
+                _oi_fch   = _oi.get("fecha", "")
+                _oi_dsc   = _oi.get("descripcion") or ""
+
+                with st.container(border=True):
+                    _oi_ca, _oi_cb, _oi_cc = st.columns([5, 1, 1])
+                    with _oi_ca:
+                        st.markdown(f"**{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm} · **$ {_oi_mn:,.0f}** · 🏦 {_oi_cj_nm}")
+                        if _oi_dsc:
+                            st.caption(_oi_dsc)
+                    with _oi_cb:
+                        if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
+                            st.session_state[f"oi_editing_{_oi_id}"] = True
+                    with _oi_cc:
+                        if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
+                            try:
+                                db.eliminar_otro_ingreso(_oi_id)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                    if st.session_state.get(f"oi_editing_{_oi_id}"):
+                        with st.form(f"form_edit_oi_{_oi_id}"):
+                            _e_c1, _e_c2 = st.columns(2)
+                            with _e_c1:
+                                _e_fecha = st.date_input("Fecha", value=pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(), format="DD/MM/YYYY", key=f"ef_{_oi_id}")
+                                _e_monto = st.number_input("Monto ($)", value=_oi_mn, min_value=0.0, step=100.0, format="%.2f", key=f"em_{_oi_id}")
+                            with _e_c2:
+                                _e_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()),
+                                    index=([""] + list(_oi_rubro_opts.keys())).index(_oi_r_nm) if _oi_r_nm in _oi_rubro_opts else 0,
+                                    key=f"er_{_oi_id}")
+                                _e_sub_opts = {}
+                                if _e_rubro_sel:
+                                    _e_rid = _oi_rubro_opts[_e_rubro_sel]
+                                    _e_subs = db.cargar_subrubros_ingresos(_e_rid)
+                                    _e_sub_opts = {s["nombre"]: s["id"] for s in _e_subs}
+                                _e_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_e_sub_opts.keys()),
+                                    index=([""] + list(_e_sub_opts.keys())).index(_oi_s_nm) if _oi_s_nm in _e_sub_opts else 0,
+                                    key=f"es_{_oi_id}")
+                            _e_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()),
+                                index=([""] + list(_oi_caja_opts.keys())).index(_oi_cj_nm) if _oi_cj_nm in _oi_caja_opts else 0,
+                                key=f"ec_{_oi_id}")
+                            _e_desc = st.text_input("Descripción", value=_oi_dsc, key=f"ed_{_oi_id}")
+                            _e_col1, _e_col2 = st.columns(2)
+                            _e_ok  = _e_col1.form_submit_button("Guardar", type="primary")
+                            _e_can = _e_col2.form_submit_button("Cancelar")
+                        if _e_ok:
+                            try:
+                                db.actualizar_otro_ingreso(
+                                    id=_oi_id,
+                                    fecha=_e_fecha,
+                                    rubro_id=_oi_rubro_opts.get(_e_rubro_sel),
+                                    subrubro_id=_e_sub_opts.get(_e_subrubro_sel),
+                                    monto=_e_monto,
+                                    caja_id=_oi_caja_opts.get(_e_caja_sel),
+                                    descripcion=_e_desc,
+                                )
+                                st.session_state.pop(f"oi_editing_{_oi_id}", None)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                        if _e_can:
+                            st.session_state.pop(f"oi_editing_{_oi_id}", None)
+                            st.rerun()
 
 if tab_iva:
     with tab_iva:
@@ -3259,8 +3409,8 @@ with tab_sync:
             st.error(_msg)
 
 with tab_grupo_config:
-    tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
-        ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos"]
+    tab_mapeo, tab_packs, tab_mixes, tab_editar, tab_rubros_ingresos = st.tabs(
+        ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos", "💰 Rubros ingresos"]
     )
 
 if tab_grupo_config_avanzada:
@@ -6084,6 +6234,77 @@ with tab_mixes:
     ts_mixes_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_mixes)}**")
 
 
+
+with tab_rubros_ingresos:
+    st.subheader("💰 Rubros y subrubros de ingresos")
+
+    _ri_rubros = db.cargar_rubros_ingresos()
+    _ri_rubro_opts = {r["nombre"]: r["id"] for r in _ri_rubros}
+
+    _ri_col1, _ri_col2 = st.columns(2)
+
+    with _ri_col1:
+        st.markdown("**Rubros**")
+        with st.form("form_nuevo_rubro_ing", clear_on_submit=True):
+            _ri_nuevo_rubro = st.text_input("Nuevo rubro")
+            if st.form_submit_button("Agregar rubro"):
+                if _ri_nuevo_rubro.strip():
+                    db.guardar_rubro_ingreso(_ri_nuevo_rubro.strip().upper())
+                    st.rerun()
+        for _ri_r in _ri_rubros:
+            with st.container(border=True):
+                _ri_ra, _ri_rb, _ri_rc = st.columns([4, 1, 1])
+                _ri_ra.write(_ri_r["nombre"])
+                if _ri_rb.button("✏️", key=f"ri_redit_{_ri_r['id']}"):
+                    st.session_state[f"ri_editing_r_{_ri_r['id']}"] = True
+                if _ri_rc.button("🗑️", key=f"ri_rdel_{_ri_r['id']}"):
+                    db.eliminar_rubro_ingreso(_ri_r["id"])
+                    st.rerun()
+                if st.session_state.get(f"ri_editing_r_{_ri_r['id']}"):
+                    with st.form(f"form_edit_ri_r_{_ri_r['id']}"):
+                        _ri_rnombre = st.text_input("Nombre", value=_ri_r["nombre"])
+                        _rc1, _rc2 = st.columns(2)
+                        if _rc1.form_submit_button("Guardar"):
+                            db.actualizar_rubro_ingreso(_ri_r["id"], _ri_rnombre.strip().upper())
+                            st.session_state.pop(f"ri_editing_r_{_ri_r['id']}", None)
+                            st.rerun()
+                        if _rc2.form_submit_button("Cancelar"):
+                            st.session_state.pop(f"ri_editing_r_{_ri_r['id']}", None)
+                            st.rerun()
+
+    with _ri_col2:
+        st.markdown("**Subrubros**")
+        with st.form("form_nuevo_subrubro_ing", clear_on_submit=True):
+            _ri_nuevo_sub_rubro = st.selectbox("Rubro", options=[""] + list(_ri_rubro_opts.keys()), key="ns_rubro")
+            _ri_nuevo_sub_nombre = st.text_input("Nuevo subrubro")
+            if st.form_submit_button("Agregar subrubro"):
+                if _ri_nuevo_sub_nombre.strip() and _ri_nuevo_sub_rubro:
+                    db.guardar_subrubro_ingreso(_ri_nuevo_sub_nombre.strip().upper(), _ri_rubro_opts[_ri_nuevo_sub_rubro])
+                    st.rerun()
+        _ri_todos_subs = db.cargar_subrubros_ingresos()
+        for _ri_s in _ri_todos_subs:
+            _ri_s_rubro_nm = _ri_rubro_opts and next((r["nombre"] for r in _ri_rubros if r["id"] == _ri_s.get("rubro_id")), "—")
+            with st.container(border=True):
+                _ri_sa, _ri_sb, _ri_sc = st.columns([4, 1, 1])
+                _ri_sa.write(f"{_ri_s_rubro_nm} / {_ri_s['nombre']}")
+                if _ri_sb.button("✏️", key=f"ri_sedit_{_ri_s['id']}"):
+                    st.session_state[f"ri_editing_s_{_ri_s['id']}"] = True
+                if _ri_sc.button("🗑️", key=f"ri_sdel_{_ri_s['id']}"):
+                    db.eliminar_subrubro_ingreso(_ri_s["id"])
+                    st.rerun()
+                if st.session_state.get(f"ri_editing_s_{_ri_s['id']}"):
+                    with st.form(f"form_edit_ri_s_{_ri_s['id']}"):
+                        _ri_snombre = st.text_input("Nombre", value=_ri_s["nombre"])
+                        _ri_srubro = st.selectbox("Rubro", options=[""] + list(_ri_rubro_opts.keys()),
+                            index=([""] + list(_ri_rubro_opts.keys())).index(_ri_s_rubro_nm) if _ri_s_rubro_nm in _ri_rubro_opts else 0)
+                        _sc1, _sc2 = st.columns(2)
+                        if _sc1.form_submit_button("Guardar"):
+                            db.actualizar_subrubro_ingreso(_ri_s["id"], _ri_snombre.strip().upper(), _ri_rubro_opts.get(_ri_srubro))
+                            st.session_state.pop(f"ri_editing_s_{_ri_s['id']}", None)
+                            st.rerun()
+                        if _sc2.form_submit_button("Cancelar"):
+                            st.session_state.pop(f"ri_editing_s_{_ri_s['id']}", None)
+                            st.rerun()
 
 if tab_migracion:
     with tab_migracion:

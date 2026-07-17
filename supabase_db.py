@@ -1933,4 +1933,86 @@ def cargar_compras_desde_gastos(fecha):
             "items": items_list,
         })
 
+
+# ── OTROS INGRESOS ────────────────────────────────────────────────────────────
+
+def cargar_rubros_ingresos():
+    client = get_client()
+    resp = client.table("rubros_ingresos").select("*").order("nombre").execute()
+    return resp.data or []
+
+
+def guardar_rubro_ingreso(nombre):
+    client = get_client()
+    client.table("rubros_ingresos").insert({"nombre": nombre}).execute()
+
+
+def actualizar_rubro_ingreso(id, nombre):
+    client = get_client()
+    client.table("rubros_ingresos").update({"nombre": nombre}).eq("id", id).execute()
+
+
+def eliminar_rubro_ingreso(id):
+    client = get_client()
+    client.table("rubros_ingresos").delete().eq("id", id).execute()
+
+
+def cargar_subrubros_ingresos(rubro_id=None):
+    client = get_client()
+    q = client.table("subrubros_ingresos").select("*").order("nombre")
+    if rubro_id is not None:
+        q = q.eq("rubro_id", rubro_id)
+    return q.execute().data or []
+
+
+def guardar_subrubro_ingreso(nombre, rubro_id):
+    client = get_client()
+    client.table("subrubros_ingresos").insert({"nombre": nombre, "rubro_id": rubro_id}).execute()
+
+
+def actualizar_subrubro_ingreso(id, nombre, rubro_id):
+    client = get_client()
+    client.table("subrubros_ingresos").update({"nombre": nombre, "rubro_id": rubro_id}).eq("id", id).execute()
+
+
+def eliminar_subrubro_ingreso(id):
+    client = get_client()
+    client.table("subrubros_ingresos").delete().eq("id", id).execute()
+
+
+def cargar_otros_ingresos():
+    client = get_client()
+    resp = client.table("otros_ingresos").select("*, rubros_ingresos(nombre), subrubros_ingresos(nombre)").order("fecha", desc=True).execute()
+    return resp.data or []
+
+
+def guardar_otro_ingreso(fecha, rubro_id, subrubro_id, monto, caja_id, descripcion, usuario):
+    client = get_client()
+    client.table("otros_ingresos").insert({
+        "fecha": str(fecha),
+        "rubro_id": rubro_id,
+        "subrubro_id": subrubro_id or None,
+        "monto": float(monto),
+        "caja_id": caja_id or None,
+        "descripcion": descripcion or None,
+        "usuario": usuario,
+    }).execute()
+
+
+def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, monto, caja_id, descripcion):
+    client = get_client()
+    client.table("otros_ingresos").update({
+        "fecha": str(fecha),
+        "rubro_id": rubro_id,
+        "subrubro_id": subrubro_id or None,
+        "monto": float(monto),
+        "caja_id": caja_id or None,
+        "descripcion": descripcion or None,
+    }).eq("id", id).execute()
+
+
+def eliminar_otro_ingreso(id):
+    client = get_client()
+    client.table("otros_ingresos").delete().eq("id", id).execute()
+
     return {"cantidades": cantidades, "compras": compras_raw}
