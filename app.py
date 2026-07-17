@@ -2949,23 +2949,20 @@ if _stab_otros_ingresos:
         with _oi_tab1:
             @st.fragment
             def _oi_nuevo_ingreso():
-                _f_c1, _f_c2 = st.columns(2)
-                with _f_c1:
-                    _f_fecha     = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
-                    _f_monto_str = st.text_input("Monto ($)", value="", key="ni_monto")
-                    try:
-                        _f_monto = float(_f_monto_str.replace(",", ".")) if _f_monto_str else 0.0
-                    except ValueError:
-                        _f_monto = 0.0
-                    _f_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), key="ni_caja")
-                    _f_desc     = st.text_input("Descripción (opcional)", key="ni_desc")
-                with _f_c2:
-                    _f_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
-                    _f_sub_opts  = {}
-                    if _f_rubro_sel:
-                        _f_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_f_rubro_sel])
-                        _f_sub_opts = {s["nombre"]: s["id"] for s in _f_subs}
-                    _f_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_f_sub_opts.keys()), key="ni_subrubro")
+                _f_fecha     = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
+                _f_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
+                _f_sub_opts  = {}
+                if _f_rubro_sel:
+                    _f_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_f_rubro_sel])
+                    _f_sub_opts = {s["nombre"]: s["id"] for s in _f_subs}
+                _f_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_f_sub_opts.keys()), key="ni_subrubro")
+                _f_monto_str = st.text_input("Monto ($)", value="", key="ni_monto")
+                try:
+                    _f_monto = float(_f_monto_str.replace(",", ".")) if _f_monto_str else 0.0
+                except ValueError:
+                    _f_monto = 0.0
+                _f_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), key="ni_caja")
+                _f_desc     = st.text_input("Descripción (opcional)", key="ni_desc")
                 if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
                     if not _f_rubro_sel:
                         st.error("Seleccioná un rubro.")
