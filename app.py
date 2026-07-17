@@ -2973,6 +2973,7 @@ if _stab_otros_ingresos:
                             descripcion=_oi_desc,
                             usuario=_usuario_actual,
                         )
+                        db.cargar_otros_ingresos.clear()
                         st.success("✅ Ingreso guardado.")
                         st.rerun()
                     except Exception as e:
@@ -3005,6 +3006,7 @@ if _stab_otros_ingresos:
                         if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
                             try:
                                 db.eliminar_otro_ingreso(_oi_id)
+                                db.cargar_otros_ingresos.clear()
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error: {e}")
@@ -3049,6 +3051,7 @@ if _stab_otros_ingresos:
                                     caja_id=_oi_caja_opts.get(_e_caja_sel),
                                     descripcion=_e_desc,
                                 )
+                                db.cargar_otros_ingresos.clear()
                                 st.session_state.pop(f"oi_editing_{_oi_id}", None)
                                 st.rerun()
                             except Exception as e:

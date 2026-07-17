@@ -1938,6 +1938,7 @@ def cargar_compras_desde_gastos(fecha):
 
 # ── OTROS INGRESOS ────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=60, show_spinner=False)
 def cargar_rubros_ingresos():
     client = get_client()
     resp = client.table("rubros_ingresos").select("*").order("nombre").execute()
@@ -1959,6 +1960,7 @@ def eliminar_rubro_ingreso(id):
     client.table("rubros_ingresos").delete().eq("id", id).execute()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def cargar_subrubros_ingresos(rubro_id=None):
     client = get_client()
     q = client.table("subrubros_ingresos").select("*").order("nombre")
@@ -1982,6 +1984,7 @@ def eliminar_subrubro_ingreso(id):
     client.table("subrubros_ingresos").delete().eq("id", id).execute()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def cargar_otros_ingresos():
     client = get_client()
     resp = client.table("otros_ingresos").select("*, rubros_ingresos(nombre), subrubros_ingresos(nombre)").order("fecha", desc=True).execute()
