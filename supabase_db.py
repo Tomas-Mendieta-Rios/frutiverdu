@@ -1905,6 +1905,18 @@ def guardar_transferencia(fecha, origen_id, destino_id, monto, concepto=""):
     st.cache_data.clear()
 
 
+def actualizar_transferencia(transfer_id, fecha, origen_id, destino_id, monto, concepto=""):
+    client = get_client()
+    client.table("transferencias_cajas").update({
+        "fecha":      str(fecha),
+        "origen_id":  origen_id,
+        "destino_id": destino_id,
+        "monto":      float(monto),
+        "concepto":   concepto or "",
+    }).eq("id", transfer_id).execute()
+    st.cache_data.clear()
+
+
 def eliminar_transferencia(transfer_id):
     client = get_client()
     client.table("transferencias_cajas").delete().eq("id", transfer_id).execute()

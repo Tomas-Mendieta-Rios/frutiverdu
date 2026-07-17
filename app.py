@@ -2973,111 +2973,120 @@ if _stab_ajustes:
 
 if _stab_saldo_ini:
     with _stab_saldo_ini:
-        st.subheader("Saldo inicial por caja")
-        st.caption("Fecha única de corte para todas las cajas. Los movimientos posteriores a esa fecha acumulan sobre el saldo inicial.")
-        _ini_cajas_list = db.cargar_cajas()
-        _ini_cajas_con_id = [c for c in _ini_cajas_list if c.get("id")]
-        if not _ini_cajas_con_id:
-            st.info("No hay cajas configuradas.")
-        else:
-            _ini_ajustes = {
-                int(_aj["caja_id"]): _aj
-                for _aj in db.cargar_ajustes_caja()
-                if _aj.get("tipo") == "inicial"
-            }
-            # Fecha global: tomar la del primer saldo inicial existente, o hoy
-            _fecha_global_actual = date.today()
-            for _aj_g in _ini_ajustes.values():
-                _fg = _safe_date(_aj_g.get("fecha"))
-                if _fg != date.min:
-                    _fecha_global_actual = _fg
-                    break
+        _si_tab_new, _si_tab_edit, _si_tab_all = st.tabs(["➕ Configurar", "✏️ Editar / Eliminar", "📋 Todos"])
 
-            with st.form("form_saldo_inicial_cajas"):
-                _fecha_corte = st.date_input(
-                    "📅 Fecha de corte (única para todas las cajas)",
-                    value=_fecha_global_actual,
-                    format="DD/MM/YYYY",
-                    key="ini_fecha_global",
-                )
-                st.divider()
-                _ini_vals = {}
-                for _cj in _ini_cajas_con_id:
-                    _aj_ini = _ini_ajustes.get(int(_cj["id"])) or {}
-                    _ini_actual = float(_aj_ini.get("monto") or 0)
-                    _fc1, _fc2 = st.columns([2, 2])
-                    _fc1.markdown(f"**{_cj['nombre']}**")
-                    _ini_vals[_cj["id"]] = _fc2.text_input(
-                        "Monto",
-                        value=str(int(_ini_actual)) if _ini_actual == int(_ini_actual) else str(_ini_actual),
-                        key=f"ini_caja_{_cj['id']}",
-                        label_visibility="collapsed",
-                    )
-                st.caption("Caja · Monto inicial")
-                if st.form_submit_button("💾 Guardar", type="primary", use_container_width=True):
-                    _ini_error = False
-                    _ini_parsed = {}
-                    for _cj_id, _ini_str in _ini_vals.items():
-                        try:
-                            _ini_parsed[_cj_id] = float(str(_ini_str).replace(",", ".").strip())
-                        except ValueError:
-                            st.error("Monto inválido.")
-                            _ini_error = True
-                            break
-                    if not _ini_error:
-                        for _cj_id, _monto in _ini_parsed.items():
-                            db.guardar_ajuste_caja(_cj_id, _fecha_corte, _monto, "Saldo inicial", tipo="inicial")
-                        st.cache_data.clear()
-                        st.success("✅ Saldos iniciales guardados.")
-                        st.rerun()
+        def _si_get_data():
+            _cajas = [c for c in db.cargar_cajas() if c.get("id")]
+            _inis  = {int(a["caja_id"]): a for a in db.cargar_ajustes_caja() if a.get("tipo") == "inicial"}
+            return _cajas, _inis
 
-            st.divider()
-            st.markdown("**🗑 Eliminar saldo inicial**")
-            # Agrupar por fecha de corte
-            _del_por_fecha = {}
-            for _aj_v in _ini_ajustes.values():
-                _fv = _safe_date(_aj_v.get("fecha"))
-                _fv_str = _fv.strftime("%d/%m/%Y") if _fv != date.min else "—"
-                _del_por_fecha.setdefault(_fv_str, []).append(_aj_v)
-            if _del_por_fecha:
-                _col_sel, _col_btn = st.columns([3, 1])
-                _del_fecha_sel = _col_sel.selectbox(
-                    "Fecha de corte",
-                    options=list(_del_por_fecha.keys()),
-                    key="del_ini_fecha_sel",
-                    label_visibility="collapsed",
-                )
-                if _col_btn.button("🗑 Eliminar", type="secondary", key="del_ini_btn"):
-                    for _aj_del in _del_por_fecha[_del_fecha_sel]:
-                        db.eliminar_ajuste_caja(_aj_del["id"])
-                    st.cache_data.clear()
-                    st.rerun()
-            else:
-                st.caption("No hay saldos iniciales configurados.")
+        def _si_label(caja_nombre, aj):
+            _f = _safe_date(aj.get("fecha"))
+            _fs = _f.strftime("%d/%m/%Y") if _f != date.min else "—"
+            return f"{caja_nombre} · $ {float(aj.get('monto') or 0):,.0f} · Corte: {_fs}"
 
-            # Detalle del saldo inicial configurado
-            if _ini_ajustes:
-                st.divider()
-                st.markdown("**📋 Detalle actual**")
-                _ini_rows = []
-                for _cj in _ini_cajas_con_id:
-                    _aj_d = _ini_ajustes.get(int(_cj["id"]))
-                    if _aj_d:
-                        _ini_rows.append({
-                            "Caja":        _cj["nombre"],
-                            "Fecha corte": _safe_date(_aj_d.get("fecha")).strftime("%d/%m/%Y") if _safe_date(_aj_d.get("fecha")) != date.min else "—",
-                            "Saldo inicial": float(_aj_d.get("monto") or 0),
-                        })
-                if _ini_rows:
-                    _df_ini = pd.DataFrame(_ini_rows)
-                    st.dataframe(
-                        _df_ini,
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Saldo inicial": st.column_config.NumberColumn("Saldo inicial", format="$ %.0f"),
-                        },
-                    )
+        with _si_tab_new:
+            @st.fragment
+            def _si_nuevo():
+                _cajas, _inis = _si_get_data()
+                if not _cajas:
+                    st.info("No hay cajas configuradas.")
+                    return
+                _fecha_actual = date.today()
+                for _aj_g in _inis.values():
+                    _fg = _safe_date(_aj_g.get("fecha"))
+                    if _fg != date.min:
+                        _fecha_actual = _fg
+                        break
+                st.caption("Fecha única de corte para todas las cajas. Los movimientos posteriores acumulan sobre el saldo inicial.")
+                with st.container(border=True):
+                    _n_fecha = st.date_input("📅 Fecha de corte", value=_fecha_actual, format="DD/MM/YYYY", key="si_n_fecha")
+                    st.divider()
+                    _n_vals = {}
+                    for _cj in _cajas:
+                        _aj_ini = _inis.get(int(_cj["id"])) or {}
+                        _ini_actual = float(_aj_ini.get("monto") or 0)
+                        _n_vals[_cj["id"]] = st.text_input(
+                            f"{_cj['nombre']}",
+                            value=str(int(_ini_actual)) if _ini_actual == int(_ini_actual) else str(_ini_actual),
+                            key=f"si_n_{_cj['id']}",
+                        )
+                    if st.button("💾 Guardar saldos", type="primary", use_container_width=True, key="si_n_save"):
+                        _parsed = {}
+                        for _cj_id, _s in _n_vals.items():
+                            try:
+                                _parsed[_cj_id] = float(str(_s).replace(",", ".").strip())
+                            except ValueError:
+                                st.error("Monto inválido.")
+                                return
+                        for _cj_id, _monto in _parsed.items():
+                            db.guardar_ajuste_caja(_cj_id, _n_fecha, _monto, "Saldo inicial", tipo="inicial")
+                        db.cargar_ajustes_caja.clear()
+                        st.toast("✅ Saldos iniciales guardados.", icon="✅")
+                        st.rerun(scope="fragment")
+            _si_nuevo()
+
+        with _si_tab_edit:
+            @st.fragment
+            def _si_editar_eliminar():
+                _cajas, _inis = _si_get_data()
+                _caja_map = {c["id"]: c["nombre"] for c in _cajas}
+                if not _inis:
+                    st.info("No hay saldos iniciales configurados.")
+                    return
+                for _caj_id, _aj in sorted(_inis.items(), key=lambda x: _caja_map.get(x[0], "")):
+                    _caj_nm = _caja_map.get(_caj_id, "—")
+                    _aid    = _aj["id"]
+                    with st.container(border=True):
+                        _lc1, _lc2, _lc3 = st.columns([6, 1, 1])
+                        _lc1.write(_si_label(_caj_nm, _aj))
+                        if _lc2.button("✏️", key=f"si_edit_{_aid}"):
+                            st.session_state[f"si_editing_{_aid}"] = True
+                        if _lc3.button("🗑️", key=f"si_del_{_aid}"):
+                            db.eliminar_ajuste_caja(_aid)
+                            st.session_state.pop(f"si_editing_{_aid}", None)
+                            st.toast("🗑️ Saldo inicial eliminado.", icon="🗑️")
+                            st.rerun(scope="fragment")
+                        if st.session_state.get(f"si_editing_{_aid}"):
+                            _f_actual = _safe_date(_aj.get("fecha"))
+                            _m_actual = float(_aj.get("monto") or 0)
+                            _e_fecha = st.date_input("Fecha de corte", value=_f_actual, format="DD/MM/YYYY", key=f"si_ef_{_aid}")
+                            _e_monto = st.text_input("Monto ($)", value=str(int(_m_actual)) if _m_actual == int(_m_actual) else str(_m_actual), key=f"si_em_{_aid}")
+                            _sc1, _sc2 = st.columns(2)
+                            if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"si_es_{_aid}"):
+                                try:
+                                    _em = float(str(_e_monto).replace(",", ".").strip())
+                                except ValueError:
+                                    st.error("El monto debe ser un número.")
+                                    return
+                                db.actualizar_ajuste_caja(_aid, _caj_id, _e_fecha, _em, "Saldo inicial")
+                                st.session_state.pop(f"si_editing_{_aid}", None)
+                                st.toast("✅ Saldo actualizado.", icon="✅")
+                                st.rerun(scope="fragment")
+                            if _sc2.button("Cancelar", use_container_width=True, key=f"si_ec_{_aid}"):
+                                st.session_state.pop(f"si_editing_{_aid}", None)
+                                st.rerun(scope="fragment")
+            _si_editar_eliminar()
+
+        with _si_tab_all:
+            @st.fragment
+            def _si_todos_vista():
+                _cajas, _inis = _si_get_data()
+                _caja_map = {c["id"]: c["nombre"] for c in _cajas}
+                if not _inis:
+                    st.info("No hay saldos iniciales configurados.")
+                    return
+                _rows = []
+                for _caj_id, _aj in sorted(_inis.items(), key=lambda x: _caja_map.get(x[0], "")):
+                    _f = _safe_date(_aj.get("fecha"))
+                    _rows.append({
+                        "Caja":          _caja_map.get(_caj_id, "—"),
+                        "Fecha corte":   _f.strftime("%d/%m/%Y") if _f != date.min else "—",
+                        "Saldo inicial": float(_aj.get("monto") or 0),
+                    })
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Saldo inicial": st.column_config.NumberColumn("Saldo inicial ($)", format="$ %,.0f")})
+            _si_todos_vista()
 
 if _stab_otros_ingresos:
     with _stab_otros_ingresos:
@@ -3476,62 +3485,122 @@ if tab_iva:
 
 if _stab_transferencias:
     with _stab_transferencias:
-        st.subheader("Transferencias entre cajas")
-        _cajas_tr = db.cargar_cajas()
-        _cajas_tr_opts = {c["nombre"]: c["id"] for c in _cajas_tr if c.get("activa")}
-        with st.form("form_nueva_transferencia"):
-            _tc1, _tc2, _tc3, _tc4 = st.columns(4)
-            _tr_fecha   = _tc1.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
-            _tr_origen  = _tc2.selectbox("Desde", options=list(_cajas_tr_opts.keys()))
-            _tr_destino = _tc3.selectbox("Hacia",  options=list(_cajas_tr_opts.keys()))
-            _tr_monto_str = _tc4.text_input("Monto", value="", placeholder="0")
-            _tr_concepto = st.text_input("Concepto (opcional)")
-            if st.form_submit_button("Registrar", type="primary", use_container_width=True):
-                try:
-                    _tr_monto = float(str(_tr_monto_str).replace(",", ".").strip())
-                except ValueError:
-                    _tr_monto = 0.0
-                if _tr_origen == _tr_destino:
-                    st.error("Origen y destino deben ser distintos.")
-                elif _tr_monto <= 0:
-                    st.error("El monto debe ser mayor a cero.")
-                else:
-                    db.guardar_transferencia(_tr_fecha, _cajas_tr_opts[_tr_origen], _cajas_tr_opts[_tr_destino], _tr_monto, _tr_concepto)
-                    st.success("Transferencia registrada.")
-                    st.rerun()
+        _tr_tab_new, _tr_tab_edit, _tr_tab_all = st.tabs(["➕ Ingresar", "✏️ Editar / Eliminar", "📋 Todas"])
 
-        st.divider()
-        _todas_tr = db.cargar_transferencias()
-        if _todas_tr:
-            _tr_sorted = sorted(_todas_tr, key=lambda x: str(x.get("fecha") or ""), reverse=True)
-            _tr_rows = []
-            for _tr in _tr_sorted:
-                _tr_rows.append({
-                    "Fecha":    _safe_date(_tr.get("fecha")).strftime("%d/%m/%Y") if _safe_date(_tr.get("fecha")) != date.min else str(_tr.get("fecha") or "")[:10],
-                    "Desde":   (_tr.get("origen")  or {}).get("nombre") or "—",
-                    "Hacia":   (_tr.get("destino") or {}).get("nombre") or "—",
-                    "Concepto": _tr.get("concepto") or "—",
-                    "Monto":   float(_tr.get("monto") or 0),
-                })
-            st.dataframe(
-                pd.DataFrame(_tr_rows),
-                use_container_width=True,
-                hide_index=True,
-                column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")},
-            )
-            st.markdown("**🗑 Eliminar transferencia**")
-            _tr_labels = {
-                f"{r['Fecha']} · {r['Desde']} → {r['Hacia']} · $ {r['Monto']:,.0f}": _tr_sorted[i]["id"]
-                for i, r in enumerate(_tr_rows)
-            }
-            _del_tr_col, _del_tr_btn_col = st.columns([5, 1])
-            _del_tr_sel = _del_tr_col.selectbox("Transferencia", options=list(_tr_labels.keys()), key="del_tr_sel", label_visibility="collapsed")
-            if _del_tr_btn_col.button("🗑 Eliminar", key="del_tr_btn", type="secondary"):
-                db.eliminar_transferencia(_tr_labels[_del_tr_sel])
-                st.cache_data.clear()
-                st.rerun()
-        else:
-            st.info("No hay transferencias registradas.")
+        def _tr_get_cajas():
+            _all = db.cargar_cajas()
+            return {c["nombre"]: c["id"] for c in _all if c.get("activa")}
+
+        def _tr_label(t):
+            _f = _safe_date(t.get("fecha"))
+            _fs = _f.strftime("%d/%m/%Y") if _f != date.min else str(t.get("fecha") or "")[:10]
+            _org = (t.get("origen") or {}).get("nombre") or "—"
+            _dst = (t.get("destino") or {}).get("nombre") or "—"
+            _lbl = f"{_fs} · {_org} → {_dst} · $ {float(t.get('monto') or 0):,.0f}"
+            if t.get("concepto"):
+                _lbl += f" · {t['concepto']}"
+            return _lbl
+
+        with _tr_tab_new:
+            @st.fragment
+            def _tr_nuevo():
+                _opts = _tr_get_cajas()
+                if len(_opts) < 2:
+                    st.info("Se necesitan al menos 2 cajas activas.")
+                    return
+                with st.container(border=True):
+                    _n_fecha    = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="tr_n_fecha")
+                    _n_origen   = st.selectbox("Desde", options=list(_opts.keys()), key="tr_n_origen")
+                    _n_destino  = st.selectbox("Hacia",  options=list(_opts.keys()), key="tr_n_destino")
+                    _n_monto    = st.text_input("Monto ($)", value="", placeholder="0", key="tr_n_monto")
+                    _n_concepto = st.text_input("Concepto (opcional)", key="tr_n_concepto")
+                    if st.button("💾 Registrar", type="primary", use_container_width=True, key="tr_n_save"):
+                        try:
+                            _m = float(str(_n_monto).replace(",", ".").strip())
+                        except ValueError:
+                            st.error("El monto debe ser un número.")
+                            return
+                        if _n_origen == _n_destino:
+                            st.error("Origen y destino deben ser distintos.")
+                            return
+                        if _m <= 0:
+                            st.error("El monto debe ser mayor a cero.")
+                            return
+                        db.guardar_transferencia(_n_fecha, _opts[_n_origen], _opts[_n_destino], _m, _n_concepto)
+                        st.toast("✅ Transferencia registrada.", icon="✅")
+                        st.rerun(scope="fragment")
+            _tr_nuevo()
+
+        with _tr_tab_edit:
+            @st.fragment
+            def _tr_editar_eliminar():
+                _opts = _tr_get_cajas()
+                _lista = db.cargar_transferencias()
+                if not _lista:
+                    st.info("No hay transferencias registradas.")
+                    return
+                for _t in _lista:
+                    _tid = _t["id"]
+                    with st.container(border=True):
+                        _lc1, _lc2, _lc3 = st.columns([6, 1, 1])
+                        _lc1.write(_tr_label(_t))
+                        if _lc2.button("✏️", key=f"tr_edit_{_tid}"):
+                            st.session_state[f"tr_editing_{_tid}"] = True
+                        if _lc3.button("🗑️", key=f"tr_del_{_tid}"):
+                            db.eliminar_transferencia(_tid)
+                            st.session_state.pop(f"tr_editing_{_tid}", None)
+                            st.toast("🗑️ Transferencia eliminada.", icon="🗑️")
+                            st.rerun(scope="fragment")
+                        if st.session_state.get(f"tr_editing_{_tid}"):
+                            _org_actual = ((_t.get("origen") or {}).get("nombre") or "")
+                            _dst_actual = ((_t.get("destino") or {}).get("nombre") or "")
+                            _c_opts = list(_opts.keys())
+                            _e_fecha    = st.date_input("Fecha", value=_safe_date(_t.get("fecha")), format="DD/MM/YYYY", key=f"tr_ef_{_tid}")
+                            _e_origen   = st.selectbox("Desde", options=_c_opts,
+                                                        index=_c_opts.index(_org_actual) if _org_actual in _c_opts else 0, key=f"tr_eo_{_tid}")
+                            _e_destino  = st.selectbox("Hacia",  options=_c_opts,
+                                                        index=_c_opts.index(_dst_actual) if _dst_actual in _c_opts else 0, key=f"tr_ed_{_tid}")
+                            _e_monto    = st.text_input("Monto ($)", value=str(_t.get("monto") or "0"), key=f"tr_em_{_tid}")
+                            _e_concepto = st.text_input("Concepto (opcional)", value=_t.get("concepto") or "", key=f"tr_ec_{_tid}")
+                            _sc1, _sc2 = st.columns(2)
+                            if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"tr_es_{_tid}"):
+                                try:
+                                    _em = float(str(_e_monto).replace(",", ".").strip())
+                                except ValueError:
+                                    st.error("El monto debe ser un número.")
+                                    return
+                                if _e_origen == _e_destino:
+                                    st.error("Origen y destino deben ser distintos.")
+                                    return
+                                db.actualizar_transferencia(_tid, _e_fecha, _opts[_e_origen], _opts[_e_destino], _em, _e_concepto)
+                                st.session_state.pop(f"tr_editing_{_tid}", None)
+                                st.toast("✅ Transferencia actualizada.", icon="✅")
+                                st.rerun(scope="fragment")
+                            if _sc2.button("Cancelar", use_container_width=True, key=f"tr_ec2_{_tid}"):
+                                st.session_state.pop(f"tr_editing_{_tid}", None)
+                                st.rerun(scope="fragment")
+            _tr_editar_eliminar()
+
+        with _tr_tab_all:
+            @st.fragment
+            def _tr_todos_vista():
+                _lista = db.cargar_transferencias()
+                if not _lista:
+                    st.info("No hay transferencias registradas.")
+                    return
+                _rows = []
+                for _t in _lista:
+                    _f = _safe_date(_t.get("fecha"))
+                    _rows.append({
+                        "Fecha":    _f.strftime("%d/%m/%Y") if _f != date.min else str(_t.get("fecha") or "")[:10],
+                        "Desde":   (_t.get("origen")  or {}).get("nombre") or "—",
+                        "Hacia":   (_t.get("destino") or {}).get("nombre") or "—",
+                        "Concepto": _t.get("concepto") or "—",
+                        "Monto":   float(_t.get("monto") or 0),
+                    })
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+            _tr_todos_vista()
 
 if tab_ingresos:
     with tab_ingresos:
