@@ -881,6 +881,95 @@ def cargar_pedidos_wix():
     return pedidos
 
 
+def cargar_pedidos_wix_recientes(limit=150):
+    """Trae solo los últimos `limit` pedidos Wix con sus items."""
+    client = get_client()
+    resp_orders = (
+        client.table("pedidos_wix")
+        .select("*")
+        .order("number", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    if not resp_orders.data:
+        return []
+
+    order_ids = [str(r.get("order_id") or "") for r in resp_orders.data if r.get("order_id")]
+    all_items = []
+    if order_ids:
+        resp_items = client.table("pedidos_wix_items").select("*").in_("order_id", order_ids).execute()
+        all_items = resp_items.data or []
+
+    items_por_order = {}
+    for it in all_items:
+        oid = str(it.get("order_id") or "")
+        if oid:
+            items_por_order.setdefault(oid, []).append({
+                "quantity": it.get("quantity"),
+                "catalogReference": {"catalogItemId": it.get("catalog_item_id")},
+                "productId": it.get("product_id"),
+                "productName": {
+                    "translated": it.get("product_name_translated"),
+                    "original": it.get("product_name_original"),
+                },
+                "price": {
+                    "formattedAmount": it.get("price_formatted"),
+                    "amount": it.get("price_amount"),
+                },
+            })
+
+    pedidos = []
+    for r in resp_orders.data:
+        oid = str(r.get("order_id") or "")
+        buyer_email = r.get("buyer_email") or r.get("billing_email") or ""
+        pedidos.append({
+            "id": oid,
+            "number": r.get("number"),
+            "status": r.get("status"),
+            "createdDate": r.get("created_date"),
+            "lineItems": items_por_order.get(oid, []),
+            "billingInfo": {
+                "contactDetails": {
+                    "firstName": r.get("billing_first_name"),
+                    "lastName": r.get("billing_last_name"),
+                    "phone": r.get("billing_phone"),
+                    "email": r.get("billing_email"),
+                },
+            },
+            "shippingInfo": {
+                "logistics": {
+                    "shippingDestination": {
+                        "contactDetails": {
+                            "firstName": r.get("shipping_first_name"),
+                            "lastName": r.get("shipping_last_name"),
+                            "phone": r.get("shipping_phone"),
+                        },
+                        "address": {
+                            "addressLine": r.get("shipping_address_line"),
+                            "addressLine2": r.get("shipping_address_line2"),
+                            "city": r.get("shipping_city"),
+                            "subdivision": r.get("shipping_subdivision"),
+                        },
+                    },
+                },
+            },
+            "buyerInfo": {
+                "email": buyer_email,
+                "contactDetails": {"email": buyer_email},
+            },
+            "total_amount": float(r.get("total_amount") or 0),
+            "priceSummary": {
+                "total": {"formattedAmount": r.get("total_formatted")},
+            },
+            "paymentStatus": r.get("payment_status"),
+            "fulfillmentStatus": r.get("fulfillment_status"),
+            "buyerNote": r.get("buyer_note"),
+            "updatedDate": r.get("updated_date"),
+            "caja_id": r.get("caja_id"),
+        })
+    return pedidos
+
+
 def guardar_pedidos_wix(pedidos):
     client = get_client()
     order_rows = []

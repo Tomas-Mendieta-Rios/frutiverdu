@@ -448,6 +448,10 @@ def _convertir_wix_orders_a_dux(orders_filtrados):
 def _cargar_pedidos_dux_cached():
     return db.cargar_pedidos_dux_recientes(limit=150)
 
+@st.cache_data(ttl=120, show_spinner=False)
+def _cargar_pedidos_wix_cached():
+    return db.cargar_pedidos_wix_recientes(limit=150)
+
 
 def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=None):
     """Agrega pedidos DUX + Wix (filtrados por fecha_compra vía selecciones)
@@ -5055,7 +5059,7 @@ with tab_wix:
         )
     else:
         try:
-            wix_orders_saved = db.cargar_pedidos_wix()
+            wix_orders_saved = _cargar_pedidos_wix_cached()
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos Wix", e))
             wix_orders_saved = []
@@ -5144,8 +5148,10 @@ with tab_wix:
                 orders_saved, key=_nro_wix_sort, reverse=True
             )
 
-            # Mostrar los ultimos 100 por number (independiente de fecha).
-            orders_saved_sorted = orders_saved_sorted[:100]
+            if "wix_n_show" not in st.session_state:
+                st.session_state["wix_n_show"] = 100
+            _wix_n_show = st.session_state["wix_n_show"]
+            orders_saved_sorted = orders_saved_sorted[:_wix_n_show]
 
             if not orders_saved_sorted:
                 st.info("No hay pedidos sincronizados todavía.")
@@ -5268,6 +5274,14 @@ with tab_wix:
                     st.success(f"✅ {len(nuevas_selecciones)} entregas guardadas.")
                 except Exception as e:
                     st.error(msg_error_sheets("guardar selecciones Wix", e))
+
+            _total_wix = len(wix_orders_saved)
+            if _wix_n_show < _total_wix:
+                _c1, _c2, _c3 = st.columns([2, 1, 2])
+                with _c2:
+                    if st.button("Cargar más", key="wix_ver_mas", type="primary", use_container_width=True):
+                        st.session_state["wix_n_show"] += 50
+                        st.rerun()
 
 if tab_wix_productos:
     with tab_wix_productos:
