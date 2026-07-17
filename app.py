@@ -2984,7 +2984,7 @@ if _stab_otros_ingresos:
                             )
                             db.cargar_otros_ingresos.clear()
                             st.success("✅ Ingreso guardado.")
-                            st.rerun()
+                            st.rerun(scope="fragment")
                         except Exception as e:
                             st.error(f"Error al guardar: {e}")
             _oi_nuevo_ingreso()
