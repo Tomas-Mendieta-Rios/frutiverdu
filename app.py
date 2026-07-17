@@ -2633,50 +2633,37 @@ if _sub_resumen:
         # ── OTROS INGRESOS ──────────────────────────────────────────────────────
         if _otros_ing_f:
             st.markdown(f"#### 💰 Otros ingresos · {len(_otros_ing_f)} registros")
-            _c1, _c2, _c3 = st.columns(3)
-            _bal_metric(_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#1a1a1a")
-            _bal_metric(_c2, "Cobrado", f"$ {_pesos(total_otros_cobr)}", "#2e7d32")
-            _bal_metric(_c3, "Pendiente", f"$ {_pesos(total_otros_pend)}", "#c62828")
-            # Desglose detalle
-            _oi_det_rows = []
-            for _oi in _otros_ing_f:
-                _oi_det_rows.append({
-                    "Estado": _oi.get("estado", "pendiente"),
-                    "F. ingreso": _oi.get("fecha", ""),
-                    "F. cobro": _oi.get("fecha_movimiento") or "—",
-                    "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or "—",
-                    "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
-                    "Monto": float(_oi.get("monto") or 0),
-                    "Descripción": _oi.get("descripcion") or "",
-                })
-            st.dataframe(
-                pd.DataFrame(_oi_det_rows),
-                use_container_width=True,
-                hide_index=True,
-                column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
-            )
-
-        if _otros_egr_f:
-            st.divider()
-            st.markdown(f"#### 💸 Otros egresos · {len(_otros_egr_f)} registros")
-            _oe_c1, _oe_c2, _oe_c3 = st.columns(3)
-            _bal_metric(_oe_c1, "Total", f"$ {_pesos(total_otros_egr)}", "#1a1a1a")
-            _bal_metric(_oe_c2, "Pagado", f"$ {_pesos(total_otros_egr_pag)}", "#2e7d32")
-            _bal_metric(_oe_c3, "Pendiente", f"$ {_pesos(total_otros_egr_pend)}", "#c62828")
-            _oe_det_rows = []
-            for _oe in _otros_egr_f:
-                _oe_det_rows.append({
-                    "Estado": _oe.get("estado", "pendiente"),
-                    "F. egreso": _oe.get("fecha", ""),
-                    "F. pago": _oe.get("fecha_movimiento") or "—",
-                    "Rubro": (_oe.get("rubros_egresos") or {}).get("nombre") or "—",
-                    "Subrubro": (_oe.get("subrubros_egresos") or {}).get("nombre") or "—",
-                    "Item": _oe.get("item") or "—",
-                    "Monto": float(_oe.get("monto") or 0),
-                    "Descripción": _oe.get("descripcion") or "",
-                })
-            st.dataframe(pd.DataFrame(_oe_det_rows), use_container_width=True, hide_index=True,
-                         column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+            _oi_c1, _oi_c2, _oi_c3 = st.columns(3)
+            _bal_metric(_oi_c1, "Total",     f"$ {_pesos(total_otros_ing)}",  "#1a1a1a")
+            _bal_metric(_oi_c2, "Cobrado",   f"$ {_pesos(total_otros_cobr)}", "#2e7d32")
+            _bal_metric(_oi_c3, "Pendiente", f"$ {_pesos(total_otros_pend)}", "#c62828")
+            for _oi_est_lbl, _oi_est_disp in [("cobrado", "Cobrado"), ("pendiente", "Pendiente")]:
+                _oi_est_items = [o for o in _otros_ing_f if (o.get("estado") or "pendiente") == _oi_est_lbl]
+                if _oi_est_items:
+                    _oi_est_tot = sum(float(o.get("monto") or 0) for o in _oi_est_items)
+                    with st.expander(f"{_oi_est_disp} ({len(_oi_est_items)}) — $ {_pesos(_oi_est_tot)}"):
+                        _oi_by_rub = {}
+                        for _o in _oi_est_items:
+                            _rk = (_o.get("rubros_ingresos") or {}).get("nombre") or "—"
+                            _oi_by_rub.setdefault(_rk, []).append(_o)
+                        for _rk, _ritems in sorted(_oi_by_rub.items()):
+                            _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
+                            with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
+                                _oi_by_sub = {}
+                                for _o in _ritems:
+                                    _sk = (_o.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                                    _oi_by_sub.setdefault(_sk, []).append(_o)
+                                for _sk, _sitems in sorted(_oi_by_sub.items()):
+                                    _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                                    with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                        _rows = [{
+                                            "F. ingreso":  _fmt_fecha(o.get("fecha")),
+                                            "F. cobro":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
+                                            "Monto":       float(o.get("monto") or 0),
+                                            "Descripción": o.get("descripcion") or "",
+                                        } for o in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
@@ -2768,6 +2755,48 @@ if _sub_resumen:
                                                      "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
                                                      "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
                                                  })
+
+        # ── OTROS EGRESOS ────────────────────────────────────────────────────────
+        if _otros_egr_f:
+            st.markdown(f"#### 💸 Otros egresos · {len(_otros_egr_f)} registros")
+            _oe_c1, _oe_c2, _oe_c3 = st.columns(3)
+            _bal_metric(_oe_c1, "Total",     f"$ {_pesos(total_otros_egr)}",      "#1a1a1a")
+            _bal_metric(_oe_c2, "Pagado",    f"$ {_pesos(total_otros_egr_pag)}",  "#2e7d32")
+            _bal_metric(_oe_c3, "Pendiente", f"$ {_pesos(total_otros_egr_pend)}", "#c62828")
+            for _oe_est_lbl, _oe_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
+                _oe_est_items = [o for o in _otros_egr_f if (o.get("estado") or "pendiente") == _oe_est_lbl]
+                if _oe_est_items:
+                    _oe_est_tot = sum(float(o.get("monto") or 0) for o in _oe_est_items)
+                    with st.expander(f"{_oe_est_disp} ({len(_oe_est_items)}) — $ {_pesos(_oe_est_tot)}"):
+                        _oe_by_rub = {}
+                        for _o in _oe_est_items:
+                            _rk = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
+                            _oe_by_rub.setdefault(_rk, []).append(_o)
+                        for _rk, _ritems in sorted(_oe_by_rub.items()):
+                            _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
+                            with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
+                                _oe_by_sub = {}
+                                for _o in _ritems:
+                                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                                    _oe_by_sub.setdefault(_sk, []).append(_o)
+                                for _sk, _sitems in sorted(_oe_by_sub.items()):
+                                    _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                                    with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                        _oe_by_item = {}
+                                        for _o in _sitems:
+                                            _ik = _o.get("item") or "—"
+                                            _oe_by_item.setdefault(_ik, []).append(_o)
+                                        for _ik, _iitems in sorted(_oe_by_item.items()):
+                                            _itot = sum(float(o.get("monto") or 0) for o in _iitems)
+                                            with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
+                                                _rows = [{
+                                                    "F. egreso":   _fmt_fecha(o.get("fecha")),
+                                                    "F. pago":     _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
+                                                    "Monto":       float(o.get("monto") or 0),
+                                                    "Descripción": o.get("descripcion") or "",
+                                                } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
