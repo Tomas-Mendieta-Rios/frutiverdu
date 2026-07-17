@@ -237,6 +237,21 @@ HEARTBEAT_INTERVAL = 300  # 5 min — refrescamos nuestra presencia cada este la
 if "auth_user" not in st.session_state:
     st.session_state["auth_user"] = None
 
+# Restaurar sesión desde URL params (persiste al refrescar)
+_url_u = st.query_params.get("u", "")
+_url_t = st.query_params.get("t", "")
+if _url_u and _url_t and st.session_state["auth_user"] is None:
+    _users_cfg_url = st.secrets.get("users", {})
+    _udata_url = _users_cfg_url.get(_url_u.lower(), {})
+    _stored_url = _udata_url.get("password_hash", "")
+    _salt_url = st.secrets.get("auth", {}).get("salt", "frutiverdu")
+    if _stored_url:
+        _expected_t = hashlib.sha256(f"{_salt_url}:{_url_u.lower()}:{_stored_url}".encode()).hexdigest()[:24]
+        if _url_t == _expected_t:
+            st.session_state["auth_user"] = _url_u.lower()
+            st.session_state["usuario_app"] = _url_u.lower()
+            st.session_state["_ultimo_heartbeat"] = 0
+
 if st.session_state["auth_user"] is None:
     st.title("🔒 Frutiverdu")
     with st.form("login_form"):
@@ -253,6 +268,9 @@ if st.session_state["auth_user"] is None:
             st.session_state["auth_user"] = _lu.lower()
             st.session_state["usuario_app"] = _lu.lower()
             st.session_state["_ultimo_heartbeat"] = 0
+            _token = hashlib.sha256(f"{_salt}:{_lu.lower()}:{_stored}".encode()).hexdigest()[:24]
+            st.query_params["u"] = _lu.lower()
+            st.query_params["t"] = _token
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos.")
@@ -306,6 +324,7 @@ with _col_logout:
     if st.button("Cerrar sesión", key="logout_top", use_container_width=True):
         st.session_state["auth_user"] = None
         st.session_state.pop("usuario_app", None)
+        st.query_params.clear()
         st.rerun()
 
 
