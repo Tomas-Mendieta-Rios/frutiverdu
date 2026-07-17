@@ -2671,6 +2671,18 @@ if _sub_resumen:
                                         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
+        # Ajustes positivos
+        _aj_pos = [a for a in _aj_todos_f if float(a.get("monto") or 0) >= 0]
+        if _aj_pos:
+            st.markdown(f"#### 🔧 Ajustes positivos · {len(_aj_pos)} registros")
+            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_aj_pos)}", "#2e7d32")
+            with st.expander(f"Detalle ({len(_aj_pos)}) — $ {_pesos(total_aj_pos)}"):
+                _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
+                          "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
+                         for a in sorted(_aj_pos, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
         st.markdown(f"""
@@ -2804,28 +2816,17 @@ if _sub_resumen:
                                                 st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                                              column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
-        # ── AJUSTES DE CAJA ──────────────────────────────────────────────────────
-        if _aj_todos_f:
-            st.markdown(f"#### 🔧 Ajustes de caja · {len(_aj_todos_f)} registros")
-            _aj_mc1, _aj_mc2 = st.columns(2)
-            _bal_metric(_aj_mc1, "Positivos", f"$ {_pesos(total_aj_pos)}", "#2e7d32")
-            _bal_metric(_aj_mc2, "Negativos", f"$ {_pesos(abs(total_aj_neg))}", "#c62828")
-            for _aj_grp_lbl, _aj_grp_filter in [
-                ("Positivos", lambda a: float(a.get("monto") or 0) >= 0),
-                ("Negativos", lambda a: float(a.get("monto") or 0) < 0),
-            ]:
-                _aj_grp = [a for a in _aj_todos_f if _aj_grp_filter(a)]
-                if _aj_grp:
-                    _aj_grp_tot = sum(float(a.get("monto") or 0) for a in _aj_grp)
-                    with st.expander(f"{_aj_grp_lbl} ({len(_aj_grp)}) — $ {_pesos(abs(_aj_grp_tot))}"):
-                        _rows = [{
-                            "Fecha": _fmt_fecha(a.get("fecha")),
-                            "Caja":  _aj_cajas_map.get(a.get("caja_id"), "—"),
-                            "Monto": float(a.get("monto") or 0),
-                            "Nota":  a.get("nota") or "",
-                        } for a in sorted(_aj_grp, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+        # Ajustes negativos
+        _aj_neg = [a for a in _aj_todos_f if float(a.get("monto") or 0) < 0]
+        if _aj_neg:
+            st.markdown(f"#### 🔧 Ajustes negativos · {len(_aj_neg)} registros")
+            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(abs(total_aj_neg))}", "#c62828")
+            with st.expander(f"Detalle ({len(_aj_neg)}) — $ {_pesos(abs(total_aj_neg))}"):
+                _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
+                          "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
+                         for a in sorted(_aj_neg, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
