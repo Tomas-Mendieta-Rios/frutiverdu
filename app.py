@@ -2633,7 +2633,7 @@ if _sub_resumen:
                 _oi_sn = (_oi.get("subrubros_ingresos") or {}).get("nombre") or ""
                 _key = f"{_oi_rn} / {_oi_sn}" if _oi_sn else _oi_rn
                 _oi_por_rubro[_key] = _oi_por_rubro.get(_key, 0.0) + float(_oi.get("monto") or 0)
-            with st.expander("Ver desglose por rubro"):
+            with st.expander("Ver desglose por rubro", expanded=True):
                 for _k, _v in sorted(_oi_por_rubro.items()):
                     _da, _db = st.columns([4, 1])
                     _da.write(_k)
