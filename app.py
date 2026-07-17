@@ -2433,7 +2433,6 @@ if _sub_resumen:
         else:
             compras_f = pd.DataFrame()
         comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
-        gastos_f = [g for g in gastos_bal if _en_rango(g.get("fecha"))]
 
         # Monto cobrado real por factura (via imputaciones de cobros)
         _cobrado_por_fac = {}
@@ -2485,19 +2484,8 @@ if _sub_resumen:
         comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente") and _pagado_comp(c) == 0 and str(c.get("estado") or "").upper() != "ANULADA"]
         comp_anuladas   = [c for c in comprobantes_f if str(c.get("estado") or "").upper() == "ANULADA"]
 
-        # Categorizar gastos
-        def _pagado_gasto(g):
-            return min(float(g.get("total") or 0), _pagado_por_comp.get(str(g.get("nro_comprobante") or ""), 0.0))
-        def _saldo_gasto(g):
-            return max(0.0, float(g.get("total") or 0) - _pagado_gasto(g))
-
-        gas_pagados    = [g for g in gastos_f if not g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA"]
-        gas_parciales  = [g for g in gastos_f if g.get("pago_pendiente") and _pagado_gasto(g) > 0 and str(g.get("estado") or "").upper() != "ANULADA"]
-        gas_pendientes = [g for g in gastos_f if g.get("pago_pendiente") and _pagado_gasto(g) == 0 and str(g.get("estado") or "").upper() != "ANULADA"]
-        gas_anulados   = [g for g in gastos_f if str(g.get("estado") or "").upper() == "ANULADA"]
 
         total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
-        total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_parciales + gas_pendientes)
 
         # Otros ingresos
         _otros_ing_todos = db.cargar_otros_ingresos()
@@ -2520,12 +2508,9 @@ if _sub_resumen:
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
         total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
-        total_gas_pag   = sum(float(g.get("total") or 0) for g in gas_pagados) + sum(_pagado_gasto(g) for g in gas_parciales)
-        total_gas_pend  = sum(_saldo_gasto(g) for g in gas_parciales) + sum(float(g.get("total") or 0) for g in gas_pendientes)
-        total_gas_anul  = sum(float(g.get("total") or 0) for g in gas_anulados)
-        total_egr_pag   = total_comp_pag + total_gas_pag + total_otros_egr_pag
-        total_egr_pend  = total_comp_pend + total_gas_pend + total_otros_egr_pend
-        total_egr_anul  = total_comp_anul + total_gas_anul
+        total_egr_pag   = total_comp_pag + total_otros_egr_pag
+        total_egr_pend  = total_comp_pend + total_otros_egr_pend
+        total_egr_anul  = total_comp_anul
 
         # Ajustes de caja (calculados antes de los totales para incluirlos)
         _aj_cajas_map   = {c["id"]: c["nombre"] for c in db.cargar_cajas()}
@@ -2536,7 +2521,7 @@ if _sub_resumen:
         total_ingresos = total_facturas + total_wix + total_otros_ing + total_aj_pos
         total_ing_cobr = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
         total_ing_pend = total_fac_pend + total_wix_pend + total_otros_pend
-        total_egresos  = total_compras + total_gastos + total_otros_egr + abs(total_aj_neg)
+        total_egresos  = total_compras + total_otros_egr + abs(total_aj_neg)
         total_egr_pag  = total_egr_pag + abs(total_aj_neg)
         resultado      = total_ingresos - total_egresos
 
@@ -2733,50 +2718,6 @@ if _sub_resumen:
                                              "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
                                          })
 
-        # Gastos
-        st.markdown(f"#### Gastos · {len(gas_pagados) + len(gas_parciales) + len(gas_pendientes)} gastos")
-        _eg1, _eg2, _eg3, _eg4 = st.columns(4)
-        _bal_metric(_eg1, "Total",     f"$ {_pesos(total_gastos)}",    "#1a1a1a")
-        _bal_metric(_eg2, "Pagado",    f"$ {_pesos(total_gas_pag)}",   "#2e7d32")
-        _bal_metric(_eg3, "Pendiente", f"$ {_pesos(total_gas_pend)}",  "#c62828")
-        _bal_metric(_eg4, "Anulado",   f"$ {_pesos(total_gas_anul)}",  "#757575")
-        for _label, _lista, _tot_fn in [
-            ("Pagado",    gas_pagados,    lambda g: float(g.get("total") or 0)),
-            ("Parcial",   gas_parciales,  _pagado_gasto),
-            ("Pendiente", gas_pendientes, lambda g: float(g.get("total") or 0)),
-            ("Anulado",   gas_anulados,   lambda g: float(g.get("total") or 0)),
-        ]:
-            if _lista:
-                _tot_lbl = sum(_tot_fn(g) for g in _lista)
-                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
-                    _by_rubro = {}
-                    for _g in _lista:
-                        _rk = _g.get("rubro_nombre") or _g.get("gasto") or "Sin rubro"
-                        _by_rubro.setdefault(_rk, []).append(_g)
-                    for _rubro, _ritems in sorted(_by_rubro.items()):
-                        _rtot = sum(_tot_fn(g) for g in _ritems)
-                        with st.expander(f"{_rubro} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
-                            _by_sub = {}
-                            for _g in _ritems:
-                                _sk = _g.get("sub_rubro_nombre") or "Sin sub rubro"
-                                _by_sub.setdefault(_sk, []).append(_g)
-                            for _sub, _sitems in sorted(_by_sub.items()):
-                                _stot = sum(_tot_fn(g) for g in _sitems)
-                                with st.expander(f"{_sub} ({len(_sitems)}) — $ {_pesos(_stot)}"):
-                                    _rows = [{
-                                        "Fecha":       _fmt_fecha(g.get("fecha")),
-                                        "Proveedor":   g.get("proveedor") or "—",
-                                        "Items":       ", ".join(d.get("item","") for d in (g.get("detalles") or []) if (d.get("item") or "").strip()),
-                                        "Comprobante": g.get("nro_comprobante") or "—",
-                                        "Total":       float(g.get("total") or 0),
-                                        **( {"Pagado": _pagado_gasto(g)} if _label == "Parcial" else {}),
-                                    } for g in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                                 column_config={
-                                                     "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
-                                                     "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
-                                                 })
-
         # ── OTROS EGRESOS ────────────────────────────────────────────────────────
         if _otros_egr_f:
             st.markdown(f"#### 💸 Otros egresos · {len(_otros_egr_f)} registros")
@@ -2834,7 +2775,7 @@ if _sub_resumen:
         # ── RESULTADO ────────────────────────────────────────────────────────────
         st.divider()
         _ing_real   = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
-        _egr_real   = total_comp_pag + total_gas_pag + total_otros_egr_pag + abs(total_aj_neg)
+        _egr_real   = total_comp_pag + total_otros_egr_pag + abs(total_aj_neg)
         _res_real   = _ing_real - _egr_real
         _fic_color  = "#2e7d32" if resultado >= 0 else "#c62828"
         _fic_signo  = "+" if resultado >= 0 else ""
