@@ -2983,7 +2983,7 @@ if _stab_otros_ingresos:
                                 usuario=_usuario_actual,
                             )
                             db.cargar_otros_ingresos.clear()
-                            st.success("✅ Ingreso guardado.")
+                            st.toast("✅ Ingreso guardado.", icon="✅")
                             st.rerun(scope="fragment")
                         except Exception as e:
                             st.error(f"Error al guardar: {e}")
