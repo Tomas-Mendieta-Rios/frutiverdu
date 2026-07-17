@@ -4682,7 +4682,7 @@ with tab_dux:
             )
 
             if "dux_n_show" not in st.session_state:
-                st.session_state["dux_n_show"] = 50
+                st.session_state["dux_n_show"] = 100
             _dux_n_show = st.session_state["dux_n_show"]
             all_orders_sorted = all_orders_sorted[:_dux_n_show]
 
