@@ -2947,44 +2947,47 @@ if _stab_otros_ingresos:
 
         # ── TAB 1: Nuevo ingreso ──────────────────────────────────────────────
         with _oi_tab1:
-            _oi_c1, _oi_c2 = st.columns(2)
-            with _oi_c1:
-                _oi_fecha     = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
-                _oi_monto_str = st.text_input("Monto ($)", value="", key="ni_monto")
-                try:
-                    _oi_monto = float(_oi_monto_str.replace(",", ".")) if _oi_monto_str else 0.0
-                except ValueError:
-                    _oi_monto = 0.0
-                _oi_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), key="ni_caja")
-                _oi_desc     = st.text_input("Descripción (opcional)", key="ni_desc")
-            with _oi_c2:
-                _oi_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
-                _oi_sub_opts  = {}
-                if _oi_rubro_sel:
-                    _oi_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_oi_rubro_sel])
-                    _oi_sub_opts = {s["nombre"]: s["id"] for s in _oi_subs}
-                _oi_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_oi_sub_opts.keys()), key="ni_subrubro")
-            if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
-                if not _oi_rubro_sel:
-                    st.error("Seleccioná un rubro.")
-                elif _oi_monto <= 0:
-                    st.error("El monto debe ser mayor a 0.")
-                else:
+            @st.fragment
+            def _oi_nuevo_ingreso():
+                _f_c1, _f_c2 = st.columns(2)
+                with _f_c1:
+                    _f_fecha     = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
+                    _f_monto_str = st.text_input("Monto ($)", value="", key="ni_monto")
                     try:
-                        db.guardar_otro_ingreso(
-                            fecha=_oi_fecha,
-                            rubro_id=_oi_rubro_opts.get(_oi_rubro_sel),
-                            subrubro_id=_oi_sub_opts.get(_oi_subrubro_sel),
-                            monto=_oi_monto,
-                            caja_id=_oi_caja_opts.get(_oi_caja_sel),
-                            descripcion=_oi_desc,
-                            usuario=_usuario_actual,
-                        )
-                        db.cargar_otros_ingresos.clear()
-                        st.success("✅ Ingreso guardado.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error al guardar: {e}")
+                        _f_monto = float(_f_monto_str.replace(",", ".")) if _f_monto_str else 0.0
+                    except ValueError:
+                        _f_monto = 0.0
+                    _f_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), key="ni_caja")
+                    _f_desc     = st.text_input("Descripción (opcional)", key="ni_desc")
+                with _f_c2:
+                    _f_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
+                    _f_sub_opts  = {}
+                    if _f_rubro_sel:
+                        _f_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_f_rubro_sel])
+                        _f_sub_opts = {s["nombre"]: s["id"] for s in _f_subs}
+                    _f_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_f_sub_opts.keys()), key="ni_subrubro")
+                if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
+                    if not _f_rubro_sel:
+                        st.error("Seleccioná un rubro.")
+                    elif _f_monto <= 0:
+                        st.error("El monto debe ser mayor a 0.")
+                    else:
+                        try:
+                            db.guardar_otro_ingreso(
+                                fecha=_f_fecha,
+                                rubro_id=_oi_rubro_opts.get(_f_rubro_sel),
+                                subrubro_id=_f_sub_opts.get(_f_subrubro_sel),
+                                monto=_f_monto,
+                                caja_id=_oi_caja_opts.get(_f_caja_sel),
+                                descripcion=_f_desc,
+                                usuario=_usuario_actual,
+                            )
+                            db.cargar_otros_ingresos.clear()
+                            st.success("✅ Ingreso guardado.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar: {e}")
+            _oi_nuevo_ingreso()
 
         # ── TAB 2: Editar / Eliminar ──────────────────────────────────────────
         with _oi_tab2:
