@@ -4994,50 +4994,57 @@ if tab_dux_rubros:
             if sincronizar_rubros:
                 url_sr = f"{base_url}/subrubros"
                 headers_sr = {"accept": "application/json", "authorization": token}
-                params_sr = {"id_empresa": id_empresa_default}
-                try:
-                    resp_sr = requests.get(url_sr, headers=headers_sr, params=params_sr, timeout=30)
-                except requests.RequestException as e:
-                    st.error(msg_error_red("DUX", e))
-                    resp_sr = None
-
-                if resp_sr is not None:
+                _sr_offset, _sr_page_size, items_sr, _sr_error = 0, 100, [], None
+                while True:
+                    params_sr = {"id_empresa": id_empresa_default, "offset": _sr_offset, "limit": _sr_page_size}
+                    try:
+                        resp_sr = requests.get(url_sr, headers=headers_sr, params=params_sr, timeout=30)
+                    except requests.RequestException as e:
+                        _sr_error = msg_error_red("DUX (subrubros)", e)
+                        break
                     if resp_sr.status_code != 200:
-                        st.error(msg_error_http("DUX", resp_sr.status_code, resp_sr.text))
-                    else:
-                        try:
-                            data_sr = resp_sr.json()
-                        except ValueError:
-                            data_sr = None
-                            st.error("❌ DUX devolvió una respuesta inválida.")
+                        _sr_error = msg_error_http("DUX (subrubros)", resp_sr.status_code, resp_sr.text)
+                        break
+                    try:
+                        data_sr = resp_sr.json()
+                    except ValueError:
+                        _sr_error = "❌ DUX devolvió una respuesta inválida (subrubros)."
+                        break
+                    page_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
+                    if not page_sr:
+                        break
+                    items_sr.extend(page_sr)
+                    if len(page_sr) < _sr_page_size:
+                        break
+                    _sr_offset += _sr_page_size
 
-                        if data_sr is not None:
-                            items_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
+                if _sr_error:
+                    st.error(_sr_error)
+                else:
+                    # Rubros únicos extraídos del mismo endpoint
+                    rubros_vistos = {}
+                    for sr in items_sr:
+                        rid = sr.get("id_rubro")
+                        if rid is not None and rid not in rubros_vistos:
+                            rubros_vistos[rid] = str(sr.get("rubro", "") or "").strip()
+                    registros_r = [{"id": rid, "nombre": nombre} for rid, nombre in rubros_vistos.items()]
+                    db.guardar_rubros(registros_r)
 
-                            # Rubros únicos extraídos del mismo endpoint
-                            rubros_vistos = {}
-                            for sr in (items_sr or []):
-                                rid = sr.get("id_rubro")
-                                if rid is not None and rid not in rubros_vistos:
-                                    rubros_vistos[rid] = str(sr.get("rubro", "") or "").strip()
-                            registros_r = [{"id": rid, "nombre": nombre} for rid, nombre in rubros_vistos.items()]
-                            db.guardar_rubros(registros_r)
-
-                            # Subrubros: id único = id_rubro * 10000 + id_sub_rubro
-                            registros_sr = []
-                            for sr in (items_sr or []):
-                                rid = sr.get("id_rubro")
-                                sid = sr.get("id_sub_rubro")
-                                if rid is None or sid is None:
-                                    continue
-                                registros_sr.append({
-                                    "id":          rid * 10000 + sid,
-                                    "nombre":      str(sr.get("sub_rubro", "") or "").strip(),
-                                    "rubro_id":    rid,
-                                    "rubro_nombre": str(sr.get("rubro", "") or "").strip(),
-                                })
-                            db.guardar_subrubros(registros_sr)
-                            st.success(f"✅ {len(registros_r)} rubros y {len(registros_sr)} subrubros sincronizados.")
+                    # Subrubros: id único = id_rubro * 10000 + id_sub_rubro
+                    registros_sr = []
+                    for sr in items_sr:
+                        rid = sr.get("id_rubro")
+                        sid = sr.get("id_sub_rubro")
+                        if rid is None or sid is None:
+                            continue
+                        registros_sr.append({
+                            "id":           rid * 10000 + sid,
+                            "nombre":       str(sr.get("sub_rubro", "") or "").strip(),
+                            "rubro_id":     rid,
+                            "rubro_nombre": str(sr.get("rubro", "") or "").strip(),
+                        })
+                    db.guardar_subrubros(registros_sr)
+                    st.success(f"✅ {len(registros_r)} rubros y {len(registros_sr)} subrubros sincronizados.")
 
             st.divider()
             _rc, _src = st.columns(2)
