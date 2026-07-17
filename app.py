@@ -4780,10 +4780,11 @@ with tab_dux:
 
             _total_dux = len(all_orders_saved)
             if _dux_n_show < _total_dux:
-                _restantes = _total_dux - _dux_n_show
-                if st.button(f"Ver más ({_restantes} pedidos más)", key="dux_ver_mas"):
-                    st.session_state["dux_n_show"] += 50
-                    st.rerun()
+                _c1, _c2, _c3 = st.columns([2, 1, 2])
+                with _c2:
+                    if st.button("Cargar más", key="dux_ver_mas", type="primary", use_container_width=True):
+                        st.session_state["dux_n_show"] += 50
+                        st.rerun()
 
         else:
             st.info(
