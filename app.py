@@ -3023,34 +3023,31 @@ if _stab_otros_ingresos:
                                 st.error(f"Error: {e}")
 
                     if st.session_state.get(f"oi_editing_{_oi_id}"):
-                        with st.form(f"form_edit_oi_{_oi_id}"):
-                            _e_c1, _e_c2 = st.columns(2)
-                            with _e_c1:
-                                _e_fecha = st.date_input("Fecha", value=pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(), format="DD/MM/YYYY", key=f"ef_{_oi_id}")
-                                _e_monto_str = st.text_input("Monto ($)", value=str(_oi_mn), key=f"em_{_oi_id}")
-                                try:
-                                    _e_monto = float(_e_monto_str.replace(",", ".")) if _e_monto_str else 0.0
-                                except ValueError:
-                                    _e_monto = 0.0
-                            with _e_c2:
-                                _e_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()),
-                                    index=([""] + list(_oi_rubro_opts.keys())).index(_oi_r_nm) if _oi_r_nm in _oi_rubro_opts else 0,
-                                    key=f"er_{_oi_id}")
-                                _e_sub_opts = {}
-                                if _e_rubro_sel:
-                                    _e_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_e_rubro_sel])
-                                    _e_sub_opts = {s["nombre"]: s["id"] for s in _e_subs}
-                                _e_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_e_sub_opts.keys()),
-                                    index=([""] + list(_e_sub_opts.keys())).index(_oi_s_nm) if _oi_s_nm in _e_sub_opts else 0,
-                                    key=f"es_{_oi_id}")
+                        _e_c1, _e_c2 = st.columns(2)
+                        with _e_c1:
+                            _e_fecha = st.date_input("Fecha", value=pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(), format="DD/MM/YYYY", key=f"ef_{_oi_id}")
+                            _e_monto_str = st.text_input("Monto ($)", value=str(_oi_mn), key=f"em_{_oi_id}")
+                            try:
+                                _e_monto = float(_e_monto_str.replace(",", ".")) if _e_monto_str else 0.0
+                            except ValueError:
+                                _e_monto = 0.0
                             _e_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()),
                                 index=([""] + list(_oi_caja_opts.keys())).index(_oi_cj_nm) if _oi_cj_nm in _oi_caja_opts else 0,
                                 key=f"ec_{_oi_id}")
                             _e_desc = st.text_input("Descripción", value=_oi_dsc, key=f"ed_{_oi_id}")
-                            _e_col1, _e_col2 = st.columns(2)
-                            _e_ok  = _e_col1.form_submit_button("Guardar", type="primary")
-                            _e_can = _e_col2.form_submit_button("Cancelar")
-                        if _e_ok:
+                        with _e_c2:
+                            _e_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()),
+                                index=([""] + list(_oi_rubro_opts.keys())).index(_oi_r_nm) if _oi_r_nm in _oi_rubro_opts else 0,
+                                key=f"er_{_oi_id}")
+                            _e_sub_opts = {}
+                            if _e_rubro_sel:
+                                _e_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_e_rubro_sel])
+                                _e_sub_opts = {s["nombre"]: s["id"] for s in _e_subs}
+                            _e_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_e_sub_opts.keys()),
+                                index=([""] + list(_e_sub_opts.keys())).index(_oi_s_nm) if _oi_s_nm in _e_sub_opts else 0,
+                                key=f"es_{_oi_id}")
+                        _e_col1, _e_col2 = st.columns(2)
+                        if _e_col1.button("Guardar", type="primary", key=f"eo_{_oi_id}"):
                             try:
                                 db.actualizar_otro_ingreso(
                                     id=_oi_id,
@@ -3066,7 +3063,7 @@ if _stab_otros_ingresos:
                                 st.rerun(scope="fragment")
                             except Exception as e:
                                 st.error(f"Error: {e}")
-                        if _e_can:
+                        if _e_col2.button("Cancelar", key=f"ec2_{_oi_id}"):
                             st.session_state.pop(f"oi_editing_{_oi_id}", None)
                             st.rerun(scope="fragment")
             _oi_editar_eliminar()
