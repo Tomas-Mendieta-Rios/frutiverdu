@@ -5048,28 +5048,16 @@ if tab_dux_rubros:
                     st.success(f"✅ {len(registros_r)} rubros y {len(registros_sr)} subrubros sincronizados.")
 
             st.divider()
-            _rc, _src = st.columns(2)
-            with _rc:
-                st.caption("Rubros")
-                try:
-                    df_rubros = db.cargar_rubros()
-                    if not df_rubros.empty:
-                        st.dataframe(df_rubros[["nombre"]].sort_values("nombre").reset_index(drop=True), use_container_width=True, hide_index=True)
-                    else:
-                        st.info("Sin rubros.")
-                except Exception as e:
-                    st.error(msg_error_sheets("leer rubros", e))
-            with _src:
-                st.caption("Subrubros")
-                try:
-                    df_subrubros = db.cargar_subrubros()
-                    if not df_subrubros.empty:
-                        cols_sr = [c for c in ["rubro_nombre", "nombre"] if c in df_subrubros.columns]
-                        st.dataframe(df_subrubros[cols_sr].sort_values(["rubro_nombre", "nombre"]).reset_index(drop=True), use_container_width=True, hide_index=True)
-                    else:
-                        st.info("Sin subrubros.")
-                except Exception as e:
-                    st.error(msg_error_sheets("leer subrubros", e))
+            st.caption("Subrubros")
+            try:
+                df_subrubros = db.cargar_subrubros()
+                if not df_subrubros.empty:
+                    cols_sr = [c for c in ["rubro_nombre", "nombre"] if c in df_subrubros.columns]
+                    st.dataframe(df_subrubros[cols_sr].sort_values(["rubro_nombre", "nombre"]).reset_index(drop=True), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Sin subrubros.")
+            except Exception as e:
+                st.error(msg_error_sheets("leer subrubros", e))
 
         ts_dux_rubros = db.ultima_carga("dux_rubros")
         ts_dux_rubros_ph.caption(f"🕒 Última actualización rubros: **{_fmt_ts(ts_dux_rubros)}**")
