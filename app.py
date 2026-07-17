@@ -2988,10 +2988,13 @@ if _stab_otros_ingresos:
 
         # ── TAB 2: Editar / Eliminar ──────────────────────────────────────────
         with _oi_tab2:
-            if not _oi_lista:
-                st.info("No hay ingresos cargados todavía.")
-            else:
-                for _oi in _oi_lista:
+            @st.fragment
+            def _oi_editar_eliminar():
+                _lista = db.cargar_otros_ingresos()
+                if not _lista:
+                    st.info("No hay ingresos cargados todavía.")
+                    return
+                for _oi in _lista:
                     _oi_id    = _oi["id"]
                     _oi_r_nm  = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
                     _oi_s_nm  = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
@@ -3006,12 +3009,13 @@ if _stab_otros_ingresos:
                     with _cb:
                         if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
                             st.session_state[f"oi_editing_{_oi_id}"] = True
+                            st.rerun(scope="fragment")
                     with _cc:
                         if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
                             try:
                                 db.eliminar_otro_ingreso(_oi_id)
                                 db.cargar_otros_ingresos.clear()
-                                st.rerun()
+                                st.rerun(scope="fragment")
                             except Exception as e:
                                 st.error(f"Error: {e}")
 
@@ -3056,12 +3060,13 @@ if _stab_otros_ingresos:
                                 )
                                 db.cargar_otros_ingresos.clear()
                                 st.session_state.pop(f"oi_editing_{_oi_id}", None)
-                                st.rerun()
+                                st.rerun(scope="fragment")
                             except Exception as e:
                                 st.error(f"Error: {e}")
                         if _e_can:
                             st.session_state.pop(f"oi_editing_{_oi_id}", None)
-                            st.rerun()
+                            st.rerun(scope="fragment")
+            _oi_editar_eliminar()
 
         # ── TAB 3: Todos los ingresos ─────────────────────────────────────────
         with _oi_tab3:
