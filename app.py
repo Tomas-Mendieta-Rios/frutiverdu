@@ -2502,9 +2502,11 @@ if _sub_resumen:
         _otros_ing_todos = db.cargar_otros_ingresos()
         _otros_ing_f     = [o for o in _otros_ing_todos if _en_rango(o.get("fecha"))]
         total_otros_ing  = sum(float(o.get("monto") or 0) for o in _otros_ing_f)
+        total_otros_cobr = sum(float(o.get("monto") or 0) for o in _otros_ing_f if o.get("estado") == "cobrado")
+        total_otros_pend = sum(float(o.get("monto") or 0) for o in _otros_ing_f if o.get("estado") != "cobrado")
 
-        total_ing_cobr  = total_fac_cobr + total_wix_cobr + total_otros_ing
-        total_ing_pend  = total_fac_pend + total_wix_pend
+        total_ing_cobr  = total_fac_cobr + total_wix_cobr + total_otros_cobr
+        total_ing_pend  = total_fac_pend + total_wix_pend + total_otros_pend
         total_ing_anul  = total_fac_anul + total_wix_anul
 
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
@@ -2623,14 +2625,17 @@ if _sub_resumen:
         # ── OTROS INGRESOS ──────────────────────────────────────────────────────
         if _otros_ing_f:
             st.markdown(f"#### 💰 Otros ingresos · {len(_otros_ing_f)} registros")
-            _c1, _c2 = st.columns(2)
-            _bal_metric(_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#2e7d32")
-            _bal_metric(_c2, "Registros", str(len(_otros_ing_f)), "#1a1a1a")
+            _c1, _c2, _c3 = st.columns(3)
+            _bal_metric(_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#1a1a1a")
+            _bal_metric(_c2, "Cobrado", f"$ {_pesos(total_otros_cobr)}", "#2e7d32")
+            _bal_metric(_c3, "Pendiente", f"$ {_pesos(total_otros_pend)}", "#c62828")
             # Desglose detalle
             _oi_det_rows = []
             for _oi in _otros_ing_f:
                 _oi_det_rows.append({
-                    "Fecha": _oi.get("fecha", ""),
+                    "Estado": _oi.get("estado", "pendiente"),
+                    "F. ingreso": _oi.get("fecha", ""),
+                    "F. cobro": _oi.get("fecha_movimiento") or "—",
                     "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or "—",
                     "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
                     "Monto": float(_oi.get("monto") or 0),
@@ -2947,10 +2952,9 @@ if _stab_otros_ingresos:
 
         # ── TAB 1: Nuevo ingreso ──────────────────────────────────────────────
         def _oi_render_fields(pfx, defaults=None):
-            """Renderiza los campos del formulario. Retorna dict con los valores."""
             d = defaults or {}
             rubro_idx = ([""] + list(_oi_rubro_opts.keys())).index(d.get("rubro_nm", "")) if d.get("rubro_nm") in _oi_rubro_opts else 0
-            fecha  = st.date_input("Fecha", value=d.get("fecha", date.today()), format="DD/MM/YYYY", key=f"{pfx}_fecha")
+            fecha  = st.date_input("Fecha de ingreso", value=d.get("fecha", date.today()), format="DD/MM/YYYY", key=f"{pfx}_fecha")
             rubro  = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), index=rubro_idx, key=f"{pfx}_rubro")
             sub_opts = {}
             if rubro:
@@ -2965,8 +2969,14 @@ if _stab_otros_ingresos:
             caja_idx = ([""] + list(_oi_caja_opts.keys())).index(d.get("caja_nm", "")) if d.get("caja_nm") in _oi_caja_opts else 0
             caja   = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), index=caja_idx, key=f"{pfx}_caja")
             desc   = st.text_input("Descripción (opcional)", value=d.get("desc", ""), key=f"{pfx}_desc")
-            return {"fecha": fecha, "rubro": rubro, "subrubro": subrubro,
-                    "sub_opts": sub_opts, "monto": monto, "caja": caja, "desc": desc}
+            estado_idx = ["pendiente", "cobrado"].index(d.get("estado", "pendiente"))
+            estado = st.selectbox("Estado", options=["pendiente", "cobrado"], index=estado_idx, key=f"{pfx}_estado")
+            fecha_mov = None
+            if estado == "cobrado":
+                _fmov_default = d.get("fecha_mov") or date.today()
+                fecha_mov = st.date_input("Fecha de cobro", value=_fmov_default, format="DD/MM/YYYY", key=f"{pfx}_fmov")
+            return {"fecha": fecha, "rubro": rubro, "subrubro": subrubro, "sub_opts": sub_opts,
+                    "monto": monto, "caja": caja, "desc": desc, "estado": estado, "fecha_mov": fecha_mov}
 
         with _oi_tab1:
             @st.fragment
@@ -2988,6 +2998,8 @@ if _stab_otros_ingresos:
                                     caja_id=_oi_caja_opts.get(_f["caja"]),
                                     descripcion=_f["desc"],
                                     usuario=_usuario_actual,
+                                    estado=_f["estado"],
+                                    fecha_movimiento=_f["fecha_mov"],
                                 )
                                 db.cargar_otros_ingresos.clear()
                                 st.toast("✅ Ingreso guardado.", icon="✅")
@@ -3012,10 +3024,13 @@ if _stab_otros_ingresos:
                     _oi_mn    = float(_oi.get("monto") or 0)
                     _oi_fch   = _oi.get("fecha", "")
                     _oi_dsc   = _oi.get("descripcion") or ""
+                    _oi_est   = _oi.get("estado", "pendiente")
+                    _oi_fmov  = _oi.get("fecha_movimiento")
 
                     _ca, _cb, _cc = st.columns([5, 1, 1])
                     with _ca:
-                        st.markdown(f"**{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm} · **$ {_oi_mn:,.0f}**")
+                        _est_badge = "🟢" if _oi_est == "cobrado" else "🟡"
+                        st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm} · **$ {_oi_mn:,.0f}**")
                     with _cb:
                         if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
                             st.session_state[f"oi_editing_{_oi_id}"] = True
@@ -3031,10 +3046,12 @@ if _stab_otros_ingresos:
 
                     if st.session_state.get(f"oi_editing_{_oi_id}"):
                         with st.container(border=True):
+                            _fmov_def = pd.to_datetime(_oi_fmov).date() if _oi_fmov else date.today()
                             _e = _oi_render_fields(f"e{_oi_id}", defaults={
                                 "fecha": pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(),
                                 "rubro_nm": _oi_r_nm, "sub_nm": _oi_s_nm,
                                 "monto_str": str(_oi_mn), "caja_nm": _oi_cj_nm, "desc": _oi_dsc,
+                                "estado": _oi_est, "fecha_mov": _fmov_def,
                             })
                             _e_col1, _e_col2 = st.columns(2)
                             if _e_col1.button("Guardar", type="primary", key=f"eo_{_oi_id}"):
@@ -3047,6 +3064,8 @@ if _stab_otros_ingresos:
                                         monto=_e["monto"],
                                         caja_id=_oi_caja_opts.get(_e["caja"]),
                                         descripcion=_e["desc"],
+                                        estado=_e["estado"],
+                                        fecha_movimiento=_e["fecha_mov"],
                                     )
                                     db.cargar_otros_ingresos.clear()
                                     st.session_state.pop(f"oi_editing_{_oi_id}", None)
@@ -3066,7 +3085,9 @@ if _stab_otros_ingresos:
                 _oi_rows = []
                 for _oi in _oi_lista:
                     _oi_rows.append({
-                        "Fecha": _oi.get("fecha", ""),
+                        "Estado": _oi.get("estado", "pendiente"),
+                        "F. ingreso": _oi.get("fecha", ""),
+                        "F. cobro": _oi.get("fecha_movimiento") or "—",
                         "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—"),
                         "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
                         "Monto": float(_oi.get("monto") or 0),

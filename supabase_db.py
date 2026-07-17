@@ -1991,7 +1991,7 @@ def cargar_otros_ingresos():
     return resp.data or []
 
 
-def guardar_otro_ingreso(fecha, rubro_id, subrubro_id, monto, caja_id, descripcion, usuario):
+def guardar_otro_ingreso(fecha, rubro_id, subrubro_id, monto, caja_id, descripcion, usuario, estado="pendiente", fecha_movimiento=None):
     client = get_client()
     client.table("otros_ingresos").insert({
         "fecha": str(fecha),
@@ -2001,10 +2001,12 @@ def guardar_otro_ingreso(fecha, rubro_id, subrubro_id, monto, caja_id, descripci
         "caja_id": caja_id or None,
         "descripcion": descripcion or None,
         "usuario": usuario,
+        "estado": estado,
+        "fecha_movimiento": str(fecha_movimiento) if fecha_movimiento else None,
     }).execute()
 
 
-def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, monto, caja_id, descripcion):
+def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, monto, caja_id, descripcion, estado="pendiente", fecha_movimiento=None):
     client = get_client()
     client.table("otros_ingresos").update({
         "fecha": str(fecha),
@@ -2013,6 +2015,8 @@ def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, monto, caja_id, de
         "monto": float(monto),
         "caja_id": caja_id or None,
         "descripcion": descripcion or None,
+        "estado": estado,
+        "fecha_movimiento": str(fecha_movimiento) if fecha_movimiento else None,
     }).eq("id", id).execute()
 
 
