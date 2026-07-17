@@ -1444,6 +1444,7 @@ tab_eg_compras = tab_eg_gastos = tab_eg_pagos = None
 tab_ing_facturas = tab_ing_cobros = None
 tab_dux_productos = tab_dux_rubros = tab_wix_productos = None
 tab_proveedores = tab_probar = tab_migracion = tab_cajas = tab_gastos_catalogo = tab_percepciones = None
+tab_rubros_ingresos = tab_re = None
 tab_ing_cobros_wix = None
 
 if tab_tesoreria:
@@ -3662,8 +3663,8 @@ with tab_sync:
             st.error(_msg)
 
 with tab_grupo_config:
-    tab_mapeo, tab_packs, tab_mixes, tab_editar, tab_rubros_ingresos, tab_re = st.tabs(
-        ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos", "💰 Rubros ingresos", "💸 Rubros egresos"]
+    tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
+        ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos"]
     )
 
 if tab_grupo_config_avanzada:
@@ -3678,6 +3679,8 @@ if tab_grupo_config_avanzada:
             tab_cajas,
             tab_gastos_catalogo,
             tab_percepciones,
+            tab_rubros_ingresos,
+            tab_re,
         ) = st.tabs(
             [
                 "DUX Productos",
@@ -3689,6 +3692,8 @@ if tab_grupo_config_avanzada:
                 "💰 Cajas",
                 "📋 Items Gastos",
                 "🧾 Percepciones",
+                "💰 Rubros ingresos",
+                "💸 Rubros egresos",
             ]
         )
 
@@ -6488,7 +6493,8 @@ with tab_mixes:
 
 
 
-with tab_rubros_ingresos:
+if tab_rubros_ingresos:
+  with tab_rubros_ingresos:
     st.subheader("💰 Rubros y subrubros de ingresos")
 
     _ri_rubros = db.cargar_rubros_ingresos()
