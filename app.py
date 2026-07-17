@@ -2946,44 +2946,54 @@ if _stab_otros_ingresos:
         _oi_tab1, _oi_tab2, _oi_tab3 = st.tabs(["➕ Ingresar ingreso", "✏️ Editar / Eliminar", "📋 Todos los ingresos"])
 
         # ── TAB 1: Nuevo ingreso ──────────────────────────────────────────────
+        def _oi_render_fields(pfx, defaults=None):
+            """Renderiza los campos del formulario. Retorna dict con los valores."""
+            d = defaults or {}
+            rubro_idx = ([""] + list(_oi_rubro_opts.keys())).index(d.get("rubro_nm", "")) if d.get("rubro_nm") in _oi_rubro_opts else 0
+            fecha  = st.date_input("Fecha", value=d.get("fecha", date.today()), format="DD/MM/YYYY", key=f"{pfx}_fecha")
+            rubro  = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), index=rubro_idx, key=f"{pfx}_rubro")
+            sub_opts = {}
+            if rubro:
+                sub_opts = {s["nombre"]: s["id"] for s in db.cargar_subrubros_ingresos(_oi_rubro_opts[rubro])}
+            sub_nm_idx = ([""] + list(sub_opts.keys())).index(d.get("sub_nm", "")) if d.get("sub_nm") in sub_opts else 0
+            subrubro = st.selectbox("Subrubro", options=[""] + list(sub_opts.keys()), index=sub_nm_idx, key=f"{pfx}_sub")
+            monto_str = st.text_input("Monto ($)", value=d.get("monto_str", ""), key=f"{pfx}_monto")
+            try:
+                monto = float(monto_str.replace(",", ".")) if monto_str else 0.0
+            except ValueError:
+                monto = 0.0
+            caja_idx = ([""] + list(_oi_caja_opts.keys())).index(d.get("caja_nm", "")) if d.get("caja_nm") in _oi_caja_opts else 0
+            caja   = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), index=caja_idx, key=f"{pfx}_caja")
+            desc   = st.text_input("Descripción (opcional)", value=d.get("desc", ""), key=f"{pfx}_desc")
+            return {"fecha": fecha, "rubro": rubro, "subrubro": subrubro,
+                    "sub_opts": sub_opts, "monto": monto, "caja": caja, "desc": desc}
+
         with _oi_tab1:
             @st.fragment
             def _oi_nuevo_ingreso():
-                _f_fecha     = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
-                _f_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
-                _f_sub_opts  = {}
-                if _f_rubro_sel:
-                    _f_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_f_rubro_sel])
-                    _f_sub_opts = {s["nombre"]: s["id"] for s in _f_subs}
-                _f_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_f_sub_opts.keys()), key="ni_subrubro")
-                _f_monto_str = st.text_input("Monto ($)", value="", key="ni_monto")
-                try:
-                    _f_monto = float(_f_monto_str.replace(",", ".")) if _f_monto_str else 0.0
-                except ValueError:
-                    _f_monto = 0.0
-                _f_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), key="ni_caja")
-                _f_desc     = st.text_input("Descripción (opcional)", key="ni_desc")
-                if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
-                    if not _f_rubro_sel:
-                        st.error("Seleccioná un rubro.")
-                    elif _f_monto <= 0:
-                        st.error("El monto debe ser mayor a 0.")
-                    else:
-                        try:
-                            db.guardar_otro_ingreso(
-                                fecha=_f_fecha,
-                                rubro_id=_oi_rubro_opts.get(_f_rubro_sel),
-                                subrubro_id=_f_sub_opts.get(_f_subrubro_sel),
-                                monto=_f_monto,
-                                caja_id=_oi_caja_opts.get(_f_caja_sel),
-                                descripcion=_f_desc,
-                                usuario=_usuario_actual,
-                            )
-                            db.cargar_otros_ingresos.clear()
-                            st.toast("✅ Ingreso guardado.", icon="✅")
-                            st.rerun(scope="fragment")
-                        except Exception as e:
-                            st.error(f"Error al guardar: {e}")
+                with st.container(border=True):
+                    _f = _oi_render_fields("ni")
+                    if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
+                        if not _f["rubro"]:
+                            st.error("Seleccioná un rubro.")
+                        elif _f["monto"] <= 0:
+                            st.error("El monto debe ser mayor a 0.")
+                        else:
+                            try:
+                                db.guardar_otro_ingreso(
+                                    fecha=_f["fecha"],
+                                    rubro_id=_oi_rubro_opts.get(_f["rubro"]),
+                                    subrubro_id=_f["sub_opts"].get(_f["subrubro"]),
+                                    monto=_f["monto"],
+                                    caja_id=_oi_caja_opts.get(_f["caja"]),
+                                    descripcion=_f["desc"],
+                                    usuario=_usuario_actual,
+                                )
+                                db.cargar_otros_ingresos.clear()
+                                st.toast("✅ Ingreso guardado.", icon="✅")
+                                st.rerun(scope="fragment")
+                            except Exception as e:
+                                st.error(f"Error al guardar: {e}")
             _oi_nuevo_ingreso()
 
         # ── TAB 2: Editar / Eliminar ──────────────────────────────────────────
@@ -3020,49 +3030,32 @@ if _stab_otros_ingresos:
                                 st.error(f"Error: {e}")
 
                     if st.session_state.get(f"oi_editing_{_oi_id}"):
-                        _e_c1, _e_c2 = st.columns(2)
-                        with _e_c1:
-                            _e_fecha = st.date_input("Fecha", value=pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(), format="DD/MM/YYYY", key=f"ef_{_oi_id}")
-                            _e_monto_str = st.text_input("Monto ($)", value=str(_oi_mn), key=f"em_{_oi_id}")
-                            try:
-                                _e_monto = float(_e_monto_str.replace(",", ".")) if _e_monto_str else 0.0
-                            except ValueError:
-                                _e_monto = 0.0
-                            _e_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()),
-                                index=([""] + list(_oi_caja_opts.keys())).index(_oi_cj_nm) if _oi_cj_nm in _oi_caja_opts else 0,
-                                key=f"ec_{_oi_id}")
-                            _e_desc = st.text_input("Descripción", value=_oi_dsc, key=f"ed_{_oi_id}")
-                        with _e_c2:
-                            _e_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()),
-                                index=([""] + list(_oi_rubro_opts.keys())).index(_oi_r_nm) if _oi_r_nm in _oi_rubro_opts else 0,
-                                key=f"er_{_oi_id}")
-                            _e_sub_opts = {}
-                            if _e_rubro_sel:
-                                _e_subs     = db.cargar_subrubros_ingresos(_oi_rubro_opts[_e_rubro_sel])
-                                _e_sub_opts = {s["nombre"]: s["id"] for s in _e_subs}
-                            _e_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_e_sub_opts.keys()),
-                                index=([""] + list(_e_sub_opts.keys())).index(_oi_s_nm) if _oi_s_nm in _e_sub_opts else 0,
-                                key=f"es_{_oi_id}")
-                        _e_col1, _e_col2 = st.columns(2)
-                        if _e_col1.button("Guardar", type="primary", key=f"eo_{_oi_id}"):
-                            try:
-                                db.actualizar_otro_ingreso(
-                                    id=_oi_id,
-                                    fecha=_e_fecha,
-                                    rubro_id=_oi_rubro_opts.get(_e_rubro_sel),
-                                    subrubro_id=_e_sub_opts.get(_e_subrubro_sel),
-                                    monto=_e_monto,
-                                    caja_id=_oi_caja_opts.get(_e_caja_sel),
-                                    descripcion=_e_desc,
-                                )
-                                db.cargar_otros_ingresos.clear()
+                        with st.container(border=True):
+                            _e = _oi_render_fields(f"e{_oi_id}", defaults={
+                                "fecha": pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(),
+                                "rubro_nm": _oi_r_nm, "sub_nm": _oi_s_nm,
+                                "monto_str": str(_oi_mn), "caja_nm": _oi_cj_nm, "desc": _oi_dsc,
+                            })
+                            _e_col1, _e_col2 = st.columns(2)
+                            if _e_col1.button("Guardar", type="primary", key=f"eo_{_oi_id}"):
+                                try:
+                                    db.actualizar_otro_ingreso(
+                                        id=_oi_id,
+                                        fecha=_e["fecha"],
+                                        rubro_id=_oi_rubro_opts.get(_e["rubro"]),
+                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
+                                        monto=_e["monto"],
+                                        caja_id=_oi_caja_opts.get(_e["caja"]),
+                                        descripcion=_e["desc"],
+                                    )
+                                    db.cargar_otros_ingresos.clear()
+                                    st.session_state.pop(f"oi_editing_{_oi_id}", None)
+                                    st.rerun(scope="fragment")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                            if _e_col2.button("Cancelar", key=f"ec2_{_oi_id}"):
                                 st.session_state.pop(f"oi_editing_{_oi_id}", None)
                                 st.rerun(scope="fragment")
-                            except Exception as e:
-                                st.error(f"Error: {e}")
-                        if _e_col2.button("Cancelar", key=f"ec2_{_oi_id}"):
-                            st.session_state.pop(f"oi_editing_{_oi_id}", None)
-                            st.rerun(scope="fragment")
             _oi_editar_eliminar()
 
         # ── TAB 3: Todos los ingresos ─────────────────────────────────────────
