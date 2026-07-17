@@ -2939,28 +2939,25 @@ if _stab_otros_ingresos:
 
         # ── Formulario nuevo ingreso ──────────────────────────────────────────
         with st.expander("➕ Nuevo ingreso", expanded=False):
-            with st.form("form_nuevo_ingreso", clear_on_submit=True):
-                _oi_c1, _oi_c2 = st.columns(2)
-                with _oi_c1:
-                    _oi_fecha  = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
-                    _oi_monto_str = st.text_input("Monto ($)", value="")
-                    try:
-                        _oi_monto = float(_oi_monto_str.replace(",", ".")) if _oi_monto_str else 0.0
-                    except ValueError:
-                        _oi_monto = 0.0
-                with _oi_c2:
-                    _oi_rubro_sel  = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
-                    _oi_sub_opts   = {}
-                    if _oi_rubro_sel:
-                        _oi_rid = _oi_rubro_opts[_oi_rubro_sel]
-                        _oi_subs = db.cargar_subrubros_ingresos(_oi_rid)
-                        _oi_sub_opts = {s["nombre"]: s["id"] for s in _oi_subs}
-                    _oi_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_oi_sub_opts.keys()), key="ni_subrubro")
-                _oi_caja_sel  = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()))
-                _oi_desc      = st.text_input("Descripción (opcional)")
-                _oi_guardar   = st.form_submit_button("Guardar", type="primary")
-
-            if _oi_guardar:
+            _oi_c1, _oi_c2 = st.columns(2)
+            with _oi_c1:
+                _oi_fecha  = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="ni_fecha")
+                _oi_monto_str = st.text_input("Monto ($)", value="", key="ni_monto")
+                try:
+                    _oi_monto = float(_oi_monto_str.replace(",", ".")) if _oi_monto_str else 0.0
+                except ValueError:
+                    _oi_monto = 0.0
+                _oi_caja_sel = st.selectbox("Caja", options=[""] + list(_oi_caja_opts.keys()), key="ni_caja")
+                _oi_desc     = st.text_input("Descripción (opcional)", key="ni_desc")
+            with _oi_c2:
+                _oi_rubro_sel = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), key="ni_rubro")
+                _oi_sub_opts  = {}
+                if _oi_rubro_sel:
+                    _oi_rid = _oi_rubro_opts[_oi_rubro_sel]
+                    _oi_subs = db.cargar_subrubros_ingresos(_oi_rid)
+                    _oi_sub_opts = {s["nombre"]: s["id"] for s in _oi_subs}
+                _oi_subrubro_sel = st.selectbox("Subrubro", options=[""] + list(_oi_sub_opts.keys()), key="ni_subrubro")
+            if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
                 if not _oi_rubro_sel:
                     st.error("Seleccioná un rubro.")
                 elif _oi_monto <= 0:
