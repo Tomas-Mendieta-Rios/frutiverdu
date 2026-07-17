@@ -2498,6 +2498,11 @@ if _sub_resumen:
         total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
         total_gastos      = sum(float(g.get("total") or 0) for g in gas_pagados + gas_parciales + gas_pendientes)
 
+        # Otros ingresos
+        _otros_ing_todos = db.cargar_otros_ingresos()
+        _otros_ing_f     = [o for o in _otros_ing_todos if _en_rango(o.get("fecha"))]
+        total_otros_ing  = sum(float(o.get("monto") or 0) for o in _otros_ing_f)
+
         total_ing_cobr  = total_fac_cobr + total_wix_cobr + total_otros_ing
         total_ing_pend  = total_fac_pend + total_wix_pend
         total_ing_anul  = total_fac_anul + total_wix_anul
@@ -2511,11 +2516,6 @@ if _sub_resumen:
         total_egr_pag   = total_comp_pag + total_gas_pag
         total_egr_pend  = total_comp_pend + total_gas_pend
         total_egr_anul  = total_comp_anul + total_gas_anul
-
-        # Otros ingresos
-        _otros_ing_todos = db.cargar_otros_ingresos()
-        _otros_ing_f     = [o for o in _otros_ing_todos if _en_rango(o.get("fecha"))]
-        total_otros_ing  = sum(float(o.get("monto") or 0) for o in _otros_ing_f)
 
         total_ingresos = total_facturas + total_wix + total_otros_ing
         total_egresos  = total_compras + total_gastos
