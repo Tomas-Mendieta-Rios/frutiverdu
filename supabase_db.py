@@ -1933,6 +1933,8 @@ def cargar_compras_desde_gastos(fecha):
             "items": items_list,
         })
 
+    return {"cantidades": cantidades, "compras": compras_raw}
+
 
 # ── OTROS INGRESOS ────────────────────────────────────────────────────────────
 
