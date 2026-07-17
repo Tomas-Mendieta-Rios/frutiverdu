@@ -6636,6 +6636,7 @@ if tab_rubros_ingresos:
             if st.form_submit_button("Agregar rubro"):
                 if _ri_nuevo_rubro.strip():
                     db.guardar_rubro_ingreso(_ri_nuevo_rubro.strip().upper())
+                    st.toast("✅ Rubro agregado.", icon="✅")
                     st.rerun()
         for _ri_r in _ri_rubros:
             with st.container(border=True):
@@ -6645,6 +6646,7 @@ if tab_rubros_ingresos:
                     st.session_state[f"ri_editing_r_{_ri_r['id']}"] = True
                 if _ri_rc.button("🗑️", key=f"ri_rdel_{_ri_r['id']}"):
                     db.eliminar_rubro_ingreso(_ri_r["id"])
+                    st.toast("🗑️ Rubro eliminado.", icon="🗑️")
                     st.rerun()
                 if st.session_state.get(f"ri_editing_r_{_ri_r['id']}"):
                     with st.form(f"form_edit_ri_r_{_ri_r['id']}"):
@@ -6653,6 +6655,7 @@ if tab_rubros_ingresos:
                         if _rc1.form_submit_button("Guardar"):
                             db.actualizar_rubro_ingreso(_ri_r["id"], _ri_rnombre.strip().upper())
                             st.session_state.pop(f"ri_editing_r_{_ri_r['id']}", None)
+                            st.toast("✅ Rubro actualizado.", icon="✅")
                             st.rerun()
                         if _rc2.form_submit_button("Cancelar"):
                             st.session_state.pop(f"ri_editing_r_{_ri_r['id']}", None)
@@ -6666,6 +6669,7 @@ if tab_rubros_ingresos:
             if st.form_submit_button("Agregar subrubro"):
                 if _ri_nuevo_sub_nombre.strip() and _ri_nuevo_sub_rubro:
                     db.guardar_subrubro_ingreso(_ri_nuevo_sub_nombre.strip().upper(), _ri_rubro_opts[_ri_nuevo_sub_rubro])
+                    st.toast("✅ Subrubro agregado.", icon="✅")
                     st.rerun()
         _ri_todos_subs = db.cargar_subrubros_ingresos()
         for _ri_s in _ri_todos_subs:
@@ -6677,6 +6681,7 @@ if tab_rubros_ingresos:
                     st.session_state[f"ri_editing_s_{_ri_s['id']}"] = True
                 if _ri_sc.button("🗑️", key=f"ri_sdel_{_ri_s['id']}"):
                     db.eliminar_subrubro_ingreso(_ri_s["id"])
+                    st.toast("🗑️ Subrubro eliminado.", icon="🗑️")
                     st.rerun()
                 if st.session_state.get(f"ri_editing_s_{_ri_s['id']}"):
                     with st.form(f"form_edit_ri_s_{_ri_s['id']}"):
@@ -6687,6 +6692,7 @@ if tab_rubros_ingresos:
                         if _sc1.form_submit_button("Guardar"):
                             db.actualizar_subrubro_ingreso(_ri_s["id"], _ri_snombre.strip().upper(), _ri_rubro_opts.get(_ri_srubro))
                             st.session_state.pop(f"ri_editing_s_{_ri_s['id']}", None)
+                            st.toast("✅ Subrubro actualizado.", icon="✅")
                             st.rerun()
                         if _sc2.form_submit_button("Cancelar"):
                             st.session_state.pop(f"ri_editing_s_{_ri_s['id']}", None)
@@ -6706,6 +6712,7 @@ if tab_re:
                 if _re_nuevo_rubro:
                     db.guardar_rubro_egreso(_re_nuevo_rubro)
                     db.cargar_rubros_egresos.clear()
+                    st.toast("✅ Rubro agregado.", icon="✅")
                     st.rerun()
 
         # ── Tabla rubros ──────────────────────────────────────────────────────
@@ -6719,6 +6726,7 @@ if tab_re:
                 if _re_rc3.button("🗑️", key=f"re_dr_{_re_r['id']}"):
                     db.eliminar_rubro_egreso(_re_r["id"])
                     db.cargar_rubros_egresos.clear()
+                    st.toast("🗑️ Rubro eliminado.", icon="🗑️")
                     st.rerun()
                 if st.session_state.get(f"re_edit_r_{_re_r['id']}"):
                     with st.form(f"re_form_r_{_re_r['id']}"):
@@ -6729,6 +6737,7 @@ if tab_re:
                         db.actualizar_rubro_egreso(_re_r["id"], _re_new_nm.strip().upper())
                         db.cargar_rubros_egresos.clear()
                         st.session_state.pop(f"re_edit_r_{_re_r['id']}", None)
+                        st.toast("✅ Rubro actualizado.", icon="✅")
                         st.rerun()
                     if _re_can:
                         st.session_state.pop(f"re_edit_r_{_re_r['id']}", None)
@@ -6744,6 +6753,7 @@ if tab_re:
                 if _re_nuevo_sub_nombre and _re_nuevo_sub_rubro:
                     db.guardar_subrubro_egreso(_re_nuevo_sub_nombre, _re_rubro_opts[_re_nuevo_sub_rubro])
                     db.cargar_subrubros_egresos.clear()
+                    st.toast("✅ Subrubro agregado.", icon="✅")
                     st.rerun()
 
         # ── Tabla subrubros ───────────────────────────────────────────────────
@@ -6764,6 +6774,7 @@ if tab_re:
                 if _re_nuevo_item_nombre and _re_nuevo_item_rubro:
                     db.guardar_item_egreso(_re_nuevo_item_nombre, _re_rubro_opts[_re_nuevo_item_rubro])
                     db.cargar_items_egresos.clear()
+                    st.toast("✅ Item agregado.", icon="✅")
                     st.rerun()
 
         _re_todos_items = db.cargar_items_egresos()
@@ -6995,7 +7006,7 @@ if tab_gastos_catalogo:
             )
             if st.button("🗑 Borrar todo el catálogo", type="secondary", key="btn_borrar_cat_gastos"):
                 db.guardar_gastos_catalogo([])
-                st.success("Catálogo borrado.")
+                st.toast("🗑️ Catálogo borrado.", icon="🗑️")
                 st.rerun()
         else:
             st.info("El catálogo está vacío. Importá un Excel para empezar.")
@@ -7033,7 +7044,7 @@ if tab_gastos_catalogo:
                     if st.button("✅ Importar y reemplazar catálogo", type="primary", key="btn_importar_cat_gastos"):
                         _registros = _df_import.to_dict(orient="records")
                         db.guardar_gastos_catalogo(_registros)
-                        st.success(f"✅ {len(_registros)} items importados correctamente.")
+                        st.toast(f"✅ {len(_registros)} items importados.", icon="✅")
                         st.rerun()
             except Exception as _e_imp:
                 st.error(f"Error al leer el archivo: {_e_imp}")
@@ -7046,7 +7057,7 @@ if tab_percepciones:
         if st.button("🔄 Sincronizar Percepciones", type="primary", key="btn_sync_percepciones"):
             _ok_p, _n_p, _msg_p = _sync_percepciones(None, None)
             if _ok_p:
-                st.success(_msg_p)
+                st.toast(_msg_p, icon="✅")
                 st.rerun()
             else:
                 st.error(_msg_p)
