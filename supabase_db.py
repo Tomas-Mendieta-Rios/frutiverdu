@@ -142,8 +142,9 @@ def cargar_subrubros():
 def guardar_subrubros(registros):
     client = get_client()
     client.table("subrubros").delete().neq("id", -1).execute()
-    if registros:
-        client.table("subrubros").insert(registros).execute()
+    batch = 200
+    for i in range(0, len(registros), batch):
+        client.table("subrubros").insert(registros[i:i + batch]).execute()
 
 
 # ---------------- GASTOS CATÁLOGO ----------------

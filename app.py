@@ -4994,29 +4994,29 @@ if tab_dux_rubros:
             if sincronizar_rubros:
                 url_sr = f"{base_url}/subrubros"
                 headers_sr = {"accept": "application/json", "authorization": token}
-                _sr_offset, _sr_page_size, items_sr, _sr_error = 0, 100, [], None
+                _sr_offset, _sr_limit, items_sr, _sr_error = 0, 50, [], None
                 while True:
-                    params_sr = {"id_empresa": id_empresa_default, "offset": _sr_offset, "limit": _sr_page_size}
+                    params_sr = {"id_empresa": id_empresa_default, "offset": _sr_offset, "limit": _sr_limit}
                     try:
                         resp_sr = requests.get(url_sr, headers=headers_sr, params=params_sr, timeout=30)
+                        if resp_sr.status_code != 200:
+                            _sr_error = msg_error_http("DUX (subrubros)", resp_sr.status_code, resp_sr.text)
+                            break
+                        page_sr = resp_sr.json()
+                        if isinstance(page_sr, dict):
+                            page_sr = page_sr.get("results", [])
                     except requests.RequestException as e:
                         _sr_error = msg_error_red("DUX (subrubros)", e)
                         break
-                    if resp_sr.status_code != 200:
-                        _sr_error = msg_error_http("DUX (subrubros)", resp_sr.status_code, resp_sr.text)
-                        break
-                    try:
-                        data_sr = resp_sr.json()
                     except ValueError:
                         _sr_error = "❌ DUX devolvió una respuesta inválida (subrubros)."
                         break
-                    page_sr = data_sr if isinstance(data_sr, list) else data_sr.get("results", [])
                     if not page_sr:
                         break
                     items_sr.extend(page_sr)
-                    if len(page_sr) < _sr_page_size:
+                    if len(page_sr) < _sr_limit:
                         break
-                    _sr_offset += _sr_page_size
+                    _sr_offset += _sr_limit
 
                 if _sr_error:
                     st.error(_sr_error)
