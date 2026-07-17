@@ -2023,3 +2023,83 @@ def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, monto, caja_id, de
 def eliminar_otro_ingreso(id):
     client = get_client()
     client.table("otros_ingresos").delete().eq("id", id).execute()
+
+
+# ── OTROS EGRESOS ─────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cargar_rubros_egresos():
+    client = get_client()
+    resp = client.table("rubros_egresos").select("*").order("nombre").execute()
+    return resp.data or []
+
+def guardar_rubro_egreso(nombre):
+    client = get_client()
+    client.table("rubros_egresos").insert({"nombre": nombre}).execute()
+
+def actualizar_rubro_egreso(id, nombre):
+    client = get_client()
+    client.table("rubros_egresos").update({"nombre": nombre}).eq("id", id).execute()
+
+def eliminar_rubro_egreso(id):
+    client = get_client()
+    client.table("rubros_egresos").delete().eq("id", id).execute()
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cargar_subrubros_egresos(rubro_id=None):
+    client = get_client()
+    q = client.table("subrubros_egresos").select("*").order("nombre")
+    if rubro_id is not None:
+        q = q.eq("rubro_id", rubro_id)
+    return q.execute().data or []
+
+def guardar_subrubro_egreso(nombre, rubro_id):
+    client = get_client()
+    client.table("subrubros_egresos").insert({"nombre": nombre, "rubro_id": rubro_id}).execute()
+
+def actualizar_subrubro_egreso(id, nombre, rubro_id):
+    client = get_client()
+    client.table("subrubros_egresos").update({"nombre": nombre, "rubro_id": rubro_id}).eq("id", id).execute()
+
+def eliminar_subrubro_egreso(id):
+    client = get_client()
+    client.table("subrubros_egresos").delete().eq("id", id).execute()
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cargar_otros_egresos():
+    client = get_client()
+    resp = client.table("otros_egresos").select("*, rubros_egresos(nombre), subrubros_egresos(nombre)").order("fecha", desc=True).execute()
+    return resp.data or []
+
+def guardar_otro_egreso(fecha, rubro_id, subrubro_id, item, monto, caja_id, descripcion, usuario, estado="pendiente", fecha_movimiento=None):
+    client = get_client()
+    client.table("otros_egresos").insert({
+        "fecha": str(fecha),
+        "rubro_id": rubro_id,
+        "subrubro_id": subrubro_id or None,
+        "item": item or None,
+        "monto": float(monto),
+        "caja_id": caja_id or None,
+        "descripcion": descripcion or None,
+        "usuario": usuario,
+        "estado": estado,
+        "fecha_movimiento": str(fecha_movimiento) if fecha_movimiento else None,
+    }).execute()
+
+def actualizar_otro_egreso(id, fecha, rubro_id, subrubro_id, item, monto, caja_id, descripcion, estado="pendiente", fecha_movimiento=None):
+    client = get_client()
+    client.table("otros_egresos").update({
+        "fecha": str(fecha),
+        "rubro_id": rubro_id,
+        "subrubro_id": subrubro_id or None,
+        "item": item or None,
+        "monto": float(monto),
+        "caja_id": caja_id or None,
+        "descripcion": descripcion or None,
+        "estado": estado,
+        "fecha_movimiento": str(fecha_movimiento) if fecha_movimiento else None,
+    }).eq("id", id).execute()
+
+def eliminar_otro_egreso(id):
+    client = get_client()
+    client.table("otros_egresos").delete().eq("id", id).execute()

@@ -1439,7 +1439,7 @@ tab_grupo_config_avanzada = _tabs_dict.get("tab_grupo_config_avanzada")
 
 # Sub-tab pre-init (in case parent tab is not visible for this role)
 _sub_resumen = _sub_pendientes = tab_ing_cobros_wix = None
-_stab_movimientos = _stab_transferencias = _stab_ajustes = _stab_saldo_ini = _stab_otros_ingresos = None
+_stab_movimientos = _stab_transferencias = _stab_ajustes = _stab_saldo_ini = _stab_otros_ingresos = _stab_otros_egresos = None
 tab_eg_compras = tab_eg_gastos = tab_eg_pagos = None
 tab_ing_facturas = tab_ing_cobros = None
 tab_dux_productos = tab_dux_rubros = tab_wix_productos = None
@@ -1448,8 +1448,8 @@ tab_ing_cobros_wix = None
 
 if tab_tesoreria:
     with tab_tesoreria:
-        _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini, _stab_otros_ingresos = st.tabs([
-            "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial", "💰 Otros ingresos",
+        _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini, _stab_otros_ingresos, _stab_otros_egresos = st.tabs([
+            "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial", "💰 Otros ingresos", "💸 Otros egresos",
         ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -2509,18 +2509,25 @@ if _sub_resumen:
         total_ing_pend  = total_fac_pend + total_wix_pend + total_otros_pend
         total_ing_anul  = total_fac_anul + total_wix_anul
 
+        # Otros egresos
+        _otros_egr_todos = db.cargar_otros_egresos()
+        _otros_egr_f     = [o for o in _otros_egr_todos if _en_rango(o.get("fecha"))]
+        total_otros_egr  = sum(float(o.get("monto") or 0) for o in _otros_egr_f)
+        total_otros_egr_pag  = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") == "pagado")
+        total_otros_egr_pend = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") != "pagado")
+
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
         total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
         total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
         total_gas_pag   = sum(float(g.get("total") or 0) for g in gas_pagados) + sum(_pagado_gasto(g) for g in gas_parciales)
         total_gas_pend  = sum(_saldo_gasto(g) for g in gas_parciales) + sum(float(g.get("total") or 0) for g in gas_pendientes)
         total_gas_anul  = sum(float(g.get("total") or 0) for g in gas_anulados)
-        total_egr_pag   = total_comp_pag + total_gas_pag
-        total_egr_pend  = total_comp_pend + total_gas_pend
+        total_egr_pag   = total_comp_pag + total_gas_pag + total_otros_egr_pag
+        total_egr_pend  = total_comp_pend + total_gas_pend + total_otros_egr_pend
         total_egr_anul  = total_comp_anul + total_gas_anul
 
         total_ingresos = total_facturas + total_wix + total_otros_ing
-        total_egresos  = total_compras + total_gastos
+        total_egresos  = total_compras + total_gastos + total_otros_egr
         resultado      = total_ingresos - total_egresos
 
         # ── INGRESOS ────────────────────────────────────────────────────────────
@@ -2647,6 +2654,28 @@ if _sub_resumen:
                 hide_index=True,
                 column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
             )
+
+        if _otros_egr_f:
+            st.divider()
+            st.markdown(f"#### 💸 Otros egresos · {len(_otros_egr_f)} registros")
+            _oe_c1, _oe_c2, _oe_c3 = st.columns(3)
+            _bal_metric(_oe_c1, "Total", f"$ {_pesos(total_otros_egr)}", "#1a1a1a")
+            _bal_metric(_oe_c2, "Pagado", f"$ {_pesos(total_otros_egr_pag)}", "#2e7d32")
+            _bal_metric(_oe_c3, "Pendiente", f"$ {_pesos(total_otros_egr_pend)}", "#c62828")
+            _oe_det_rows = []
+            for _oe in _otros_egr_f:
+                _oe_det_rows.append({
+                    "Estado": _oe.get("estado", "pendiente"),
+                    "F. egreso": _oe.get("fecha", ""),
+                    "F. pago": _oe.get("fecha_movimiento") or "—",
+                    "Rubro": (_oe.get("rubros_egresos") or {}).get("nombre") or "—",
+                    "Subrubro": (_oe.get("subrubros_egresos") or {}).get("nombre") or "—",
+                    "Item": _oe.get("item") or "—",
+                    "Monto": float(_oe.get("monto") or 0),
+                    "Descripción": _oe.get("descripcion") or "",
+                })
+            st.dataframe(pd.DataFrame(_oe_det_rows), use_container_width=True, hide_index=True,
+                         column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
@@ -3101,6 +3130,178 @@ if _stab_otros_ingresos:
                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
                 )
 
+if _stab_otros_egresos:
+    with _stab_otros_egresos:
+        st.subheader("💸 Otros egresos")
+
+        _oe_rubros = db.cargar_rubros_egresos()
+        _oe_cajas  = db.cargar_cajas()
+        _oe_rubro_map  = {r["id"]: r["nombre"] for r in _oe_rubros}
+        _oe_caja_map   = {c["id"]: c["nombre"] for c in _oe_cajas}
+        _oe_rubro_opts = {r["nombre"]: r["id"] for r in _oe_rubros}
+        _oe_caja_opts  = {c["nombre"]: c["id"] for c in _oe_cajas}
+
+        _oe_lista = db.cargar_otros_egresos()
+
+        _oe_tab1, _oe_tab2, _oe_tab3 = st.tabs(["➕ Ingresar egreso", "✏️ Editar / Eliminar", "📋 Todos los egresos"])
+
+        def _oe_render_fields(pfx, defaults=None):
+            d = defaults or {}
+            rubro_idx = ([""] + list(_oe_rubro_opts.keys())).index(d.get("rubro_nm", "")) if d.get("rubro_nm") in _oe_rubro_opts else 0
+            fecha  = st.date_input("Fecha de egreso", value=d.get("fecha", date.today()), format="DD/MM/YYYY", key=f"{pfx}_fecha")
+            rubro  = st.selectbox("Rubro", options=[""] + list(_oe_rubro_opts.keys()), index=rubro_idx, key=f"{pfx}_rubro")
+            sub_opts = {}
+            if rubro:
+                sub_opts = {s["nombre"]: s["id"] for s in db.cargar_subrubros_egresos(_oe_rubro_opts[rubro])}
+            sub_nm_idx = ([""] + list(sub_opts.keys())).index(d.get("sub_nm", "")) if d.get("sub_nm") in sub_opts else 0
+            subrubro = st.selectbox("Subrubro", options=[""] + list(sub_opts.keys()), index=sub_nm_idx, key=f"{pfx}_sub")
+            item   = st.text_input("Item", value=d.get("item", ""), key=f"{pfx}_item")
+            monto_str = st.text_input("Monto ($)", value=d.get("monto_str", ""), key=f"{pfx}_monto")
+            try:
+                monto = float(monto_str.replace(",", ".")) if monto_str else 0.0
+            except ValueError:
+                monto = 0.0
+            caja_idx = ([""] + list(_oe_caja_opts.keys())).index(d.get("caja_nm", "")) if d.get("caja_nm") in _oe_caja_opts else 0
+            caja   = st.selectbox("Caja", options=[""] + list(_oe_caja_opts.keys()), index=caja_idx, key=f"{pfx}_caja")
+            desc   = st.text_input("Descripción (opcional)", value=d.get("desc", ""), key=f"{pfx}_desc")
+            estado_idx = ["pendiente", "pagado"].index(d.get("estado", "pendiente"))
+            estado = st.selectbox("Estado", options=["pendiente", "pagado"], index=estado_idx, key=f"{pfx}_estado")
+            fecha_mov = None
+            if estado == "pagado":
+                _fmov_default = d.get("fecha_mov") or date.today()
+                fecha_mov = st.date_input("Fecha de pago", value=_fmov_default, format="DD/MM/YYYY", key=f"{pfx}_fmov")
+            return {"fecha": fecha, "rubro": rubro, "subrubro": subrubro, "sub_opts": sub_opts,
+                    "item": item, "monto": monto, "caja": caja, "desc": desc, "estado": estado, "fecha_mov": fecha_mov}
+
+        # ── TAB 1: Nuevo egreso ───────────────────────────────────────────────
+        with _oe_tab1:
+            @st.fragment
+            def _oe_nuevo_egreso():
+                with st.container(border=True):
+                    _f = _oe_render_fields("ne")
+                    if st.button("Guardar egreso", type="primary", key="ne_guardar"):
+                        if not _f["rubro"]:
+                            st.error("Seleccioná un rubro.")
+                        elif _f["monto"] <= 0:
+                            st.error("El monto debe ser mayor a 0.")
+                        else:
+                            try:
+                                db.guardar_otro_egreso(
+                                    fecha=_f["fecha"],
+                                    rubro_id=_oe_rubro_opts.get(_f["rubro"]),
+                                    subrubro_id=_f["sub_opts"].get(_f["subrubro"]),
+                                    item=_f["item"],
+                                    monto=_f["monto"],
+                                    caja_id=_oe_caja_opts.get(_f["caja"]),
+                                    descripcion=_f["desc"],
+                                    usuario=_usuario_actual,
+                                    estado=_f["estado"],
+                                    fecha_movimiento=_f["fecha_mov"],
+                                )
+                                db.cargar_otros_egresos.clear()
+                                st.toast("✅ Egreso guardado.", icon="✅")
+                                st.rerun(scope="fragment")
+                            except Exception as e:
+                                st.error(f"Error al guardar: {e}")
+            _oe_nuevo_egreso()
+
+        # ── TAB 2: Editar / Eliminar ──────────────────────────────────────────
+        with _oe_tab2:
+            @st.fragment
+            def _oe_editar_eliminar():
+                _lista = db.cargar_otros_egresos()
+                if not _lista:
+                    st.info("No hay egresos cargados todavía.")
+                    return
+                for _oe in _lista:
+                    _oe_id    = _oe["id"]
+                    _oe_r_nm  = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
+                    _oe_s_nm  = (_oe.get("subrubros_egresos") or {}).get("nombre") or "—"
+                    _oe_cj_nm = _oe_caja_map.get(_oe.get("caja_id"), "—")
+                    _oe_mn    = float(_oe.get("monto") or 0)
+                    _oe_fch   = _oe.get("fecha", "")
+                    _oe_dsc   = _oe.get("descripcion") or ""
+                    _oe_est   = _oe.get("estado", "pendiente")
+                    _oe_fmov  = _oe.get("fecha_movimiento")
+                    _oe_item  = _oe.get("item") or ""
+
+                    _ca, _cb, _cc = st.columns([5, 1, 1])
+                    with _ca:
+                        _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
+                        st.markdown(f"{_est_badge} **{_oe_fch}** · {_oe_r_nm} / {_oe_s_nm} · {_oe_item} · **$ {_oe_mn:,.0f}**")
+                    with _cb:
+                        if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
+                            st.session_state[f"oe_editing_{_oe_id}"] = True
+                            st.rerun(scope="fragment")
+                    with _cc:
+                        if st.button("🗑️", key=f"oe_del_{_oe_id}", help="Eliminar"):
+                            try:
+                                db.eliminar_otro_egreso(_oe_id)
+                                db.cargar_otros_egresos.clear()
+                                st.rerun(scope="fragment")
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                    if st.session_state.get(f"oe_editing_{_oe_id}"):
+                        with st.container(border=True):
+                            _fmov_def = pd.to_datetime(_oe_fmov).date() if _oe_fmov else date.today()
+                            _e = _oe_render_fields(f"ee{_oe_id}", defaults={
+                                "fecha": pd.to_datetime(_oe_fch).date() if _oe_fch else date.today(),
+                                "rubro_nm": _oe_r_nm, "sub_nm": _oe_s_nm,
+                                "item": _oe_item, "monto_str": str(_oe_mn),
+                                "caja_nm": _oe_cj_nm, "desc": _oe_dsc,
+                                "estado": _oe_est, "fecha_mov": _fmov_def,
+                            })
+                            _e_col1, _e_col2 = st.columns(2)
+                            if _e_col1.button("Guardar", type="primary", key=f"eeo_{_oe_id}"):
+                                try:
+                                    db.actualizar_otro_egreso(
+                                        id=_oe_id,
+                                        fecha=_e["fecha"],
+                                        rubro_id=_oe_rubro_opts.get(_e["rubro"]),
+                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
+                                        item=_e["item"],
+                                        monto=_e["monto"],
+                                        caja_id=_oe_caja_opts.get(_e["caja"]),
+                                        descripcion=_e["desc"],
+                                        estado=_e["estado"],
+                                        fecha_movimiento=_e["fecha_mov"],
+                                    )
+                                    db.cargar_otros_egresos.clear()
+                                    st.session_state.pop(f"oe_editing_{_oe_id}", None)
+                                    st.rerun(scope="fragment")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                            if _e_col2.button("Cancelar", key=f"eec2_{_oe_id}"):
+                                st.session_state.pop(f"oe_editing_{_oe_id}", None)
+                                st.rerun(scope="fragment")
+            _oe_editar_eliminar()
+
+        # ── TAB 3: Todos los egresos ──────────────────────────────────────────
+        with _oe_tab3:
+            if not _oe_lista:
+                st.info("No hay egresos cargados todavía.")
+            else:
+                _oe_rows = []
+                for _oe in _oe_lista:
+                    _oe_rows.append({
+                        "Estado": _oe.get("estado", "pendiente"),
+                        "F. egreso": _oe.get("fecha", ""),
+                        "F. pago": _oe.get("fecha_movimiento") or "—",
+                        "Rubro": (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—"),
+                        "Subrubro": (_oe.get("subrubros_egresos") or {}).get("nombre") or "—",
+                        "Item": _oe.get("item") or "—",
+                        "Monto": float(_oe.get("monto") or 0),
+                        "Caja": _oe_caja_map.get(_oe.get("caja_id"), "—"),
+                        "Descripción": _oe.get("descripcion") or "",
+                    })
+                st.dataframe(
+                    pd.DataFrame(_oe_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
+                )
+
 if tab_iva:
     with tab_iva:
         st.subheader("🧾 Posición IVA")
@@ -3458,8 +3659,8 @@ with tab_sync:
             st.error(_msg)
 
 with tab_grupo_config:
-    tab_mapeo, tab_packs, tab_mixes, tab_editar, tab_rubros_ingresos = st.tabs(
-        ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos", "💰 Rubros ingresos"]
+    tab_mapeo, tab_packs, tab_mixes, tab_editar, tab_rubros_ingresos, tab_re = st.tabs(
+        ["🗺️ Mapeo Wix↔DUX", "🎁 Packs Wix", "🔀 Mixes DUX", "🔗 Relacionar productos", "💰 Rubros ingresos", "💸 Rubros egresos"]
     )
 
 if tab_grupo_config_avanzada:
@@ -6354,6 +6555,68 @@ with tab_rubros_ingresos:
                         if _sc2.form_submit_button("Cancelar"):
                             st.session_state.pop(f"ri_editing_s_{_ri_s['id']}", None)
                             st.rerun()
+
+if tab_re:
+    with tab_re:
+        st.subheader("💸 Rubros y subrubros de egresos")
+        _re_rubros = db.cargar_rubros_egresos()
+        _re_rubro_map  = {r["id"]: r["nombre"] for r in _re_rubros}
+        _re_rubro_opts = {r["nombre"]: r["id"] for r in _re_rubros}
+
+        # ── Nuevo rubro ───────────────────────────────────────────────────────
+        with st.expander("➕ Agregar rubro", expanded=False):
+            _re_nuevo_rubro = st.text_input("Nombre del rubro", key="re_nuevo_rubro").strip().upper()
+            if st.button("Guardar rubro", key="re_guardar_rubro"):
+                if _re_nuevo_rubro:
+                    db.guardar_rubro_egreso(_re_nuevo_rubro)
+                    db.cargar_rubros_egresos.clear()
+                    st.rerun()
+
+        # ── Tabla rubros ──────────────────────────────────────────────────────
+        if _re_rubros:
+            st.markdown("**Rubros**")
+            for _re_r in _re_rubros:
+                _re_rc1, _re_rc2, _re_rc3 = st.columns([4, 1, 1])
+                _re_rc1.write(_re_r["nombre"])
+                if _re_rc2.button("✏️", key=f"re_er_{_re_r['id']}"):
+                    st.session_state[f"re_edit_r_{_re_r['id']}"] = True
+                if _re_rc3.button("🗑️", key=f"re_dr_{_re_r['id']}"):
+                    db.eliminar_rubro_egreso(_re_r["id"])
+                    db.cargar_rubros_egresos.clear()
+                    st.rerun()
+                if st.session_state.get(f"re_edit_r_{_re_r['id']}"):
+                    with st.form(f"re_form_r_{_re_r['id']}"):
+                        _re_new_nm = st.text_input("Nombre", value=_re_r["nombre"], key=f"re_enm_{_re_r['id']}")
+                        _re_ok = st.form_submit_button("Guardar")
+                        _re_can = st.form_submit_button("Cancelar")
+                    if _re_ok:
+                        db.actualizar_rubro_egreso(_re_r["id"], _re_new_nm.strip().upper())
+                        db.cargar_rubros_egresos.clear()
+                        st.session_state.pop(f"re_edit_r_{_re_r['id']}", None)
+                        st.rerun()
+                    if _re_can:
+                        st.session_state.pop(f"re_edit_r_{_re_r['id']}", None)
+                        st.rerun()
+
+        st.divider()
+
+        # ── Nuevo subrubro ────────────────────────────────────────────────────
+        with st.expander("➕ Agregar subrubro", expanded=False):
+            _re_nuevo_sub_rubro = st.selectbox("Rubro", options=list(_re_rubro_opts.keys()), key="re_nuevo_sub_rubro") if _re_rubro_opts else None
+            _re_nuevo_sub_nombre = st.text_input("Nombre del subrubro", key="re_nuevo_sub_nombre").strip().upper()
+            if st.button("Guardar subrubro", key="re_guardar_subrubro"):
+                if _re_nuevo_sub_nombre and _re_nuevo_sub_rubro:
+                    db.guardar_subrubro_egreso(_re_nuevo_sub_nombre, _re_rubro_opts[_re_nuevo_sub_rubro])
+                    db.cargar_subrubros_egresos.clear()
+                    st.rerun()
+
+        # ── Tabla subrubros ───────────────────────────────────────────────────
+        _re_todos_subs = db.cargar_subrubros_egresos()
+        if _re_todos_subs:
+            st.markdown("**Subrubros**")
+            _re_sub_rows = [{"Rubro": _re_rubro_map.get(s["rubro_id"], "—"), "Subrubro": s["nombre"], "id": s["id"]} for s in _re_todos_subs]
+            _re_sub_df = pd.DataFrame(_re_sub_rows)
+            st.dataframe(_re_sub_df.drop(columns=["id"]), use_container_width=True, hide_index=True)
 
 if tab_migracion:
     with tab_migracion:
