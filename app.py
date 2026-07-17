@@ -2626,18 +2626,22 @@ if _sub_resumen:
             _c1, _c2 = st.columns(2)
             _bal_metric(_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#2e7d32")
             _bal_metric(_c2, "Registros", str(len(_otros_ing_f)), "#1a1a1a")
-            # Desglose por rubro
-            _oi_por_rubro = {}
+            # Desglose detalle
+            _oi_det_rows = []
             for _oi in _otros_ing_f:
-                _oi_rn = (_oi.get("rubros_ingresos") or {}).get("nombre") or "—"
-                _oi_sn = (_oi.get("subrubros_ingresos") or {}).get("nombre") or ""
-                _key = f"{_oi_rn} / {_oi_sn}" if _oi_sn else _oi_rn
-                _oi_por_rubro[_key] = _oi_por_rubro.get(_key, 0.0) + float(_oi.get("monto") or 0)
-            with st.expander("Ver desglose por rubro", expanded=True):
-                for _k, _v in sorted(_oi_por_rubro.items()):
-                    _da, _db = st.columns([4, 1])
-                    _da.write(_k)
-                    _db.write(f"$ {_pesos(_v)}")
+                _oi_det_rows.append({
+                    "Fecha": _oi.get("fecha", ""),
+                    "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or "—",
+                    "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
+                    "Monto": float(_oi.get("monto") or 0),
+                    "Descripción": _oi.get("descripcion") or "",
+                })
+            st.dataframe(
+                pd.DataFrame(_oi_det_rows),
+                use_container_width=True,
+                hide_index=True,
+                column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
+            )
 
         # ── EGRESOS ─────────────────────────────────────────────────────────────
         st.divider()
