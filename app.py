@@ -2855,66 +2855,124 @@ if _stab_movimientos:
 
 if _stab_ajustes:
     with _stab_ajustes:
-        st.subheader("Ajustes de caja")
-        _aj_cajas_list = db.cargar_cajas()
-        _aj_cajas_activas = [c for c in _aj_cajas_list if c.get("activa")]
-        _aj_nombre_a_id = {c["nombre"]: c["id"] for c in _aj_cajas_activas}
-        if not _aj_cajas_activas:
-            st.info("No hay cajas activas.")
-        else:
-            with st.form("form_ajuste_caja"):
-                _aj_fc1, _aj_fc2, _aj_fc3 = st.columns([2, 1, 1])
-                _aj_caja  = _aj_fc1.selectbox("Caja", options=[c["nombre"] for c in _aj_cajas_activas])
-                _aj_fecha = _aj_fc2.date_input("Fecha", value=date.today(), format="DD/MM/YYYY")
-                _aj_monto_str = _aj_fc3.text_input("Diferencia ($)", value="0",
-                    help="Positivo si sobra plata, negativo si falta.")
-                _aj_nota = st.text_input("Nota (opcional)")
-                if st.form_submit_button("💾 Guardar ajuste", type="primary", use_container_width=True):
-                    try:
-                        _aj_monto = float(str(_aj_monto_str).replace(",", ".").strip())
-                    except ValueError:
-                        st.error("El monto debe ser un número.")
-                        _aj_monto = None
-                    if _aj_monto is not None:
-                        _aj_id = _aj_nombre_a_id.get(_aj_caja)
-                        if _aj_id:
-                            db.guardar_ajuste_caja(_aj_id, _aj_fecha, _aj_monto, _aj_nota, tipo="ajuste")
-                            st.success(f"✅ Ajuste registrado en {_aj_caja}.")
-                            st.rerun()
+        _aj_tab_new, _aj_tab_edit, _aj_tab_all = st.tabs(["➕ Ingresar", "✏️ Editar / Eliminar", "📋 Todos"])
 
-        st.divider()
-        st.subheader("Historial de ajustes")
-        _todos_aj = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste"]
-        _aj_cajas_map = {c["id"]: c["nombre"] for c in _aj_cajas_list}
-        if _todos_aj:
-            _aj_sorted = sorted(_todos_aj, key=lambda x: str(x.get("fecha") or ""), reverse=True)
-            _aj_rows = []
-            for _a in _aj_sorted:
-                _aj_rows.append({
-                    "Fecha":  _safe_date(_a.get("fecha")).strftime("%d/%m/%Y") if _safe_date(_a.get("fecha")) != date.min else str(_a.get("fecha") or "")[:10],
-                    "Caja":   _aj_cajas_map.get(_a.get("caja_id"), "—"),
-                    "Monto":  float(_a.get("monto") or 0),
-                    "Nota":   _a.get("nota") or "—",
-                })
-            st.dataframe(
-                pd.DataFrame(_aj_rows),
-                use_container_width=True,
-                hide_index=True,
-                column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")},
-            )
-            st.markdown("**🗑 Eliminar ajuste**")
-            _aj_labels = {
-                f"{r['Fecha']} · {r['Caja']} · $ {r['Monto']:,.0f}" + (f" · {r['Nota']}" if r["Nota"] != "—" else ""): _aj_sorted[i]["id"]
-                for i, r in enumerate(_aj_rows)
-            }
-            _del_aj_col, _del_aj_btn_col = st.columns([5, 1])
-            _del_aj_sel = _del_aj_col.selectbox("Ajuste", options=list(_aj_labels.keys()), key="del_aj_sel", label_visibility="collapsed")
-            if _del_aj_btn_col.button("🗑 Eliminar", key="del_aj_btn", type="secondary"):
-                db.eliminar_ajuste_caja(_aj_labels[_del_aj_sel])
-                st.cache_data.clear()
-                st.rerun()
-        else:
-            st.info("No hay ajustes registrados.")
+        def _aj_get_cajas():
+            _all = db.cargar_cajas()
+            return _all, [c for c in _all if c.get("activa")]
+
+        def _aj_get_lista():
+            return [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste"]
+
+        def _aj_label(a, id_a_nombre):
+            _f = _safe_date(a.get("fecha"))
+            _fs = _f.strftime("%d/%m/%Y") if _f != date.min else str(a.get("fecha") or "")[:10]
+            _cn = id_a_nombre.get(a.get("caja_id"), "—")
+            _m  = float(a.get("monto") or 0)
+            _lbl = f"{_fs} · {_cn} · $ {_m:,.0f}"
+            if a.get("nota"):
+                _lbl += f" · {a['nota']}"
+            return _lbl
+
+        with _aj_tab_new:
+            @st.fragment
+            def _aj_nuevo():
+                _, _activas = _aj_get_cajas()
+                if not _activas:
+                    st.info("No hay cajas activas.")
+                    return
+                _nombre_a_id = {c["nombre"]: c["id"] for c in _activas}
+                with st.container(border=True):
+                    _n_caja  = st.selectbox("Caja", options=[c["nombre"] for c in _activas], key="aj_n_caja")
+                    _n_fecha = st.date_input("Fecha", value=date.today(), format="DD/MM/YYYY", key="aj_n_fecha")
+                    _n_monto = st.text_input("Diferencia ($)", value="0", key="aj_n_monto",
+                                             help="Positivo si sobra plata, negativo si falta.")
+                    _n_nota  = st.text_input("Nota (opcional)", key="aj_n_nota")
+                    if st.button("💾 Guardar ajuste", type="primary", use_container_width=True, key="aj_n_save"):
+                        try:
+                            _m = float(str(_n_monto).replace(",", ".").strip())
+                        except ValueError:
+                            st.error("El monto debe ser un número.")
+                            return
+                        _cid = _nombre_a_id.get(_n_caja)
+                        if _cid:
+                            db.guardar_ajuste_caja(_cid, _n_fecha, _m, _n_nota, tipo="ajuste")
+                            st.toast("✅ Ajuste registrado.", icon="✅")
+                            st.rerun(scope="fragment")
+            _aj_nuevo()
+
+        with _aj_tab_edit:
+            @st.fragment
+            def _aj_editar_eliminar():
+                _todos_c, _activas = _aj_get_cajas()
+                _id_a_nombre = {c["id"]: c["nombre"] for c in _todos_c}
+                _nombre_a_id = {c["nombre"]: c["id"] for c in _activas}
+                _lista = _aj_get_lista()
+                if not _lista:
+                    st.info("No hay ajustes registrados.")
+                    return
+                _lista_s = sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True)
+                _opts = {_aj_label(a, _id_a_nombre): a for a in _lista_s}
+                _sel_lbl = st.selectbox("Ajuste", options=list(_opts.keys()), key="aj_edit_sel")
+                _sel     = _opts.get(_sel_lbl)
+                if not _sel:
+                    return
+                _bc1, _bc2 = st.columns(2)
+                if _bc1.button("🗑️ Eliminar", key="aj_del_btn", use_container_width=True):
+                    db.eliminar_ajuste_caja(_sel["id"])
+                    st.session_state.pop("aj_editing", None)
+                    st.toast("🗑️ Ajuste eliminado.", icon="🗑️")
+                    st.rerun(scope="fragment")
+                if _bc2.button("✏️ Editar", key="aj_edit_open", use_container_width=True):
+                    st.session_state["aj_editing"] = _sel["id"]
+                if st.session_state.get("aj_editing") == _sel["id"]:
+                    with st.container(border=True):
+                        _cn_actual  = _id_a_nombre.get(_sel.get("caja_id"), "")
+                        _caja_opts  = [c["nombre"] for c in _activas]
+                        _caja_idx   = _caja_opts.index(_cn_actual) if _cn_actual in _caja_opts else 0
+                        _e_caja  = st.selectbox("Caja", options=_caja_opts, index=_caja_idx, key="aj_e_caja")
+                        _e_fecha = st.date_input("Fecha", value=_safe_date(_sel.get("fecha")), format="DD/MM/YYYY", key="aj_e_fecha")
+                        _e_monto = st.text_input("Diferencia ($)", value=str(_sel.get("monto") or "0"), key="aj_e_monto")
+                        _e_nota  = st.text_input("Nota (opcional)", value=_sel.get("nota") or "", key="aj_e_nota")
+                        _sc1, _sc2 = st.columns(2)
+                        if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key="aj_e_save"):
+                            try:
+                                _em = float(str(_e_monto).replace(",", ".").strip())
+                            except ValueError:
+                                st.error("El monto debe ser un número.")
+                                return
+                            _ecid = _nombre_a_id.get(_e_caja)
+                            if _ecid:
+                                db.actualizar_ajuste_caja(_sel["id"], _ecid, _e_fecha, _em, _e_nota)
+                                st.session_state.pop("aj_editing", None)
+                                st.toast("✅ Ajuste actualizado.", icon="✅")
+                                st.rerun(scope="fragment")
+                        if _sc2.button("Cancelar", use_container_width=True, key="aj_e_cancel"):
+                            st.session_state.pop("aj_editing", None)
+                            st.rerun(scope="fragment")
+            _aj_editar_eliminar()
+
+        with _aj_tab_all:
+            @st.fragment
+            def _aj_todos_vista():
+                _todos_c, _ = _aj_get_cajas()
+                _id_a_nombre = {c["id"]: c["nombre"] for c in _todos_c}
+                _lista = _aj_get_lista()
+                if not _lista:
+                    st.info("No hay ajustes registrados.")
+                    return
+                _rows = []
+                for _a in sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                    _f = _safe_date(_a.get("fecha"))
+                    _rows.append({
+                        "Fecha": _f.strftime("%d/%m/%Y") if _f != date.min else str(_a.get("fecha") or "")[:10],
+                        "Caja":  _id_a_nombre.get(_a.get("caja_id"), "—"),
+                        "Monto": float(_a.get("monto") or 0),
+                        "Nota":  _a.get("nota") or "—",
+                    })
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+            _aj_todos_vista()
 
 if _stab_saldo_ini:
     with _stab_saldo_ini:

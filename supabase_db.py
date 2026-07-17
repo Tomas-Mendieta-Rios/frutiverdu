@@ -746,6 +746,17 @@ def guardar_ajuste_caja(caja_id, fecha, monto, nota="", tipo="ajuste"):
     cargar_ajustes_caja.clear()
 
 
+def actualizar_ajuste_caja(ajuste_id, caja_id, fecha, monto, nota=""):
+    client = get_client()
+    client.table("cajas_ajustes").update({
+        "caja_id": caja_id,
+        "fecha": str(fecha),
+        "monto": float(monto),
+        "nota": nota or "",
+    }).eq("id", ajuste_id).execute()
+    cargar_ajustes_caja.clear()
+
+
 def eliminar_ajuste_caja(ajuste_id):
     client = get_client()
     client.table("cajas_ajustes").delete().eq("id", ajuste_id).execute()
