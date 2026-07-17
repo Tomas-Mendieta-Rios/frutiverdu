@@ -2019,5 +2019,3 @@ def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, monto, caja_id, de
 def eliminar_otro_ingreso(id):
     client = get_client()
     client.table("otros_ingresos").delete().eq("id", id).execute()
-
-    return {"cantidades": cantidades, "compras": compras_raw}
