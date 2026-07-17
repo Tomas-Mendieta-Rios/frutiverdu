@@ -444,6 +444,11 @@ def _convertir_wix_orders_a_dux(orders_filtrados):
     return resultado, sin_mapear
 
 
+@st.cache_data(ttl=120, show_spinner=False)
+def _cargar_pedidos_dux_cached():
+    return db.cargar_pedidos_dux()
+
+
 def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=None):
     """Agrega pedidos DUX + Wix (filtrados por fecha_compra vía selecciones)
     + estimado semanal del dia indicado (default: ninguno).
@@ -4645,7 +4650,7 @@ with tab_dux:
         all_orders_saved = []
         selecciones_dux = db.cargar_selecciones("dux")
         try:
-            all_orders_saved = db.cargar_pedidos_dux()
+            all_orders_saved = _cargar_pedidos_dux_cached()
         except Exception as e:
             st.error(msg_error_sheets("leer pedidos DUX", e))
 
