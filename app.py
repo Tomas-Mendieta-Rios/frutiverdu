@@ -2850,7 +2850,9 @@ if _sub_resumen:
         _real_signo = "+" if _res_real >= 0 else ""
         def _metric_cell_sub(label, value, color, sub):
             return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p><p style='margin:0;font-size:0.75rem;color:#999'>{sub}</p></div>"
-        st.markdown(f"""
+        _res_label = f"Resultado · Dev: {_fic_signo}$ {_pesos(abs(resultado))} · Perc: {_real_signo}$ {_pesos(abs(_res_real))}"
+        with st.expander(_res_label, expanded=True):
+            st.markdown(f"""
 <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
   <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
@@ -2859,8 +2861,8 @@ if _sub_resumen:
   </div>
 </div>""", unsafe_allow_html=True)
 
-        if total_retiros > 0:
-            st.markdown(f"""
+            if total_retiros > 0:
+                st.markdown(f"""
 <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Retiros</h2>
   <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
@@ -2868,6 +2870,8 @@ if _sub_resumen:
     {_metric_cell_sub("Pagado", f"−$ {_pesos(total_retiros_pag)}", "#c62828", "Efectivamente retirado")}
   </div>
 </div>""", unsafe_allow_html=True)
+
+        if total_retiros > 0:
             _net_dev       = resultado - total_retiros
             _net_real      = _res_real - total_retiros_pag
             _net_dev_color = "#2e7d32" if _net_dev  >= 0 else "#c62828"
