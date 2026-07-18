@@ -3,9 +3,21 @@ Expone la misma API pública que gsheets_db.py para que app.py no necesite cambi
 """
 
 import json as _json
+import time as _time
 import pandas as pd
 import streamlit as st
 from supabase import create_client, Client
+
+
+def _exec(q):
+    """Ejecuta q.execute() con hasta 3 reintentos ante errores de red."""
+    for attempt in range(3):
+        try:
+            return q.execute()
+        except Exception:
+            if attempt == 2:
+                raise
+            _time.sleep(1.5 ** attempt)
 
 DIAS_SEMANA = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 
@@ -72,7 +84,7 @@ def ultima_carga(clave):
     client = get_client()
     for col in ("updated_at", "created_at"):
         try:
-            resp = client.table(tabla).select(col).order(col, desc=True).limit(1).execute()
+            resp = _exec(client.table(tabla).select(col).order(col, desc=True).limit(1))
             if resp.data and resp.data[0].get(col):
                 return resp.data[0][col]
         except Exception:
@@ -85,13 +97,13 @@ def ultima_carga(clave):
 def _productos_lookup():
     """Dict {codigo: nombre} para enriquecer items sin descripcion en DUX."""
     client = get_client()
-    resp = client.table("productos").select("codigo, producto").execute()
+    resp = _exec(client.table("productos").select("codigo, producto"))
     return {str(r.get("codigo", "")): str(r.get("producto") or "") for r in (resp.data or [])}
 
 
 def cargar_productos():
     client = get_client()
-    resp = client.table("productos").select("*").execute()
+    resp = _exec(client.table("productos").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["codigo", "producto", "unidad_medida", "descripcion", "rubro"])
@@ -114,7 +126,7 @@ def guardar_productos(df):
 
 def cargar_rubros():
     client = get_client()
-    resp = client.table("rubros").select("*").execute()
+    resp = _exec(client.table("rubros").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["id", "nombre"])
@@ -131,7 +143,7 @@ def guardar_rubros(registros):
 
 def cargar_subrubros():
     client = get_client()
-    resp = client.table("subrubros").select("*").execute()
+    resp = _exec(client.table("subrubros").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["id", "nombre", "rubro_id", "rubro_nombre"])
@@ -152,7 +164,7 @@ def guardar_subrubros(registros):
 @st.cache_data(ttl=600)
 def cargar_gastos_catalogo():
     client = get_client()
-    resp = client.table("gastos_catalogo").select("*").order("rubro").order("sub_rubro").order("gasto").execute()
+    resp = _exec(client.table("gastos_catalogo").select("*").order("rubro").order("sub_rubro").order("gasto"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["id", "cod_producto", "gasto", "rubro", "sub_rubro", "proveedor"])
@@ -177,7 +189,7 @@ def eliminar_gastos_catalogo_item(item_id):
 
 def cargar_compuestos():
     client = get_client()
-    resp = client.table("compuestos").select("*").execute()
+    resp = _exec(client.table("compuestos").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["codigo_origen", "producto_origen", "cantidad_origen", "codigo_componente", "producto_componente", "cantidad_componente"])
@@ -232,7 +244,7 @@ def _fetch_all(client, table, columns="*", filters=None, batch=1000):
                 q = q.eq(col, val)
         for attempt in range(3):
             try:
-                resp = q.execute()
+                resp = _exec(q)
                 break
             except Exception:
                 if attempt == 2:
@@ -309,7 +321,7 @@ def fechas_stock():
 
 def cargar_estimado_completo():
     client = get_client()
-    resp = client.table("estimado_historico").select("*").execute()
+    resp = _exec(client.table("estimado_historico").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return df
@@ -358,7 +370,7 @@ def fechas_estimado():
 
 def cargar_estimado_semanal(dia=None):
     client = get_client()
-    resp = client.table("estimado_semanal").select("*").execute()
+    resp = _exec(client.table("estimado_semanal").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return df
@@ -385,7 +397,7 @@ def guardar_estimado_semanal_dia(df_dia, dia):
 
 def dias_semana_con_estimado():
     client = get_client()
-    resp = client.table("estimado_semanal").select("dia_semana").execute()
+    resp = _exec(client.table("estimado_semanal").select("dia_semana"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return []
@@ -396,7 +408,7 @@ def dias_semana_con_estimado():
 
 def cargar_wix_productos():
     client = get_client()
-    resp = client.table("wix_productos").select("*").execute()
+    resp = _exec(client.table("wix_productos").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["wix_id", "producto", "descripcion"])
@@ -417,7 +429,7 @@ def guardar_wix_productos(df):
 
 def cargar_mapping_wix_dux():
     client = get_client()
-    resp = client.table("mapping_wix_dux").select("*").execute()
+    resp = _exec(client.table("mapping_wix_dux").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["wix_id", "wix_producto", "dux_codigo", "dux_producto", "factor"])
@@ -444,7 +456,7 @@ def guardar_mapping_wix_dux(df):
 
 def cargar_packs_wix():
     client = get_client()
-    resp = client.table("packs_wix").select("*").execute()
+    resp = _exec(client.table("packs_wix").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["wix_id_pack", "pack_nombre", "dux_codigo", "dux_producto", "cantidad"])
@@ -472,7 +484,7 @@ def guardar_packs_wix(df):
 def cargar_selecciones(fuente):
     """fuente: 'dux' o 'wix'. Devuelve dict {order_id: fecha_entrega}."""
     client = get_client()
-    resp = client.table(f"selecciones_{fuente}").select("order_id,fecha_entrega").execute()
+    resp = _exec(client.table(f"selecciones_{fuente}").select("order_id,fecha_entrega"))
     if not resp.data:
         return {}
     return {str(r["order_id"]): str(r["fecha_entrega"]) for r in resp.data}
@@ -498,7 +510,7 @@ def guardar_selecciones(fuente, selecciones):
 
 def cargar_pedidos_dux():
     client = get_client()
-    resp_orders = client.table("pedidos_dux").select("*").limit(10000).execute()
+    resp_orders = _exec(client.table("pedidos_dux").select("*").limit(10000))
     if not resp_orders.data:
         return []
 
@@ -561,7 +573,7 @@ def cargar_pedidos_dux_recientes(limit=150):
     order_ids = [str(r.get("order_id") or "") for r in resp_orders.data if r.get("order_id")]
     all_items = []
     if order_ids:
-        resp_items = client.table("pedidos_dux_items").select("*").in_("order_id", order_ids).execute()
+        resp_items = _exec(client.table("pedidos_dux_items").select("*").in_("order_id", order_ids))
         all_items = resp_items.data or []
 
     prods = _productos_lookup()
@@ -694,7 +706,7 @@ def _to_float(v):
 @st.cache_data(ttl=300)
 def cargar_cajas():
     client = get_client()
-    resp = client.table("cajas").select("*").order("id").execute()
+    resp = _exec(client.table("cajas").select("*").order("id"))
     return resp.data or []
 
 
@@ -702,7 +714,7 @@ def guardar_cajas(cajas):
     client = get_client()
     ids_nuevos = {int(c["id"]) for c in cajas if c.get("id")}
     # Eliminar cajas que ya no están en la lista (nullear FK en pedidos_wix primero)
-    existing = client.table("cajas").select("id").execute()
+    existing = _exec(client.table("cajas").select("id"))
     ids_existentes = {r["id"] for r in (existing.data or [])}
     ids_a_borrar = ids_existentes - ids_nuevos
     for caja_id in ids_a_borrar:
@@ -728,7 +740,7 @@ def guardar_cajas(cajas):
 @st.cache_data(ttl=120)
 def cargar_ajustes_caja():
     client = get_client()
-    resp = client.table("cajas_ajustes").select("*").order("fecha").execute()
+    resp = _exec(client.table("cajas_ajustes").select("*").order("fecha"))
     return resp.data or []
 
 
@@ -736,7 +748,7 @@ def guardar_ajuste_caja(caja_id, fecha, monto, nota="", tipo="ajuste"):
     client = get_client()
     if tipo == "inicial":
         # Solo puede haber uno por caja — reemplazar si existe
-        existing = client.table("cajas_ajustes").select("id").eq("caja_id", caja_id).eq("tipo", "inicial").execute()
+        existing = _exec(client.table("cajas_ajustes").select("id").eq("caja_id", caja_id).eq("tipo", "inicial"))
         if existing.data:
             client.table("cajas_ajustes").update({
                 "fecha": str(fecha), "monto": float(monto), "nota": nota or "",
@@ -782,7 +794,7 @@ def asignar_cajas_pedidos_wix(asignaciones):
 def cargar_fechas_pago_wix():
     """Devuelve dict {order_id: fecha_pago}."""
     client = get_client()
-    resp = client.table("fechas_pago_wix").select("order_id,fecha_pago").execute()
+    resp = _exec(client.table("fechas_pago_wix").select("order_id,fecha_pago"))
     return {r["order_id"]: r["fecha_pago"] for r in (resp.data or [])}
 
 
@@ -800,7 +812,7 @@ def guardar_fechas_pago_wix(fechas):
 @st.cache_data(ttl=3600)
 def cargar_percepciones_impuestos():
     client = get_client()
-    resp = client.table("percepciones_impuestos").select("*").order("percepcion_impuesto").execute()
+    resp = _exec(client.table("percepciones_impuestos").select("*").order("percepcion_impuesto"))
     return resp.data or []
 
 
@@ -826,11 +838,11 @@ def guardar_percepciones_impuestos(data):
 @st.cache_data(ttl=600)
 def cargar_pedidos_wix():
     client = get_client()
-    resp_orders = client.table("pedidos_wix").select("*").limit(10000).execute()
+    resp_orders = _exec(client.table("pedidos_wix").select("*").limit(10000))
     if not resp_orders.data:
         return []
 
-    resp_items = client.table("pedidos_wix_items").select("*").execute()
+    resp_items = _exec(client.table("pedidos_wix_items").select("*"))
     items_por_order = {}
     for it in (resp_items.data or []):
         oid = str(it.get("order_id") or "")
@@ -917,7 +929,7 @@ def cargar_pedidos_wix_recientes(limit=150):
     order_ids = [str(r.get("order_id") or "") for r in resp_orders.data if r.get("order_id")]
     all_items = []
     if order_ids:
-        resp_items = client.table("pedidos_wix_items").select("*").in_("order_id", order_ids).execute()
+        resp_items = _exec(client.table("pedidos_wix_items").select("*").in_("order_id", order_ids))
         all_items = resp_items.data or []
 
     items_por_order = {}
@@ -1155,7 +1167,7 @@ def cargar_facturas():
     if not rows:
         return []
 
-    resp_items = client.table("facturas_items").select("*").execute()
+    resp_items = _exec(client.table("facturas_items").select("*"))
     items_por_factura = {}
     for it in (resp_items.data or []):
         fid = str(it.get("factura_id") or "")
@@ -1201,7 +1213,7 @@ def cargar_facturas():
 
 def cargar_proveedores():
     client = get_client()
-    resp = client.table("proveedores").select("*").execute()
+    resp = _exec(client.table("proveedores").select("*"))
     df = pd.DataFrame(resp.data or [])
     if df.empty:
         return pd.DataFrame(columns=["proveedor_id", "proveedor", "cuit_cuil", "telefono", "email", "notas"])
@@ -1238,7 +1250,7 @@ def cargar_compras():
     offset = 0
     batch = 1000
     while True:
-        resp = client.table("items_compra").select(cols).range(offset, offset + batch - 1).execute()
+        resp = _exec(client.table("items_compra").select(cols).range(offset, offset + batch - 1))
         if not resp.data:
             break
         rows.extend(resp.data)
@@ -1369,7 +1381,7 @@ def guardar_compras_sync(compras):
 
 def cargar_mixes_dux():
     client = get_client()
-    resp = client.table("mixes_dux").select("mix_base,componente_base").execute()
+    resp = _exec(client.table("mixes_dux").select("mix_base,componente_base"))
     if not resp.data:
         return {}
     out = {}
@@ -1396,7 +1408,7 @@ def guardar_mixes_dux(mixes_dict):
 
 def cargar_config():
     client = get_client()
-    resp = client.table("config").select("key,value").execute()
+    resp = _exec(client.table("config").select("key,value"))
     if not resp.data:
         return {}
     return {str(r["key"]): str(r["value"]) for r in resp.data}
@@ -1441,7 +1453,7 @@ def guardar_stock_teorico(rows, f0, fc, fp):
 
 def cargar_stock_teorico():
     client = get_client()
-    resp = client.table("stock_teorico_ultimo").select("*").execute()
+    resp = _exec(client.table("stock_teorico_ultimo").select("*"))
     cfg = cargar_config()
     rows = []
     for r in (resp.data or []):
@@ -1516,7 +1528,7 @@ def cargar_stock_teorico_detalle():
 @st.cache_data(ttl=600)
 def cargar_gastos():
     client = get_client()
-    resp_gastos = client.table("gastos").select("*").limit(10000).execute()
+    resp_gastos = _exec(client.table("gastos").select("*").limit(10000))
     if not resp_gastos.data:
         return []
 
@@ -1753,7 +1765,7 @@ def _fetch_all_rows(client, table):
     """Trae todas las filas de una tabla paginando de a 1000 para evitar límites del API."""
     all_rows, offset, page = [], 0, 1000
     while True:
-        resp = client.table(table).select("*").range(offset, offset + page - 1).execute()
+        resp = _exec(client.table(table).select("*").range(offset, offset + page - 1))
         if not resp.data:
             break
         all_rows.extend(resp.data)
@@ -1879,7 +1891,7 @@ def guardar_cobros(cobros):
 @st.cache_data(ttl=600)
 def cargar_ids_gastos():
     client = get_client()
-    resp = client.table("gastos").select("id, gasto, nro_comprobante, gastos_items(cod_item)").execute()
+    resp = _exec(client.table("gastos").select("id, gasto, nro_comprobante, gastos_items(cod_item)"))
     result = {}
     for r in (resp.data or []):
         items = r.get("gastos_items") or []
@@ -1972,7 +1984,7 @@ def cargar_compras_desde_gastos(fecha):
 @st.cache_data(ttl=60, show_spinner=False)
 def cargar_rubros_ingresos():
     client = get_client()
-    resp = client.table("rubros_ingresos").select("*").order("nombre").execute()
+    resp = _exec(client.table("rubros_ingresos").select("*").order("nombre"))
     return resp.data or []
 
 
@@ -2018,7 +2030,7 @@ def eliminar_subrubro_ingreso(id):
 @st.cache_data(ttl=60, show_spinner=False)
 def cargar_otros_ingresos():
     client = get_client()
-    resp = client.table("otros_ingresos").select("*, rubros_ingresos(nombre), subrubros_ingresos(nombre)").order("fecha", desc=True).execute()
+    resp = _exec(client.table("otros_ingresos").select("*, rubros_ingresos(nombre), subrubros_ingresos(nombre)").order("fecha", desc=True))
     return resp.data or []
 
 
@@ -2061,7 +2073,7 @@ def eliminar_otro_ingreso(id):
 @st.cache_data(ttl=60, show_spinner=False)
 def cargar_rubros_egresos():
     client = get_client()
-    resp = client.table("rubros_egresos").select("*").order("nombre").execute()
+    resp = _exec(client.table("rubros_egresos").select("*").order("nombre"))
     return resp.data or []
 
 def guardar_rubro_egreso(nombre):
