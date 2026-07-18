@@ -2258,8 +2258,8 @@ if _sub_pendientes:
             )
 
         # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
-        _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA" and _pend_en_rango(c.get("fecha"))]
-        _gas_pend_hist  = [g for g in gastos_bal       if g.get("pago_pendiente") and str(g.get("estado") or "").upper() != "ANULADA" and _pend_en_rango(g.get("fecha"))]
+        _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and not str(c.get("estado") or "").upper().startswith("ANULAD") and float(c.get("monto_pendiente") or 0) > 0 and _pend_en_rango(c.get("fecha"))]
+        _gas_pend_hist  = [g for g in gastos_bal       if g.get("pago_pendiente") and not str(g.get("estado") or "").upper().startswith("ANULAD") and _pend_en_rango(g.get("fecha"))]
         _total_pend_comp = sum(_pend_saldo_c(c) for c in _comp_pend_hist)
         _total_pend_gas  = sum(_pend_saldo_g(g) for g in _gas_pend_hist)
         _total_pend      = _total_pend_comp + _total_pend_gas
@@ -2424,7 +2424,9 @@ if _sub_resumen:
                 return False
 
         # Filtrar por rango
-        facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
+        _fac_vig_all  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
+        facturas_vig  = [f for f in _fac_vig_all if str(f.get("tipo_comp") or "").upper() == "FACTURA"]
+        notas_vig     = [f for f in _fac_vig_all if "NOTA" in str(f.get("tipo_comp") or "").upper()]
         facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
         ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
         if not compras_bal.empty:
@@ -2462,7 +2464,10 @@ if _sub_resumen:
         wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
 
         # Totales — cobrado y pendiente calculados con monto_imputado real
-        total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig)
+        def _nota_sign(f):
+            return -1 if "CREDITO" in str(f.get("tipo_comp") or "").upper() else 1
+        total_notas_net   = sum(_nota_sign(f) * float(f.get("total") or 0) for f in notas_vig)
+        total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig) + total_notas_net
         total_fac_cobr    = sum(
             min(float(f.get("total") or 0), _cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
             for f in facturas_vig
@@ -2541,7 +2546,7 @@ if _sub_resumen:
 </div>""", unsafe_allow_html=True)
 
         # Facturas DUX
-        st.markdown(f"#### DUX · {len(facturas_vig)} facturas")
+        st.markdown(f"#### DUX · {len(facturas_vig)} facturas"  + (f" · {len(notas_vig)} nota{'s' if len(notas_vig)!=1 else ''} C/D" if notas_vig else ""))
         _c1, _c2, _c3, _c4 = st.columns(4)
         _bal_metric(_c1, "Facturado",  f"$ {_pesos(total_facturas)}",  "#1a1a1a")
         _bal_metric(_c2, "Cobrado",    f"$ {_pesos(total_fac_cobr)}",  "#2e7d32")
@@ -2605,6 +2610,23 @@ if _sub_resumen:
                                 _rows.append(_row)
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config=_col_cfg)
+
+        # Notas de crédito/débito
+        if notas_vig:
+            _notas_sign_str = f"— $ {_pesos(abs(total_notas_net))}" + (" (reducen pendiente)" if total_notas_net < 0 else " (aumentan pendiente)")
+            with st.expander(f"Notas C/D ({len(notas_vig)}) {_notas_sign_str}"):
+                _rows_notas = []
+                for _f in sorted(notas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                    _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                    _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
+                    _rows_notas.append({
+                        "Fecha": _fmt_fecha(_f.get("fecha_comp")),
+                        "Cliente": _cli,
+                        "Comprobante": _comp,
+                        "Monto": _nota_sign(_f) * float(_f.get("total") or 0),
+                    })
+                st.dataframe(pd.DataFrame(_rows_notas), use_container_width=True, hide_index=True,
+                             column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f")})
 
         # Wix
         _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
@@ -2755,7 +2777,7 @@ if _sub_resumen:
 
         # ── OTROS EGRESOS ────────────────────────────────────────────────────────
         if _otros_egr_f:
-            st.markdown(f"#### 💸 Otros egresos · {len(_otros_egr_f)} registros")
+            st.markdown(f"#### Otros egresos · {len(_otros_egr_f)} registros")
             _oe_c1, _oe_c2, _oe_c3 = st.columns(3)
             _bal_metric(_oe_c1, "Total",     f"$ {_pesos(total_otros_egr)}",      "#1a1a1a")
             _bal_metric(_oe_c2, "Pagado",    f"$ {_pesos(total_otros_egr_pag)}",  "#2e7d32")
@@ -2798,7 +2820,7 @@ if _sub_resumen:
         # Ajustes negativos
         _aj_neg = [a for a in _aj_todos_f if float(a.get("monto") or 0) < 0]
         if _aj_neg:
-            st.markdown(f"#### 🔧 Ajustes negativos · {len(_aj_neg)} registros")
+            st.markdown(f"#### Ajustes negativos · {len(_aj_neg)} registros")
             _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(abs(total_aj_neg))}", "#c62828")
             with st.expander(f"Detalle ({len(_aj_neg)}) — $ {_pesos(abs(total_aj_neg))}"):
                 _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
