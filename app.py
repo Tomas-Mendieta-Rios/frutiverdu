@@ -3258,30 +3258,7 @@ if _stab_saldo_ini:
                             st.rerun(scope="fragment")
                         for _caj_id, _aj in sorted(_items, key=lambda x: _caja_map.get(x[0], "")):
                             _caj_nm = _caja_map.get(_caj_id, "—")
-                            _aid    = _aj["id"]
-                            _lc1, _lc2 = st.columns([8, 1])
-                            _lc1.write(_si_label(_caj_nm, _aj))
-                            if _lc2.button("✏️", key=f"si_edit_{_aid}"):
-                                st.session_state[f"si_editing_{_aid}"] = True
-                            if st.session_state.get(f"si_editing_{_aid}"):
-                                _f_actual = _safe_date(_aj.get("fecha"))
-                                _m_actual = float(_aj.get("monto") or 0)
-                                _e_fecha = st.date_input("Fecha de corte", value=_f_actual, format="DD/MM/YYYY", key=f"si_ef_{_aid}")
-                                _e_monto = st.text_input("Monto ($)", value=str(int(_m_actual)) if _m_actual == int(_m_actual) else str(_m_actual), key=f"si_em_{_aid}")
-                                _sc1, _sc2 = st.columns(2)
-                                if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"si_es_{_aid}"):
-                                    try:
-                                        _em = float(str(_e_monto).replace(",", ".").strip())
-                                    except ValueError:
-                                        st.error("El monto debe ser un número.")
-                                        return
-                                    db.actualizar_ajuste_caja(_aid, _caj_id, _e_fecha, _em, "Saldo inicial")
-                                    st.session_state.pop(f"si_editing_{_aid}", None)
-                                    st.toast("✅ Saldo actualizado.")
-                                    st.rerun(scope="fragment")
-                                if _sc2.button("Cancelar", use_container_width=True, key=f"si_ec_{_aid}"):
-                                    st.session_state.pop(f"si_editing_{_aid}", None)
-                                    st.rerun(scope="fragment")
+                            st.write(_si_label(_caj_nm, _aj))
             _si_editar_eliminar()
 
         with _si_tab_all:
