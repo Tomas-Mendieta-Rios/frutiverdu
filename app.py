@@ -2672,7 +2672,7 @@ if _sub_resumen:
 
         # ── OTROS INGRESOS ──────────────────────────────────────────────────────
         if _otros_ing_f:
-            st.markdown(f"#### 💰 Otros ingresos · {len(_otros_ing_f)} registros")
+            st.markdown(f"#### Otros ingresos · {len(_otros_ing_f)} registros")
             _oi_c1, _oi_c2, _oi_c3 = st.columns(3)
             _bal_metric(_oi_c1, "Total",     f"$ {_pesos(total_otros_ing)}",  "#1a1a1a")
             _bal_metric(_oi_c2, "Cobrado",   f"$ {_pesos(total_otros_cobr)}", "#2e7d32")
@@ -2708,7 +2708,7 @@ if _sub_resumen:
         # Ajustes positivos
         _aj_pos = [a for a in _aj_todos_f if float(a.get("monto") or 0) >= 0]
         if _aj_pos:
-            st.markdown(f"#### 🔧 Ajustes positivos · {len(_aj_pos)} registros")
+            st.markdown(f"#### Ajustes positivos · {len(_aj_pos)} registros")
             _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_aj_pos)}", "#2e7d32")
             with st.expander(f"Detalle ({len(_aj_pos)}) — $ {_pesos(total_aj_pos)}"):
                 _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
