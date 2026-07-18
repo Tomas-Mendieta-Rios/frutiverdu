@@ -6795,9 +6795,33 @@ if tab_re:
         _re_todos_subs = db.cargar_subrubros_egresos()
         if _re_todos_subs:
             st.markdown("**Subrubros**")
-            _re_sub_rows = [{"Rubro": _re_rubro_map.get(s["rubro_id"], "—"), "Subrubro": s["nombre"], "id": s["id"]} for s in _re_todos_subs]
-            _re_sub_df = pd.DataFrame(_re_sub_rows)
-            st.dataframe(_re_sub_df.drop(columns=["id"]), use_container_width=True, hide_index=True)
+            for _re_s in _re_todos_subs:
+                _re_sc1, _re_sc2, _re_sc3 = st.columns([4, 1, 1])
+                _re_sc1.write(f"{_re_rubro_map.get(_re_s['rubro_id'], '—')} › {_re_s['nombre']}")
+                if _re_sc2.button("✏️", key=f"re_es_{_re_s['id']}"):
+                    st.session_state[f"re_edit_s_{_re_s['id']}"] = True
+                if _re_sc3.button("🗑️", key=f"re_ds_{_re_s['id']}"):
+                    db.eliminar_subrubro_egreso(_re_s["id"])
+                    db.cargar_subrubros_egresos.clear()
+                    st.toast("🗑️ Subrubro eliminado.", icon="🗑️")
+                    st.rerun()
+                if st.session_state.get(f"re_edit_s_{_re_s['id']}"):
+                    with st.form(f"re_form_s_{_re_s['id']}"):
+                        _re_s_nm = st.text_input("Nombre", value=_re_s["nombre"], key=f"re_snm_{_re_s['id']}")
+                        _re_s_rub = st.selectbox("Rubro", options=list(_re_rubro_opts.keys()),
+                                                  index=list(_re_rubro_opts.values()).index(_re_s["rubro_id"]) if _re_s["rubro_id"] in _re_rubro_opts.values() else 0,
+                                                  key=f"re_srub_{_re_s['id']}")
+                        _re_s_ok = st.form_submit_button("Guardar")
+                        _re_s_can = st.form_submit_button("Cancelar")
+                    if _re_s_ok:
+                        db.actualizar_subrubro_egreso(_re_s["id"], _re_s_nm.strip().upper(), _re_rubro_opts[_re_s_rub])
+                        db.cargar_subrubros_egresos.clear()
+                        st.session_state.pop(f"re_edit_s_{_re_s['id']}", None)
+                        st.toast("✅ Subrubro actualizado.", icon="✅")
+                        st.rerun()
+                    if _re_s_can:
+                        st.session_state.pop(f"re_edit_s_{_re_s['id']}", None)
+                        st.rerun()
 
         st.divider()
 
@@ -6815,9 +6839,33 @@ if tab_re:
         _re_todos_items = db.cargar_items_egresos()
         if _re_todos_items:
             st.markdown("**Items**")
-            _re_item_rows = [{"Rubro": _re_rubro_map.get(i["rubro_id"], "—"), "Item": i["nombre"], "id": i["id"]} for i in _re_todos_items]
-            _re_item_df = pd.DataFrame(_re_item_rows)
-            st.dataframe(_re_item_df.drop(columns=["id"]), use_container_width=True, hide_index=True)
+            for _re_i in _re_todos_items:
+                _re_ic1, _re_ic2, _re_ic3 = st.columns([4, 1, 1])
+                _re_ic1.write(f"{_re_rubro_map.get(_re_i['rubro_id'], '—')} › {_re_i['nombre']}")
+                if _re_ic2.button("✏️", key=f"re_ei_{_re_i['id']}"):
+                    st.session_state[f"re_edit_i_{_re_i['id']}"] = True
+                if _re_ic3.button("🗑️", key=f"re_di_{_re_i['id']}"):
+                    db.eliminar_item_egreso(_re_i["id"])
+                    db.cargar_items_egresos.clear()
+                    st.toast("🗑️ Item eliminado.", icon="🗑️")
+                    st.rerun()
+                if st.session_state.get(f"re_edit_i_{_re_i['id']}"):
+                    with st.form(f"re_form_i_{_re_i['id']}"):
+                        _re_i_nm = st.text_input("Nombre", value=_re_i["nombre"], key=f"re_inm_{_re_i['id']}")
+                        _re_i_rub = st.selectbox("Rubro", options=list(_re_rubro_opts.keys()),
+                                                  index=list(_re_rubro_opts.values()).index(_re_i["rubro_id"]) if _re_i["rubro_id"] in _re_rubro_opts.values() else 0,
+                                                  key=f"re_irub_{_re_i['id']}")
+                        _re_i_ok = st.form_submit_button("Guardar")
+                        _re_i_can = st.form_submit_button("Cancelar")
+                    if _re_i_ok:
+                        db.actualizar_item_egreso(_re_i["id"], _re_i_nm.strip().upper(), _re_rubro_opts[_re_i_rub])
+                        db.cargar_items_egresos.clear()
+                        st.session_state.pop(f"re_edit_i_{_re_i['id']}", None)
+                        st.toast("✅ Item actualizado.", icon="✅")
+                        st.rerun()
+                    if _re_i_can:
+                        st.session_state.pop(f"re_edit_i_{_re_i['id']}", None)
+                        st.rerun()
 
 if tab_migracion:
     with tab_migracion:
