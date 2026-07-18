@@ -1143,8 +1143,8 @@ def guardar_facturas(facturas):
 @st.cache_data(ttl=600)
 def cargar_facturas():
     client = get_client()
-    resp = client.table("facturas").select("*").limit(10000).execute()
-    if not resp.data:
+    rows = _fetch_all_rows(client, "facturas")
+    if not rows:
         return []
 
     resp_items = client.table("facturas_items").select("*").execute()
@@ -1162,7 +1162,7 @@ def cargar_facturas():
             })
 
     facturas = []
-    for r in resp.data:
+    for r in rows:
         fid = str(r.get("factura_id") or "")
         facturas.append({
             "id": fid,

@@ -2424,9 +2424,8 @@ if _sub_resumen:
                 return False
 
         # Filtrar por rango
-        _fac_vig_all  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
-        notas_vig     = [f for f in _fac_vig_all if "NOTA" in str(f.get("tipo_comp") or "").upper()]
-        facturas_vig  = [f for f in _fac_vig_all if "NOTA" not in str(f.get("tipo_comp") or "").upper()]
+        facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
+        notas_vig     = [f for f in facturas_vig if "NOTA" in str(f.get("tipo_comp") or "").upper()]
         facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
         ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
         if not compras_bal.empty:
@@ -2456,10 +2455,11 @@ if _sub_resumen:
             cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
             return min(float(f.get("total") or 0), cob)
 
-        # Categorizar facturas DUX
-        fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro") and _fac_cob_real(f) >= float(f.get("total") or 0)]
-        fac_parciales  = [f for f in facturas_vig if f.get("con_cobro") and _fac_cob_real(f) < float(f.get("total") or 0)]
-        fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
+        # Categorizar facturas DUX (excluir notas C/D de cobradas/parciales/pendientes)
+        _fac_solo = [f for f in facturas_vig if "NOTA" not in str(f.get("tipo_comp") or "").upper()]
+        fac_cobradas   = [f for f in _fac_solo if f.get("con_cobro") and _fac_cob_real(f) >= float(f.get("total") or 0)]
+        fac_parciales  = [f for f in _fac_solo if f.get("con_cobro") and _fac_cob_real(f) < float(f.get("total") or 0)]
+        fac_pendientes = [f for f in _fac_solo if not f.get("con_cobro")]
 
         # Categorizar Wix
         wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
@@ -2470,9 +2470,8 @@ if _sub_resumen:
         # Totales — cobrado y pendiente calculados con monto_imputado real
         def _nota_sign(f):
             return -1 if "CREDITO" in str(f.get("tipo_comp") or "").upper() else 1
-        total_notas_net   = sum(_nota_sign(f) * float(f.get("total") or 0) for f in notas_vig)
-        total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig) + total_notas_net
-        total_fac_cobr    = sum(_fac_cob_real(f) for f in facturas_vig)
+        total_facturas    = sum(_nota_sign(f) * float(f.get("total") or 0) for f in facturas_vig)
+        total_fac_cobr    = sum(_fac_cob_real(f) for f in _fac_solo)
         total_fac_pend    = total_facturas - total_fac_cobr
         total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
         total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
@@ -7213,4 +7212,5 @@ if tab_percepciones:
             st.info("No hay percepciones cargadas. Sincronizá para obtener los datos de DUX.")
 
 
-#python -m streamlit run app.py
+#python -m streamlit run app.py 
+# SELECT get_schema_info();
