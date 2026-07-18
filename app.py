@@ -2425,8 +2425,8 @@ if _sub_resumen:
 
         # Filtrar por rango
         _fac_vig_all  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
-        facturas_vig  = [f for f in _fac_vig_all if str(f.get("tipo_comp") or "").upper() == "FACTURA"]
         notas_vig     = [f for f in _fac_vig_all if "NOTA" in str(f.get("tipo_comp") or "").upper()]
+        facturas_vig  = [f for f in _fac_vig_all if "NOTA" not in str(f.get("tipo_comp") or "").upper()]
         facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
         ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
         if not compras_bal.empty:
