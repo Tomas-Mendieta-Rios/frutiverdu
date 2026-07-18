@@ -2565,7 +2565,7 @@ if _sub_resumen:
             if _lista:
                 _sum_cob  = sum(_fac_cobrado(f) for f in _lista)
                 _sum_pend = sum(_fac_saldo(f)   for f in _lista)
-                _hdr = f"{_label} ({len(_lista)}) — Cobrado: $ {_pesos(_sum_cob)} | Pendiente: $ {_pesos(_sum_pend)}"
+                _hdr = f"{_label} ({len(_lista)})  —  $ {_pesos(_sum_cob)} cob  /  $ {_pesos(_sum_pend)} pend"
                 with st.expander(_hdr):
                     _by_cli = {}
                     for _f in _lista:
@@ -2574,7 +2574,7 @@ if _sub_resumen:
                     for _cli, _fitems in sorted(_by_cli.items()):
                         _cli_cob  = sum(_fac_cobrado(f) for f in _fitems)
                         _cli_pend = sum(_fac_saldo(f)   for f in _fitems)
-                        _cli_hdr  = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Cobrado: $ {_pesos(_cli_cob)} | Pendiente: $ {_pesos(_cli_pend)}"
+                        _cli_hdr  = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''}  —  $ {_pesos(_cli_cob)} cob  /  $ {_pesos(_cli_pend)} pend"
                         with st.expander(_cli_hdr):
                             _rows = []
                             for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
