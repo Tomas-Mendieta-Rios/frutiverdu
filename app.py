@@ -2827,42 +2827,6 @@ if _sub_resumen:
                                                 st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                                              column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
-        # ── RETIROS ──────────────────────────────────────────────────────────────
-        if _retiros_f:
-            st.markdown(f"#### Retiros · {len(_retiros_f)} registros")
-            _ret_c1, _ret_c2, _ret_c3 = st.columns(3)
-            _total_retiros_pend = sum(float(o.get("monto") or 0) for o in _retiros_f if (o.get("estado") or "pendiente") != "pagado")
-            _bal_metric(_ret_c1, "Total",     f"$ {_pesos(total_retiros)}",      "#1a1a1a")
-            _bal_metric(_ret_c2, "Pagado",    f"$ {_pesos(total_retiros_pag)}",  "#2e7d32")
-            _bal_metric(_ret_c3, "Pendiente", f"$ {_pesos(_total_retiros_pend)}", "#c62828")
-            for _ret_est_lbl, _ret_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
-                _ret_est_items = [o for o in _retiros_f if (o.get("estado") or "pendiente") == _ret_est_lbl]
-                if _ret_est_items:
-                    _ret_est_tot = sum(float(o.get("monto") or 0) for o in _ret_est_items)
-                    with st.expander(f"{_ret_est_disp} ({len(_ret_est_items)}) — $ {_pesos(_ret_est_tot)}"):
-                        _ret_by_sub = {}
-                        for _o in _ret_est_items:
-                            _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
-                            _ret_by_sub.setdefault(_sk, []).append(_o)
-                        for _sk, _sitems in sorted(_ret_by_sub.items()):
-                            _stot = sum(float(o.get("monto") or 0) for o in _sitems)
-                            with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
-                                _ret_by_item = {}
-                                for _o in _sitems:
-                                    _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
-                                    _ret_by_item.setdefault(_ik, []).append(_o)
-                                for _ik, _iitems in sorted(_ret_by_item.items()):
-                                    _itot = sum(float(o.get("monto") or 0) for o in _iitems)
-                                    with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
-                                        _rows = [{
-                                            "F. retiro": _fmt_fecha(o.get("fecha")),
-                                            "F. pago":   _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
-                                            "Monto":     float(o.get("monto") or 0),
-                                            "Descripción": o.get("descripcion") or "",
-                                        } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
-
         # Ajustes negativos
         _aj_neg = [a for a in _aj_todos_f if float(a.get("monto") or 0) < 0]
         if _aj_neg:
@@ -2896,6 +2860,40 @@ if _sub_resumen:
 </div>""", unsafe_allow_html=True)
 
         if total_retiros > 0:
+            st.divider()
+            st.markdown(f"#### Retiros · {len(_retiros_f)} registros")
+            _ret_c1, _ret_c2, _ret_c3 = st.columns(3)
+            _total_retiros_pend = sum(float(o.get("monto") or 0) for o in _retiros_f if (o.get("estado") or "pendiente") != "pagado")
+            _bal_metric(_ret_c1, "Total",     f"$ {_pesos(total_retiros)}",       "#1a1a1a")
+            _bal_metric(_ret_c2, "Pagado",    f"$ {_pesos(total_retiros_pag)}",   "#2e7d32")
+            _bal_metric(_ret_c3, "Pendiente", f"$ {_pesos(_total_retiros_pend)}", "#c62828")
+            for _ret_est_lbl, _ret_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
+                _ret_est_items = [o for o in _retiros_f if (o.get("estado") or "pendiente") == _ret_est_lbl]
+                if _ret_est_items:
+                    _ret_est_tot = sum(float(o.get("monto") or 0) for o in _ret_est_items)
+                    with st.expander(f"{_ret_est_disp} ({len(_ret_est_items)}) — $ {_pesos(_ret_est_tot)}"):
+                        _ret_by_sub = {}
+                        for _o in _ret_est_items:
+                            _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                            _ret_by_sub.setdefault(_sk, []).append(_o)
+                        for _sk, _sitems in sorted(_ret_by_sub.items()):
+                            _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                            with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                _ret_by_item = {}
+                                for _o in _sitems:
+                                    _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
+                                    _ret_by_item.setdefault(_ik, []).append(_o)
+                                for _ik, _iitems in sorted(_ret_by_item.items()):
+                                    _itot = sum(float(o.get("monto") or 0) for o in _iitems)
+                                    with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
+                                        _rows = [{
+                                            "F. retiro":   _fmt_fecha(o.get("fecha")),
+                                            "F. pago":     _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
+                                            "Monto":       float(o.get("monto") or 0),
+                                            "Descripción": o.get("descripcion") or "",
+                                        } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _net_dev       = resultado - total_retiros
             _net_real      = _res_real - total_retiros_pag
             _net_dev_color = "#2e7d32" if _net_dev  >= 0 else "#c62828"
