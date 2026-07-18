@@ -2556,22 +2556,26 @@ if _sub_resumen:
             _tot = float(f.get("total") or 0)
             return min(_tot, _cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
 
-        for _label, _lista, _lbl_fn in [
-            ("Cobrado",  fac_cobradas,   _fac_cobrado),
-            ("Parcial",  fac_parciales,  _fac_cobrado),
-            ("Pendiente", fac_pendientes, _fac_saldo),
-            ("Anulado",  facturas_anul,   lambda f: float(f.get("total") or 0)),
+        for _label, _lista in [
+            ("Cobrado",   fac_cobradas),
+            ("Parcial",   fac_parciales),
+            ("Pendiente", fac_pendientes),
+            ("Anulado",   facturas_anul),
         ]:
             if _lista:
-                _lbl_total = sum(_lbl_fn(f) for f in _lista)
-                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_lbl_total)}"):
+                _sum_cob  = sum(_fac_cobrado(f) for f in _lista)
+                _sum_pend = sum(_fac_saldo(f)   for f in _lista)
+                _hdr = f"{_label} ({len(_lista)}) — Cobrado: $ {_pesos(_sum_cob)} | Pendiente: $ {_pesos(_sum_pend)}"
+                with st.expander(_hdr):
                     _by_cli = {}
                     for _f in _lista:
                         _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                         _by_cli.setdefault(_k, []).append(_f)
                     for _cli, _fitems in sorted(_by_cli.items()):
-                        _ctot = sum(_lbl_fn(f) for f in _fitems)
-                        with st.expander(f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_ctot)}"):
+                        _cli_cob  = sum(_fac_cobrado(f) for f in _fitems)
+                        _cli_pend = sum(_fac_saldo(f)   for f in _fitems)
+                        _cli_hdr  = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Cobrado: $ {_pesos(_cli_cob)} | Pendiente: $ {_pesos(_cli_pend)}"
+                        with st.expander(_cli_hdr):
                             _rows = []
                             for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
                                 _ftot = float(_f.get("total") or 0)
@@ -2582,14 +2586,16 @@ if _sub_resumen:
                                     "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
                                     "Total":       _ftot,
                                     "Cobrado":     _fcob,
+                                    "Pendiente":   _fsal,
                                 }
                                 if 0 < _fcob < _ftot:
                                     _row["Comprobante"] += " (parcial)"
                                 _rows.append(_row)
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config={
-                                             "Total":   st.column_config.NumberColumn("Total",   format="$ %,.2f"),
-                                             "Cobrado": st.column_config.NumberColumn("Cobrado", format="$ %,.2f"),
+                                             "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
+                                             "Cobrado":   st.column_config.NumberColumn("Cobrado",   format="$ %,.2f"),
+                                             "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
                                          })
 
         # Wix
