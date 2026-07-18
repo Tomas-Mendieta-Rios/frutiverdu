@@ -2265,7 +2265,6 @@ def _render_movimiento_caja(cobros, pagos):
         for _titulo, _rows in [
             ("Salidas — Compras", _sal_compras + _sal_compras_parc),
             ("Salidas — Gastos",  _sal_gastos  + _sal_gastos_parc),
-            ("Salidas — Otros",   _sal_otros),
         ]:
             if _rows:
                 _df_rows = pd.DataFrame(_rows)
@@ -2283,6 +2282,14 @@ def _render_movimiento_caja(cobros, pagos):
                         use_container_width=True, hide_index=True,
                         column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                     )
+        _sal_egresos = [r for r in _sal_otros if r.get("Cat.") == "Otro egreso"]
+        if _sal_egresos:
+            _tot_egr = sum(r["Monto"] for r in _sal_egresos)
+            with st.expander(f"Egresos ({len(_sal_egresos)}) — {_fmt_monto(_tot_egr)}"):
+                _egr_rows = [{"Fecha": r["Fecha"], "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
+                             for r in sorted(_sal_egresos, key=lambda x: x["Fecha"], reverse=True)]
+                st.dataframe(pd.DataFrame(_egr_rows), use_container_width=True, hide_index=True,
+                             column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
         if _aj_caja_periodo:
             _aj_sum = sum(float(_aj.get("monto") or 0) for _aj in _aj_caja_periodo)
