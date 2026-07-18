@@ -2505,10 +2505,14 @@ if _sub_resumen:
 
         # Otros egresos
         _otros_egr_todos = db.cargar_otros_egresos()
-        _otros_egr_f     = [o for o in _otros_egr_todos if _en_rango(o.get("fecha"))]
+        _todos_rango     = [o for o in _otros_egr_todos if _en_rango(o.get("fecha"))]
+        _retiros_f       = [o for o in _todos_rango if (o.get("subrubros_egresos") or {}).get("nombre") == "RETIRO"]
+        _otros_egr_f     = [o for o in _todos_rango if (o.get("subrubros_egresos") or {}).get("nombre") != "RETIRO"]
         total_otros_egr  = sum(float(o.get("monto") or 0) for o in _otros_egr_f)
         total_otros_egr_pag  = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") == "pagado")
         total_otros_egr_pend = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") != "pagado")
+        total_retiros     = sum(float(o.get("monto") or 0) for o in _retiros_f)
+        total_retiros_pag = sum(float(o.get("monto") or 0) for o in _retiros_f if o.get("estado") == "pagado")
 
         total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
         total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
@@ -2852,6 +2856,30 @@ if _sub_resumen:
   <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
     {_metric_cell_sub("Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
     {_metric_cell_sub("Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        if total_retiros > 0:
+            st.markdown(f"""
+<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Retiros</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+    {_metric_cell_sub("Total", f"−$ {_pesos(total_retiros)}", "#c62828", "Registrados en el período")}
+    {_metric_cell_sub("Pagado", f"−$ {_pesos(total_retiros_pag)}", "#c62828", "Efectivamente retirado")}
+  </div>
+</div>""", unsafe_allow_html=True)
+            _net_dev       = resultado - total_retiros
+            _net_real      = _res_real - total_retiros_pag
+            _net_dev_color = "#2e7d32" if _net_dev  >= 0 else "#c62828"
+            _net_dev_signo = "+" if _net_dev  >= 0 else ""
+            _net_real_color= "#2e7d32" if _net_real >= 0 else "#c62828"
+            _net_real_signo= "+" if _net_real >= 0 else ""
+            st.markdown(f"""
+<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+    {_metric_cell_sub("Devengado", f"{_net_dev_signo}$ {_pesos(abs(_net_dev))}", _net_dev_color, "Resultado − Retiros")}
+    {_metric_cell_sub("Percibido", f"{_net_real_signo}$ {_pesos(abs(_net_real))}", _net_real_color, "Percibido − Retiros pagados")}
   </div>
 </div>""", unsafe_allow_html=True)
 
