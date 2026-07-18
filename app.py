@@ -2568,7 +2568,7 @@ if _sub_resumen:
                 _sum_cob  = sum(_fac_cobrado(f) for f in _lista)
                 _sum_pend = sum(_fac_saldo(f)   for f in _lista)
                 if _is_parcial:
-                    _hdr = f"Parcial ({len(_lista)}) — Total: $ {_pesos(_sum_tot)} / Cobrado: $ {_pesos(_sum_cob)} / Pendiente: $ {_pesos(_sum_pend)}"
+                    _hdr = f"Parcial ({len(_lista)}) — Total $ {_pesos(_sum_tot)}  /  cob $ {_pesos(_sum_cob)}  /  pend $ {_pesos(_sum_pend)}"
                 else:
                     _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_sum_tot)}"
                 with st.expander(_hdr):
@@ -2581,7 +2581,7 @@ if _sub_resumen:
                         _cli_cob  = sum(_fac_cobrado(f) for f in _fitems)
                         _cli_pend = sum(_fac_saldo(f)   for f in _fitems)
                         if _is_parcial:
-                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Total: $ {_pesos(_cli_tot)} / Cobrado: $ {_pesos(_cli_cob)} / Pendiente: $ {_pesos(_cli_pend)}"
+                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Total $ {_pesos(_cli_tot)}  /  cob $ {_pesos(_cli_cob)}  /  pend $ {_pesos(_cli_pend)}"
                         else:
                             _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_cli_tot)}"
                         with st.expander(_cli_hdr):
