@@ -1623,6 +1623,14 @@ def _render_movimiento_caja(cobros, pagos):
         _fechas_pago_mov = db.cargar_fechas_pago_wix()
     except Exception:
         _fechas_pago_mov = {}
+    try:
+        _otros_ing_mov = db.cargar_otros_ingresos()
+    except Exception:
+        _otros_ing_mov = []
+    try:
+        _otros_egr_mov = db.cargar_otros_egresos()
+    except Exception:
+        _otros_egr_mov = []
 
     _cfg_caja = db.cargar_config()
     try:
@@ -1724,6 +1732,26 @@ def _render_movimiento_caja(cobros, pagos):
 
     _ids_gastos = db.cargar_ids_gastos()
 
+    def _es_gasto(i, _ids=_ids_gastos):
+        _idc = i.get("id_comp_compra") or i.get("id_compra")
+        return bool(i.get("id_gasto") or i.get("id_comp_gasto") or
+                    (_idc and int(_idc) in _ids))
+    def _es_compra(i, _ids=_ids_gastos):
+        return not _es_gasto(i, _ids)
+    def _gasto_label(i, _ids=_ids_gastos):
+        _idc = i.get("id_comp_compra") or i.get("id_compra")
+        if _idc and int(_idc) in _ids:
+            return _ids[int(_idc)].get("label") or str(_idc)
+        return str(i.get("nro_comprobante") or "")
+
+    _pago_compra_pct = {}
+    for _p in pagos:
+        _imput = _p.get("imputaciones", [])
+        _tc = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_compra(i))
+        _tg = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_gasto(i))
+        _tt = _tc + _tg
+        _pago_compra_pct[str(_p.get("id") or "")] = (_tc / _tt) if _tt else 1.0
+
     for _p in pagos:
         try:
             _f = pd.to_datetime(str(_p.get("fecha") or "")).date()
@@ -1732,17 +1760,6 @@ def _render_movimiento_caja(cobros, pagos):
         if not (_desde <= _f <= _hasta):
             continue
         _imput = _p.get("imputaciones", [])
-        def _es_gasto(i, _ids=_ids_gastos):
-            _idc = i.get("id_comp_compra") or i.get("id_compra")
-            return bool(i.get("id_gasto") or i.get("id_comp_gasto") or
-                        (_idc and int(_idc) in _ids))
-        def _es_compra(i, _ids=_ids_gastos):
-            return not _es_gasto(i, _ids)
-        def _gasto_label(i, _ids=_ids_gastos):
-            _idc = i.get("id_comp_compra") or i.get("id_compra")
-            if _idc and int(_idc) in _ids:
-                return _ids[int(_idc)].get("label") or str(_idc)
-            return str(i.get("nro_comprobante") or "")
         _tot_compra = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_compra(i))
         _tot_gasto  = sum(float(i.get("monto_imputado") or 0) for i in _imput if _es_gasto(i))
         _tot_imput  = _tot_compra + _tot_gasto
@@ -1760,7 +1777,6 @@ def _render_movimiento_caja(cobros, pagos):
             _sal_compra = _monto * _pct_compra
             _sal_gasto  = _monto * _pct_gasto
             _t["Sal. Compras"] += _sal_compra
-            _t["Sal. Gastos"]  += _sal_gasto
             _cheque_det = ""
             if "CHEQUE" in (_lin.get("tipo_valor") or "").upper():
                 _cheque_det = _lin.get("descripcion") or _lin.get("tipo_valor") or ""
@@ -1793,6 +1809,8 @@ def _render_movimiento_caja(cobros, pagos):
             _tot_comp_ref  = sum(_comp_total_lkp.get(_n, 0) for _n in _comp_imput_nros)
             _tot_pag_ref   = sum(_pag_por_comp_all.get(_n, 0) for _n in _comp_imput_nros)
             _saldo_comp_ref = max(0.0, _tot_comp_ref - _tot_pag_ref)
+            if _sal_compra == 0.0:
+                continue
             _t["detalle"].append({
                 "Fecha":           _f,
                 "Tipo":            "Salida",
@@ -1802,7 +1820,7 @@ def _render_movimiento_caja(cobros, pagos):
                 "Cobro #":         "",
                 "Pago #":          _p.get("nro_comprobante") or "—",
                 "Cheque":          _cheque_det,
-                "Monto":           _monto,
+                "Monto":           _sal_compra,
                 "Total comprobante": _tot_comp_ref,
                 "Pagado total":    _tot_pag_ref,
                 "Saldo":           _saldo_comp_ref,
@@ -1855,6 +1873,64 @@ def _render_movimiento_caja(cobros, pagos):
             "Saldo":         0.0,
             "imputaciones":  [],
             "_parcial":      False,
+        })
+
+    # Otros ingresos → Entradas
+    for _oi in _otros_ing_mov:
+        if _oi.get("estado") != "cobrado":
+            continue
+        _fecha_ref = _oi.get("fecha_movimiento") or _oi.get("fecha")
+        try:
+            _oif = pd.to_datetime(str(_fecha_ref)).date()
+        except Exception:
+            continue
+        if not (_desde <= _oif <= _hasta):
+            continue
+        _caja_id = _oi.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck:
+            continue
+        _monto = float(_oi.get("monto") or 0)
+        _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
+        _t["Entradas"] += _monto
+        _rub_nm = (_oi.get("rubros_ingresos") or {}).get("nombre") or "—"
+        _sub_nm = (_oi.get("subrubros_ingresos") or {}).get("nombre") or ""
+        _conc = f"{_rub_nm}{' / ' + _sub_nm if _sub_nm else ''}"
+        _t["detalle"].append({
+            "Fecha": _oif, "Tipo": "Entrada", "Cat.": "Otro ingreso",
+            "Concepto": _conc, "Proveedor": "", "Cliente": "",
+            "Cobro #": "", "Pago #": "", "Cheque": "",
+            "Monto": _monto, "imputaciones": [], "_parcial": False,
+        })
+
+    # Otros egresos → Salidas
+    for _oe in _otros_egr_mov:
+        if _oe.get("estado") != "pagado":
+            continue
+        _fecha_ref = _oe.get("fecha_movimiento") or _oe.get("fecha")
+        try:
+            _oef = pd.to_datetime(str(_fecha_ref)).date()
+        except Exception:
+            continue
+        if not (_desde <= _oef <= _hasta):
+            continue
+        _caja_id = _oe.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck:
+            continue
+        _monto = float(_oe.get("monto") or 0)
+        _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
+        _t["Sal. Compras"] += _monto
+        _rub_nm  = (_oe.get("rubros_egresos") or {}).get("nombre") or "—"
+        _sub_nm  = (_oe.get("subrubros_egresos") or {}).get("nombre") or ""
+        _item_nm = (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or ""
+        _parts = [x for x in [_rub_nm, _sub_nm, _item_nm] if x]
+        _conc = " / ".join(_parts)
+        _t["detalle"].append({
+            "Fecha": _oef, "Tipo": "Salida", "Cat.": "Otro egreso",
+            "Concepto": _conc, "Proveedor": "", "Cliente": "",
+            "Cobro #": "", "Pago #": "", "Cheque": "",
+            "Monto": _monto, "imputaciones": [], "_parcial": False,
         })
 
     # Transferencias entre cajas
@@ -1927,12 +2003,16 @@ def _render_movimiento_caja(cobros, pagos):
         _pf = _safe_date(_p.get("fecha"))
         if _pf == date.min:
             continue
+        _pid = str(_p.get("id") or "")
+        _pct = _pago_compra_pct.get(_pid, 1.0)
+        if _pct == 0.0:
+            continue
         for _lin in _p.get("lineas_pago", []):
             _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
             if _pf < _ini_fecha_hist.get(_ck, date.min):
                 continue
             _ht = _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})
-            _ht["Salidas"] += float(_lin.get("monto") or 0)
+            _ht["Salidas"] += float(_lin.get("monto") or 0) * _pct
     for _tr in _transferencias:
         _trf = _safe_date(_tr.get("fecha"))
         if _trf == date.min:
@@ -1965,6 +2045,32 @@ def _render_movimiento_caja(cobros, pagos):
         if _wf < _ini_fecha_hist.get(_wck, date.min):
             continue
         _hist_total.setdefault(_wck, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _wix_monto(_wo)
+    for _oi in _otros_ing_mov:
+        if _oi.get("estado") != "cobrado":
+            continue
+        _fecha_ref = _oi.get("fecha_movimiento") or _oi.get("fecha")
+        try:
+            _oif = pd.to_datetime(str(_fecha_ref)).date()
+        except Exception:
+            continue
+        _caja_id = _oi.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck or _oif < _ini_fecha_hist.get(_ck, date.min):
+            continue
+        _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += float(_oi.get("monto") or 0)
+    for _oe in _otros_egr_mov:
+        if _oe.get("estado") != "pagado":
+            continue
+        _fecha_ref = _oe.get("fecha_movimiento") or _oe.get("fecha")
+        try:
+            _oef = pd.to_datetime(str(_fecha_ref)).date()
+        except Exception:
+            continue
+        _caja_id = _oe.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck or _oef < _ini_fecha_hist.get(_ck, date.min):
+            continue
+        _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"] += float(_oe.get("monto") or 0)
 
     # Totales del período seleccionado (_desde/_hasta) — misma lógica que _hist_total
     _periodo_total = {}
@@ -1979,9 +2085,13 @@ def _render_movimiento_caja(cobros, pagos):
         _pf = _safe_date(_p.get("fecha"))
         if _pf == date.min or not (_desde <= _pf <= _hasta):
             continue
+        _pid = str(_p.get("id") or "")
+        _pct = _pago_compra_pct.get(_pid, 1.0)
+        if _pct == 0.0:
+            continue
         for _lin in _p.get("lineas_pago", []):
             _ck = _caja_key(_lin.get("tipo_valor"), _lin.get("descripcion"))
-            _periodo_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"] += float(_lin.get("monto") or 0)
+            _periodo_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"] += float(_lin.get("monto") or 0) * _pct
     for _tr in _transferencias:
         _trf = _safe_date(_tr.get("fecha"))
         if _trf == date.min or not (_desde <= _trf <= _hasta):
@@ -2012,6 +2122,36 @@ def _render_movimiento_caja(cobros, pagos):
         if not _wck:
             continue
         _periodo_total.setdefault(_wck, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += _wix_monto(_wo)
+    for _oi in _otros_ing_mov:
+        if _oi.get("estado") != "cobrado":
+            continue
+        _fecha_ref = _oi.get("fecha_movimiento") or _oi.get("fecha")
+        try:
+            _oif = pd.to_datetime(str(_fecha_ref)).date()
+        except Exception:
+            continue
+        if not (_desde <= _oif <= _hasta):
+            continue
+        _caja_id = _oi.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck:
+            continue
+        _periodo_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"] += float(_oi.get("monto") or 0)
+    for _oe in _otros_egr_mov:
+        if _oe.get("estado") != "pagado":
+            continue
+        _fecha_ref = _oe.get("fecha_movimiento") or _oe.get("fecha")
+        try:
+            _oef = pd.to_datetime(str(_fecha_ref)).date()
+        except Exception:
+            continue
+        if not (_desde <= _oef <= _hasta):
+            continue
+        _caja_id = _oe.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck:
+            continue
+        _periodo_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"] += float(_oe.get("monto") or 0)
 
     # ajustes desde la fecha de corte por caja (inclusive)
     _all_aj_sum = {}
