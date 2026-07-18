@@ -2415,9 +2415,9 @@ if _sub_pendientes:
 
         # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
         _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and not str(c.get("estado") or "").upper().startswith("ANULAD") and _pend_en_rango(c.get("fecha"))]
-        _gas_pend_hist  = [g for g in gastos_bal       if g.get("pago_pendiente") and not str(g.get("estado") or "").upper().startswith("ANULAD") and _pend_en_rango(g.get("fecha"))]
+        _oe_pend_hist   = [o for o in db.cargar_otros_egresos() if (o.get("estado") or "pendiente") != "pagado" and _pend_en_rango(o.get("fecha"))]
         _total_pend_comp = sum(_pend_saldo_c(c) for c in _comp_pend_hist)
-        _total_pend_gas  = sum(_pend_saldo_g(g) for g in _gas_pend_hist)
+        _total_pend_gas  = sum(float(o.get("monto") or 0) for o in _oe_pend_hist)
         _total_pend      = _total_pend_comp + _total_pend_gas
 
         st.subheader(f"A pagar a proveedores — $ {_pesos(_total_pend)}")
@@ -2452,36 +2452,26 @@ if _sub_pendientes:
                                 _ccfg["Saldo"]  = st.column_config.NumberColumn("Saldo",  format="$ %,.2f")
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_ccfg)
 
-        # Gastos: agrupar por Proveedor → Parcial/Pendiente adentro
-        _pend_big("Gastos", _pesos(_total_pend_gas), "#c62828")
-        if not _gas_pend_hist:
-            st.caption("Sin gastos pendientes en el rango seleccionado.")
+        # Egresos: agrupar por Rubro
+        _pend_big("Egresos", _pesos(_total_pend_gas), "#c62828")
+        if not _oe_pend_hist:
+            st.caption("Sin egresos pendientes en el rango seleccionado.")
         else:
-            _by_prov_gas = {}
-            for _g in _gas_pend_hist:
-                _by_prov_gas.setdefault(_g.get("proveedor") or "—", []).append(_g)
-            for _prov, _pi in sorted(_by_prov_gas.items(), key=lambda kv: sum(_pend_saldo_g(g) for g in kv[1]), reverse=True):
-                _ptot = sum(_pend_saldo_g(g) for g in _pi)
-                with st.expander(f"{_prov} ({len(_pi)}) — $ {_pesos(_ptot)}"):
-                    _gp = [g for g in _pi if _pend_pagado_g(g) > 0]
-                    _gn = [g for g in _pi if _pend_pagado_g(g) == 0]
-                    for _lbl, _lst in [("Parciales", _gp), ("Pendientes", _gn)]:
-                        if not _lst:
-                            continue
-                        _ltot = sum(_pend_saldo_g(g) for g in _lst)
-                        with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
-                            _rows = [{
-                                "Fecha":       _fmt_fecha(_g.get("fecha")),
-                                "Rubro":       " / ".join(filter(None, [_g.get("rubro_nombre"), _g.get("sub_rubro_nombre")])) or _g.get("gasto") or "—",
-                                "Comprobante": _g.get("nro_comprobante") or "—",
-                                "Total":       float(_g.get("total") or 0),
-                                **( {"Pagado": _pend_pagado_g(_g), "Saldo": _pend_saldo_g(_g)} if _lbl == "Parciales" else {} ),
-                            } for _g in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                            _gcfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
-                            if _lbl == "Parciales":
-                                _gcfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
-                                _gcfg["Saldo"]  = st.column_config.NumberColumn("Saldo",  format="$ %,.2f")
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_gcfg)
+            _by_rubro_oe = {}
+            for _o in _oe_pend_hist:
+                _rub = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
+                _by_rubro_oe.setdefault(_rub, []).append(_o)
+            for _rub, _rlst in sorted(_by_rubro_oe.items(), key=lambda kv: sum(float(o.get("monto") or 0) for o in kv[1]), reverse=True):
+                _rtot = sum(float(o.get("monto") or 0) for o in _rlst)
+                with st.expander(f"{_rub} ({len(_rlst)}) — $ {_pesos(_rtot)}"):
+                    _rows = [{
+                        "Fecha":    _fmt_fecha(_o.get("fecha")),
+                        "Subrubro": (_o.get("subrubros_egresos") or {}).get("nombre") or "—",
+                        "Item":     (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—",
+                        "Monto":    float(_o.get("monto") or 0),
+                    } for _o in sorted(_rlst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                 column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f")})
 
         st.divider()
 
