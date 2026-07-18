@@ -2089,20 +2089,20 @@ def eliminar_subrubro_egreso(id):
     client.table("subrubros_egresos").delete().eq("id", id).execute()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def cargar_items_egresos(rubro_id=None):
+def cargar_items_egresos(subrubro_id=None):
     client = get_client()
     q = client.table("items_egresos").select("*").order("nombre")
-    if rubro_id is not None:
-        q = q.eq("rubro_id", rubro_id)
+    if subrubro_id is not None:
+        q = q.eq("subrubro_id", subrubro_id)
     return q.execute().data or []
 
-def guardar_item_egreso(nombre, rubro_id):
+def guardar_item_egreso(nombre, subrubro_id):
     client = get_client()
-    client.table("items_egresos").insert({"nombre": nombre, "rubro_id": rubro_id}).execute()
+    client.table("items_egresos").insert({"nombre": nombre, "subrubro_id": subrubro_id}).execute()
 
-def actualizar_item_egreso(id, nombre, rubro_id):
+def actualizar_item_egreso(id, nombre, subrubro_id):
     client = get_client()
-    client.table("items_egresos").update({"nombre": nombre, "rubro_id": rubro_id}).eq("id", id).execute()
+    client.table("items_egresos").update({"nombre": nombre, "subrubro_id": subrubro_id}).eq("id", id).execute()
 
 def eliminar_item_egreso(id):
     client = get_client()
