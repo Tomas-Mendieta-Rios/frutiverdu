@@ -2592,17 +2592,22 @@ if _sub_resumen:
                                 _fcob = _cobrado_por_fac.get(str(_f.get("id") or ""), 0.0)
                                 _fsal = max(0.0, _ftot - _fcob)
                                 _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
+                                _url = _f.get("url_factura") or ""
                                 if _is_parcial:
                                     _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp,
-                                            "Total": _ftot, "Cobrado": _fcob, "Pendiente": _fsal}
+                                            "Total": _ftot, "Cobrado": _fcob, "Pendiente": _fsal, "PDF": _url}
                                     _col_cfg = {
                                         "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
                                         "Cobrado":   st.column_config.NumberColumn("Cobrado",   format="$ %,.2f"),
                                         "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
+                                        "PDF":       st.column_config.LinkColumn("PDF", display_text="Ver"),
                                     }
                                 else:
-                                    _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp, "Total": _ftot}
-                                    _col_cfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
+                                    _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp, "Total": _ftot, "PDF": _url}
+                                    _col_cfg = {
+                                        "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
+                                        "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
+                                    }
                                 _rows.append(_row)
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                          column_config=_col_cfg)
@@ -2621,9 +2626,13 @@ if _sub_resumen:
                         "Cliente": _cli,
                         "Comprobante": _comp,
                         "Monto": _nota_sign(_f) * float(_f.get("total") or 0),
+                        "PDF": _f.get("url_factura") or "",
                     })
                 st.dataframe(pd.DataFrame(_rows_notas), use_container_width=True, hide_index=True,
-                             column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f")})
+                             column_config={
+                                 "Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f"),
+                                 "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
+                             })
 
         # Wix
         _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
