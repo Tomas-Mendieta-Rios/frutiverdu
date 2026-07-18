@@ -2258,7 +2258,7 @@ if _sub_pendientes:
             )
 
         # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
-        _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and not str(c.get("estado") or "").upper().startswith("ANULAD") and float(c.get("monto_pendiente") or 0) > 0 and _pend_en_rango(c.get("fecha"))]
+        _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and not str(c.get("estado") or "").upper().startswith("ANULAD") and _pend_en_rango(c.get("fecha"))]
         _gas_pend_hist  = [g for g in gastos_bal       if g.get("pago_pendiente") and not str(g.get("estado") or "").upper().startswith("ANULAD") and _pend_en_rango(g.get("fecha"))]
         _total_pend_comp = sum(_pend_saldo_c(c) for c in _comp_pend_hist)
         _total_pend_gas  = sum(_pend_saldo_g(g) for g in _gas_pend_hist)
