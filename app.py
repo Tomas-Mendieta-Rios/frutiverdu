@@ -3420,7 +3420,8 @@ if _stab_otros_egresos:
                     _ca, _cb, _cc = st.columns([5, 1, 1])
                     with _ca:
                         _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
-                        st.markdown(f"{_est_badge} **{_oe_fch}** · {_oe_r_nm} / {_oe_s_nm} · {_oe_item} · **$ {_oe_mn:,.0f}**")
+                        _fmov_str = f" · pago: {_oe_fmov}" if _oe_fmov else ""
+                        st.markdown(f"{_est_badge} **{_oe_fch}**{_fmov_str} · {_oe_r_nm} / {_oe_s_nm} · {_oe_item} · **$ {_oe_mn:,.0f}**")
                     with _cb:
                         if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
                             st.session_state[f"oe_editing_{_oe_id}"] = True
