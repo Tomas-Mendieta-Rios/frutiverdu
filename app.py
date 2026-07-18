@@ -2563,40 +2563,48 @@ if _sub_resumen:
             ("Anulado",   facturas_anul),
         ]:
             if _lista:
+                _is_parcial = (_label == "Parcial")
+                _sum_tot  = sum(float(f.get("total") or 0) for f in _lista)
                 _sum_cob  = sum(_fac_cobrado(f) for f in _lista)
                 _sum_pend = sum(_fac_saldo(f)   for f in _lista)
-                _hdr = f"{_label} ({len(_lista)})  —  $ {_pesos(_sum_cob)} cob  /  $ {_pesos(_sum_pend)} pend"
+                if _is_parcial:
+                    _hdr = f"Parcial ({len(_lista)}) — Total: $ {_pesos(_sum_tot)} / Cobrado: $ {_pesos(_sum_cob)} / Pendiente: $ {_pesos(_sum_pend)}"
+                else:
+                    _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_sum_tot)}"
                 with st.expander(_hdr):
                     _by_cli = {}
                     for _f in _lista:
                         _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                         _by_cli.setdefault(_k, []).append(_f)
                     for _cli, _fitems in sorted(_by_cli.items()):
+                        _cli_tot  = sum(float(f.get("total") or 0) for f in _fitems)
                         _cli_cob  = sum(_fac_cobrado(f) for f in _fitems)
                         _cli_pend = sum(_fac_saldo(f)   for f in _fitems)
-                        _cli_hdr  = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''}  —  $ {_pesos(_cli_cob)} cob  /  $ {_pesos(_cli_pend)} pend"
+                        if _is_parcial:
+                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Total: $ {_pesos(_cli_tot)} / Cobrado: $ {_pesos(_cli_cob)} / Pendiente: $ {_pesos(_cli_pend)}"
+                        else:
+                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_cli_tot)}"
                         with st.expander(_cli_hdr):
                             _rows = []
                             for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
                                 _ftot = float(_f.get("total") or 0)
                                 _fcob = _cobrado_por_fac.get(str(_f.get("id") or ""), 0.0)
                                 _fsal = max(0.0, _ftot - _fcob)
-                                _row = {
-                                    "Fecha":       _fmt_fecha(_f.get("fecha_comp")),
-                                    "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
-                                    "Total":       _ftot,
-                                    "Cobrado":     _fcob,
-                                    "Pendiente":   _fsal,
-                                }
-                                if 0 < _fcob < _ftot:
-                                    _row["Comprobante"] += " (parcial)"
+                                _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
+                                if _is_parcial:
+                                    _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp,
+                                            "Total": _ftot, "Cobrado": _fcob, "Pendiente": _fsal}
+                                    _col_cfg = {
+                                        "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
+                                        "Cobrado":   st.column_config.NumberColumn("Cobrado",   format="$ %,.2f"),
+                                        "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
+                                    }
+                                else:
+                                    _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp, "Total": _ftot}
+                                    _col_cfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
                                 _rows.append(_row)
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config={
-                                             "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
-                                             "Cobrado":   st.column_config.NumberColumn("Cobrado",   format="$ %,.2f"),
-                                             "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
-                                         })
+                                         column_config=_col_cfg)
 
         # Wix
         _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
