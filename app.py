@@ -2568,7 +2568,7 @@ if _sub_resumen:
                 _sum_cob  = sum(_fac_cobrado(f) for f in _lista)
                 _sum_pend = sum(_fac_saldo(f)   for f in _lista)
                 if _is_parcial:
-                    _hdr = f"Parcial ({len(_lista)}) — Total \\${_pesos(_sum_tot)} | Cobrado \\${_pesos(_sum_cob)} | Pendiente \\${_pesos(_sum_pend)}"
+                    _hdr = f"Parcial ({len(_lista)}) — Total {_pesos(_sum_tot)} | Cobrado {_pesos(_sum_cob)} | Pendiente {_pesos(_sum_pend)}"
                 else:
                     _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_sum_tot)}"
                 with st.expander(_hdr):
@@ -2581,7 +2581,7 @@ if _sub_resumen:
                         _cli_cob  = sum(_fac_cobrado(f) for f in _fitems)
                         _cli_pend = sum(_fac_saldo(f)   for f in _fitems)
                         if _is_parcial:
-                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Total \\${_pesos(_cli_tot)} | Cobrado \\${_pesos(_cli_cob)} | Pendiente \\${_pesos(_cli_pend)}"
+                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Total {_pesos(_cli_tot)} | Cobrado {_pesos(_cli_cob)} | Pendiente {_pesos(_cli_pend)}"
                         else:
                             _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_cli_tot)}"
                         with st.expander(_cli_hdr):
@@ -2717,7 +2717,7 @@ if _sub_resumen:
                 _c_pag  = sum(_pagado_comp(c) for c in _lista)
                 _c_pend = sum(_saldo_comp(c)  for c in _lista)
                 if _is_parc:
-                    _hdr = f"Parcial ({len(_lista)}) — Total \\${_pesos(_c_tot)} | Pagado \\${_pesos(_c_pag)} | Pendiente \\${_pesos(_c_pend)}"
+                    _hdr = f"Parcial ({len(_lista)}) — Total {_pesos(_c_tot)} | Pagado {_pesos(_c_pag)} | Pendiente {_pesos(_c_pend)}"
                 else:
                     _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_c_tot)}"
                 with st.expander(_hdr):
@@ -2729,7 +2729,7 @@ if _sub_resumen:
                         _p_pag  = sum(_pagado_comp(c) for c in _pitems)
                         _p_pend = sum(_saldo_comp(c)  for c in _pitems)
                         if _is_parc:
-                            _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — Total \\${_pesos(_p_tot)} | Pagado \\${_pesos(_p_pag)} | Pendiente \\${_pesos(_p_pend)}"
+                            _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — Total {_pesos(_p_tot)} | Pagado {_pesos(_p_pag)} | Pendiente {_pesos(_p_pend)}"
                         else:
                             _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_p_tot)}"
                         with st.expander(_p_hdr):
