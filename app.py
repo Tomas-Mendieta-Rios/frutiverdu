@@ -2820,7 +2820,6 @@ if _sub_resumen:
                                             with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                                 _rows = [{
                                                     "F. egreso":   _fmt_fecha(o.get("fecha")),
-                                                    "F. pago":     _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
                                                     "Monto":       float(o.get("monto") or 0),
                                                     "Descripción": o.get("descripcion") or "",
                                                 } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -2888,7 +2887,6 @@ if _sub_resumen:
                                     with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                         _rows = [{
                                             "F. retiro":   _fmt_fecha(o.get("fecha")),
-                                            "F. pago":     _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
                                             "Monto":       float(o.get("monto") or 0),
                                             "Descripción": o.get("descripcion") or "",
                                         } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
