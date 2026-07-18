@@ -2452,10 +2452,20 @@ if _sub_resumen:
                 if _nro:
                     _pagado_por_comp[_nro] = _pagado_por_comp.get(_nro, 0.0) + float(_imp.get("monto_imputado") or 0)
 
+        # Helper: cobrado real por factura — si DUX dice con_cobro pero no hay imputación
+        # sincronizada, confiamos en DUX y usamos el total como cobrado
+        def _fac_cob_real(f):
+            cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
+            if cob > 0:
+                return min(float(f.get("total") or 0), cob)
+            if f.get("con_cobro"):
+                return float(f.get("total") or 0)
+            return 0.0
+
         # Categorizar facturas DUX
-        fac_cobradas   = [f for f in facturas_vig if f.get("con_cobro") and _cobrado_por_fac.get(str(f.get("id") or ""), 0.0) >= float(f.get("total") or 0)]
-        fac_parciales  = [f for f in facturas_vig if f.get("con_cobro") and _cobrado_por_fac.get(str(f.get("id") or ""), 0.0) < float(f.get("total") or 0)]
-        fac_pendientes = [f for f in facturas_vig if not f.get("con_cobro")]
+        fac_cobradas   = [f for f in facturas_vig if _fac_cob_real(f) >= float(f.get("total") or 0) > 0]
+        fac_parciales  = [f for f in facturas_vig if 0 < _fac_cob_real(f) < float(f.get("total") or 0)]
+        fac_pendientes = [f for f in facturas_vig if _fac_cob_real(f) == 0]
 
         # Categorizar Wix
         wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
@@ -2468,10 +2478,7 @@ if _sub_resumen:
             return -1 if "CREDITO" in str(f.get("tipo_comp") or "").upper() else 1
         total_notas_net   = sum(_nota_sign(f) * float(f.get("total") or 0) for f in notas_vig)
         total_facturas    = sum(float(f.get("total") or 0) for f in facturas_vig) + total_notas_net
-        total_fac_cobr    = sum(
-            min(float(f.get("total") or 0), _cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
-            for f in facturas_vig
-        )
+        total_fac_cobr    = sum(_fac_cob_real(f) for f in facturas_vig)
         total_fac_pend    = total_facturas - total_fac_cobr
         total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
         total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
@@ -2552,14 +2559,10 @@ if _sub_resumen:
         _bal_metric(_c2, "Cobrado",    f"$ {_pesos(total_fac_cobr)}",  "#2e7d32")
         _bal_metric(_c3, "Pendiente",  f"$ {_pesos(total_fac_pend)}",  "#c62828")
         _bal_metric(_c4, "Anulado",    f"$ {_pesos(total_fac_anul)}",  "#757575")
-        def _fac_saldo(f):
-            _tot = float(f.get("total") or 0)
-            _cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
-            return max(0.0, _tot - _cob)
-
         def _fac_cobrado(f):
-            _tot = float(f.get("total") or 0)
-            return min(_tot, _cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
+            return _fac_cob_real(f)
+        def _fac_saldo(f):
+            return max(0.0, float(f.get("total") or 0) - _fac_cobrado(f))
 
         for _label, _lista in [
             ("Cobrado",   fac_cobradas),
