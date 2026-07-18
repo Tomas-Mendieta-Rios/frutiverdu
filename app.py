@@ -1898,8 +1898,9 @@ def _render_movimiento_caja(cobros, pagos):
         _conc = f"{_rub_nm}{' / ' + _sub_nm if _sub_nm else ''}"
         _t["detalle"].append({
             "Fecha": _oif, "Tipo": "Entrada", "Cat.": "Otro ingreso",
-            "Concepto": _conc, "Proveedor": "", "Cliente": "",
-            "Cobro #": "", "Pago #": "", "Cheque": "",
+            "Concepto": _conc, "Proveedor": "", "Cliente": _conc,
+            "Cobro #": f"OI-{_oi.get('id','')}", "Pago #": "", "Cheque": "",
+            "Facturas": "", "Total factura": 0.0, "Cobrado total": 0.0, "Saldo": 0.0,
             "Monto": _monto, "imputaciones": [], "_parcial": False,
         })
 
