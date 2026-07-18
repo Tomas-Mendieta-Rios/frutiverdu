@@ -222,6 +222,7 @@ def _norm_fecha_iso(x):
 
 def _fetch_all(client, table, columns="*", filters=None, batch=1000):
     """Pagina sobre una tabla de Supabase y devuelve todos los registros."""
+    import time
     rows = []
     offset = 0
     while True:
@@ -229,7 +230,14 @@ def _fetch_all(client, table, columns="*", filters=None, batch=1000):
         if filters:
             for col, val in filters.items():
                 q = q.eq(col, val)
-        resp = q.execute()
+        for attempt in range(3):
+            try:
+                resp = q.execute()
+                break
+            except Exception:
+                if attempt == 2:
+                    raise
+                time.sleep(1.5 ** attempt)
         if not resp.data:
             break
         rows.extend(resp.data)
