@@ -2221,8 +2221,9 @@ def _render_movimiento_caja(cobros, pagos):
         _ent_transf  = [r for r in _det if r.get("Cat.") == "Transferencia" and r.get("Tipo") == "Entrada"]
         _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto", "Transferencia")]
 
-        _entradas_real      = [r for r in _entradas if r.get("Cat.") != "Transferencia" and not r.get("_parcial")]
-        _entradas_real_parc = [r for r in _entradas if r.get("Cat.") != "Transferencia" and r.get("_parcial")]
+        _entradas_real      = [r for r in _entradas if r.get("Cat.") not in ("Transferencia", "Otro ingreso") and not r.get("_parcial")]
+        _entradas_real_parc = [r for r in _entradas if r.get("Cat.") not in ("Transferencia", "Otro ingreso") and r.get("_parcial")]
+        _ent_otros_ing      = [r for r in _entradas if r.get("Cat.") == "Otro ingreso"]
 
         # Dedup cobros: un cobro puede tener múltiples cobranza lines en la misma caja
         def _dedup_cobros(rows):
@@ -2246,6 +2247,13 @@ def _render_movimiento_caja(cobros, pagos):
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
+        if _ent_otros_ing:
+            _tot_oi = sum(r["Monto"] for r in _ent_otros_ing)
+            with st.expander(f"Entradas — Otros ({len(_ent_otros_ing)}) — {_fmt_monto(_tot_oi)}"):
+                _oi_rows = [{"Fecha": r["Fecha"], "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
+                            for r in sorted(_ent_otros_ing, key=lambda x: x["Fecha"], reverse=True)]
+                st.dataframe(pd.DataFrame(_oi_rows), use_container_width=True, hide_index=True,
+                             column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
             with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
