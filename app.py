@@ -2705,32 +2705,53 @@ if _sub_resumen:
         _bal_metric(_ec2, "Pagado",    f"$ {_pesos(total_comp_pag)}",   "#2e7d32")
         _bal_metric(_ec3, "Pendiente", f"$ {_pesos(total_comp_pend)}",  "#c62828")
         _bal_metric(_ec4, "Anulado",   f"$ {_pesos(total_comp_anul)}",  "#757575")
-        for _label, _lista, _tot_fn in [
-            ("Pagado",    comp_pagadas,    lambda c: float(c.get("total") or 0)),
-            ("Parcial",   comp_parciales,  _pagado_comp),
-            ("Pendiente", comp_pendientes, lambda c: float(c.get("total") or 0)),
-            ("Anulado",   comp_anuladas,   lambda c: float(c.get("total") or 0)),
+        for _label, _lista in [
+            ("Pagado",    comp_pagadas),
+            ("Parcial",   comp_parciales),
+            ("Pendiente", comp_pendientes),
+            ("Anulado",   comp_anuladas),
         ]:
             if _lista:
-                _tot_lbl = sum(_tot_fn(c) for c in _lista)
-                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(_tot_lbl)}"):
+                _is_parc = (_label == "Parcial")
+                _c_tot  = sum(float(c.get("total") or 0) for c in _lista)
+                _c_pag  = sum(_pagado_comp(c) for c in _lista)
+                _c_pend = sum(_saldo_comp(c)  for c in _lista)
+                if _is_parc:
+                    _hdr = f"Parcial ({len(_lista)}) — Total \\${_pesos(_c_tot)} | Pagado \\${_pesos(_c_pag)} | Pendiente \\${_pesos(_c_pend)}"
+                else:
+                    _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_c_tot)}"
+                with st.expander(_hdr):
                     _by_prov = {}
                     for _c in _lista:
                         _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
                     for _prov, _pitems in sorted(_by_prov.items()):
-                        _ptot = sum(_tot_fn(c) for c in _pitems)
-                        with st.expander(f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ptot)}"):
-                            _rows = [{
-                                "Fecha":       _fmt_fecha(c.get("fecha")),
-                                "Comprobante": c.get("nro_comprobante") or "—",
-                                "Total":       float(c.get("total") or 0),
-                                "Pagado":      _pagado_comp(c),
-                            } for c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        _p_tot  = sum(float(c.get("total") or 0) for c in _pitems)
+                        _p_pag  = sum(_pagado_comp(c) for c in _pitems)
+                        _p_pend = sum(_saldo_comp(c)  for c in _pitems)
+                        if _is_parc:
+                            _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — Total \\${_pesos(_p_tot)} | Pagado \\${_pesos(_p_pag)} | Pendiente \\${_pesos(_p_pend)}"
+                        else:
+                            _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_p_tot)}"
+                        with st.expander(_p_hdr):
+                            _rows = []
+                            for _c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                                _ctot = float(_c.get("total") or 0)
+                                _cpag = _pagado_comp(_c)
+                                _csal = _saldo_comp(_c)
+                                if _is_parc:
+                                    _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—",
+                                            "Total": _ctot, "Pagado": _cpag, "Pendiente": _csal}
+                                    _col_cfg = {
+                                        "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
+                                        "Pagado":    st.column_config.NumberColumn("Pagado",    format="$ %,.2f"),
+                                        "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
+                                    }
+                                else:
+                                    _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—", "Total": _ctot}
+                                    _col_cfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
+                                _rows.append(_row)
                             st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config={
-                                             "Total":  st.column_config.NumberColumn("Total",  format="$ %,.2f"),
-                                             "Pagado": st.column_config.NumberColumn("Pagado", format="$ %,.2f"),
-                                         })
+                                         column_config=_col_cfg)
 
         # ── OTROS EGRESOS ────────────────────────────────────────────────────────
         if _otros_egr_f:
