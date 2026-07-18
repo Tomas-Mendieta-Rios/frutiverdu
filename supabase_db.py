@@ -2091,36 +2091,63 @@ def eliminar_subrubro_egreso(id):
 @st.cache_data(ttl=60, show_spinner=False)
 def cargar_items_egresos(subrubro_id=None):
     client = get_client()
-    q = client.table("items_egresos").select("*").order("nombre")
     if subrubro_id is not None:
-        q = q.eq("subrubro_id", subrubro_id)
-    return q.execute().data or []
+        resp = client.table("items_egresos_subrubros") \
+            .select("items_egresos(id, nombre)") \
+            .eq("subrubro_id", subrubro_id) \
+            .execute()
+        items = [row["items_egresos"] for row in (resp.data or []) if row.get("items_egresos")]
+        return sorted(items, key=lambda x: x.get("nombre", ""))
+    resp = client.table("items_egresos") \
+        .select("id, nombre, items_egresos_subrubros(subrubro_id)") \
+        .order("nombre") \
+        .execute()
+    return resp.data or []
 
 def guardar_item_egreso(nombre, subrubro_id):
     client = get_client()
-    client.table("items_egresos").insert({"nombre": nombre, "subrubro_id": subrubro_id}).execute()
+    resp = client.table("items_egresos").upsert({"nombre": nombre}, on_conflict="nombre").execute()
+    item_id = resp.data[0]["id"]
+    client.table("items_egresos_subrubros").upsert(
+        {"item_id": item_id, "subrubro_id": subrubro_id},
+        on_conflict="item_id,subrubro_id"
+    ).execute()
 
-def actualizar_item_egreso(id, nombre, subrubro_id):
+def actualizar_item_egreso(id, nombre):
     client = get_client()
-    client.table("items_egresos").update({"nombre": nombre, "subrubro_id": subrubro_id}).eq("id", id).execute()
+    client.table("items_egresos").update({"nombre": nombre}).eq("id", id).execute()
 
 def eliminar_item_egreso(id):
     client = get_client()
     client.table("items_egresos").delete().eq("id", id).execute()
 
+def agregar_link_item_subrubro(item_id, subrubro_id):
+    client = get_client()
+    client.table("items_egresos_subrubros").upsert(
+        {"item_id": item_id, "subrubro_id": subrubro_id},
+        on_conflict="item_id,subrubro_id"
+    ).execute()
+
+def eliminar_link_item_subrubro(item_id, subrubro_id):
+    client = get_client()
+    client.table("items_egresos_subrubros") \
+        .delete().eq("item_id", item_id).eq("subrubro_id", subrubro_id).execute()
+
 @st.cache_data(ttl=60, show_spinner=False)
 def cargar_otros_egresos():
     client = get_client()
-    resp = client.table("otros_egresos").select("*, rubros_egresos(nombre), subrubros_egresos(nombre)").order("fecha", desc=True).execute()
+    resp = client.table("otros_egresos").select(
+        "*, rubros_egresos(nombre), subrubros_egresos(nombre), items_egresos(nombre)"
+    ).order("fecha", desc=True).execute()
     return resp.data or []
 
-def guardar_otro_egreso(fecha, rubro_id, subrubro_id, item, monto, caja_id, descripcion, usuario, estado="pendiente", fecha_movimiento=None):
+def guardar_otro_egreso(fecha, rubro_id, subrubro_id, item_id, monto, caja_id, descripcion, usuario, estado="pendiente", fecha_movimiento=None):
     client = get_client()
     client.table("otros_egresos").insert({
         "fecha": str(fecha),
         "rubro_id": rubro_id,
         "subrubro_id": subrubro_id or None,
-        "item": item or None,
+        "item_id": item_id or None,
         "monto": float(monto),
         "caja_id": caja_id or None,
         "descripcion": descripcion or None,
@@ -2129,13 +2156,13 @@ def guardar_otro_egreso(fecha, rubro_id, subrubro_id, item, monto, caja_id, desc
         "fecha_movimiento": str(fecha_movimiento) if fecha_movimiento else None,
     }).execute()
 
-def actualizar_otro_egreso(id, fecha, rubro_id, subrubro_id, item, monto, caja_id, descripcion, estado="pendiente", fecha_movimiento=None):
+def actualizar_otro_egreso(id, fecha, rubro_id, subrubro_id, item_id, monto, caja_id, descripcion, estado="pendiente", fecha_movimiento=None):
     client = get_client()
     client.table("otros_egresos").update({
         "fecha": str(fecha),
         "rubro_id": rubro_id,
         "subrubro_id": subrubro_id or None,
-        "item": item or None,
+        "item_id": item_id or None,
         "monto": float(monto),
         "caja_id": caja_id or None,
         "descripcion": descripcion or None,

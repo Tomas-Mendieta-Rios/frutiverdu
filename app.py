@@ -3287,10 +3287,15 @@ if _stab_otros_egresos:
                 sub_opts = {s["nombre"]: s["id"] for s in db.cargar_subrubros_egresos(_oe_rubro_opts[rubro])}
             sub_nm_idx = ([""] + list(sub_opts.keys())).index(d.get("sub_nm", "")) if d.get("sub_nm") in sub_opts else 0
             subrubro = st.selectbox("Subrubro", options=[""] + list(sub_opts.keys()), index=sub_nm_idx, key=f"{pfx}_sub")
+            item_map = {}
             if subrubro and subrubro in sub_opts:
-                item_opts = [i["nombre"] for i in db.cargar_items_egresos(sub_opts[subrubro])]
-            item_idx = ([""] + item_opts).index(d.get("item", "")) if d.get("item") in item_opts else 0
-            item = st.selectbox("Item", options=[""] + item_opts, index=item_idx, key=f"{pfx}_item")
+                _items_raw = db.cargar_items_egresos(sub_opts[subrubro])
+                item_map = {i["nombre"]: i["id"] for i in _items_raw}
+            item_opts = list(item_map.keys())
+            _def_item_nm = d.get("item", "")
+            item_idx = ([""] + item_opts).index(_def_item_nm) if _def_item_nm in item_opts else 0
+            item_nm = st.selectbox("Item", options=[""] + item_opts, index=item_idx, key=f"{pfx}_item")
+            item_id = item_map.get(item_nm)
             monto_str = st.text_input("Monto ($)", value=d.get("monto_str", ""), key=f"{pfx}_monto")
             try:
                 monto = float(monto_str.replace(",", ".")) if monto_str else 0.0
@@ -3306,7 +3311,7 @@ if _stab_otros_egresos:
                 _fmov_default = d.get("fecha_mov") or date.today()
                 fecha_mov = st.date_input("Fecha de pago", value=_fmov_default, format="DD/MM/YYYY", key=f"{pfx}_fmov")
             return {"fecha": fecha, "rubro": rubro, "subrubro": subrubro, "sub_opts": sub_opts,
-                    "item": item, "monto": monto, "caja": caja, "desc": desc, "estado": estado, "fecha_mov": fecha_mov}
+                    "item": item_nm, "item_id": item_id, "monto": monto, "caja": caja, "desc": desc, "estado": estado, "fecha_mov": fecha_mov}
 
         # ── TAB 1: Nuevo egreso ───────────────────────────────────────────────
         with _oe_tab1:
@@ -3325,7 +3330,7 @@ if _stab_otros_egresos:
                                     fecha=_f["fecha"],
                                     rubro_id=_oe_rubro_opts.get(_f["rubro"]),
                                     subrubro_id=_f["sub_opts"].get(_f["subrubro"]),
-                                    item=_f["item"],
+                                    item_id=_f["item_id"],
                                     monto=_f["monto"],
                                     caja_id=_oe_caja_opts.get(_f["caja"]),
                                     descripcion=_f["desc"],
@@ -3358,7 +3363,7 @@ if _stab_otros_egresos:
                     _oe_dsc   = _oe.get("descripcion") or ""
                     _oe_est   = _oe.get("estado", "pendiente")
                     _oe_fmov  = _oe.get("fecha_movimiento")
-                    _oe_item  = _oe.get("item") or ""
+                    _oe_item  = (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or ""
 
                     _ca, _cb, _cc = st.columns([5, 1, 1])
                     with _ca:
@@ -3383,7 +3388,8 @@ if _stab_otros_egresos:
                             _e = _oe_render_fields(f"ee{_oe_id}", defaults={
                                 "fecha": pd.to_datetime(_oe_fch).date() if _oe_fch else date.today(),
                                 "rubro_nm": _oe_r_nm, "sub_nm": _oe_s_nm,
-                                "item": _oe_item, "monto_str": str(_oe_mn),
+                                "item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "",
+                                "monto_str": str(_oe_mn),
                                 "caja_nm": _oe_cj_nm, "desc": _oe_dsc,
                                 "estado": _oe_est, "fecha_mov": _fmov_def,
                             })
@@ -3395,7 +3401,7 @@ if _stab_otros_egresos:
                                         fecha=_e["fecha"],
                                         rubro_id=_oe_rubro_opts.get(_e["rubro"]),
                                         subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
-                                        item=_e["item"],
+                                        item_id=_e["item_id"],
                                         monto=_e["monto"],
                                         caja_id=_oe_caja_opts.get(_e["caja"]),
                                         descripcion=_e["desc"],
@@ -3425,7 +3431,7 @@ if _stab_otros_egresos:
                         "F. pago": _oe.get("fecha_movimiento") or "—",
                         "Rubro": (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—"),
                         "Subrubro": (_oe.get("subrubros_egresos") or {}).get("nombre") or "—",
-                        "Item": _oe.get("item") or "—",
+                        "Item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "—",
                         "Monto": float(_oe.get("monto") or 0),
                         "Caja": _oe_caja_map.get(_oe.get("caja_id"), "—"),
                         "Descripción": _oe.get("descripcion") or "",
@@ -6885,11 +6891,15 @@ if tab_re:
             if _items:
                 st.markdown("**Items**")
                 for _i in _items:
-                    _sub_i   = _sub_map.get(_i.get("subrubro_id")) or {}
-                    _rub_nm  = _rub_map.get(_sub_i.get("rubro_id"), "—")
-                    _sub_nm  = _sub_i.get("nombre", "—")
+                    _links = _i.get("items_egresos_subrubros") or []
+                    _paths = []
+                    for _lnk in _links:
+                        _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
+                        _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
+                        _sub_nm = _sub_i.get("nombre", "—")
+                        _paths.append(f"{_rub_nm} › {_sub_nm}")
                     _ic1, _ic2, _ic3 = st.columns([4, 1, 1])
-                    _ic1.write(f"{_rub_nm} › {_sub_nm} › {_i['nombre']}")
+                    _ic1.write(f"**{_i['nombre']}** — {', '.join(_paths) if _paths else '(sin subrubro)'}")
                     if _ic2.button("✏️", key=f"re_ei_{_i['id']}"):
                         st.session_state[f"re_edit_i_{_i['id']}"] = True
                         st.rerun(scope="fragment")
@@ -6900,26 +6910,36 @@ if tab_re:
                         st.rerun(scope="fragment")
                     if st.session_state.get(f"re_edit_i_{_i['id']}"):
                         with st.container(border=True):
-                            _cur_sub  = _sub_map.get(_i.get("subrubro_id")) or {}
-                            _cur_rub_nm = _rub_map.get(_cur_sub.get("rubro_id"), "")
-                            _e_rub = st.selectbox("Rubro", options=list(_rub_opts.keys()),
-                                                   index=list(_rub_opts.keys()).index(_cur_rub_nm) if _cur_rub_nm in _rub_opts else 0,
-                                                   key=f"re_erub_{_i['id']}")
-                            _e_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if s["rubro_id"] == _rub_opts.get(_e_rub)}
-                            _cur_sub_nm = _cur_sub.get("nombre", "")
-                            _e_sub = st.selectbox("Subrubro", options=list(_e_sub_opts.keys()),
-                                                   index=list(_e_sub_opts.keys()).index(_cur_sub_nm) if _cur_sub_nm in _e_sub_opts else 0,
-                                                   key=f"re_esub_{_i['id']}")
                             _e_nm = st.text_input("Nombre", value=_i["nombre"], key=f"re_enm_{_i['id']}")
-                            _ec1, _ec2 = st.columns(2)
-                            if _ec1.button("💾 Guardar", key=f"re_isave_{_i['id']}"):
-                                if _e_sub in _e_sub_opts:
-                                    db.actualizar_item_egreso(_i["id"], _e_nm.strip().upper(), _e_sub_opts[_e_sub])
+                            if _links:
+                                st.markdown("**Subrubros vinculados:**")
+                                for _lnk in _links:
+                                    _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
+                                    _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
+                                    _sub_nm = _sub_i.get("nombre", "—")
+                                    _lc1, _lc2 = st.columns([5, 1])
+                                    _lc1.write(f"{_rub_nm} › {_sub_nm}")
+                                    if _lc2.button("✕", key=f"re_unlink_{_i['id']}_{_lnk['subrubro_id']}"):
+                                        db.eliminar_link_item_subrubro(_i["id"], _lnk["subrubro_id"])
+                                        db.cargar_items_egresos.clear()
+                                        st.rerun(scope="fragment")
+                            st.markdown("**Agregar subrubro:**")
+                            _add_rub = st.selectbox("Rubro", options=[""] + list(_rub_opts.keys()), key=f"re_addlnk_rub_{_i['id']}")
+                            _add_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if _add_rub and s["rubro_id"] == _rub_opts.get(_add_rub)}
+                            _add_sub = st.selectbox("Subrubro", options=[""] + list(_add_sub_opts.keys()), key=f"re_addlnk_sub_{_i['id']}")
+                            _ec1, _ec2, _ec3 = st.columns(3)
+                            if _ec1.button("💾 Nombre", key=f"re_isave_{_i['id']}"):
+                                db.actualizar_item_egreso(_i["id"], _e_nm.strip().upper())
+                                db.cargar_items_egresos.clear()
+                                st.session_state.pop(f"re_edit_i_{_i['id']}", None)
+                                st.toast("✅ Item actualizado.")
+                                st.rerun(scope="fragment")
+                            if _ec2.button("🔗 Vincular", key=f"re_addlnk_{_i['id']}"):
+                                if _add_sub in _add_sub_opts:
+                                    db.agregar_link_item_subrubro(_i["id"], _add_sub_opts[_add_sub])
                                     db.cargar_items_egresos.clear()
-                                    st.session_state.pop(f"re_edit_i_{_i['id']}", None)
-                                    st.toast("✅ Item actualizado.", icon="✅")
                                     st.rerun(scope="fragment")
-                            if _ec2.button("❌ Cancelar", key=f"re_ican_{_i['id']}"):
+                            if _ec3.button("❌ Cancelar", key=f"re_ican_{_i['id']}"):
                                 st.session_state.pop(f"re_edit_i_{_i['id']}", None)
                                 st.rerun(scope="fragment")
 
