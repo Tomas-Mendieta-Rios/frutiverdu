@@ -2609,6 +2609,7 @@ if _sub_resumen:
 
         # Notas de crédito/débito
         if notas_vig:
+            total_notas_net = sum(_nota_sign(f) * float(f.get("total") or 0) for f in notas_vig)
             _notas_sign_str = f"— $ {_pesos(abs(total_notas_net))}" + (" (reducen pendiente)" if total_notas_net < 0 else " (aumentan pendiente)")
             with st.expander(f"Notas C/D ({len(notas_vig)}) {_notas_sign_str}"):
                 _rows_notas = []
