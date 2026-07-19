@@ -2028,18 +2028,72 @@ def eliminar_subrubro_ingreso(id):
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def cargar_otros_ingresos():
+def cargar_items_ingresos(subrubro_id=None):
     client = get_client()
-    resp = _exec(client.table("otros_ingresos").select("*, rubros_ingresos(nombre), subrubros_ingresos(nombre)").order("fecha", desc=True))
+    if subrubro_id is not None:
+        resp = _exec(client.table("items_ingresos_subrubros")
+            .select("items_ingresos(id, nombre)")
+            .eq("subrubro_id", subrubro_id))
+        return sorted(
+            [row["items_ingresos"] for row in (resp.data or []) if row.get("items_ingresos")],
+            key=lambda x: x.get("nombre", "")
+        )
+    resp = _exec(client.table("items_ingresos")
+        .select("id, nombre, items_ingresos_subrubros(subrubro_id)")
+        .order("nombre"))
     return resp.data or []
 
 
-def guardar_otro_ingreso(fecha, rubro_id, subrubro_id, monto, caja_id, descripcion, usuario, estado="pendiente", fecha_movimiento=None):
+def guardar_item_ingreso(nombre, subrubro_id):
+    client = get_client()
+    resp = client.table("items_ingresos").upsert({"nombre": nombre}, on_conflict="nombre").execute()
+    item_id = resp.data[0]["id"]
+    client.table("items_ingresos_subrubros").upsert(
+        {"item_id": item_id, "subrubro_id": subrubro_id},
+        on_conflict="item_id,subrubro_id"
+    ).execute()
+
+
+def actualizar_item_ingreso(id, nombre):
+    client = get_client()
+    client.table("items_ingresos").update({"nombre": nombre}).eq("id", id).execute()
+
+
+def eliminar_item_ingreso(id):
+    client = get_client()
+    client.table("items_ingresos").delete().eq("id", id).execute()
+
+
+def agregar_link_item_ingreso_subrubro(item_id, subrubro_id):
+    client = get_client()
+    client.table("items_ingresos_subrubros").upsert(
+        {"item_id": item_id, "subrubro_id": subrubro_id},
+        on_conflict="item_id,subrubro_id"
+    ).execute()
+
+
+def eliminar_link_item_ingreso_subrubro(item_id, subrubro_id):
+    client = get_client()
+    client.table("items_ingresos_subrubros") \
+        .delete().eq("item_id", item_id).eq("subrubro_id", subrubro_id).execute()
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cargar_otros_ingresos():
+    client = get_client()
+    resp = _exec(client.table("otros_ingresos").select(
+        "*, rubros_ingresos(nombre), subrubros_ingresos(nombre), items_ingresos(nombre)"
+    ).order("fecha", desc=True))
+    return resp.data or []
+
+
+def guardar_otro_ingreso(fecha, rubro_id, subrubro_id, item_id, monto, caja_id, descripcion, usuario, estado="pendiente", fecha_movimiento=None):
     client = get_client()
     client.table("otros_ingresos").insert({
         "fecha": str(fecha),
         "rubro_id": rubro_id,
         "subrubro_id": subrubro_id or None,
+        "item_id": item_id or None,
         "monto": float(monto),
         "caja_id": caja_id or None,
         "descripcion": descripcion or None,
@@ -2049,12 +2103,13 @@ def guardar_otro_ingreso(fecha, rubro_id, subrubro_id, monto, caja_id, descripci
     }).execute()
 
 
-def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, monto, caja_id, descripcion, estado="pendiente", fecha_movimiento=None):
+def actualizar_otro_ingreso(id, fecha, rubro_id, subrubro_id, item_id, monto, caja_id, descripcion, estado="pendiente", fecha_movimiento=None):
     client = get_client()
     client.table("otros_ingresos").update({
         "fecha": str(fecha),
         "rubro_id": rubro_id,
         "subrubro_id": subrubro_id or None,
+        "item_id": item_id or None,
         "monto": float(monto),
         "caja_id": caja_id or None,
         "descripcion": descripcion or None,

@@ -3343,6 +3343,14 @@ if _stab_otros_ingresos:
                 sub_opts = {s["nombre"]: s["id"] for s in db.cargar_subrubros_ingresos(_oi_rubro_opts[rubro])}
             sub_nm_idx = ([""] + list(sub_opts.keys())).index(d.get("sub_nm", "")) if d.get("sub_nm") in sub_opts else 0
             subrubro = st.selectbox("Subrubro", options=[""] + list(sub_opts.keys()), index=sub_nm_idx, key=f"{pfx}_sub")
+            item_map = {}
+            if subrubro and subrubro in sub_opts:
+                _items_raw = db.cargar_items_ingresos(sub_opts[subrubro])
+                item_map = {i["nombre"]: i["id"] for i in _items_raw}
+            _def_item_nm = d.get("item", "")
+            item_idx = ([""] + list(item_map.keys())).index(_def_item_nm) if _def_item_nm in item_map else 0
+            item_nm = st.selectbox("Item", options=[""] + list(item_map.keys()), index=item_idx, key=f"{pfx}_item")
+            item_id = item_map.get(item_nm)
             monto_str = st.text_input("Monto ($)", value=d.get("monto_str", ""), key=f"{pfx}_monto")
             try:
                 monto = float(monto_str.replace(",", ".")) if monto_str else 0.0
@@ -3358,6 +3366,7 @@ if _stab_otros_ingresos:
                 _fmov_default = d.get("fecha_mov") or date.today()
                 fecha_mov = st.date_input("Fecha de cobro", value=_fmov_default, format="DD/MM/YYYY", key=f"{pfx}_fmov")
             return {"fecha": fecha, "rubro": rubro, "subrubro": subrubro, "sub_opts": sub_opts,
+                    "item": item_nm, "item_id": item_id,
                     "monto": monto, "caja": caja, "desc": desc, "estado": estado, "fecha_mov": fecha_mov}
 
         with _oi_tab1:
@@ -3376,6 +3385,7 @@ if _stab_otros_ingresos:
                                     fecha=_f["fecha"],
                                     rubro_id=_oi_rubro_opts.get(_f["rubro"]),
                                     subrubro_id=_f["sub_opts"].get(_f["subrubro"]),
+                                    item_id=_f["item_id"],
                                     monto=_f["monto"],
                                     caja_id=_oi_caja_opts.get(_f["caja"]),
                                     descripcion=_f["desc"],
@@ -3409,6 +3419,7 @@ if _stab_otros_ingresos:
                     _oi_id    = _oi["id"]
                     _oi_r_nm  = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
                     _oi_s_nm  = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                    _oi_it_nm = (_oi.get("items_ingresos") or {}).get("nombre") or ""
                     _oi_cj_nm = _oi_caja_map.get(_oi.get("caja_id"), "—")
                     _oi_mn    = float(_oi.get("monto") or 0)
                     _oi_fch   = _oi.get("fecha", "")
@@ -3416,29 +3427,31 @@ if _stab_otros_ingresos:
                     _oi_est   = _oi.get("estado", "pendiente")
                     _oi_fmov  = _oi.get("fecha_movimiento")
 
-                    _ca, _cb, _cc = st.columns([5, 1, 1])
-                    with _ca:
-                        _est_badge = "🟢" if _oi_est == "cobrado" else "🟡"
-                        st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm} · **$ {_oi_mn:,.0f}**")
-                    with _cb:
-                        if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
-                            st.session_state[f"oi_editing_{_oi_id}"] = True
-                            st.rerun(scope="fragment")
-                    with _cc:
-                        if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
-                            try:
-                                db.eliminar_otro_ingreso(_oi_id)
-                                db.cargar_otros_ingresos.clear()
+                    with st.container(border=True):
+                        _ca, _cb, _cc = st.columns([5, 1, 1])
+                        with _ca:
+                            _est_badge = "🟢" if _oi_est == "cobrado" else "🟡"
+                            _item_str = f" · {_oi_it_nm}" if _oi_it_nm else ""
+                            st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm}{_item_str} · **$ {_oi_mn:,.0f}**")
+                        with _cb:
+                            if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
+                                st.session_state[f"oi_editing_{_oi_id}"] = True
                                 st.rerun(scope="fragment")
-                            except Exception as e:
-                                st.error(f"Error: {e}")
+                        with _cc:
+                            if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
+                                try:
+                                    db.eliminar_otro_ingreso(_oi_id)
+                                    db.cargar_otros_ingresos.clear()
+                                    st.rerun(scope="fragment")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
 
                     if st.session_state.get(f"oi_editing_{_oi_id}"):
                         with st.container(border=True):
                             _fmov_def = pd.to_datetime(_oi_fmov).date() if _oi_fmov else date.today()
                             _e = _oi_render_fields(f"e{_oi_id}", defaults={
                                 "fecha": pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(),
-                                "rubro_nm": _oi_r_nm, "sub_nm": _oi_s_nm,
+                                "rubro_nm": _oi_r_nm, "sub_nm": _oi_s_nm, "item": _oi_it_nm,
                                 "monto_str": str(_oi_mn), "caja_nm": _oi_cj_nm, "desc": _oi_dsc,
                                 "estado": _oi_est, "fecha_mov": _fmov_def,
                             })
@@ -3450,6 +3463,7 @@ if _stab_otros_ingresos:
                                         fecha=_e["fecha"],
                                         rubro_id=_oi_rubro_opts.get(_e["rubro"]),
                                         subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
+                                        item_id=_e["item_id"],
                                         monto=_e["monto"],
                                         caja_id=_oi_caja_opts.get(_e["caja"]),
                                         descripcion=_e["desc"],
@@ -3489,6 +3503,7 @@ if _stab_otros_ingresos:
                         "F. cobro": _oi.get("fecha_movimiento") or "—",
                         "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—"),
                         "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
+                        "Item": (_oi.get("items_ingresos") or {}).get("nombre") or "—",
                         "Monto": float(_oi.get("monto") or 0),
                         "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
                         "Descripción": _oi.get("descripcion") or "",
@@ -7041,6 +7056,88 @@ if tab_rubros_ingresos:
                         if _sc2.form_submit_button("Cancelar"):
                             st.session_state.pop(f"ri_editing_s_{_ri_s['id']}", None)
                             st.rerun()
+
+    st.divider()
+
+    @st.fragment
+    def _ri_frag_items():
+        _rubros   = db.cargar_rubros_ingresos()
+        _rub_map  = {r["id"]: r["nombre"] for r in _rubros}
+        _rub_opts = {r["nombre"]: r["id"] for r in _rubros}
+        _all_subs = db.cargar_subrubros_ingresos()
+        _sub_map  = {s["id"]: s for s in _all_subs}
+
+        st.markdown("### Items de ingresos")
+        with st.expander("➕ Agregar item", expanded=False):
+            if _rub_opts:
+                _ni_rub = st.selectbox("Rubro", options=[""] + list(_rub_opts.keys()), key="ri_ni_rubro")
+                _ni_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if _ni_rub and s["rubro_id"] == _rub_opts.get(_ni_rub)}
+                _ni_sub = st.selectbox("Subrubro", options=[""] + list(_ni_sub_opts.keys()), key="ri_ni_sub")
+                _ni_nm  = st.text_input("Nombre del item", key="ri_ni_nombre").strip().upper()
+                if st.button("Guardar item", key="ri_ni_save"):
+                    if _ni_nm and _ni_sub and _ni_sub in _ni_sub_opts:
+                        db.guardar_item_ingreso(_ni_nm, _ni_sub_opts[_ni_sub])
+                        db.cargar_items_ingresos.clear()
+                        st.toast("✅ Item agregado.")
+                        st.rerun(scope="fragment")
+
+        _items = db.cargar_items_ingresos()
+        if _items:
+            st.markdown("**Items**")
+            for _i in _items:
+                _links = _i.get("items_ingresos_subrubros") or []
+                _paths = []
+                for _lnk in _links:
+                    _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
+                    _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
+                    _sub_nm = _sub_i.get("nombre", "—")
+                    _paths.append(f"{_rub_nm} › {_sub_nm}")
+                _ic1, _ic2, _ic3 = st.columns([4, 1, 1])
+                _ic1.write(f"**{_i['nombre']}** — {', '.join(_paths) if _paths else '(sin subrubro)'}")
+                if _ic2.button("✏️", key=f"ri_ei_{_i['id']}"):
+                    st.session_state[f"ri_edit_i_{_i['id']}"] = True
+                    st.rerun(scope="fragment")
+                if _ic3.button("🗑️", key=f"ri_di_{_i['id']}"):
+                    db.eliminar_item_ingreso(_i["id"])
+                    db.cargar_items_ingresos.clear()
+                    st.toast("🗑️ Item eliminado.")
+                    st.rerun(scope="fragment")
+                if st.session_state.get(f"ri_edit_i_{_i['id']}"):
+                    with st.container(border=True):
+                        _e_nm = st.text_input("Nombre", value=_i["nombre"], key=f"ri_enm_{_i['id']}")
+                        if _links:
+                            st.markdown("**Subrubros vinculados:**")
+                            for _lnk in _links:
+                                _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
+                                _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
+                                _sub_nm = _sub_i.get("nombre", "—")
+                                _lc1, _lc2 = st.columns([5, 1])
+                                _lc1.write(f"{_rub_nm} › {_sub_nm}")
+                                if _lc2.button("✕", key=f"ri_unlink_{_i['id']}_{_lnk['subrubro_id']}"):
+                                    db.eliminar_link_item_ingreso_subrubro(_i["id"], _lnk["subrubro_id"])
+                                    db.cargar_items_ingresos.clear()
+                                    st.rerun(scope="fragment")
+                        st.markdown("**Agregar subrubro:**")
+                        _add_rub = st.selectbox("Rubro", options=[""] + list(_rub_opts.keys()), key=f"ri_addlnk_rub_{_i['id']}")
+                        _add_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if _add_rub and s["rubro_id"] == _rub_opts.get(_add_rub)}
+                        _add_sub = st.selectbox("Subrubro", options=[""] + list(_add_sub_opts.keys()), key=f"ri_addlnk_sub_{_i['id']}")
+                        _ec1, _ec2, _ec3 = st.columns(3)
+                        if _ec1.button("💾 Nombre", key=f"ri_isave_{_i['id']}"):
+                            db.actualizar_item_ingreso(_i["id"], _e_nm.strip().upper())
+                            db.cargar_items_ingresos.clear()
+                            st.session_state.pop(f"ri_edit_i_{_i['id']}", None)
+                            st.toast("✅ Item actualizado.")
+                            st.rerun(scope="fragment")
+                        if _ec2.button("🔗 Vincular", key=f"ri_addlnk_{_i['id']}"):
+                            if _add_sub in _add_sub_opts:
+                                db.agregar_link_item_ingreso_subrubro(_i["id"], _add_sub_opts[_add_sub])
+                                db.cargar_items_ingresos.clear()
+                                st.rerun(scope="fragment")
+                        if _ec3.button("❌ Cancelar", key=f"ri_ican_{_i['id']}"):
+                            st.session_state.pop(f"ri_edit_i_{_i['id']}", None)
+                            st.rerun(scope="fragment")
+
+    _ri_frag_items()
 
 if tab_re:
     with tab_re:
