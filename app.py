@@ -732,10 +732,16 @@ def extraer_item_dux(item):
         cant = float(cant) if cant is not None else 0.0
     except (ValueError, TypeError):
         cant = 0.0
+    precio_uni = _dux_get_first(item, ["precio_uni", "precioUni", "precio_unitario", "precioUnitario", "precio"])
+    try:
+        precio_uni = float(precio_uni) if precio_uni is not None else None
+    except (ValueError, TypeError):
+        precio_uni = None
     return {
         "codigo": str(codigo) if codigo is not None else "",
         "producto": descr or "",
         "cantidad": cant,
+        "precio_uni": precio_uni,
     }
 
 
@@ -5726,7 +5732,7 @@ with tab_dux:
                             if items:
                                 filas = [extraer_item_dux(it) for it in items]
                                 _df_items = pd.DataFrame(filas)
-                                _cols_show = [c for c in ["producto", "cantidad"] if c in _df_items.columns]
+                                _cols_show = [c for c in ["producto", "cantidad", "precio_uni"] if c in _df_items.columns]
                                 st.dataframe(
                                     _df_items[_cols_show],
                                     use_container_width=False,
