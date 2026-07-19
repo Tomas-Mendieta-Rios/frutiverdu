@@ -3923,10 +3923,10 @@ if _stab_transferencias:
                 for _org_nm, _dsts in sorted(_by_org.items()):
                     _org_tot = sum(float(x.get("monto") or 0) for d in _dsts.values() for x in d)
                     _org_cnt = sum(len(d) for d in _dsts.values())
-                    with st.expander(f"{_org_nm} ({_org_cnt}) — $ {_pesos(_org_tot)}"):
+                    with st.expander(f"Desde - {_org_nm} ({_org_cnt}) — $ {_pesos(_org_tot)}"):
                         for _dst_nm, _dst_items in sorted(_dsts.items()):
                             _dst_tot = sum(float(x.get("monto") or 0) for x in _dst_items)
-                            with st.expander(f"{_dst_nm} ({len(_dst_items)}) — $ {_pesos(_dst_tot)}"):
+                            with st.expander(f"Hacia - {_dst_nm} ({len(_dst_items)}) — $ {_pesos(_dst_tot)}"):
                                 _rows = [{"Fecha": _fmt_fecha(_t.get("fecha")),
                                           "Concepto": _t.get("concepto") or "—",
                                           "Monto": float(_t.get("monto") or 0)}
