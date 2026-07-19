@@ -3627,24 +3627,24 @@ if _stab_otros_egresos:
                     _oe_fmov  = _oe.get("fecha_movimiento")
                     _oe_item  = (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or ""
 
-                    with st.container(border=True):
-                        _ca, _cb, _cc = st.columns([5, 1, 1])
-                        with _ca:
-                            _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
-                            _fmov_str = f" · pago: {_oe_fmov}" if _oe_fmov else ""
-                            st.markdown(f"{_est_badge} **{_oe_fch}**{_fmov_str} · {_oe_r_nm} / {_oe_s_nm} · {_oe_item} · **$ {_oe_mn:,.0f}**")
-                        with _cb:
-                            if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
-                                st.session_state[f"oe_editing_{_oe_id}"] = True
+                    _ca, _cb, _cc = st.columns([5, 1, 1])
+                    with _ca:
+                        _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
+                        _fmov_str = f" · pago: {_oe_fmov}" if _oe_fmov else ""
+                        st.markdown(f"{_est_badge} **{_oe_fch}**{_fmov_str} · {_oe_r_nm} / {_oe_s_nm} · {_oe_item} · **$ {_oe_mn:,.0f}**")
+                    with _cb:
+                        if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
+                            st.session_state[f"oe_editing_{_oe_id}"] = True
+                            st.rerun(scope="fragment")
+                    with _cc:
+                        if st.button("🗑️", key=f"oe_del_{_oe_id}", help="Eliminar"):
+                            try:
+                                db.eliminar_otro_egreso(_oe_id)
+                                db.cargar_otros_egresos.clear()
                                 st.rerun(scope="fragment")
-                        with _cc:
-                            if st.button("🗑️", key=f"oe_del_{_oe_id}", help="Eliminar"):
-                                try:
-                                    db.eliminar_otro_egreso(_oe_id)
-                                    db.cargar_otros_egresos.clear()
-                                    st.rerun(scope="fragment")
-                                except Exception as e:
-                                    st.error(f"Error: {e}")
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                    st.divider()
 
                     if st.session_state.get(f"oe_editing_{_oe_id}"):
                         with st.container(border=True):
