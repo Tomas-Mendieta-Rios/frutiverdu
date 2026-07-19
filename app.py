@@ -1456,7 +1456,7 @@ tab_ing_cobros_wix = None
 if tab_tesoreria:
     with tab_tesoreria:
         _sub_resumen, _sub_pendientes, _stab_movimientos, tab_ing_cobros_wix, _stab_otros_ingresos, _stab_otros_egresos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
-            "📊 Resumen", "⏳ Pendientes y deudores", "📊 Movimientos", "💳 Cobros Wix", "💰 Otros ingresos", "💸 Otros egresos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
+            "📊 Resumen", "⏳ Pendientes y deudores", "📊 Movimientos", "💳 Cobros Wix", "💰 Ingresos", "💸 Egresos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
         ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -1881,7 +1881,7 @@ def _render_movimiento_caja(cobros, pagos):
             "_parcial":      False,
         })
 
-    # Otros ingresos → Entradas
+    # Ingresos → Entradas
     for _oi in _otros_ing_mov:
         if _oi.get("estado") != "cobrado":
             continue
@@ -1910,7 +1910,7 @@ def _render_movimiento_caja(cobros, pagos):
             "Monto": _monto, "imputaciones": [], "_parcial": False,
         })
 
-    # Otros egresos → Salidas
+    # Egresos → Salidas
     for _oe in _otros_egr_mov:
         if _oe.get("estado") != "pagado":
             continue
@@ -2647,7 +2647,7 @@ if _sub_resumen:
 
         total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
 
-        # Otros ingresos
+        # Ingresos
         _otros_ing_todos = db.cargar_otros_ingresos()
         _otros_ing_f     = [o for o in _otros_ing_todos if _en_rango(o.get("fecha"))]
         total_otros_ing  = sum(float(o.get("monto") or 0) for o in _otros_ing_f)
@@ -2658,7 +2658,7 @@ if _sub_resumen:
         total_ing_pend  = total_fac_pend + total_wix_pend + total_otros_pend
         total_ing_anul  = total_fac_anul + total_wix_anul
 
-        # Otros egresos
+        # Egresos
         _otros_egr_todos = db.cargar_otros_egresos()
         _todos_rango     = [o for o in _otros_egr_todos if _en_rango(o.get("fecha"))]
         _retiros_f       = [o for o in _todos_rango if (o.get("subrubros_egresos") or {}).get("nombre") == "RETIRO"]
@@ -2827,7 +2827,7 @@ if _sub_resumen:
 
         # ── OTROS INGRESOS ──────────────────────────────────────────────────────
         if _otros_ing_f:
-            st.markdown(f"#### Otros ingresos · {len(_otros_ing_f)} registros")
+            st.markdown(f"#### Ingresos · {len(_otros_ing_f)} registros")
             _oi_c1, _oi_c2, _oi_c3 = st.columns(3)
             _bal_metric(_oi_c1, "Total",     f"$ {_pesos(total_otros_ing)}",  "#1a1a1a")
             _bal_metric(_oi_c2, "Cobrado",   f"$ {_pesos(total_otros_cobr)}", "#2e7d32")
@@ -2942,7 +2942,7 @@ if _sub_resumen:
 
         # ── OTROS EGRESOS ────────────────────────────────────────────────────────
         if _otros_egr_f:
-            st.markdown(f"#### Otros egresos · {len(_otros_egr_f)} registros")
+            st.markdown(f"#### Egresos · {len(_otros_egr_f)} registros")
             _oe_c1, _oe_c2, _oe_c3 = st.columns(3)
             _bal_metric(_oe_c1, "Total",     f"$ {_pesos(total_otros_egr)}",      "#1a1a1a")
             _bal_metric(_oe_c2, "Pagado",    f"$ {_pesos(total_otros_egr_pag)}",  "#2e7d32")
@@ -3334,7 +3334,7 @@ if _stab_saldo_ini:
 
 if _stab_otros_ingresos:
     with _stab_otros_ingresos:
-        st.subheader("💰 Otros ingresos")
+        st.subheader("💰 Ingresos")
 
         _oi_rubros = db.cargar_rubros_ingresos()
         _oi_cajas  = db.cargar_cajas()
@@ -3345,7 +3345,7 @@ if _stab_otros_ingresos:
 
         _oi_lista = db.cargar_otros_ingresos()
 
-        _oi_tab1, _oi_tab2, _oi_tab3 = st.tabs(["➕ Ingresar ingreso", "✏️ Editar / Eliminar", "📋 Todos los ingresos"])
+        _oi_tab1, _oi_tab2, _oi_tab3 = st.tabs(["➕ Ingresar", "✏️ Editar / Eliminar", "📋 Todos los ingresos"])
 
         # ── TAB 1: Nuevo ingreso ──────────────────────────────────────────────
         def _oi_render_fields(pfx, defaults=None):
@@ -3451,7 +3451,8 @@ if _stab_otros_ingresos:
                         with _ca:
                             _est_badge = "🟢" if _oi_est == "cobrado" else "🟡"
                             _item_str = f" · {_oi_it_nm}" if _oi_it_nm else ""
-                            st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm}{_item_str} · **$ {_oi_mn:,.0f}**")
+                            _fmov_str = f" · F.cobro: {_oi_fmov}" if _oi_fmov else ""
+                            st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm}{_item_str} · **$ {_oi_mn:,.0f}**{_fmov_str}")
                         with _cb:
                             if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
                                 st.session_state[f"oi_editing_{_oi_id}"] = True
@@ -3549,7 +3550,7 @@ if _stab_otros_ingresos:
 
 if _stab_otros_egresos:
     with _stab_otros_egresos:
-        st.subheader("💸 Otros egresos")
+        st.subheader("💸 Egresos")
 
         _oe_rubros = db.cargar_rubros_egresos()
         _oe_cajas  = db.cargar_cajas()
@@ -3560,7 +3561,7 @@ if _stab_otros_egresos:
 
         _oe_lista = db.cargar_otros_egresos()
 
-        _oe_tab1, _oe_tab2, _oe_tab3 = st.tabs(["➕ Ingresar egreso", "✏️ Editar / Eliminar", "📋 Todos los egresos"])
+        _oe_tab1, _oe_tab2, _oe_tab3 = st.tabs(["➕ Ingresar", "✏️ Editar / Eliminar", "📋 Todos los egresos"])
 
         def _oe_render_fields(pfx, defaults=None):
             d = defaults or {}
@@ -3667,7 +3668,8 @@ if _stab_otros_egresos:
                         with _ca:
                             _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
                             _item_str = f" · {_oe_item}" if _oe_item else ""
-                            st.markdown(f"{_est_badge} **{_oe_fch}** · {_oe_r_nm} / {_oe_s_nm}{_item_str} · **$ {_oe_mn:,.0f}**")
+                            _fmov_str = f" · F.pago: {_oe_fmov}" if _oe_fmov else ""
+                            st.markdown(f"{_est_badge} **{_oe_fch}** · {_oe_r_nm} / {_oe_s_nm}{_item_str} · **$ {_oe_mn:,.0f}**{_fmov_str}")
                         with _cb:
                             if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
                                 st.session_state[f"oe_editing_{_oe_id}"] = True
