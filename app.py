@@ -3102,8 +3102,10 @@ if _stab_ajustes:
                         _cid = _nombre_a_id.get(_n_caja)
                         if _cid:
                             db.guardar_ajuste_caja(_cid, _n_fecha, _m, _n_nota, tipo="ajuste")
-                            st.toast("✅ Ajuste registrado.", icon="✅")
+                            st.session_state["aj_guardado_ok"] = True
                             st.rerun(scope="fragment")
+                    if st.session_state.pop("aj_guardado_ok", False):
+                        st.success("Ajuste guardado.")
             _aj_nuevo()
 
         with _aj_tab_edit:
