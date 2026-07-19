@@ -3915,20 +3915,24 @@ if _stab_transferencias:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                _tr_grupos: dict[str, list] = {}
+                _by_org: dict[str, dict[str, list]] = {}
                 for _t in _lista:
                     _org_nm = ((_t.get("origen") or {}).get("nombre") or "—")
                     _dst_nm = ((_t.get("destino") or {}).get("nombre") or "—")
-                    _tr_grupos.setdefault(f"{_org_nm} → {_dst_nm}", []).append(_t)
-                for _grp_key, _grp_items in sorted(_tr_grupos.items()):
-                    _grp_total = sum(float(x.get("monto") or 0) for x in _grp_items)
-                    with st.expander(f"{_grp_key} ({len(_grp_items)}) — $ {_pesos(_grp_total)}"):
-                        _rows = [{"Fecha": _fmt_fecha(_t.get("fecha")),
-                                  "Concepto": _t.get("concepto") or "—",
-                                  "Monto": float(_t.get("monto") or 0)}
-                                 for _t in sorted(_grp_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                    _by_org.setdefault(_org_nm, {}).setdefault(_dst_nm, []).append(_t)
+                for _org_nm, _dsts in sorted(_by_org.items()):
+                    _org_tot = sum(float(x.get("monto") or 0) for d in _dsts.values() for x in d)
+                    _org_cnt = sum(len(d) for d in _dsts.values())
+                    with st.expander(f"{_org_nm} ({_org_cnt}) — $ {_pesos(_org_tot)}"):
+                        for _dst_nm, _dst_items in sorted(_dsts.items()):
+                            _dst_tot = sum(float(x.get("monto") or 0) for x in _dst_items)
+                            with st.expander(f"{_dst_nm} ({len(_dst_items)}) — $ {_pesos(_dst_tot)}"):
+                                _rows = [{"Fecha": _fmt_fecha(_t.get("fecha")),
+                                          "Concepto": _t.get("concepto") or "—",
+                                          "Monto": float(_t.get("monto") or 0)}
+                                         for _t in sorted(_dst_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _tr_todos_vista()
 
 if tab_ingresos:
