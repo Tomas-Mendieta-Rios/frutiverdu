@@ -3124,9 +3124,11 @@ if _stab_ajustes:
                 if not _lista:
                     st.info("No hay ajustes registrados.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _aj_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_edit_desde")
-                _aj_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_edit_hasta")
+                with st.form("form_aj_edit_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _aj_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_edit_desde")
+                    _aj_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_edit_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [a for a in _lista if _aj_e_desde <= _safe_date(a.get("fecha")) <= _aj_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3178,9 +3180,11 @@ if _stab_ajustes:
                 if not _lista:
                     st.info("No hay ajustes registrados.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _aj_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_all_desde")
-                _aj_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_all_hasta")
+                with st.form("form_aj_all_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _aj_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_all_desde")
+                    _aj_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_all_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [a for a in _lista if _aj_v_desde <= _safe_date(a.get("fecha")) <= _aj_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3418,9 +3422,11 @@ if _stab_otros_ingresos:
                 if not _lista:
                     st.info("No hay ingresos cargados todavía.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _oi_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_edit_desde")
-                _oi_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_edit_hasta")
+                with st.form("form_oi_edit_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _oi_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_edit_desde")
+                    _oi_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_edit_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [o for o in _lista if _oi_e_desde <= _safe_date(o.get("fecha")) <= _oi_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3498,9 +3504,11 @@ if _stab_otros_ingresos:
                 if not _lista:
                     st.info("No hay ingresos cargados todavía.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _oi_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_all_desde")
-                _oi_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_all_hasta")
+                with st.form("form_oi_all_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _oi_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_all_desde")
+                    _oi_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_all_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [o for o in _lista if _oi_v_desde <= _safe_date(o.get("fecha")) <= _oi_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3630,9 +3638,11 @@ if _stab_otros_egresos:
                 if not _lista:
                     st.info("No hay egresos cargados todavía.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _oe_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_edit_desde")
-                _oe_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_edit_hasta")
+                with st.form("form_oe_edit_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _oe_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_edit_desde")
+                    _oe_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_edit_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [o for o in _lista if _oe_e_desde <= _safe_date(o.get("fecha")) <= _oe_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3712,9 +3722,11 @@ if _stab_otros_egresos:
                 if not _lista:
                     st.info("No hay egresos cargados todavía.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _oe_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_all_desde")
-                _oe_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_all_hasta")
+                with st.form("form_oe_all_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _oe_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_all_desde")
+                    _oe_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_all_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [o for o in _lista if _oe_v_desde <= _safe_date(o.get("fecha")) <= _oe_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3860,9 +3872,11 @@ if _stab_transferencias:
                 if not _lista:
                     st.info("No hay transferencias registradas.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _tr_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_edit_desde")
-                _tr_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_edit_hasta")
+                with st.form("form_tr_edit_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _tr_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_edit_desde")
+                    _tr_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_edit_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [t for t in _lista if _tr_e_desde <= _safe_date(t.get("fecha")) <= _tr_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3916,9 +3930,11 @@ if _stab_transferencias:
                 if not _lista:
                     st.info("No hay transferencias registradas.")
                     return
-                _dc1, _dc2 = st.columns(2)
-                _tr_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_all_desde")
-                _tr_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_all_hasta")
+                with st.form("form_tr_all_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _tr_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_all_desde")
+                    _tr_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_all_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
                 _lista = [t for t in _lista if _tr_v_desde <= _safe_date(t.get("fecha")) <= _tr_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -4058,9 +4074,11 @@ if tab_ing_cobros_wix:
             _ful_map = {"FULFILLED": "✅ Entregado", "NOT_FULFILLED": "⏳ Pendiente",
                         "PARTIALLY_FULFILLED": "🔶 Parcial"}
 
-            _wc1, _wc2 = st.columns(2)
-            _wix_desde = _wc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_cob_desde")
-            _wix_hasta = _wc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_cob_hasta")
+            with st.form("form_wix_cob_filtro", border=False):
+                _wc1, _wc2 = st.columns(2)
+                _wix_desde = _wc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_cob_desde")
+                _wix_hasta = _wc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_cob_hasta")
+                st.form_submit_button("Actualizar", type="primary")
             _wix_sorted_cob = [o for o in _wix_sorted_cob
                                 if _wix_desde <= _safe_date(str(o.get("createdDate") or "")[:10]) <= _wix_hasta]
 
@@ -5646,9 +5664,11 @@ with tab_dux:
                 all_orders_saved, key=_nro_dux_sort, reverse=True
             )
 
-            _ddc1, _ddc2 = st.columns(2)
-            _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
-            _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
+            with st.form("form_dux_ped_filtro", border=False):
+                _ddc1, _ddc2 = st.columns(2)
+                _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
+                _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
+                st.form_submit_button("Actualizar", type="primary")
             all_orders_sorted = [o for o in all_orders_sorted
                                   if _dux_desde <= _fecha_dux(o).date() <= _dux_hasta]
 
@@ -6101,9 +6121,11 @@ with tab_wix:
                 orders_saved, key=_nro_wix_sort, reverse=True
             )
 
-            _wpc1, _wpc2 = st.columns(2)
-            _wix_ped_desde = _wpc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_ped_desde")
-            _wix_ped_hasta = _wpc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_ped_hasta")
+            with st.form("form_wix_ped_filtro", border=False):
+                _wpc1, _wpc2 = st.columns(2)
+                _wix_ped_desde = _wpc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_ped_desde")
+                _wix_ped_hasta = _wpc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_ped_hasta")
+                st.form_submit_button("Actualizar", type="primary")
             orders_saved_sorted = [o for o in orders_saved_sorted
                                     if _wix_ped_desde <= _fecha_wix(o).date() <= _wix_ped_hasta]
 
