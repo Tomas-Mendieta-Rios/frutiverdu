@@ -1449,8 +1449,8 @@ tab_ing_cobros_wix = None
 
 if tab_tesoreria:
     with tab_tesoreria:
-        _sub_resumen, _sub_pendientes, tab_ing_cobros_wix, _stab_movimientos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini, _stab_otros_ingresos, _stab_otros_egresos = st.tabs([
-            "📊 Resumen", "⏳ Pendientes y deudores", "💳 Cobros Wix", "📊 Movimientos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial", "💰 Otros ingresos", "💸 Otros egresos",
+        _sub_resumen, _sub_pendientes, _stab_movimientos, tab_ing_cobros_wix, _stab_otros_ingresos, _stab_otros_egresos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
+            "📊 Resumen", "⏳ Pendientes y deudores", "📊 Movimientos", "💳 Cobros Wix", "💰 Otros ingresos", "💸 Otros egresos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
         ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
