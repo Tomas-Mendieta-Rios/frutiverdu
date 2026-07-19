@@ -2247,7 +2247,7 @@ def _render_movimiento_caja(cobros, pagos):
         _df_ent = _dedup_cobros(_entradas_real + _entradas_real_parc)
         if not _df_ent.empty:
             _tot_ent = _df_ent["Monto"].sum()
-            with st.expander(f"Entradas ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
+            with st.expander(f"ENTRADAS - VENTAS ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
                 st.dataframe(
                     _df_ent[["Cobro #", "Fecha", "Cliente", "Monto"]],
                     use_container_width=True, hide_index=True,
@@ -2255,14 +2255,14 @@ def _render_movimiento_caja(cobros, pagos):
                 )
         if _ent_otros_ing:
             _tot_oi = sum(r["Monto"] for r in _ent_otros_ing)
-            with st.expander(f"Entradas — Otros ({len(_ent_otros_ing)}) — {_fmt_monto(_tot_oi)}"):
+            with st.expander(f"ENTRADAS - INGRESOS ({len(_ent_otros_ing)}) — {_fmt_monto(_tot_oi)}"):
                 _oi_rows = [{"Fecha": r["Fecha"], "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
                             for r in sorted(_ent_otros_ing, key=lambda x: x["Fecha"], reverse=True)]
                 st.dataframe(pd.DataFrame(_oi_rows), use_container_width=True, hide_index=True,
                              column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
-            with st.expander(f"Entradas — Transferencias ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
+            with st.expander(f"ENTRADAS - TRANSFERENCIAS ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
                 st.dataframe(
                     pd.DataFrame(_ent_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
@@ -2270,15 +2270,15 @@ def _render_movimiento_caja(cobros, pagos):
                 )
         if _sal_transf:
             _tot_st = sum(r["Monto"] for r in _sal_transf)
-            with st.expander(f"Salidas — Transferencias ({len(_sal_transf)}) — {_fmt_monto(_tot_st)}"):
+            with st.expander(f"SALIDAS - TRANSFERENCIAS ({len(_sal_transf)}) — {_fmt_monto(_tot_st)}"):
                 st.dataframe(
                     pd.DataFrame(_sal_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
                     use_container_width=True, hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
         for _titulo, _rows in [
-            ("Salidas — Compras", _sal_compras + _sal_compras_parc),
-            ("Salidas — Gastos",  _sal_gastos  + _sal_gastos_parc),
+            ("SALIDAS - COMPRAS", _sal_compras + _sal_compras_parc),
+            ("SALIDAS - GASTOS",  _sal_gastos  + _sal_gastos_parc),
         ]:
             if _rows:
                 _df_rows = pd.DataFrame(_rows)
@@ -2299,7 +2299,7 @@ def _render_movimiento_caja(cobros, pagos):
         _sal_egresos = [r for r in _sal_otros if r.get("Cat.") == "Otro egreso"]
         if _sal_egresos:
             _tot_egr = sum(r["Monto"] for r in _sal_egresos)
-            with st.expander(f"Egresos ({len(_sal_egresos)}) — {_fmt_monto(_tot_egr)}"):
+            with st.expander(f"SALIDAS - EGRESOS ({len(_sal_egresos)}) — {_fmt_monto(_tot_egr)}"):
                 _egr_rows = [{"Fecha": r["Fecha"], "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
                              for r in sorted(_sal_egresos, key=lambda x: x["Fecha"], reverse=True)]
                 st.dataframe(pd.DataFrame(_egr_rows), use_container_width=True, hide_index=True,
