@@ -5701,8 +5701,11 @@ with tab_dux:
                             anulado_badge = " · 🚫 **ANULADO**" if es_anulado else ""
                             st.markdown(
                                 f"**#{nro or i}** — {cliente_str} · "
-                                f"{len(items)} ítems · {estado_badge}{registro_badge}{anulado_badge}"
+                                f"{estado_badge}{registro_badge}{anulado_badge}"
                             )
+                            if items:
+                                _dux_noms = [extraer_item_dux(it).get("producto", "") for it in items]
+                                st.caption(" · ".join(n for n in _dux_noms if n))
                         if not es_anulado:
                             with c_chk:
                                 asignar = st.checkbox(
@@ -6157,10 +6160,17 @@ with tab_wix:
                             cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
                             badges_line = " · ".join(b for b in [pay_badge, ful_badge] if b)
                             st.markdown(
-                                f"**#{nro}** — {cliente} · {len(items)} ítems · "
+                                f"**#{nro}** — {cliente} · "
                                 f"**{total}**{registro_badge}{cancelado_badge}"
                                 + (f" · {badges_line}" if badges_line else "")
                             )
+                            if items:
+                                _wix_noms = [
+                                    ((it.get("productName") or {}).get("original")
+                                     or (it.get("productName") or {}).get("translated") or "")
+                                    for it in items
+                                ]
+                                st.caption(" · ".join(n for n in _wix_noms if n))
                             detalles = []
                             if direccion:
                                 detalles.append(f"📍 {direccion}")
