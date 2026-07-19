@@ -3123,51 +3123,42 @@ if _stab_ajustes:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                # agrupar por caja
-                _aj_grupos: dict[str, list] = {}
                 for _a in sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                    _cj = _id_a_nombre.get(_a.get("caja_id"), "—")
-                    _aj_grupos.setdefault(_cj, []).append(_a)
-                for _cj_nm, _cj_items in _aj_grupos.items():
-                    _cj_total = sum(float(x.get("monto") or 0) for x in _cj_items)
-                    with st.expander(f"**{_cj_nm}** · $ {_cj_total:,.0f}", expanded=True):
-                        for _a in _cj_items:
-                            _aid = _a["id"]
-                            with st.container(border=True):
-                                _lc1, _lc2, _lc3 = st.columns([6, 1, 1])
-                                _lc1.write(_aj_label(_a, _id_a_nombre))
-                                if _lc2.button("✏️", key=f"aj_edit_{_aid}"):
-                                    st.session_state[f"aj_editing_{_aid}"] = True
-                                if _lc3.button("🗑️", key=f"aj_del_{_aid}"):
-                                    db.eliminar_ajuste_caja(_aid)
+                    _aid = _a["id"]
+                    with st.container(border=True):
+                        _lc1, _lc2, _lc3 = st.columns([6, 1, 1])
+                        _lc1.write(_aj_label(_a, _id_a_nombre))
+                        if _lc2.button("✏️", key=f"aj_edit_{_aid}"):
+                            st.session_state[f"aj_editing_{_aid}"] = True
+                        if _lc3.button("🗑️", key=f"aj_del_{_aid}"):
+                            db.eliminar_ajuste_caja(_aid)
+                            st.session_state.pop(f"aj_editing_{_aid}", None)
+                            st.toast("🗑️ Ajuste eliminado.", icon="🗑️")
+                            st.rerun(scope="fragment")
+                        if st.session_state.get(f"aj_editing_{_aid}"):
+                            _cn_actual = _id_a_nombre.get(_a.get("caja_id"), "")
+                            _caja_opts = [c["nombre"] for c in _activas]
+                            _caja_idx  = _caja_opts.index(_cn_actual) if _cn_actual in _caja_opts else 0
+                            _e_caja  = st.selectbox("Caja", options=_caja_opts, index=_caja_idx, key=f"aj_ec_{_aid}")
+                            _e_fecha = st.date_input("Fecha", value=_safe_date(_a.get("fecha")), format="DD/MM/YYYY", key=f"aj_ef_{_aid}")
+                            _e_monto = st.text_input("Diferencia ($)", value=str(_a.get("monto") or "0"), key=f"aj_em_{_aid}")
+                            _e_nota  = st.text_input("Nota (opcional)", value=_a.get("nota") or "", key=f"aj_en_{_aid}")
+                            _sc1, _sc2 = st.columns(2)
+                            if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"aj_es_{_aid}"):
+                                try:
+                                    _em = float(str(_e_monto).replace(",", ".").strip())
+                                except ValueError:
+                                    st.error("El monto debe ser un número.")
+                                    return
+                                _ecid = _nombre_a_id.get(_e_caja)
+                                if _ecid:
+                                    db.actualizar_ajuste_caja(_aid, _ecid, _e_fecha, _em, _e_nota)
                                     st.session_state.pop(f"aj_editing_{_aid}", None)
-                                    st.toast("🗑️ Ajuste eliminado.", icon="🗑️")
+                                    st.toast("✅ Ajuste actualizado.", icon="✅")
                                     st.rerun(scope="fragment")
-                            if st.session_state.get(f"aj_editing_{_aid}"):
-                                with st.container(border=True):
-                                    _cn_actual = _id_a_nombre.get(_a.get("caja_id"), "")
-                                    _caja_opts = [c["nombre"] for c in _activas]
-                                    _caja_idx  = _caja_opts.index(_cn_actual) if _cn_actual in _caja_opts else 0
-                                    _e_caja  = st.selectbox("Caja", options=_caja_opts, index=_caja_idx, key=f"aj_ec_{_aid}")
-                                    _e_fecha = st.date_input("Fecha", value=_safe_date(_a.get("fecha")), format="DD/MM/YYYY", key=f"aj_ef_{_aid}")
-                                    _e_monto = st.text_input("Diferencia ($)", value=str(_a.get("monto") or "0"), key=f"aj_em_{_aid}")
-                                    _e_nota  = st.text_input("Nota (opcional)", value=_a.get("nota") or "", key=f"aj_en_{_aid}")
-                                    _sc1, _sc2 = st.columns(2)
-                                    if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"aj_es_{_aid}"):
-                                        try:
-                                            _em = float(str(_e_monto).replace(",", ".").strip())
-                                        except ValueError:
-                                            st.error("El monto debe ser un número.")
-                                            return
-                                        _ecid = _nombre_a_id.get(_e_caja)
-                                        if _ecid:
-                                            db.actualizar_ajuste_caja(_aid, _ecid, _e_fecha, _em, _e_nota)
-                                            st.session_state.pop(f"aj_editing_{_aid}", None)
-                                            st.toast("✅ Ajuste actualizado.", icon="✅")
-                                            st.rerun(scope="fragment")
-                                    if _sc2.button("Cancelar", use_container_width=True, key=f"aj_ec2_{_aid}"):
-                                        st.session_state.pop(f"aj_editing_{_aid}", None)
-                                        st.rerun(scope="fragment")
+                            if _sc2.button("Cancelar", use_container_width=True, key=f"aj_ec2_{_aid}"):
+                                st.session_state.pop(f"aj_editing_{_aid}", None)
+                                st.rerun(scope="fragment")
             _aj_editar_eliminar()
 
         with _aj_tab_all:
@@ -3186,17 +3177,23 @@ if _stab_ajustes:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                _rows = []
+                _aj_grupos: dict[str, list] = {}
                 for _a in sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                    _f = _safe_date(_a.get("fecha"))
-                    _rows.append({
-                        "Fecha": _f.strftime("%d/%m/%Y") if _f != date.min else str(_a.get("fecha") or "")[:10],
-                        "Caja":  _id_a_nombre.get(_a.get("caja_id"), "—"),
-                        "Monto": float(_a.get("monto") or 0),
-                        "Nota":  _a.get("nota") or "—",
-                    })
-                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                    _cj = _id_a_nombre.get(_a.get("caja_id"), "—")
+                    _aj_grupos.setdefault(_cj, []).append(_a)
+                for _cj_nm, _cj_items in _aj_grupos.items():
+                    _cj_total = sum(float(x.get("monto") or 0) for x in _cj_items)
+                    with st.expander(f"**{_cj_nm}** · $ {_cj_total:,.0f}", expanded=True):
+                        _rows = []
+                        for _a in _cj_items:
+                            _f = _safe_date(_a.get("fecha"))
+                            _rows.append({
+                                "Fecha": _f.strftime("%d/%m/%Y") if _f != date.min else str(_a.get("fecha") or "")[:10],
+                                "Monto": float(_a.get("monto") or 0),
+                                "Nota":  _a.get("nota") or "—",
+                            })
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _aj_todos_vista()
 
 if _stab_saldo_ini:
@@ -3426,90 +3423,69 @@ if _stab_otros_ingresos:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                # agrupar: estado → rubro → subrubro
-                def _oi_render_group(items_grp):
-                    _rubros: dict[str, dict[str, list]] = {}
-                    for _oi in items_grp:
-                        _r = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
-                        _s = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
-                        _rubros.setdefault(_r, {}).setdefault(_s, []).append(_oi)
-                    for _r_nm, _subs in _rubros.items():
-                        _r_total = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
-                        with st.expander(f"**{_r_nm}** · $ {_r_total:,.0f}", expanded=True):
-                            for _s_nm, _s_items in _subs.items():
-                                st.caption(f"— {_s_nm}")
-                                for _oi in _s_items:
-                                    _oi_id    = _oi["id"]
-                                    _oi_r_nm  = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
-                                    _oi_s_nm  = _s_nm
-                                    _oi_it_nm = (_oi.get("items_ingresos") or {}).get("nombre") or ""
-                                    _oi_cj_nm = _oi_caja_map.get(_oi.get("caja_id"), "—")
-                                    _oi_mn    = float(_oi.get("monto") or 0)
-                                    _oi_fch   = _oi.get("fecha", "")
-                                    _oi_dsc   = _oi.get("descripcion") or ""
-                                    _oi_est   = _oi.get("estado", "pendiente")
-                                    _oi_fmov  = _oi.get("fecha_movimiento")
+                for _oi in _lista:
+                    _oi_id    = _oi["id"]
+                    _oi_r_nm  = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
+                    _oi_s_nm  = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                    _oi_it_nm = (_oi.get("items_ingresos") or {}).get("nombre") or ""
+                    _oi_cj_nm = _oi_caja_map.get(_oi.get("caja_id"), "—")
+                    _oi_mn    = float(_oi.get("monto") or 0)
+                    _oi_fch   = _oi.get("fecha", "")
+                    _oi_dsc   = _oi.get("descripcion") or ""
+                    _oi_est   = _oi.get("estado", "pendiente")
+                    _oi_fmov  = _oi.get("fecha_movimiento")
 
-                                    with st.container(border=True):
-                                        _ca, _cb, _cc = st.columns([5, 1, 1])
-                                        with _ca:
-                                            _est_badge = "🟢" if _oi_est == "cobrado" else "🟡"
-                                            _item_str = f" · {_oi_it_nm}" if _oi_it_nm else ""
-                                            st.markdown(f"{_est_badge} **{_oi_fch}**{_item_str} · **$ {_oi_mn:,.0f}**")
-                                        with _cb:
-                                            if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
-                                                st.session_state[f"oi_editing_{_oi_id}"] = True
-                                                st.rerun(scope="fragment")
-                                        with _cc:
-                                            if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
-                                                try:
-                                                    db.eliminar_otro_ingreso(_oi_id)
-                                                    db.cargar_otros_ingresos.clear()
-                                                    st.rerun(scope="fragment")
-                                                except Exception as e:
-                                                    st.error(f"Error: {e}")
+                    with st.container(border=True):
+                        _ca, _cb, _cc = st.columns([5, 1, 1])
+                        with _ca:
+                            _est_badge = "🟢" if _oi_est == "cobrado" else "🟡"
+                            _item_str = f" · {_oi_it_nm}" if _oi_it_nm else ""
+                            st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm}{_item_str} · **$ {_oi_mn:,.0f}**")
+                        with _cb:
+                            if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
+                                st.session_state[f"oi_editing_{_oi_id}"] = True
+                                st.rerun(scope="fragment")
+                        with _cc:
+                            if st.button("🗑️", key=f"oi_del_{_oi_id}", help="Eliminar"):
+                                try:
+                                    db.eliminar_otro_ingreso(_oi_id)
+                                    db.cargar_otros_ingresos.clear()
+                                    st.rerun(scope="fragment")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
 
-                                    if st.session_state.get(f"oi_editing_{_oi_id}"):
-                                        with st.container(border=True):
-                                            _fmov_def = pd.to_datetime(_oi_fmov).date() if _oi_fmov else date.today()
-                                            _e = _oi_render_fields(f"e{_oi_id}", defaults={
-                                                "fecha": pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(),
-                                                "rubro_nm": _oi_r_nm, "sub_nm": _oi_s_nm, "item": _oi_it_nm,
-                                                "monto_str": str(_oi_mn), "caja_nm": _oi_cj_nm, "desc": _oi_dsc,
-                                                "estado": _oi_est, "fecha_mov": _fmov_def,
-                                            })
-                                            _e_col1, _e_col2 = st.columns(2)
-                                            if _e_col1.button("Guardar", type="primary", key=f"eo_{_oi_id}"):
-                                                try:
-                                                    db.actualizar_otro_ingreso(
-                                                        id=_oi_id,
-                                                        fecha=_e["fecha"],
-                                                        rubro_id=_oi_rubro_opts.get(_e["rubro"]),
-                                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
-                                                        item_id=_e["item_id"],
-                                                        monto=_e["monto"],
-                                                        caja_id=_oi_caja_opts.get(_e["caja"]),
-                                                        descripcion=_e["desc"],
-                                                        estado=_e["estado"],
-                                                        fecha_movimiento=_e["fecha_mov"],
-                                                    )
-                                                    db.cargar_otros_ingresos.clear()
-                                                    st.session_state.pop(f"oi_editing_{_oi_id}", None)
-                                                    st.rerun(scope="fragment")
-                                                except Exception as e:
-                                                    st.error(f"Error: {e}")
-                                            if _e_col2.button("Cancelar", key=f"ec2_{_oi_id}"):
-                                                st.session_state.pop(f"oi_editing_{_oi_id}", None)
-                                                st.rerun(scope="fragment")
-
-                _pend = [x for x in _lista if x.get("estado") != "cobrado"]
-                _cobr = [x for x in _lista if x.get("estado") == "cobrado"]
-                if _pend:
-                    st.markdown("#### 🟡 Pendientes")
-                    _oi_render_group(_pend)
-                if _cobr:
-                    st.markdown("#### 🟢 Cobrados")
-                    _oi_render_group(_cobr)
+                    if st.session_state.get(f"oi_editing_{_oi_id}"):
+                        with st.container(border=True):
+                            _fmov_def = pd.to_datetime(_oi_fmov).date() if _oi_fmov else date.today()
+                            _e = _oi_render_fields(f"e{_oi_id}", defaults={
+                                "fecha": pd.to_datetime(_oi_fch).date() if _oi_fch else date.today(),
+                                "rubro_nm": _oi_r_nm, "sub_nm": _oi_s_nm, "item": _oi_it_nm,
+                                "monto_str": str(_oi_mn), "caja_nm": _oi_cj_nm, "desc": _oi_dsc,
+                                "estado": _oi_est, "fecha_mov": _fmov_def,
+                            })
+                            _e_col1, _e_col2 = st.columns(2)
+                            if _e_col1.button("Guardar", type="primary", key=f"eo_{_oi_id}"):
+                                try:
+                                    db.actualizar_otro_ingreso(
+                                        id=_oi_id,
+                                        fecha=_e["fecha"],
+                                        rubro_id=_oi_rubro_opts.get(_e["rubro"]),
+                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
+                                        item_id=_e["item_id"],
+                                        monto=_e["monto"],
+                                        caja_id=_oi_caja_opts.get(_e["caja"]),
+                                        descripcion=_e["desc"],
+                                        estado=_e["estado"],
+                                        fecha_movimiento=_e["fecha_mov"],
+                                    )
+                                    db.cargar_otros_ingresos.clear()
+                                    st.session_state.pop(f"oi_editing_{_oi_id}", None)
+                                    st.rerun(scope="fragment")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                            if _e_col2.button("Cancelar", key=f"ec2_{_oi_id}"):
+                                st.session_state.pop(f"oi_editing_{_oi_id}", None)
+                                st.rerun(scope="fragment")
             _oi_editar_eliminar()
 
         # ── TAB 3: Todos los ingresos ─────────────────────────────────────────
@@ -3527,25 +3503,37 @@ if _stab_otros_ingresos:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                _oi_rows = []
-                for _oi in _lista:
-                    _oi_rows.append({
-                        "Estado": _oi.get("estado", "pendiente"),
-                        "F. ingreso": _oi.get("fecha", ""),
-                        "F. cobro": _oi.get("fecha_movimiento") or "—",
-                        "Rubro": (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—"),
-                        "Subrubro": (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—",
-                        "Item": (_oi.get("items_ingresos") or {}).get("nombre") or "—",
-                        "Monto": float(_oi.get("monto") or 0),
-                        "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
-                        "Descripción": _oi.get("descripcion") or "",
-                    })
-                st.dataframe(
-                    pd.DataFrame(_oi_rows),
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
-                )
+                def _oi_todos_group(items_grp):
+                    _rubros: dict[str, dict[str, list]] = {}
+                    for _oi in items_grp:
+                        _r = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
+                        _s = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                        _rubros.setdefault(_r, {}).setdefault(_s, []).append(_oi)
+                    for _r_nm, _subs in _rubros.items():
+                        _r_total = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
+                        with st.expander(f"**{_r_nm}** · $ {_r_total:,.0f}", expanded=True):
+                            for _s_nm, _s_items in _subs.items():
+                                st.caption(f"— {_s_nm}")
+                                _rows = []
+                                for _oi in _s_items:
+                                    _rows.append({
+                                        "Fecha": _oi.get("fecha", ""),
+                                        "F. cobro": _oi.get("fecha_movimiento") or "—",
+                                        "Item": (_oi.get("items_ingresos") or {}).get("nombre") or "—",
+                                        "Monto": float(_oi.get("monto") or 0),
+                                        "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
+                                        "Descripción": _oi.get("descripcion") or "",
+                                    })
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                _pend = [x for x in _lista if x.get("estado") != "cobrado"]
+                _cobr = [x for x in _lista if x.get("estado") == "cobrado"]
+                if _pend:
+                    st.markdown("#### 🟡 Pendientes")
+                    _oi_todos_group(_pend)
+                if _cobr:
+                    st.markdown("#### 🟢 Cobrados")
+                    _oi_todos_group(_cobr)
             _oi_todos_vista()
 
 if _stab_otros_egresos:
@@ -3649,92 +3637,71 @@ if _stab_otros_egresos:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                # agrupar: estado → rubro → subrubro
-                def _oe_render_group(items_grp):
-                    _rubros: dict[str, dict[str, list]] = {}
-                    for _oe in items_grp:
-                        _r = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
-                        _s = (_oe.get("subrubros_egresos") or {}).get("nombre") or "—"
-                        _rubros.setdefault(_r, {}).setdefault(_s, []).append(_oe)
-                    for _r_nm, _subs in _rubros.items():
-                        _r_total = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
-                        with st.expander(f"**{_r_nm}** · $ {_r_total:,.0f}", expanded=True):
-                            for _s_nm, _s_items in _subs.items():
-                                st.caption(f"— {_s_nm}")
-                                for _oe in _s_items:
-                                    _oe_id    = _oe["id"]
-                                    _oe_r_nm  = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
-                                    _oe_s_nm  = _s_nm
-                                    _oe_cj_nm = _oe_caja_map.get(_oe.get("caja_id"), "—")
-                                    _oe_mn    = float(_oe.get("monto") or 0)
-                                    _oe_fch   = _oe.get("fecha", "")
-                                    _oe_dsc   = _oe.get("descripcion") or ""
-                                    _oe_est   = _oe.get("estado", "pendiente")
-                                    _oe_fmov  = _oe.get("fecha_movimiento")
-                                    _oe_item  = (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or ""
+                for _oe in _lista:
+                    _oe_id    = _oe["id"]
+                    _oe_r_nm  = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
+                    _oe_s_nm  = (_oe.get("subrubros_egresos") or {}).get("nombre") or "—"
+                    _oe_cj_nm = _oe_caja_map.get(_oe.get("caja_id"), "—")
+                    _oe_mn    = float(_oe.get("monto") or 0)
+                    _oe_fch   = _oe.get("fecha", "")
+                    _oe_dsc   = _oe.get("descripcion") or ""
+                    _oe_est   = _oe.get("estado", "pendiente")
+                    _oe_fmov  = _oe.get("fecha_movimiento")
+                    _oe_item  = (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or ""
 
-                                    with st.container(border=True):
-                                        _ca, _cb, _cc = st.columns([5, 1, 1])
-                                        with _ca:
-                                            _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
-                                            _item_str = f" · {_oe_item}" if _oe_item else ""
-                                            st.markdown(f"{_est_badge} **{_oe_fch}**{_item_str} · **$ {_oe_mn:,.0f}**")
-                                        with _cb:
-                                            if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
-                                                st.session_state[f"oe_editing_{_oe_id}"] = True
-                                                st.rerun(scope="fragment")
-                                        with _cc:
-                                            if st.button("🗑️", key=f"oe_del_{_oe_id}", help="Eliminar"):
-                                                try:
-                                                    db.eliminar_otro_egreso(_oe_id)
-                                                    db.cargar_otros_egresos.clear()
-                                                    st.rerun(scope="fragment")
-                                                except Exception as e:
-                                                    st.error(f"Error: {e}")
+                    with st.container(border=True):
+                        _ca, _cb, _cc = st.columns([5, 1, 1])
+                        with _ca:
+                            _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
+                            _item_str = f" · {_oe_item}" if _oe_item else ""
+                            st.markdown(f"{_est_badge} **{_oe_fch}** · {_oe_r_nm} / {_oe_s_nm}{_item_str} · **$ {_oe_mn:,.0f}**")
+                        with _cb:
+                            if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
+                                st.session_state[f"oe_editing_{_oe_id}"] = True
+                                st.rerun(scope="fragment")
+                        with _cc:
+                            if st.button("🗑️", key=f"oe_del_{_oe_id}", help="Eliminar"):
+                                try:
+                                    db.eliminar_otro_egreso(_oe_id)
+                                    db.cargar_otros_egresos.clear()
+                                    st.rerun(scope="fragment")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
 
-                                    if st.session_state.get(f"oe_editing_{_oe_id}"):
-                                        with st.container(border=True):
-                                            _fmov_def = pd.to_datetime(_oe_fmov).date() if _oe_fmov else date.today()
-                                            _e = _oe_render_fields(f"ee{_oe_id}", defaults={
-                                                "fecha": pd.to_datetime(_oe_fch).date() if _oe_fch else date.today(),
-                                                "rubro_nm": _oe_r_nm, "sub_nm": _oe_s_nm,
-                                                "item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "",
-                                                "monto_str": str(_oe_mn),
-                                                "caja_nm": _oe_cj_nm, "desc": _oe_dsc,
-                                                "estado": _oe_est, "fecha_mov": _fmov_def,
-                                            })
-                                            _e_col1, _e_col2 = st.columns(2)
-                                            if _e_col1.button("Guardar", type="primary", key=f"eeo_{_oe_id}"):
-                                                try:
-                                                    db.actualizar_otro_egreso(
-                                                        id=_oe_id,
-                                                        fecha=_e["fecha"],
-                                                        rubro_id=_oe_rubro_opts.get(_e["rubro"]),
-                                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
-                                                        item_id=_e["item_id"],
-                                                        monto=_e["monto"],
-                                                        caja_id=_oe_caja_opts.get(_e["caja"]),
-                                                        descripcion=_e["desc"],
-                                                        estado=_e["estado"],
-                                                        fecha_movimiento=_e["fecha_mov"],
-                                                    )
-                                                    db.cargar_otros_egresos.clear()
-                                                    st.session_state.pop(f"oe_editing_{_oe_id}", None)
-                                                    st.rerun(scope="fragment")
-                                                except Exception as e:
-                                                    st.error(f"Error: {e}")
-                                            if _e_col2.button("Cancelar", key=f"eec2_{_oe_id}"):
-                                                st.session_state.pop(f"oe_editing_{_oe_id}", None)
-                                                st.rerun(scope="fragment")
-
-                _pend_oe = [x for x in _lista if x.get("estado") != "pagado"]
-                _pag_oe  = [x for x in _lista if x.get("estado") == "pagado"]
-                if _pend_oe:
-                    st.markdown("#### 🟡 Pendientes")
-                    _oe_render_group(_pend_oe)
-                if _pag_oe:
-                    st.markdown("#### 🟢 Pagados")
-                    _oe_render_group(_pag_oe)
+                    if st.session_state.get(f"oe_editing_{_oe_id}"):
+                        with st.container(border=True):
+                            _fmov_def = pd.to_datetime(_oe_fmov).date() if _oe_fmov else date.today()
+                            _e = _oe_render_fields(f"ee{_oe_id}", defaults={
+                                "fecha": pd.to_datetime(_oe_fch).date() if _oe_fch else date.today(),
+                                "rubro_nm": _oe_r_nm, "sub_nm": _oe_s_nm,
+                                "item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "",
+                                "monto_str": str(_oe_mn),
+                                "caja_nm": _oe_cj_nm, "desc": _oe_dsc,
+                                "estado": _oe_est, "fecha_mov": _fmov_def,
+                            })
+                            _e_col1, _e_col2 = st.columns(2)
+                            if _e_col1.button("Guardar", type="primary", key=f"eeo_{_oe_id}"):
+                                try:
+                                    db.actualizar_otro_egreso(
+                                        id=_oe_id,
+                                        fecha=_e["fecha"],
+                                        rubro_id=_oe_rubro_opts.get(_e["rubro"]),
+                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
+                                        item_id=_e["item_id"],
+                                        monto=_e["monto"],
+                                        caja_id=_oe_caja_opts.get(_e["caja"]),
+                                        descripcion=_e["desc"],
+                                        estado=_e["estado"],
+                                        fecha_movimiento=_e["fecha_mov"],
+                                    )
+                                    db.cargar_otros_egresos.clear()
+                                    st.session_state.pop(f"oe_editing_{_oe_id}", None)
+                                    st.rerun(scope="fragment")
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                            if _e_col2.button("Cancelar", key=f"eec2_{_oe_id}"):
+                                st.session_state.pop(f"oe_editing_{_oe_id}", None)
+                                st.rerun(scope="fragment")
             _oe_editar_eliminar()
 
         # ── TAB 3: Todos los egresos ──────────────────────────────────────────
@@ -3752,25 +3719,37 @@ if _stab_otros_egresos:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                _oe_rows = []
-                for _oe in _lista:
-                    _oe_rows.append({
-                        "Estado": _oe.get("estado", "pendiente"),
-                        "F. egreso": _oe.get("fecha", ""),
-                        "F. pago": _oe.get("fecha_movimiento") or "—",
-                        "Rubro": (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—"),
-                        "Subrubro": (_oe.get("subrubros_egresos") or {}).get("nombre") or "—",
-                        "Item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "—",
-                        "Monto": float(_oe.get("monto") or 0),
-                        "Caja": _oe_caja_map.get(_oe.get("caja_id"), "—"),
-                        "Descripción": _oe.get("descripcion") or "",
-                    })
-                st.dataframe(
-                    pd.DataFrame(_oe_rows),
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
-                )
+                def _oe_todos_group(items_grp):
+                    _rubros: dict[str, dict[str, list]] = {}
+                    for _oe in items_grp:
+                        _r = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
+                        _s = (_oe.get("subrubros_egresos") or {}).get("nombre") or "—"
+                        _rubros.setdefault(_r, {}).setdefault(_s, []).append(_oe)
+                    for _r_nm, _subs in _rubros.items():
+                        _r_total = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
+                        with st.expander(f"**{_r_nm}** · $ {_r_total:,.0f}", expanded=True):
+                            for _s_nm, _s_items in _subs.items():
+                                st.caption(f"— {_s_nm}")
+                                _rows = []
+                                for _oe in _s_items:
+                                    _rows.append({
+                                        "Fecha": _oe.get("fecha", ""),
+                                        "F. pago": _oe.get("fecha_movimiento") or "—",
+                                        "Item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "—",
+                                        "Monto": float(_oe.get("monto") or 0),
+                                        "Caja": _oe_caja_map.get(_oe.get("caja_id"), "—"),
+                                        "Descripción": _oe.get("descripcion") or "",
+                                    })
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                _pend_oe = [x for x in _lista if x.get("estado") != "pagado"]
+                _pag_oe  = [x for x in _lista if x.get("estado") == "pagado"]
+                if _pend_oe:
+                    st.markdown("#### 🟡 Pendientes")
+                    _oe_todos_group(_pend_oe)
+                if _pag_oe:
+                    st.markdown("#### 🟢 Pagados")
+                    _oe_todos_group(_pag_oe)
             _oe_todos_vista()
 
 if tab_iva:
@@ -3890,57 +3869,46 @@ if _stab_transferencias:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                # agrupar por "desde → hacia"
-                _tr_grupos: dict[str, list] = {}
                 for _t in _lista:
-                    _org_nm = ((_t.get("origen") or {}).get("nombre") or "—")
-                    _dst_nm = ((_t.get("destino") or {}).get("nombre") or "—")
-                    _key = f"{_org_nm} → {_dst_nm}"
-                    _tr_grupos.setdefault(_key, []).append(_t)
-                for _grp_key, _grp_items in _tr_grupos.items():
-                    _grp_total = sum(float(x.get("monto") or 0) for x in _grp_items)
-                    with st.expander(f"**{_grp_key}** · $ {_grp_total:,.0f}", expanded=True):
-                        for _t in _grp_items:
-                            _tid = _t["id"]
-                            with st.container(border=True):
-                                _lc1, _lc2, _lc3 = st.columns([6, 1, 1])
-                                _lc1.write(_tr_label(_t))
-                                if _lc2.button("✏️", key=f"tr_edit_{_tid}"):
-                                    st.session_state[f"tr_editing_{_tid}"] = True
-                                if _lc3.button("🗑️", key=f"tr_del_{_tid}"):
-                                    db.eliminar_transferencia(_tid)
-                                    st.session_state.pop(f"tr_editing_{_tid}", None)
-                                    st.toast("🗑️ Transferencia eliminada.", icon="🗑️")
-                                    st.rerun(scope="fragment")
-                            if st.session_state.get(f"tr_editing_{_tid}"):
-                                with st.container(border=True):
-                                    _org_actual = ((_t.get("origen") or {}).get("nombre") or "")
-                                    _dst_actual = ((_t.get("destino") or {}).get("nombre") or "")
-                                    _c_opts = list(_opts.keys())
-                                    _e_fecha    = st.date_input("Fecha", value=_safe_date(_t.get("fecha")), format="DD/MM/YYYY", key=f"tr_ef_{_tid}")
-                                    _e_origen   = st.selectbox("Desde", options=_c_opts,
-                                                                index=_c_opts.index(_org_actual) if _org_actual in _c_opts else 0, key=f"tr_eo_{_tid}")
-                                    _e_destino  = st.selectbox("Hacia",  options=_c_opts,
-                                                                index=_c_opts.index(_dst_actual) if _dst_actual in _c_opts else 0, key=f"tr_ed_{_tid}")
-                                    _e_monto    = st.text_input("Monto ($)", value=str(_t.get("monto") or "0"), key=f"tr_em_{_tid}")
-                                    _e_concepto = st.text_input("Concepto (opcional)", value=_t.get("concepto") or "", key=f"tr_ec_{_tid}")
-                                    _sc1, _sc2 = st.columns(2)
-                                    if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"tr_es_{_tid}"):
-                                        try:
-                                            _em = float(str(_e_monto).replace(",", ".").strip())
-                                        except ValueError:
-                                            st.error("El monto debe ser un número.")
-                                            return
-                                        if _e_origen == _e_destino:
-                                            st.error("Origen y destino deben ser distintos.")
-                                            return
-                                        db.actualizar_transferencia(_tid, _e_fecha, _opts[_e_origen], _opts[_e_destino], _em, _e_concepto)
-                                        st.session_state.pop(f"tr_editing_{_tid}", None)
-                                        st.toast("✅ Transferencia actualizada.", icon="✅")
-                                        st.rerun(scope="fragment")
-                                    if _sc2.button("Cancelar", use_container_width=True, key=f"tr_ec2_{_tid}"):
-                                        st.session_state.pop(f"tr_editing_{_tid}", None)
-                                        st.rerun(scope="fragment")
+                    _tid = _t["id"]
+                    with st.container(border=True):
+                        _lc1, _lc2, _lc3 = st.columns([6, 1, 1])
+                        _lc1.write(_tr_label(_t))
+                        if _lc2.button("✏️", key=f"tr_edit_{_tid}"):
+                            st.session_state[f"tr_editing_{_tid}"] = True
+                        if _lc3.button("🗑️", key=f"tr_del_{_tid}"):
+                            db.eliminar_transferencia(_tid)
+                            st.session_state.pop(f"tr_editing_{_tid}", None)
+                            st.toast("🗑️ Transferencia eliminada.", icon="🗑️")
+                            st.rerun(scope="fragment")
+                        if st.session_state.get(f"tr_editing_{_tid}"):
+                            _org_actual = ((_t.get("origen") or {}).get("nombre") or "")
+                            _dst_actual = ((_t.get("destino") or {}).get("nombre") or "")
+                            _c_opts = list(_opts.keys())
+                            _e_fecha    = st.date_input("Fecha", value=_safe_date(_t.get("fecha")), format="DD/MM/YYYY", key=f"tr_ef_{_tid}")
+                            _e_origen   = st.selectbox("Desde", options=_c_opts,
+                                                        index=_c_opts.index(_org_actual) if _org_actual in _c_opts else 0, key=f"tr_eo_{_tid}")
+                            _e_destino  = st.selectbox("Hacia",  options=_c_opts,
+                                                        index=_c_opts.index(_dst_actual) if _dst_actual in _c_opts else 0, key=f"tr_ed_{_tid}")
+                            _e_monto    = st.text_input("Monto ($)", value=str(_t.get("monto") or "0"), key=f"tr_em_{_tid}")
+                            _e_concepto = st.text_input("Concepto (opcional)", value=_t.get("concepto") or "", key=f"tr_ec_{_tid}")
+                            _sc1, _sc2 = st.columns(2)
+                            if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"tr_es_{_tid}"):
+                                try:
+                                    _em = float(str(_e_monto).replace(",", ".").strip())
+                                except ValueError:
+                                    st.error("El monto debe ser un número.")
+                                    return
+                                if _e_origen == _e_destino:
+                                    st.error("Origen y destino deben ser distintos.")
+                                    return
+                                db.actualizar_transferencia(_tid, _e_fecha, _opts[_e_origen], _opts[_e_destino], _em, _e_concepto)
+                                st.session_state.pop(f"tr_editing_{_tid}", None)
+                                st.toast("✅ Transferencia actualizada.", icon="✅")
+                                st.rerun(scope="fragment")
+                            if _sc2.button("Cancelar", use_container_width=True, key=f"tr_ec2_{_tid}"):
+                                st.session_state.pop(f"tr_editing_{_tid}", None)
+                                st.rerun(scope="fragment")
             _tr_editar_eliminar()
 
         with _tr_tab_all:
@@ -3957,18 +3925,24 @@ if _stab_transferencias:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                _rows = []
+                _tr_grupos: dict[str, list] = {}
                 for _t in _lista:
-                    _f = _safe_date(_t.get("fecha"))
-                    _rows.append({
-                        "Fecha":    _f.strftime("%d/%m/%Y") if _f != date.min else str(_t.get("fecha") or "")[:10],
-                        "Desde":   (_t.get("origen")  or {}).get("nombre") or "—",
-                        "Hacia":   (_t.get("destino") or {}).get("nombre") or "—",
-                        "Concepto": _t.get("concepto") or "—",
-                        "Monto":   float(_t.get("monto") or 0),
-                    })
-                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                    _org_nm = ((_t.get("origen") or {}).get("nombre") or "—")
+                    _dst_nm = ((_t.get("destino") or {}).get("nombre") or "—")
+                    _tr_grupos.setdefault(f"{_org_nm} → {_dst_nm}", []).append(_t)
+                for _grp_key, _grp_items in _tr_grupos.items():
+                    _grp_total = sum(float(x.get("monto") or 0) for x in _grp_items)
+                    with st.expander(f"**{_grp_key}** · $ {_grp_total:,.0f}", expanded=True):
+                        _rows = []
+                        for _t in _grp_items:
+                            _f = _safe_date(_t.get("fecha"))
+                            _rows.append({
+                                "Fecha":    _f.strftime("%d/%m/%Y") if _f != date.min else str(_t.get("fecha") or "")[:10],
+                                "Concepto": _t.get("concepto") or "—",
+                                "Monto":    float(_t.get("monto") or 0),
+                            })
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _tr_todos_vista()
 
 if tab_ingresos:
