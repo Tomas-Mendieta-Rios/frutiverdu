@@ -3116,6 +3116,13 @@ if _stab_ajustes:
                 if not _lista:
                     st.info("No hay ajustes registrados.")
                     return
+                _dc1, _dc2 = st.columns(2)
+                _aj_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_edit_desde")
+                _aj_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_edit_hasta")
+                _lista = [a for a in _lista if _aj_e_desde <= _safe_date(a.get("fecha")) <= _aj_e_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
+                    return
                 for _a in sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True):
                     _aid = _a["id"]
                     with st.container(border=True):
@@ -3162,6 +3169,13 @@ if _stab_ajustes:
                 _lista = _aj_get_lista()
                 if not _lista:
                     st.info("No hay ajustes registrados.")
+                    return
+                _dc1, _dc2 = st.columns(2)
+                _aj_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_all_desde")
+                _aj_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_all_hasta")
+                _lista = [a for a in _lista if _aj_v_desde <= _safe_date(a.get("fecha")) <= _aj_v_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
                     return
                 _rows = []
                 for _a in sorted(_lista, key=lambda x: str(x.get("fecha") or ""), reverse=True):
@@ -3384,6 +3398,13 @@ if _stab_otros_ingresos:
                 if not _lista:
                     st.info("No hay ingresos cargados todavía.")
                     return
+                _dc1, _dc2 = st.columns(2)
+                _oi_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_edit_desde")
+                _oi_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_edit_hasta")
+                _lista = [o for o in _lista if _oi_e_desde <= _safe_date(o.get("fecha")) <= _oi_e_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
+                    return
                 for _oi in _lista:
                     _oi_id    = _oi["id"]
                     _oi_r_nm  = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
@@ -3447,11 +3468,21 @@ if _stab_otros_ingresos:
 
         # ── TAB 3: Todos los ingresos ─────────────────────────────────────────
         with _oi_tab3:
-            if not _oi_lista:
-                st.info("No hay ingresos cargados todavía.")
-            else:
+            @st.fragment
+            def _oi_todos_vista():
+                _lista = db.cargar_otros_ingresos()
+                if not _lista:
+                    st.info("No hay ingresos cargados todavía.")
+                    return
+                _dc1, _dc2 = st.columns(2)
+                _oi_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_all_desde")
+                _oi_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_all_hasta")
+                _lista = [o for o in _lista if _oi_v_desde <= _safe_date(o.get("fecha")) <= _oi_v_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
+                    return
                 _oi_rows = []
-                for _oi in _oi_lista:
+                for _oi in _lista:
                     _oi_rows.append({
                         "Estado": _oi.get("estado", "pendiente"),
                         "F. ingreso": _oi.get("fecha", ""),
@@ -3468,6 +3499,7 @@ if _stab_otros_ingresos:
                     hide_index=True,
                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
                 )
+            _oi_todos_vista()
 
 if _stab_otros_egresos:
     with _stab_otros_egresos:
@@ -3561,6 +3593,13 @@ if _stab_otros_egresos:
                 if not _lista:
                     st.info("No hay egresos cargados todavía.")
                     return
+                _dc1, _dc2 = st.columns(2)
+                _oe_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_edit_desde")
+                _oe_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_edit_hasta")
+                _lista = [o for o in _lista if _oe_e_desde <= _safe_date(o.get("fecha")) <= _oe_e_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
+                    return
                 for _oe in _lista:
                     _oe_id    = _oe["id"]
                     _oe_r_nm  = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
@@ -3630,11 +3669,21 @@ if _stab_otros_egresos:
 
         # ── TAB 3: Todos los egresos ──────────────────────────────────────────
         with _oe_tab3:
-            if not _oe_lista:
-                st.info("No hay egresos cargados todavía.")
-            else:
+            @st.fragment
+            def _oe_todos_vista():
+                _lista = db.cargar_otros_egresos()
+                if not _lista:
+                    st.info("No hay egresos cargados todavía.")
+                    return
+                _dc1, _dc2 = st.columns(2)
+                _oe_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_all_desde")
+                _oe_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_all_hasta")
+                _lista = [o for o in _lista if _oe_v_desde <= _safe_date(o.get("fecha")) <= _oe_v_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
+                    return
                 _oe_rows = []
-                for _oe in _oe_lista:
+                for _oe in _lista:
                     _oe_rows.append({
                         "Estado": _oe.get("estado", "pendiente"),
                         "F. egreso": _oe.get("fecha", ""),
@@ -3652,6 +3701,7 @@ if _stab_otros_egresos:
                     hide_index=True,
                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")},
                 )
+            _oe_todos_vista()
 
 if tab_iva:
     with tab_iva:
@@ -3763,6 +3813,13 @@ if _stab_transferencias:
                 if not _lista:
                     st.info("No hay transferencias registradas.")
                     return
+                _dc1, _dc2 = st.columns(2)
+                _tr_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_edit_desde")
+                _tr_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_edit_hasta")
+                _lista = [t for t in _lista if _tr_e_desde <= _safe_date(t.get("fecha")) <= _tr_e_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
+                    return
                 for _t in _lista:
                     _tid = _t["id"]
                     with st.container(border=True):
@@ -3811,6 +3868,13 @@ if _stab_transferencias:
                 _lista = db.cargar_transferencias()
                 if not _lista:
                     st.info("No hay transferencias registradas.")
+                    return
+                _dc1, _dc2 = st.columns(2)
+                _tr_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_all_desde")
+                _tr_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_all_hasta")
+                _lista = [t for t in _lista if _tr_v_desde <= _safe_date(t.get("fecha")) <= _tr_v_hasta]
+                if not _lista:
+                    st.caption("Sin registros en el rango seleccionado.")
                     return
                 _rows = []
                 for _t in _lista:
