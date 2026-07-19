@@ -2309,7 +2309,7 @@ def _render_movimiento_caja(cobros, pagos):
         _aj_sal = [_aj for _aj in _aj_caja_periodo if float(_aj.get("monto") or 0) < 0]
         for _aj_grp, _aj_lbl in [(_aj_ent, "ENTRADAS - AJUSTES"), (_aj_sal, "SALIDAS - AJUSTES")]:
             if _aj_grp:
-                _aj_sum = sum(float(_aj.get("monto") or 0) for _aj in _aj_grp)
+                _aj_sum = abs(sum(float(_aj.get("monto") or 0) for _aj in _aj_grp))
                 with st.expander(f"{_aj_lbl} ({len(_aj_grp)}) — {_fmt_monto(_aj_sum)}"):
                     _aj_rows = [{"Fecha": _aj.get("fecha"), "Monto": float(_aj.get("monto") or 0), "Nota": _aj.get("nota") or ""} for _aj in _aj_grp]
                     st.dataframe(pd.DataFrame(_aj_rows), use_container_width=True, hide_index=True,
