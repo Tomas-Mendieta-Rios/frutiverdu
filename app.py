@@ -4051,8 +4051,17 @@ if tab_ing_cobros_wix:
                         "PARTIALLY_REFUNDED": "🟠 Parcial", "FULLY_REFUNDED": "⚫ Reembolsado"}
             _ful_map = {"FULFILLED": "✅ Entregado", "NOT_FULFILLED": "⏳ Pendiente",
                         "PARTIALLY_FULFILLED": "🔶 Parcial"}
+
+            _wc1, _wc2 = st.columns(2)
+            _wix_desde = _wc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_cob_desde")
+            _wix_hasta = _wc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_cob_hasta")
+            _wix_sorted_cob = [o for o in _wix_sorted_cob
+                                if _wix_desde <= _safe_date(str(o.get("createdDate") or "")[:10]) <= _wix_hasta]
+
             with st.form("form_cobros_wix_cajas", border=False):
                 _guardar_cob = st.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
+                if st.session_state.pop("wix_cob_ok", False):
+                    st.success("Guardado.")
                 _nuevas_fpago_cob = {}
                 _nuevas_cajas_cob = {}
                 for _o in _wix_sorted_cob:
@@ -4108,7 +4117,8 @@ if tab_ing_cobros_wix:
                 try:
                     db.asignar_cajas_pedidos_wix(_nuevas_cajas_cob)
                     db.guardar_fechas_pago_wix(_nuevas_fpago_cob)
-                    st.success("✅ Guardado.")
+                    st.session_state["wix_cob_ok"] = True
+                    st.rerun()
                 except Exception as _e_cob:
                     st.error(f"❌ {_e_cob}")
 
