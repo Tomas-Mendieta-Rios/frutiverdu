@@ -2307,11 +2307,11 @@ def _render_movimiento_caja(cobros, pagos):
         _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
         _aj_ent = [_aj for _aj in _aj_caja_periodo if float(_aj.get("monto") or 0) >= 0]
         _aj_sal = [_aj for _aj in _aj_caja_periodo if float(_aj.get("monto") or 0) < 0]
-        for _aj_grp, _aj_lbl in [(_aj_ent, "ENTRADAS - AJUSTES"), (_aj_sal, "SALIDAS - AJUSTES")]:
+        for _aj_grp, _aj_lbl, _aj_abs in [(_aj_ent, "ENTRADAS - AJUSTES", False), (_aj_sal, "SALIDAS - AJUSTES", True)]:
             if _aj_grp:
                 _aj_sum = abs(sum(float(_aj.get("monto") or 0) for _aj in _aj_grp))
                 with st.expander(f"{_aj_lbl} ({len(_aj_grp)}) — {_fmt_monto(_aj_sum)}"):
-                    _aj_rows = [{"Fecha": _aj.get("fecha"), "Monto": float(_aj.get("monto") or 0), "Nota": _aj.get("nota") or ""} for _aj in _aj_grp]
+                    _aj_rows = [{"Fecha": _aj.get("fecha"), "Monto": abs(float(_aj.get("monto") or 0)) if _aj_abs else float(_aj.get("monto") or 0), "Nota": _aj.get("nota") or ""} for _aj in _aj_grp]
                     st.dataframe(pd.DataFrame(_aj_rows), use_container_width=True, hide_index=True,
                         column_config={"Fecha": _cfg_fecha, "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")})
         st.divider()
