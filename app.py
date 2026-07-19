@@ -4061,7 +4061,7 @@ if tab_ing_cobros_wix:
             if st.session_state.pop("wix_cob_ok", False):
                 st.success("Guardado.")
             with st.form("form_cobros_wix_cajas", border=False):
-                _guardar_cob = st.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
+                _guardar_cob = st.form_submit_button("💾 Guardar fechas de cobro y cajas", type="primary")
                 _nuevas_fpago_cob = {}
                 _nuevas_cajas_cob = {}
                 for _o in _wix_sorted_cob:
