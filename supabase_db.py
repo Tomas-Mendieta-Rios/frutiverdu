@@ -573,8 +573,19 @@ def cargar_pedidos_dux_recientes(limit=150):
     order_ids = [str(r.get("order_id") or "") for r in resp_orders.data if r.get("order_id")]
     all_items = []
     if order_ids:
-        resp_items = _exec(client.table("pedidos_dux_items").select("*").in_("order_id", order_ids))
-        all_items = resp_items.data or []
+        _batch, _offset = 1000, 0
+        while True:
+            _resp = _exec(
+                client.table("pedidos_dux_items")
+                .select("*")
+                .in_("order_id", order_ids)
+                .range(_offset, _offset + _batch - 1)
+            )
+            _page = _resp.data or []
+            all_items.extend(_page)
+            if len(_page) < _batch:
+                break
+            _offset += _batch
 
     prods = _productos_lookup()
     items_por_order = {}
@@ -692,6 +703,7 @@ def guardar_pedidos_dux(pedidos):
     _all_items = [it for its in items_por_order.values() for it in its]
     if _all_items:
         client.table("pedidos_dux_items").insert(_all_items).execute()
+    st.cache_data.clear()
 
 
 def _to_float(v):

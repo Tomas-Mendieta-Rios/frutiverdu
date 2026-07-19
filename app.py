@@ -5722,8 +5722,8 @@ with tab_dux:
                             if asignar:
                                 nuevas_selecciones_dux[oid] = str(fecha_entrega)
 
-                        if items:
-                            with st.expander(f"Ver productos ({len(items)})"):
+                        with st.expander(f"Ver productos ({len(items)})"):
+                            if items:
                                 filas = [extraer_item_dux(it) for it in items]
                                 _df_items = pd.DataFrame(filas)
                                 _cols_show = [c for c in ["producto", "cantidad"] if c in _df_items.columns]
@@ -5732,6 +5732,8 @@ with tab_dux:
                                     use_container_width=False,
                                     hide_index=True,
                                 )
+                            else:
+                                st.caption("Sin ítems registrados.")
 
             if guardar_sel_dux:
                 try:
