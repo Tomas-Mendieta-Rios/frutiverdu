@@ -5640,10 +5640,11 @@ with tab_dux:
                 all_orders_saved, key=_nro_dux_sort, reverse=True
             )
 
-            if "dux_n_show" not in st.session_state:
-                st.session_state["dux_n_show"] = 100
-            _dux_n_show = st.session_state["dux_n_show"]
-            all_orders_sorted = all_orders_sorted[:_dux_n_show]
+            _ddc1, _ddc2 = st.columns(2)
+            _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
+            _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
+            all_orders_sorted = [o for o in all_orders_sorted
+                                  if _dux_desde <= _fecha_dux(o).date() <= _dux_hasta]
 
             if not all_orders_sorted:
                 st.info("No hay pedidos sincronizados todavía.")
@@ -5742,13 +5743,6 @@ with tab_dux:
                 except Exception as e:
                     st.error(msg_error_sheets("guardar selecciones DUX", e))
 
-            _total_dux = len(all_orders_saved)
-            if _dux_n_show < _total_dux:
-                _c1, _c2, _c3 = st.columns([2, 1, 2])
-                with _c2:
-                    if st.button("Cargar más", key="dux_ver_mas", type="primary", use_container_width=True):
-                        st.session_state["dux_n_show"] += 50
-                        st.rerun()
 
         else:
             st.info(
@@ -6099,10 +6093,11 @@ with tab_wix:
                 orders_saved, key=_nro_wix_sort, reverse=True
             )
 
-            if "wix_n_show" not in st.session_state:
-                st.session_state["wix_n_show"] = 100
-            _wix_n_show = st.session_state["wix_n_show"]
-            orders_saved_sorted = orders_saved_sorted[:_wix_n_show]
+            _wpc1, _wpc2 = st.columns(2)
+            _wix_ped_desde = _wpc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_ped_desde")
+            _wix_ped_hasta = _wpc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_ped_hasta")
+            orders_saved_sorted = [o for o in orders_saved_sorted
+                                    if _wix_ped_desde <= _fecha_wix(o).date() <= _wix_ped_hasta]
 
             if not orders_saved_sorted:
                 st.info("No hay pedidos sincronizados todavía.")
@@ -6226,13 +6221,6 @@ with tab_wix:
                 except Exception as e:
                     st.error(msg_error_sheets("guardar selecciones Wix", e))
 
-            _total_wix = len(wix_orders_saved)
-            if _wix_n_show < _total_wix:
-                _c1, _c2, _c3 = st.columns([2, 1, 2])
-                with _c2:
-                    if st.button("Cargar más", key="wix_ver_mas", type="primary", use_container_width=True):
-                        st.session_state["wix_n_show"] += 50
-                        st.rerun()
 
 if tab_wix_productos:
     with tab_wix_productos:
