@@ -3128,7 +3128,7 @@ if _stab_ajustes:
                     _dc1, _dc2 = st.columns(2)
                     _aj_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_edit_desde")
                     _aj_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [a for a in _lista if _aj_e_desde <= _safe_date(a.get("fecha")) <= _aj_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3184,7 +3184,7 @@ if _stab_ajustes:
                     _dc1, _dc2 = st.columns(2)
                     _aj_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_all_desde")
                     _aj_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [a for a in _lista if _aj_v_desde <= _safe_date(a.get("fecha")) <= _aj_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3426,7 +3426,7 @@ if _stab_otros_ingresos:
                     _dc1, _dc2 = st.columns(2)
                     _oi_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_edit_desde")
                     _oi_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oi_e_desde <= _safe_date(o.get("fecha")) <= _oi_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3508,7 +3508,7 @@ if _stab_otros_ingresos:
                     _dc1, _dc2 = st.columns(2)
                     _oi_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_all_desde")
                     _oi_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oi_v_desde <= _safe_date(o.get("fecha")) <= _oi_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3642,7 +3642,7 @@ if _stab_otros_egresos:
                     _dc1, _dc2 = st.columns(2)
                     _oe_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_edit_desde")
                     _oe_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oe_e_desde <= _safe_date(o.get("fecha")) <= _oe_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3726,7 +3726,7 @@ if _stab_otros_egresos:
                     _dc1, _dc2 = st.columns(2)
                     _oe_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_all_desde")
                     _oe_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oe_v_desde <= _safe_date(o.get("fecha")) <= _oe_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3876,7 +3876,7 @@ if _stab_transferencias:
                     _dc1, _dc2 = st.columns(2)
                     _tr_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_edit_desde")
                     _tr_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [t for t in _lista if _tr_e_desde <= _safe_date(t.get("fecha")) <= _tr_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3934,7 +3934,7 @@ if _stab_transferencias:
                     _dc1, _dc2 = st.columns(2)
                     _tr_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_all_desde")
                     _tr_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
                 _lista = [t for t in _lista if _tr_v_desde <= _safe_date(t.get("fecha")) <= _tr_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
