@@ -3183,15 +3183,9 @@ if _stab_ajustes:
                     _aj_grupos.setdefault(_cj, []).append(_a)
                 for _cj_nm, _cj_items in _aj_grupos.items():
                     _cj_total = sum(float(x.get("monto") or 0) for x in _cj_items)
-                    with st.expander(f"**{_cj_nm}** · $ {_cj_total:,.0f}", expanded=True):
-                        _rows = []
-                        for _a in _cj_items:
-                            _f = _safe_date(_a.get("fecha"))
-                            _rows.append({
-                                "Fecha": _f.strftime("%d/%m/%Y") if _f != date.min else str(_a.get("fecha") or "")[:10],
-                                "Monto": float(_a.get("monto") or 0),
-                                "Nota":  _a.get("nota") or "—",
-                            })
+                    with st.expander(f"{_cj_nm} ({len(_cj_items)}) — $ {_pesos(_cj_total)}"):
+                        _rows = [{"Fecha": _fmt_fecha(_a.get("fecha")), "Monto": float(_a.get("monto") or 0), "Nota": _a.get("nota") or "—"}
+                                 for _a in _cj_items]
                         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _aj_todos_vista()
@@ -3503,37 +3497,35 @@ if _stab_otros_ingresos:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                def _oi_todos_group(items_grp):
-                    _rubros: dict[str, dict[str, list]] = {}
-                    for _oi in items_grp:
-                        _r = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
-                        _s = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
-                        _rubros.setdefault(_r, {}).setdefault(_s, []).append(_oi)
-                    for _r_nm, _subs in _rubros.items():
-                        _r_total = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
-                        with st.expander(f"**{_r_nm}** · $ {_r_total:,.0f}", expanded=True):
-                            for _s_nm, _s_items in _subs.items():
-                                st.caption(f"— {_s_nm}")
-                                _rows = []
-                                for _oi in _s_items:
-                                    _rows.append({
-                                        "Fecha": _oi.get("fecha", ""),
-                                        "F. cobro": _oi.get("fecha_movimiento") or "—",
-                                        "Item": (_oi.get("items_ingresos") or {}).get("nombre") or "—",
-                                        "Monto": float(_oi.get("monto") or 0),
-                                        "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
-                                        "Descripción": _oi.get("descripcion") or "",
-                                    })
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                def _oi_todos_group(items_grp, lbl):
+                    _tot_grp = sum(float(x.get("monto") or 0) for x in items_grp)
+                    with st.expander(f"{lbl} ({len(items_grp)}) — $ {_pesos(_tot_grp)}"):
+                        _by_rub: dict[str, dict[str, list]] = {}
+                        for _oi in items_grp:
+                            _r = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
+                            _s = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                            _by_rub.setdefault(_r, {}).setdefault(_s, []).append(_oi)
+                        for _r_nm, _subs in sorted(_by_rub.items()):
+                            _r_tot = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
+                            with st.expander(f"{_r_nm} ({sum(len(v) for v in _subs.values())}) — $ {_pesos(_r_tot)}"):
+                                for _s_nm, _s_items in sorted(_subs.items()):
+                                    _s_tot = sum(float(x.get("monto") or 0) for x in _s_items)
+                                    with st.expander(f"{_s_nm} ({len(_s_items)}) — $ {_pesos(_s_tot)}"):
+                                        _rows = [{"Fecha": _fmt_fecha(_oi.get("fecha")),
+                                                  "F. cobro": _fmt_fecha(_oi.get("fecha_movimiento")) if _oi.get("fecha_movimiento") else "—",
+                                                  "Item": (_oi.get("items_ingresos") or {}).get("nombre") or "—",
+                                                  "Monto": float(_oi.get("monto") or 0),
+                                                  "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
+                                                  "Descripción": _oi.get("descripcion") or ""}
+                                                 for _oi in sorted(_s_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
                 _pend = [x for x in _lista if x.get("estado") != "cobrado"]
                 _cobr = [x for x in _lista if x.get("estado") == "cobrado"]
                 if _pend:
-                    st.markdown("#### 🟡 Pendientes")
-                    _oi_todos_group(_pend)
+                    _oi_todos_group(_pend, "Pendiente")
                 if _cobr:
-                    st.markdown("#### 🟢 Cobrados")
-                    _oi_todos_group(_cobr)
+                    _oi_todos_group(_cobr, "Cobrado")
             _oi_todos_vista()
 
 if _stab_otros_egresos:
@@ -3719,37 +3711,35 @@ if _stab_otros_egresos:
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
                     return
-                def _oe_todos_group(items_grp):
-                    _rubros: dict[str, dict[str, list]] = {}
-                    for _oe in items_grp:
-                        _r = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
-                        _s = (_oe.get("subrubros_egresos") or {}).get("nombre") or "—"
-                        _rubros.setdefault(_r, {}).setdefault(_s, []).append(_oe)
-                    for _r_nm, _subs in _rubros.items():
-                        _r_total = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
-                        with st.expander(f"**{_r_nm}** · $ {_r_total:,.0f}", expanded=True):
-                            for _s_nm, _s_items in _subs.items():
-                                st.caption(f"— {_s_nm}")
-                                _rows = []
-                                for _oe in _s_items:
-                                    _rows.append({
-                                        "Fecha": _oe.get("fecha", ""),
-                                        "F. pago": _oe.get("fecha_movimiento") or "—",
-                                        "Item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "—",
-                                        "Monto": float(_oe.get("monto") or 0),
-                                        "Caja": _oe_caja_map.get(_oe.get("caja_id"), "—"),
-                                        "Descripción": _oe.get("descripcion") or "",
-                                    })
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                def _oe_todos_group(items_grp, lbl):
+                    _tot_grp = sum(float(x.get("monto") or 0) for x in items_grp)
+                    with st.expander(f"{lbl} ({len(items_grp)}) — $ {_pesos(_tot_grp)}"):
+                        _by_rub: dict[str, dict[str, list]] = {}
+                        for _oe in items_grp:
+                            _r = (_oe.get("rubros_egresos") or {}).get("nombre") or _oe_rubro_map.get(_oe.get("rubro_id"), "—")
+                            _s = (_oe.get("subrubros_egresos") or {}).get("nombre") or "—"
+                            _by_rub.setdefault(_r, {}).setdefault(_s, []).append(_oe)
+                        for _r_nm, _subs in sorted(_by_rub.items()):
+                            _r_tot = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
+                            with st.expander(f"{_r_nm} ({sum(len(v) for v in _subs.values())}) — $ {_pesos(_r_tot)}"):
+                                for _s_nm, _s_items in sorted(_subs.items()):
+                                    _s_tot = sum(float(x.get("monto") or 0) for x in _s_items)
+                                    with st.expander(f"{_s_nm} ({len(_s_items)}) — $ {_pesos(_s_tot)}"):
+                                        _rows = [{"Fecha": _fmt_fecha(_oe.get("fecha")),
+                                                  "F. pago": _fmt_fecha(_oe.get("fecha_movimiento")) if _oe.get("fecha_movimiento") else "—",
+                                                  "Item": (_oe.get("items_egresos") or {}).get("nombre") or _oe.get("item") or "—",
+                                                  "Monto": float(_oe.get("monto") or 0),
+                                                  "Caja": _oe_caja_map.get(_oe.get("caja_id"), "—"),
+                                                  "Descripción": _oe.get("descripcion") or ""}
+                                                 for _oe in sorted(_s_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
                 _pend_oe = [x for x in _lista if x.get("estado") != "pagado"]
                 _pag_oe  = [x for x in _lista if x.get("estado") == "pagado"]
                 if _pend_oe:
-                    st.markdown("#### 🟡 Pendientes")
-                    _oe_todos_group(_pend_oe)
+                    _oe_todos_group(_pend_oe, "Pendiente")
                 if _pag_oe:
-                    st.markdown("#### 🟢 Pagados")
-                    _oe_todos_group(_pag_oe)
+                    _oe_todos_group(_pag_oe, "Pagado")
             _oe_todos_vista()
 
 if tab_iva:
@@ -3930,17 +3920,13 @@ if _stab_transferencias:
                     _org_nm = ((_t.get("origen") or {}).get("nombre") or "—")
                     _dst_nm = ((_t.get("destino") or {}).get("nombre") or "—")
                     _tr_grupos.setdefault(f"{_org_nm} → {_dst_nm}", []).append(_t)
-                for _grp_key, _grp_items in _tr_grupos.items():
+                for _grp_key, _grp_items in sorted(_tr_grupos.items()):
                     _grp_total = sum(float(x.get("monto") or 0) for x in _grp_items)
-                    with st.expander(f"**{_grp_key}** · $ {_grp_total:,.0f}", expanded=True):
-                        _rows = []
-                        for _t in _grp_items:
-                            _f = _safe_date(_t.get("fecha"))
-                            _rows.append({
-                                "Fecha":    _f.strftime("%d/%m/%Y") if _f != date.min else str(_t.get("fecha") or "")[:10],
-                                "Concepto": _t.get("concepto") or "—",
-                                "Monto":    float(_t.get("monto") or 0),
-                            })
+                    with st.expander(f"{_grp_key} ({len(_grp_items)}) — $ {_pesos(_grp_total)}"):
+                        _rows = [{"Fecha": _fmt_fecha(_t.get("fecha")),
+                                  "Concepto": _t.get("concepto") or "—",
+                                  "Monto": float(_t.get("monto") or 0)}
+                                 for _t in sorted(_grp_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _tr_todos_vista()
