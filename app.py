@@ -5703,9 +5703,6 @@ with tab_dux:
                                 f"**#{nro or i}** — {cliente_str} · "
                                 f"{estado_badge}{registro_badge}{anulado_badge}"
                             )
-                            if items:
-                                _dux_noms = [extraer_item_dux(it).get("producto", "") for it in items]
-                                st.caption(" · ".join(n for n in _dux_noms if n))
                         if not es_anulado:
                             with c_chk:
                                 asignar = st.checkbox(
@@ -5726,7 +5723,7 @@ with tab_dux:
                                 nuevas_selecciones_dux[oid] = str(fecha_entrega)
 
                         if items:
-                            with st.expander("Ver productos"):
+                            with st.expander(f"Ver productos ({len(items)})"):
                                 filas = [extraer_item_dux(it) for it in items]
                                 _df_items = pd.DataFrame(filas)
                                 _cols_show = [c for c in ["producto", "cantidad"] if c in _df_items.columns]
@@ -6164,13 +6161,6 @@ with tab_wix:
                                 f"**{total}**{registro_badge}{cancelado_badge}"
                                 + (f" · {badges_line}" if badges_line else "")
                             )
-                            if items:
-                                _wix_noms = [
-                                    ((it.get("productName") or {}).get("original")
-                                     or (it.get("productName") or {}).get("translated") or "")
-                                    for it in items
-                                ]
-                                st.caption(" · ".join(n for n in _wix_noms if n))
                             detalles = []
                             if direccion:
                                 detalles.append(f"📍 {direccion}")
@@ -6200,7 +6190,7 @@ with tab_wix:
                                 nuevas_selecciones[oid] = str(fecha_entrega)
 
                         if items:
-                            with st.expander("Ver productos"):
+                            with st.expander(f"Ver productos ({len(items)})"):
                                 filas = []
                                 for it in items:
                                     nombre_obj = it.get("productName", {}) or {}
