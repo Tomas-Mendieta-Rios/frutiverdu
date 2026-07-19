@@ -3372,6 +3372,8 @@ if _stab_otros_ingresos:
         with _oi_tab1:
             @st.fragment
             def _oi_nuevo_ingreso():
+                if st.session_state.pop("oi_guardado_ok", False):
+                    st.success("Ingreso guardado.")
                 with st.container(border=True):
                     _f = _oi_render_fields("ni")
                     if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
@@ -3394,7 +3396,7 @@ if _stab_otros_ingresos:
                                     fecha_movimiento=_f["fecha_mov"],
                                 )
                                 db.cargar_otros_ingresos.clear()
-                                st.toast("✅ Ingreso guardado.", icon="✅")
+                                st.session_state["oi_guardado_ok"] = True
                                 st.rerun(scope="fragment")
                             except Exception as e:
                                 st.error(f"Error al guardar: {e}")
