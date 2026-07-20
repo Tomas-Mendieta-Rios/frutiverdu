@@ -5641,6 +5641,8 @@ with tab_dux:
     else:
         @st.fragment
         def _dux_pedidos_frag():
+            if n := st.session_state.pop("dux_sel_guardado_ok", None):
+                st.success(f"✅ {n} entregas guardadas.")
             all_orders_saved = []
             selecciones_dux = db.cargar_selecciones("dux")
             try:
@@ -5775,10 +5777,8 @@ with tab_dux:
                 if guardar_sel_dux:
                     try:
                         db.guardar_selecciones("dux", nuevas_selecciones_dux)
-                        st.success(
-                            f"✅ {len(nuevas_selecciones_dux)} entregas guardadas en Sheets."
-                        )
                         selecciones_dux = nuevas_selecciones_dux
+                        st.session_state["dux_sel_guardado_ok"] = len(nuevas_selecciones_dux)
                         st.cache_data.clear()
                         st.rerun(scope="fragment")
                     except Exception as e:
@@ -6048,6 +6048,8 @@ with tab_wix:
     else:
         @st.fragment
         def _wix_pedidos_frag():
+            if n := st.session_state.pop("wix_sel_guardado_ok", None):
+                st.success(f"✅ {n} entregas guardadas.")
             try:
                 wix_orders_saved = _cargar_pedidos_wix_cached()
             except Exception as e:
@@ -6264,7 +6266,7 @@ with tab_wix:
                     try:
                         db.guardar_selecciones("wix", nuevas_selecciones)
                         selecciones = nuevas_selecciones
-                        st.success(f"✅ {len(nuevas_selecciones)} entregas guardadas.")
+                        st.session_state["wix_sel_guardado_ok"] = len(nuevas_selecciones)
                         st.cache_data.clear()
                         st.rerun(scope="fragment")
                     except Exception as e:
