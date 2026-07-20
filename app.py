@@ -5664,8 +5664,6 @@ with tab_dux:
     else:
         @st.fragment
         def _dux_pedidos_frag():
-            if n := st.session_state.pop("dux_sel_guardado_ok", None):
-                st.success(f"✅ {n} entregas guardadas.")
             all_orders_saved = []
             selecciones_dux = db.cargar_selecciones("dux")
             try:
@@ -5704,7 +5702,7 @@ with tab_dux:
                     _ddc1, _ddc2 = st.columns(2)
                     _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
                     _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("🔄 Actualizar", type="primary")
                 all_orders_sorted = [o for o in all_orders_sorted
                                       if _dux_desde <= _fecha_dux(o).date() <= _dux_hasta]
 
@@ -5712,9 +5710,14 @@ with tab_dux:
                     st.info("No hay pedidos sincronizados todavía.")
 
                 with st.form(key="form_dux_seleccion", clear_on_submit=False):
-                    guardar_sel_dux = st.form_submit_button(
-                        "💾 Guardar selección de entregas", type="primary", use_container_width=True
-                    )
+                    _col_btn_dux, _col_msg_dux = st.columns([2, 3])
+                    with _col_btn_dux:
+                        guardar_sel_dux = st.form_submit_button(
+                            "💾 Guardar selección de entregas", type="primary"
+                        )
+                    with _col_msg_dux:
+                        if st.session_state.pop("dux_sel_guardado_ok", None):
+                            st.success("✅ Guardado")
 
                     nuevas_selecciones_dux = {}
                     for i, orden in enumerate(all_orders_sorted, start=1):
@@ -6078,8 +6081,6 @@ with tab_wix:
     else:
         @st.fragment
         def _wix_pedidos_frag():
-            if n := st.session_state.pop("wix_sel_guardado_ok", None):
-                st.success(f"✅ {n} entregas guardadas.")
             try:
                 wix_orders_saved = _cargar_pedidos_wix_cached()
             except Exception as e:
@@ -6174,7 +6175,7 @@ with tab_wix:
                     _wpc1, _wpc2 = st.columns(2)
                     _wix_ped_desde = _wpc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_ped_desde")
                     _wix_ped_hasta = _wpc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_ped_hasta")
-                    st.form_submit_button("Actualizar", type="primary")
+                    st.form_submit_button("🔄 Actualizar", type="primary")
                 orders_saved_sorted = [o for o in orders_saved_sorted
                                         if _wix_ped_desde <= _fecha_wix(o).date() <= _wix_ped_hasta]
 
@@ -6182,9 +6183,14 @@ with tab_wix:
                     st.info("No hay pedidos sincronizados todavía.")
 
                 with st.form(key="form_wix_seleccion", clear_on_submit=False):
-                    guardar_sel = st.form_submit_button(
-                        "💾 Guardar selección de entregas", type="primary", use_container_width=True
-                    )
+                    _col_btn_wix, _col_msg_wix = st.columns([2, 3])
+                    with _col_btn_wix:
+                        guardar_sel = st.form_submit_button(
+                            "💾 Guardar selección de entregas", type="primary"
+                        )
+                    with _col_msg_wix:
+                        if st.session_state.pop("wix_sel_guardado_ok", None):
+                            st.success("✅ Guardado")
 
                     nuevas_selecciones = {}
                     for o in orders_saved_sorted:
