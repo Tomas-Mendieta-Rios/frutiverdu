@@ -5646,7 +5646,7 @@ with tab_stock:
                         except Exception:
                             pass
                         stk_save_msg_ph.success(
-                            f"✅ Stock del {_fmt_fecha(fecha_conteo)} guardado en Sheets."
+                            f"✅ Stock del {_fmt_fecha(fecha_conteo)} guardado."
                         )
                     except Exception as e:
                         stk_save_msg_ph.error(f"⚠️ Error al guardar: {e}")
