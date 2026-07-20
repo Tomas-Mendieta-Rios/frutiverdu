@@ -4538,7 +4538,7 @@ with tab_comprar:
             else:
                 if _dux_contados:
                     st.markdown(f"**DUX ({len(_dux_contados)})**")
-                    for o in _dux_contados:
+                    for o in sorted(_dux_contados, key=lambda x: int(str(_dux_get_first(x, ["nro_pedido","nroPedido","numero","id"]) or 0) or 0)):
                         nro = _dux_get_first(
                             o, ["nro_pedido", "nroPedido", "numero", "id"]
                         )
@@ -4562,7 +4562,7 @@ with tab_comprar:
 
                 if _wix_contados:
                     st.markdown(f"**Wix ({len(_wix_contados)})**")
-                    for o in _wix_contados:
+                    for o in sorted(_wix_contados, key=lambda x: int(str(x.get("number") or x.get("id") or 0) or 0)):
                         nro = o.get("number") or o.get("id", "")
                         bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
                         nombre_w = (
