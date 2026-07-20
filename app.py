@@ -3171,8 +3171,14 @@ if _sub_percibido:
                 _bal_metric(_c1, "Cobrado", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")
                 _fac_lkp = {str(f.get("id") or ""): f for f in facturas_bal}
                 _cob_by_cli = {}
+                def _cli_nombre(c):
+                    for _k in ("nombre_cliente", "cliente"):
+                        _v = c.get(_k)
+                        if _v and str(_v).strip() not in ("", "None"):
+                            return str(_v).strip()
+                    return "—"
                 for _c in sorted(_cobros_rango, key=lambda x: str(x.get("fecha") or "")):
-                    _cli = str(_c.get("nombre_cliente") or _c.get("cliente") or "—")
+                    _cli = _cli_nombre(_c)
                     _cob_by_cli.setdefault(_cli, []).append(_c)
                 for _cli, _cobs in sorted(_cob_by_cli.items()):
                     _tot = sum(float(c.get("monto") or 0) for c in _cobs)
