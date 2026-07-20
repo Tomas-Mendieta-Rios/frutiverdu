@@ -3170,6 +3170,13 @@ if _sub_percibido:
                 _c1, _c2 = st.columns(2)
                 _bal_metric(_c1, "Cobrado", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")
                 _fac_lkp = {str(f.get("id") or ""): f for f in facturas_bal}
+                # total cobrado por factura en TODOS los cobros (igual que Resumen)
+                _cob_por_fac_p = {}
+                for _cx in cobros_bal:
+                    for _ix in (_cx.get("imputaciones") or []):
+                        _fid = str(_ix.get("id_comp_venta") or "")
+                        if _fid:
+                            _cob_por_fac_p[_fid] = _cob_por_fac_p.get(_fid, 0.0) + float(_ix.get("monto_imputado") or 0)
                 _cob_by_cli = {}
                 def _cli_nombre(c):
                     for _k in ("nombre_cliente", "cliente"):
@@ -3185,6 +3192,7 @@ if _sub_percibido:
                     _fac_id  = str(_imp.get("id_comp_venta") or "")
                     _fac     = _fac_lkp.get(_fac_id) or {}
                     _fac_tot = float(_fac.get("total") or 0)
+                    _tot_cob_fac = _cob_por_fac_p.get(_fac_id, 0.0)
                     _cob_mto = float(c.get("monto") or 0)
                     return {
                         "Fecha":         _fmt_fecha(c.get("fecha")),
@@ -3193,7 +3201,7 @@ if _sub_percibido:
                         "Total Factura": _fac_tot or None,
                         "Cobrado":       _cob_mto,
                         "PDF":           _fac.get("url_factura") or None,
-                        "_parcial":      bool(_fac_tot) and _cob_mto < _fac_tot - 0.01,
+                        "_parcial":      bool(_fac_tot) and _tot_cob_fac < _fac_tot - 0.01,
                     }
                 _cob_cfg = {
                     "Total Factura": st.column_config.NumberColumn("Total Factura ($)", format="$ %,.0f"),
