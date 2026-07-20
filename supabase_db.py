@@ -850,13 +850,13 @@ def guardar_percepciones_impuestos(data):
 @st.cache_data(ttl=600)
 def cargar_pedidos_wix():
     client = get_client()
-    resp_orders = _exec(client.table("pedidos_wix").select("*").limit(10000))
-    if not resp_orders.data:
+    orders_data = _fetch_all_rows(client, "pedidos_wix")
+    if not orders_data:
         return []
 
-    resp_items = _exec(client.table("pedidos_wix_items").select("*"))
+    all_items = _fetch_all(client, "pedidos_wix_items")
     items_por_order = {}
-    for it in (resp_items.data or []):
+    for it in all_items:
         oid = str(it.get("order_id") or "")
         if oid:
             items_por_order.setdefault(oid, []).append({
@@ -874,7 +874,7 @@ def cargar_pedidos_wix():
             })
 
     pedidos = []
-    for r in resp_orders.data:
+    for r in orders_data:
         oid = str(r.get("order_id") or "")
         buyer_email = r.get("buyer_email") or r.get("billing_email") or ""
         pedidos.append({
