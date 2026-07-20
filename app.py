@@ -5782,8 +5782,15 @@ with tab_dux:
 
                 if guardar_sel_dux:
                     try:
-                        db.guardar_selecciones("dux", nuevas_selecciones_dux)
-                        selecciones_dux = nuevas_selecciones_dux
+                        # Preservar selecciones de pedidos fuera del rango visible
+                        _ids_visibles = set()
+                        for _iv, _ov in enumerate(all_orders_sorted, start=1):
+                            _nv = _dux_get_first(_ov, ["nro_pedido", "nroPedido", "numero", "id"])
+                            _ids_visibles.add(str(_ov.get("id") or _nv or _iv))
+                        _fuera = {oid: fent for oid, fent in selecciones_dux.items() if oid not in _ids_visibles}
+                        _merged = {**_fuera, **nuevas_selecciones_dux}
+                        db.guardar_selecciones("dux", _merged)
+                        selecciones_dux = _merged
                         st.session_state["dux_sel_guardado_ok"] = len(nuevas_selecciones_dux)
                         st.cache_data.clear()
                         st.rerun(scope="fragment")
@@ -6270,8 +6277,12 @@ with tab_wix:
 
                 if guardar_sel:
                     try:
-                        db.guardar_selecciones("wix", nuevas_selecciones)
-                        selecciones = nuevas_selecciones
+                        # Preservar selecciones de pedidos fuera del rango visible
+                        _ids_vis_w = {str(o.get("id") or _wix_nro(o)) for o in orders_saved_sorted}
+                        _fuera_w = {oid: fent for oid, fent in selecciones.items() if oid not in _ids_vis_w}
+                        _merged_w = {**_fuera_w, **nuevas_selecciones}
+                        db.guardar_selecciones("wix", _merged_w)
+                        selecciones = _merged_w
                         st.session_state["wix_sel_guardado_ok"] = len(nuevas_selecciones)
                         st.cache_data.clear()
                         st.rerun(scope="fragment")
