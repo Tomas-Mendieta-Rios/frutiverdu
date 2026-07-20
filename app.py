@@ -501,7 +501,10 @@ def cargar_pedidos_dux_aggregated(productos_df, dia_estimado=None, fecha_compra=
         all_orders = [
             o
             for o in all_orders
-            if selecciones_dux.get(str(o.get("id") or o.get("nro_pedido") or "")) in fechas_str
+            if (
+                selecciones_dux.get(str(o.get("id") or ""))
+                or selecciones_dux.get(str(o.get("nro_pedido") or ""))
+            ) in fechas_str
         ]
         st.session_state["_dux_contados"] = all_orders
 
@@ -4481,6 +4484,12 @@ with tab_comprar:
                 f"⚠️ No hay estimado cargado para {DIAS_DISPLAY[dia_estimado_sel]}. "
                 f"Se va a usar **0 para todos los productos**."
             )
+
+        _sel_debug = db.cargar_selecciones("dux")
+        _ords_debug = db.cargar_pedidos_dux()
+        with st.expander("🐛 DEBUG selecciones", expanded=False):
+            st.write("**Keys en selecciones_dux:**", list(_sel_debug.items()))
+            st.write("**IDs de pedidos DUX (id, nro_pedido):**", [(o.get("id"), o.get("nro_pedido")) for o in _ords_debug])
 
         pedidos_actual = cargar_pedidos_dux_aggregated(
             productos,
