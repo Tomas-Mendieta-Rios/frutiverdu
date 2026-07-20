@@ -4487,9 +4487,15 @@ with tab_comprar:
 
         _sel_debug = db.cargar_selecciones("dux")
         _ords_debug = db.cargar_pedidos_dux()
-        with st.expander("🐛 DEBUG selecciones", expanded=False):
-            st.write("**Keys en selecciones_dux:**", list(_sel_debug.items()))
-            st.write("**IDs de pedidos DUX (id, nro_pedido):**", [(o.get("id"), o.get("nro_pedido")) for o in _ords_debug])
+        with st.expander("🐛 DEBUG selecciones", expanded=True):
+            _fechas_debug = {str(f) for f in (fechas_entrega or [])}
+            st.write("**Fechas buscadas:**", _fechas_debug)
+            st.write("**Selecciones para esas fechas:**", {k: v for k, v in _sel_debug.items() if v in _fechas_debug})
+            _candidatos = [o for o in _ords_debug if str(o.get("nro_pedido") or "") in ("13899", "13907")]
+            st.write("**Pedidos 13899 y 13907 en cargar_pedidos_dux():**", [(o.get("id"), o.get("nro_pedido"), o.get("anulado")) for o in _candidatos])
+            for o in _candidatos:
+                _k = str(o.get("id") or o.get("nro_pedido") or "")
+                st.write(f"  nro={o.get('nro_pedido')} → key={_k!r} → sel={_sel_debug.get(_k)!r}")
 
         pedidos_actual = cargar_pedidos_dux_aggregated(
             productos,
