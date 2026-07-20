@@ -4445,9 +4445,9 @@ with tab_comprar:
                     key="comprar_dia_estimado",
                 )
             boton_actualizar = st.form_submit_button(
-                "🔄 Calcular",
+                "🔄 Actualizar",
                 type="primary",
-                use_container_width=True,
+                use_container_width=False,
             )
 
         if boton_actualizar:
