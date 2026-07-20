@@ -2378,7 +2378,6 @@ if _sub_pendientes:
                 _btn_pend = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
             if _btn_pend:
                 db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
-                st.rerun(scope="fragment")
     
             def _pend_en_rango(fecha_str):
                 try:
@@ -2576,7 +2575,6 @@ if _sub_resumen:
                 _btn_bal = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
             if _btn_bal:
                 db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
-                st.rerun(scope="fragment")
     
             def _en_rango(fecha_str):
                 try:
@@ -7040,7 +7038,6 @@ with tab_packs:
                     st.success(
                         f"✅ Packs guardados en Sheets ({len(rows_save)} líneas totales)."
                     )
-                    st.rerun(scope="fragment")
     
         ts_packs = db.ultima_carga("packs")
         ts_packs_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_packs)}**")
