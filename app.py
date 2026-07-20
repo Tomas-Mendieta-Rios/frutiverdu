@@ -4491,11 +4491,11 @@ with tab_comprar:
             _fechas_debug = {str(f) for f in (fechas_entrega or [])}
             st.write("**Fechas buscadas:**", _fechas_debug)
             st.write("**Selecciones para esas fechas:**", {k: v for k, v in _sel_debug.items() if v in _fechas_debug})
-            _candidatos = [o for o in _ords_debug if str(o.get("nro_pedido") or "") in ("13899", "13907")]
-            st.write("**Pedidos 13899 y 13907 en cargar_pedidos_dux():**", [(o.get("id"), o.get("nro_pedido"), o.get("anulado")) for o in _candidatos])
-            for o in _candidatos:
-                _k = str(o.get("id") or o.get("nro_pedido") or "")
-                st.write(f"  nro={o.get('nro_pedido')} → key={_k!r} → sel={_sel_debug.get(_k)!r}")
+            _candidatos = [o for o in _ords_debug if o.get("id") in ("3203532", "3205835")]
+            st.write("**Pedidos por order_id 3203532/3205835 en cargar_pedidos_dux():**", [(o.get("id"), o.get("nro_pedido"), o.get("anulado")) for o in _candidatos])
+            st.write("**Total pedidos devueltos:**", len(_ords_debug))
+            st.write("**Primeros 5 ids:**", [(o.get("id"), o.get("nro_pedido")) for o in _ords_debug[:5]])
+            st.write("**Últimos 5 ids:**", [(o.get("id"), o.get("nro_pedido")) for o in _ords_debug[-5:]])
 
         pedidos_actual = cargar_pedidos_dux_aggregated(
             productos,
