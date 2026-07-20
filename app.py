@@ -3202,8 +3202,8 @@ if _sub_percibido:
                             "Fecha":         _fmt_fecha(c.get("fecha")),
                             "Cobro #":       c.get("nro_comprobante") or "—",
                             "Factura":       _imp.get("nro_comprobante") or "—",
-                            "Total Factura": _fac_tot or None,
                             "Imputado":      _imp_mto,
+                            "Total Factura": _fac_tot or None,
                             "PDF":           _fac.get("url_factura") or None,
                             "_parcial":      bool(_fac_tot) and _tot_cob_fac < _fac_tot - 0.01,
                         })
