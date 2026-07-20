@@ -3157,9 +3157,9 @@ if _sub_percibido:
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos percibidos</h2>
   <div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px'>
-    {_metric_cell("DUX", f"$ {_pesos(total_cobrado_dux)}", "#1565c0")}
-    {_metric_cell("WIX", f"$ {_pesos(total_cobrado_wix)}", "#1565c0")}
-    {_metric_cell("Otros", f"$ {_pesos(total_otros_ing)}", "#1565c0")}
+    {_metric_cell("DUX", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")}
+    {_metric_cell("WIX", f"$ {_pesos(total_cobrado_wix)}", "#2e7d32")}
+    {_metric_cell("Otros", f"$ {_pesos(total_otros_ing)}", "#2e7d32")}
   </div>
   <div style='text-align:center;margin-top:10px;font-size:1.1em;font-weight:600'>Total: $ {_pesos(total_ingresos)}</div>
 </div>""", unsafe_allow_html=True)
@@ -3168,7 +3168,7 @@ if _sub_percibido:
             if _cobros_rango:
                 st.markdown(f"#### DUX · {len(_cobros_rango)} cobros")
                 _c1, _c2 = st.columns(2)
-                _bal_metric(_c1, "Cobrado", f"$ {_pesos(total_cobrado_dux)}", "#1565c0")
+                _bal_metric(_c1, "Cobrado", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")
                 _cob_by_cli = {}
                 for _c in sorted(_cobros_rango, key=lambda x: str(x.get("fecha") or "")):
                     _cli = str(_c.get("nombre_cliente") or _c.get("cliente") or "—")
@@ -3184,7 +3184,7 @@ if _sub_percibido:
             if _wix_cobrados:
                 st.markdown(f"#### WIX · {len(_wix_cobrados)} pedidos")
                 _w1, _w2 = st.columns(2)
-                _bal_metric(_w1, "Cobrado", f"$ {_pesos(total_cobrado_wix)}", "#1565c0")
+                _bal_metric(_w1, "Cobrado", f"$ {_pesos(total_cobrado_wix)}", "#2e7d32")
                 _wix_by_cli = {}
                 for _p in _wix_cobrados:
                     _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
@@ -3205,7 +3205,7 @@ if _sub_percibido:
             if _oi_rango:
                 st.markdown(f"#### Otros ingresos · {len(_oi_rango)} registros")
                 _oi_c1, _oi_c2 = st.columns(2)
-                _bal_metric(_oi_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#1565c0")
+                _bal_metric(_oi_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#2e7d32")
                 _oi_by_est = {}
                 for _o in _oi_rango:
                     _ek = _o.get("estado") or "pendiente"
