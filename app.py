@@ -1,4 +1,4 @@
-import hashlib
+﻿import hashlib
 import io
 import logging
 import re
@@ -2357,712 +2357,720 @@ _cfg_bal = db.cargar_config()
 
 if _sub_pendientes:
     with _sub_pendientes:
-        # ── Rango de fechas propio ─────────────────────────────────────────
-        try:
-            _pend_desde_def = date.fromisoformat(_cfg_bal.get("pend_desde", ""))
-        except Exception:
-            _pend_desde_def = date(2020, 1, 1)
-        try:
-            _pend_hasta_def = date.fromisoformat(_cfg_bal.get("pend_hasta", ""))
-        except Exception:
-            _pend_hasta_def = date.today()
-
-        with st.form("form_pend_fechas", border=False):
-            _fc1, _fc2 = st.columns(2)
-            with _fc1:
-                _pend_desde = st.date_input("Desde", value=_pend_desde_def, key="pend_desde_in", format="DD/MM/YYYY")
-            with _fc2:
-                _pend_hasta = st.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta_in", format="DD/MM/YYYY")
-            _btn_pend = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
-        if _btn_pend:
-            db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
-
-        def _pend_en_rango(fecha_str):
+        @st.fragment
+        def _pendientes_frag():
+            # ── Rango de fechas propio ─────────────────────────────────────────
             try:
-                f = pd.to_datetime(str(fecha_str or "")).date()
-                return _pend_desde <= f <= _pend_hasta
+                _pend_desde_def = date.fromisoformat(_cfg_bal.get("pend_desde", ""))
             except Exception:
-                return False
-
-        # Monto pagado por comprobante (para distinguir Parcial vs Pendiente)
-        _pend_pagado_por_comp = {}
-        for _pag in pagos_bal:
-            for _imp in (_pag.get("imputaciones") or []):
-                _nro = str(_imp.get("nro_comprobante") or "")
-                if _nro:
-                    _pend_pagado_por_comp[_nro] = _pend_pagado_por_comp.get(_nro, 0.0) + float(_imp.get("monto_imputado") or 0)
-
-        def _pend_pagado_c(c):
-            return min(float(c.get("total") or 0), _pend_pagado_por_comp.get(str(c.get("nro_comprobante") or ""), 0.0))
-        def _pend_saldo_c(c):
-            return max(0.0, float(c.get("total") or 0) - _pend_pagado_c(c))
-        def _pend_pagado_g(g):
-            return min(float(g.get("total") or 0), _pend_pagado_por_comp.get(str(g.get("nro_comprobante") or ""), 0.0))
-        def _pend_saldo_g(g):
-            return max(0.0, float(g.get("total") or 0) - _pend_pagado_g(g))
-
-        # Monto cobrado real por factura (via imputaciones de cobros)
-        _pend_cobrado_por_fac = {}
-        for _cob in cobros_bal:
-            for _imp in (_cob.get("imputaciones") or []):
-                _fid = str(_imp.get("id_comp_venta") or "")
-                if _fid:
-                    _pend_cobrado_por_fac[_fid] = _pend_cobrado_por_fac.get(_fid, 0.0) + float(_imp.get("monto_imputado") or 0)
-
-        def _pend_cobrado_f(f):
-            return min(float(f.get("total") or 0), _pend_cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
-        def _pend_saldo_f(f):
-            return max(0.0, float(f.get("total") or 0) - _pend_cobrado_f(f))
-
-        # helpers de visualización
-        def _pend_big(label, valor, color):
-            st.markdown(
-                f'<p style="margin:24px 0 2px 0;font-size:1rem;font-weight:700;color:#1a1a1a;">{label}</p>'
-                f'<p style="margin:0 0 6px 0;font-size:1.5rem;font-weight:700;color:{color};">$ {valor}</p>',
-                unsafe_allow_html=True,
-            )
-
-        # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
-        _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and not str(c.get("estado") or "").upper().startswith("ANULAD") and _pend_en_rango(c.get("fecha"))]
-        _oe_pend_hist   = [o for o in db.cargar_otros_egresos() if (o.get("estado") or "pendiente") != "pagado" and _pend_en_rango(o.get("fecha"))]
-        _total_pend_comp = sum(_pend_saldo_c(c) for c in _comp_pend_hist)
-        _total_pend_gas  = sum(float(o.get("monto") or 0) for o in _oe_pend_hist)
-        _total_pend      = _total_pend_comp + _total_pend_gas
-
-        st.subheader(f"A pagar a proveedores — $ {_pesos(_total_pend)}")
-
-        # Compras: agrupar por Proveedor → Parcial/Pendiente adentro
-        _pend_big("Compras", _pesos(_total_pend_comp), "#c62828")
-        if not _comp_pend_hist:
-            st.caption("Sin compras pendientes en el rango seleccionado.")
-        else:
-            _by_prov_comp = {}
-            for _c in _comp_pend_hist:
-                _by_prov_comp.setdefault(_c.get("proveedor") or "—", []).append(_c)
-            for _prov, _pi in sorted(_by_prov_comp.items(), key=lambda kv: sum(_pend_saldo_c(c) for c in kv[1]), reverse=True):
-                _ptot = sum(_pend_saldo_c(c) for c in _pi)
-                with st.expander(f"{_prov} ({len(_pi)}) — $ {_pesos(_ptot)}"):
-                    _cp = [c for c in _pi if _pend_pagado_c(c) > 0]
-                    _cn = [c for c in _pi if _pend_pagado_c(c) == 0]
-                    for _lbl, _lst in [("Parciales", _cp), ("Pendientes", _cn)]:
-                        if not _lst:
-                            continue
-                        _ltot = sum(_pend_saldo_c(c) for c in _lst)
-                        with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
-                            _rows = [{
-                                "Fecha":       _fmt_fecha(_c.get("fecha")),
-                                "Comprobante": _c.get("nro_comprobante") or "—",
-                                "Total":       float(_c.get("total") or 0),
-                                **( {"Pagado": _pend_pagado_c(_c), "Saldo": _pend_saldo_c(_c)} if _lbl == "Parciales" else {} ),
-                            } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                            _ccfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
-                            if _lbl == "Parciales":
-                                _ccfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
-                                _ccfg["Saldo"]  = st.column_config.NumberColumn("Saldo",  format="$ %,.2f")
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_ccfg)
-
-        # Egresos: agrupar por Rubro
-        _pend_big("Egresos", _pesos(_total_pend_gas), "#c62828")
-        if not _oe_pend_hist:
-            st.caption("Sin egresos pendientes en el rango seleccionado.")
-        else:
-            _by_rubro_oe = {}
-            for _o in _oe_pend_hist:
-                _rub = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
-                _by_rubro_oe.setdefault(_rub, []).append(_o)
-            for _rub, _rlst in sorted(_by_rubro_oe.items(), key=lambda kv: sum(float(o.get("monto") or 0) for o in kv[1]), reverse=True):
-                _rtot = sum(float(o.get("monto") or 0) for o in _rlst)
-                with st.expander(f"{_rub} ({len(_rlst)}) — $ {_pesos(_rtot)}"):
-                    _rows = [{
-                        "Fecha":    _fmt_fecha(_o.get("fecha")),
-                        "Subrubro": (_o.get("subrubros_egresos") or {}).get("nombre") or "—",
-                        "Item":     (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—",
-                        "Monto":    float(_o.get("monto") or 0),
-                    } for _o in sorted(_rlst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                 column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f")})
-
-        st.divider()
-
-        # ── DEUDORES (lo que nos deben) ────────────────────────────────────
-        _fac_deud  = [f for f in facturas_bal    if str(f.get("anulada","N")).upper() != "S" and _pend_saldo_f(f) > 0 and _pend_en_rango(f.get("fecha_comp"))]
-        _wix_deud  = [p for p in pedidos_wix_bal if str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED" and _pend_en_rango(p.get("createdDate"))]
-        _total_deud_dux = sum(_pend_saldo_f(f) for f in _fac_deud)
-        _total_deud_wix = sum(_wix_monto(p) for p in _wix_deud)
-        _total_deud     = _total_deud_dux + _total_deud_wix
-
-        st.subheader(f"A cobrar a clientes — $ {_pesos(_total_deud)}")
-
-        # DUX: agrupar por Cliente → Parcial/Pendiente adentro
-        _pend_big("DUX", _pesos(_total_deud_dux), "#c62828")
-        if not _fac_deud:
-            st.caption("Sin facturas pendientes de cobro en el rango seleccionado.")
-        else:
-            _by_cli_dux = {}
-            for _f in _fac_deud:
-                _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
-                _by_cli_dux.setdefault(_cli, []).append(_f)
-            for _cli, _ci in sorted(_by_cli_dux.items(), key=lambda kv: sum(_pend_saldo_f(f) for f in kv[1]), reverse=True):
-                _ctot = sum(_pend_saldo_f(f) for f in _ci)
-                with st.expander(f"{_cli} ({len(_ci)}) — $ {_pesos(_ctot)}"):
-                    _fp = [f for f in _ci if _pend_cobrado_f(f) > 0]
-                    _fn = [f for f in _ci if _pend_cobrado_f(f) == 0]
-                    for _lbl, _lst in [("Parciales", _fp), ("Pendientes", _fn)]:
-                        if not _lst:
-                            continue
-                        _ltot = sum(_pend_saldo_f(f) for f in _lst)
-                        with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
-                            _rows = [{
-                                "Fecha":       _fmt_fecha(_f.get("fecha_comp")),
-                                "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
-                                "Total":       float(_f.get("total") or 0),
-                                **( {"Cobrado": _pend_cobrado_f(_f), "Saldo": _pend_saldo_f(_f)} if _lbl == "Parciales" else {} ),
-                                "PDF":         _f.get("url_factura") or None,
-                            } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
-                            _fcfg = {
-                                "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
-                                "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
-                            }
-                            if _lbl == "Parciales":
-                                _fcfg["Cobrado"] = st.column_config.NumberColumn("Cobrado", format="$ %,.2f")
-                                _fcfg["Saldo"]   = st.column_config.NumberColumn("Saldo",   format="$ %,.2f")
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_fcfg)
-
-        # Wix: agrupar por Cliente (no hay parciales en Wix)
-        _pend_big("Wix", _pesos(_total_deud_wix), "#c62828")
-        if not _wix_deud:
-            st.caption("Sin pedidos pendientes de cobro en el rango seleccionado.")
-        else:
-            _by_cli_wix = {}
-            for _p in _wix_deud:
-                _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
-                _cli = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
-                _by_cli_wix.setdefault(_cli, []).append(_p)
-            for _cli, _citems in sorted(_by_cli_wix.items(), key=lambda kv: sum(_wix_monto(p) for p in kv[1]), reverse=True):
-                _ctot = sum(_wix_monto(p) for p in _citems)
-                with st.expander(f"{_cli} ({len(_citems)}) — $ {_pesos(_ctot)}"):
-                    _rows = [{
-                        "Fecha":    _fmt_fecha(_p.get("createdDate")),
-                        "Pedido #": _p.get("number") or _p.get("id") or "—",
-                        "Total":    _wix_monto(_p),
-                    } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                 column_config={"Total": _cfg_monto})
-
+                _pend_desde_def = date(2020, 1, 1)
+            try:
+                _pend_hasta_def = date.fromisoformat(_cfg_bal.get("pend_hasta", ""))
+            except Exception:
+                _pend_hasta_def = date.today()
+    
+            with st.form("form_pend_fechas", border=False):
+                _fc1, _fc2 = st.columns(2)
+                with _fc1:
+                    _pend_desde = st.date_input("Desde", value=_pend_desde_def, key="pend_desde_in", format="DD/MM/YYYY")
+                with _fc2:
+                    _pend_hasta = st.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta_in", format="DD/MM/YYYY")
+                _btn_pend = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+            if _btn_pend:
+                db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
+                st.rerun(scope="fragment")
+    
+            def _pend_en_rango(fecha_str):
+                try:
+                    f = pd.to_datetime(str(fecha_str or "")).date()
+                    return _pend_desde <= f <= _pend_hasta
+                except Exception:
+                    return False
+    
+            # Monto pagado por comprobante (para distinguir Parcial vs Pendiente)
+            _pend_pagado_por_comp = {}
+            for _pag in pagos_bal:
+                for _imp in (_pag.get("imputaciones") or []):
+                    _nro = str(_imp.get("nro_comprobante") or "")
+                    if _nro:
+                        _pend_pagado_por_comp[_nro] = _pend_pagado_por_comp.get(_nro, 0.0) + float(_imp.get("monto_imputado") or 0)
+    
+            def _pend_pagado_c(c):
+                return min(float(c.get("total") or 0), _pend_pagado_por_comp.get(str(c.get("nro_comprobante") or ""), 0.0))
+            def _pend_saldo_c(c):
+                return max(0.0, float(c.get("total") or 0) - _pend_pagado_c(c))
+            def _pend_pagado_g(g):
+                return min(float(g.get("total") or 0), _pend_pagado_por_comp.get(str(g.get("nro_comprobante") or ""), 0.0))
+            def _pend_saldo_g(g):
+                return max(0.0, float(g.get("total") or 0) - _pend_pagado_g(g))
+    
+            # Monto cobrado real por factura (via imputaciones de cobros)
+            _pend_cobrado_por_fac = {}
+            for _cob in cobros_bal:
+                for _imp in (_cob.get("imputaciones") or []):
+                    _fid = str(_imp.get("id_comp_venta") or "")
+                    if _fid:
+                        _pend_cobrado_por_fac[_fid] = _pend_cobrado_por_fac.get(_fid, 0.0) + float(_imp.get("monto_imputado") or 0)
+    
+            def _pend_cobrado_f(f):
+                return min(float(f.get("total") or 0), _pend_cobrado_por_fac.get(str(f.get("id") or ""), 0.0))
+            def _pend_saldo_f(f):
+                return max(0.0, float(f.get("total") or 0) - _pend_cobrado_f(f))
+    
+            # helpers de visualización
+            def _pend_big(label, valor, color):
+                st.markdown(
+                    f'<p style="margin:24px 0 2px 0;font-size:1rem;font-weight:700;color:#1a1a1a;">{label}</p>'
+                    f'<p style="margin:0 0 6px 0;font-size:1.5rem;font-weight:700;color:{color};">$ {valor}</p>',
+                    unsafe_allow_html=True,
+                )
+    
+            # ── PAGOS PENDIENTES (lo que debemos) ──────────────────────────────
+            _comp_pend_hist = [c for c in comprobantes_bal if c.get("pago_pendiente") and not str(c.get("estado") or "").upper().startswith("ANULAD") and _pend_en_rango(c.get("fecha"))]
+            _oe_pend_hist   = [o for o in db.cargar_otros_egresos() if (o.get("estado") or "pendiente") != "pagado" and _pend_en_rango(o.get("fecha"))]
+            _total_pend_comp = sum(_pend_saldo_c(c) for c in _comp_pend_hist)
+            _total_pend_gas  = sum(float(o.get("monto") or 0) for o in _oe_pend_hist)
+            _total_pend      = _total_pend_comp + _total_pend_gas
+    
+            st.subheader(f"A pagar a proveedores — $ {_pesos(_total_pend)}")
+    
+            # Compras: agrupar por Proveedor → Parcial/Pendiente adentro
+            _pend_big("Compras", _pesos(_total_pend_comp), "#c62828")
+            if not _comp_pend_hist:
+                st.caption("Sin compras pendientes en el rango seleccionado.")
+            else:
+                _by_prov_comp = {}
+                for _c in _comp_pend_hist:
+                    _by_prov_comp.setdefault(_c.get("proveedor") or "—", []).append(_c)
+                for _prov, _pi in sorted(_by_prov_comp.items(), key=lambda kv: sum(_pend_saldo_c(c) for c in kv[1]), reverse=True):
+                    _ptot = sum(_pend_saldo_c(c) for c in _pi)
+                    with st.expander(f"{_prov} ({len(_pi)}) — $ {_pesos(_ptot)}"):
+                        _cp = [c for c in _pi if _pend_pagado_c(c) > 0]
+                        _cn = [c for c in _pi if _pend_pagado_c(c) == 0]
+                        for _lbl, _lst in [("Parciales", _cp), ("Pendientes", _cn)]:
+                            if not _lst:
+                                continue
+                            _ltot = sum(_pend_saldo_c(c) for c in _lst)
+                            with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
+                                _rows = [{
+                                    "Fecha":       _fmt_fecha(_c.get("fecha")),
+                                    "Comprobante": _c.get("nro_comprobante") or "—",
+                                    "Total":       float(_c.get("total") or 0),
+                                    **( {"Pagado": _pend_pagado_c(_c), "Saldo": _pend_saldo_c(_c)} if _lbl == "Parciales" else {} ),
+                                } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                _ccfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
+                                if _lbl == "Parciales":
+                                    _ccfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
+                                    _ccfg["Saldo"]  = st.column_config.NumberColumn("Saldo",  format="$ %,.2f")
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_ccfg)
+    
+            # Egresos: agrupar por Rubro
+            _pend_big("Egresos", _pesos(_total_pend_gas), "#c62828")
+            if not _oe_pend_hist:
+                st.caption("Sin egresos pendientes en el rango seleccionado.")
+            else:
+                _by_rubro_oe = {}
+                for _o in _oe_pend_hist:
+                    _rub = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
+                    _by_rubro_oe.setdefault(_rub, []).append(_o)
+                for _rub, _rlst in sorted(_by_rubro_oe.items(), key=lambda kv: sum(float(o.get("monto") or 0) for o in kv[1]), reverse=True):
+                    _rtot = sum(float(o.get("monto") or 0) for o in _rlst)
+                    with st.expander(f"{_rub} ({len(_rlst)}) — $ {_pesos(_rtot)}"):
+                        _rows = [{
+                            "Fecha":    _fmt_fecha(_o.get("fecha")),
+                            "Subrubro": (_o.get("subrubros_egresos") or {}).get("nombre") or "—",
+                            "Item":     (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—",
+                            "Monto":    float(_o.get("monto") or 0),
+                        } for _o in sorted(_rlst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f")})
+    
+            st.divider()
+    
+            # ── DEUDORES (lo que nos deben) ────────────────────────────────────
+            _fac_deud  = [f for f in facturas_bal    if str(f.get("anulada","N")).upper() != "S" and _pend_saldo_f(f) > 0 and _pend_en_rango(f.get("fecha_comp"))]
+            _wix_deud  = [p for p in pedidos_wix_bal if str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED" and _pend_en_rango(p.get("createdDate"))]
+            _total_deud_dux = sum(_pend_saldo_f(f) for f in _fac_deud)
+            _total_deud_wix = sum(_wix_monto(p) for p in _wix_deud)
+            _total_deud     = _total_deud_dux + _total_deud_wix
+    
+            st.subheader(f"A cobrar a clientes — $ {_pesos(_total_deud)}")
+    
+            # DUX: agrupar por Cliente → Parcial/Pendiente adentro
+            _pend_big("DUX", _pesos(_total_deud_dux), "#c62828")
+            if not _fac_deud:
+                st.caption("Sin facturas pendientes de cobro en el rango seleccionado.")
+            else:
+                _by_cli_dux = {}
+                for _f in _fac_deud:
+                    _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                    _by_cli_dux.setdefault(_cli, []).append(_f)
+                for _cli, _ci in sorted(_by_cli_dux.items(), key=lambda kv: sum(_pend_saldo_f(f) for f in kv[1]), reverse=True):
+                    _ctot = sum(_pend_saldo_f(f) for f in _ci)
+                    with st.expander(f"{_cli} ({len(_ci)}) — $ {_pesos(_ctot)}"):
+                        _fp = [f for f in _ci if _pend_cobrado_f(f) > 0]
+                        _fn = [f for f in _ci if _pend_cobrado_f(f) == 0]
+                        for _lbl, _lst in [("Parciales", _fp), ("Pendientes", _fn)]:
+                            if not _lst:
+                                continue
+                            _ltot = sum(_pend_saldo_f(f) for f in _lst)
+                            with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
+                                _rows = [{
+                                    "Fecha":       _fmt_fecha(_f.get("fecha_comp")),
+                                    "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
+                                    "Total":       float(_f.get("total") or 0),
+                                    **( {"Cobrado": _pend_cobrado_f(_f), "Saldo": _pend_saldo_f(_f)} if _lbl == "Parciales" else {} ),
+                                    "PDF":         _f.get("url_factura") or None,
+                                } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
+                                _fcfg = {
+                                    "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
+                                    "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
+                                }
+                                if _lbl == "Parciales":
+                                    _fcfg["Cobrado"] = st.column_config.NumberColumn("Cobrado", format="$ %,.2f")
+                                    _fcfg["Saldo"]   = st.column_config.NumberColumn("Saldo",   format="$ %,.2f")
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_fcfg)
+    
+            # Wix: agrupar por Cliente (no hay parciales en Wix)
+            _pend_big("Wix", _pesos(_total_deud_wix), "#c62828")
+            if not _wix_deud:
+                st.caption("Sin pedidos pendientes de cobro en el rango seleccionado.")
+            else:
+                _by_cli_wix = {}
+                for _p in _wix_deud:
+                    _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
+                    _cli = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
+                    _by_cli_wix.setdefault(_cli, []).append(_p)
+                for _cli, _citems in sorted(_by_cli_wix.items(), key=lambda kv: sum(_wix_monto(p) for p in kv[1]), reverse=True):
+                    _ctot = sum(_wix_monto(p) for p in _citems)
+                    with st.expander(f"{_cli} ({len(_citems)}) — $ {_pesos(_ctot)}"):
+                        _rows = [{
+                            "Fecha":    _fmt_fecha(_p.get("createdDate")),
+                            "Pedido #": _p.get("number") or _p.get("id") or "—",
+                            "Total":    _wix_monto(_p),
+                        } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Total": _cfg_monto})
+    
+        _pendientes_frag()
 if _sub_resumen:
     with _sub_resumen:
-        _hoy_bal = date.today()
-        try:
-            _bal_desde_def = date.fromisoformat(_cfg_bal.get("bal_desde", ""))
-        except Exception:
-            _bal_desde_def = _hoy_bal.replace(day=1)
-        try:
-            _bal_hasta_def = date.fromisoformat(_cfg_bal.get("bal_hasta", ""))
-        except Exception:
-            _bal_hasta_def = _hoy_bal
-
-        with st.form("form_bal_fechas", border=False):
-            _bc1, _bc2 = st.columns(2)
-            with _bc1:
-                bal_desde = st.date_input("Desde", value=_bal_desde_def, key="bal_desde_in", format="DD/MM/YYYY")
-            with _bc2:
-                bal_hasta = st.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta_in", format="DD/MM/YYYY")
-            _btn_bal = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
-        if _btn_bal:
-            db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
-
-        def _en_rango(fecha_str):
+        @st.fragment
+        def _resumen_bal_frag():
+            _hoy_bal = date.today()
             try:
-                f = pd.to_datetime(str(fecha_str or "")).date()
-                return bal_desde <= f <= bal_hasta
+                _bal_desde_def = date.fromisoformat(_cfg_bal.get("bal_desde", ""))
             except Exception:
-                return False
-
-        # Filtrar por rango
-        facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
-        notas_vig     = [f for f in facturas_vig if "NOTA" in str(f.get("tipo_comp") or "").upper()]
-        facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
-        ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
-        if not compras_bal.empty:
-            compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
-            compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
-        else:
-            compras_f = pd.DataFrame()
-        comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
-
-        # Monto cobrado real por factura (via imputaciones de cobros)
-        _cobrado_por_fac = {}
-        for _cob in cobros_bal:
-            for _imp in (_cob.get("imputaciones") or []):
-                _fid = str(_imp.get("id_comp_venta") or "")
-                if _fid:
-                    _cobrado_por_fac[_fid] = _cobrado_por_fac.get(_fid, 0.0) + float(_imp.get("monto_imputado") or 0)
-
-        # Monto pagado real por comprobante/gasto (via imputaciones de pagos a proveedores)
-        _pagado_por_comp = {}
-        for _pag in pagos_bal:
-            for _imp in (_pag.get("imputaciones") or []):
-                _nro = str(_imp.get("nro_comprobante") or "")
-                if _nro:
-                    _pagado_por_comp[_nro] = _pagado_por_comp.get(_nro, 0.0) + float(_imp.get("monto_imputado") or 0)
-
-        def _fac_cob_real(f):
-            cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
-            return min(float(f.get("total") or 0), cob)
-
-        # Categorizar facturas DUX (excluir notas C/D de cobradas/parciales/pendientes)
-        _fac_solo = [f for f in facturas_vig if "NOTA" not in str(f.get("tipo_comp") or "").upper()]
-        fac_cobradas   = [f for f in _fac_solo if f.get("con_cobro") and _fac_cob_real(f) >= float(f.get("total") or 0)]
-        fac_parciales  = [f for f in _fac_solo if f.get("con_cobro") and _fac_cob_real(f) < float(f.get("total") or 0)]
-        fac_pendientes = [f for f in _fac_solo if not f.get("con_cobro")]
-
-        # Categorizar Wix
-        wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
-        wix_anulados      = [p for p in ped_wix_f if str(p.get("status") or "").upper() == "CANCELED"]
-        wix_pendientes    = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED" and str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
-        wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
-
-        # Totales — cobrado y pendiente calculados con monto_imputado real
-        def _nota_sign(f):
-            return -1 if "CREDITO" in str(f.get("tipo_comp") or "").upper() else 1
-        total_facturas    = sum(_nota_sign(f) * float(f.get("total") or 0) for f in facturas_vig)
-        total_fac_cobr    = sum(_fac_cob_real(f) for f in _fac_solo)
-        total_fac_pend    = total_facturas - total_fac_cobr
-        total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
-        total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
-        total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
-        total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
-        total_wix         = total_wix_cobr + total_wix_pend
-        # Categorizar compras
-        def _pagado_comp(c):
-            return min(float(c.get("total") or 0), _pagado_por_comp.get(str(c.get("nro_comprobante") or ""), 0.0))
-        def _saldo_comp(c):
-            return max(0.0, float(c.get("total") or 0) - _pagado_comp(c))
-
-        comp_pagadas    = [c for c in comprobantes_f if not c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA"]
-        comp_parciales  = [c for c in comprobantes_f if c.get("pago_pendiente") and _pagado_comp(c) > 0 and str(c.get("estado") or "").upper() != "ANULADA"]
-        comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente") and _pagado_comp(c) == 0 and str(c.get("estado") or "").upper() != "ANULADA"]
-        comp_anuladas   = [c for c in comprobantes_f if str(c.get("estado") or "").upper() == "ANULADA"]
-
-
-        total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
-
-        # Ingresos
-        _otros_ing_todos = db.cargar_otros_ingresos()
-        _otros_ing_f     = [o for o in _otros_ing_todos if _en_rango(o.get("fecha"))]
-        total_otros_ing  = sum(float(o.get("monto") or 0) for o in _otros_ing_f)
-        total_otros_cobr = sum(float(o.get("monto") or 0) for o in _otros_ing_f if o.get("estado") == "cobrado")
-        total_otros_pend = sum(float(o.get("monto") or 0) for o in _otros_ing_f if o.get("estado") != "cobrado")
-
-        total_ing_cobr  = total_fac_cobr + total_wix_cobr + total_otros_cobr
-        total_ing_pend  = total_fac_pend + total_wix_pend + total_otros_pend
-        total_ing_anul  = total_fac_anul + total_wix_anul
-
-        # Egresos
-        _otros_egr_todos = db.cargar_otros_egresos()
-        _todos_rango     = [o for o in _otros_egr_todos if _en_rango(o.get("fecha"))]
-        _retiros_f       = [o for o in _todos_rango if (o.get("items_egresos") or {}).get("nombre") == "RETIRO"]
-        _otros_egr_f     = [o for o in _todos_rango if (o.get("items_egresos") or {}).get("nombre") != "RETIRO"]
-        total_otros_egr  = sum(float(o.get("monto") or 0) for o in _otros_egr_f)
-        total_otros_egr_pag  = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") == "pagado")
-        total_otros_egr_pend = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") != "pagado")
-        total_retiros     = sum(float(o.get("monto") or 0) for o in _retiros_f)
-        total_retiros_pag = sum(float(o.get("monto") or 0) for o in _retiros_f if o.get("estado") == "pagado")
-
-        total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
-        total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
-        total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
-        total_egr_pag   = total_comp_pag + total_otros_egr_pag
-        total_egr_pend  = total_comp_pend + total_otros_egr_pend
-        total_egr_anul  = total_comp_anul
-
-        # Ajustes de caja (calculados antes de los totales para incluirlos)
-        _aj_cajas_map   = {c["id"]: c["nombre"] for c in db.cargar_cajas()}
-        _aj_todos_f     = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste" and _en_rango(a.get("fecha"))]
-        total_aj_pos    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) >= 0)
-        total_aj_neg    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) < 0)
-
-        total_ingresos = total_facturas + total_wix + total_otros_ing + total_aj_pos
-        total_ing_cobr = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
-        total_ing_pend = total_fac_pend + total_wix_pend + total_otros_pend
-        total_egresos  = total_compras + total_otros_egr + abs(total_aj_neg)
-        total_egr_pag  = total_egr_pag + abs(total_aj_neg)
-        resultado      = total_ingresos - total_egresos
-
-        # ── INGRESOS ────────────────────────────────────────────────────────────
-        st.divider()
-        def _metric_cell(label, value, color):
-            return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p></div>"
-        st.markdown(f"""
-<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
-  <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos</h2>
-  <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px'>
-    {_metric_cell("Facturado", f"$ {_pesos(total_ingresos)}", "#1a1a1a")}
-    {_metric_cell("Cobrado",   f"$ {_pesos(total_ing_cobr)}", "#2e7d32")}
-    {_metric_cell("Pendiente", f"$ {_pesos(total_ing_pend)}", "#c62828")}
-    {_metric_cell("Anulado",   f"$ {_pesos(total_ing_anul)}", "#757575")}
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        # Facturas DUX
-        st.markdown(f"#### DUX · {len(facturas_vig)} facturas"  + (f" · {len(notas_vig)} nota{'s' if len(notas_vig)!=1 else ''} C/D" if notas_vig else ""))
-        _c1, _c2, _c3, _c4 = st.columns(4)
-        _bal_metric(_c1, "Facturado",  f"$ {_pesos(total_facturas)}",  "#1a1a1a")
-        _bal_metric(_c2, "Cobrado",    f"$ {_pesos(total_fac_cobr)}",  "#2e7d32")
-        _bal_metric(_c3, "Pendiente",  f"$ {_pesos(total_fac_pend)}",  "#c62828")
-        _bal_metric(_c4, "Anulado",    f"$ {_pesos(total_fac_anul)}",  "#757575")
-        def _fac_cobrado(f):
-            return _fac_cob_real(f)
-        def _fac_saldo(f):
-            return max(0.0, float(f.get("total") or 0) - _fac_cobrado(f))
-
-        for _label, _lista in [
-            ("Cobrado",   fac_cobradas),
-            ("Parcial",   fac_parciales),
-            ("Pendiente", fac_pendientes),
-            ("Anulado",   facturas_anul),
-        ]:
-            if _lista:
-                _is_parcial = (_label == "Parcial")
-                _sum_tot  = sum(float(f.get("total") or 0) for f in _lista)
-                _sum_cob  = sum(_fac_cobrado(f) for f in _lista)
-                _sum_pend = sum(_fac_saldo(f)   for f in _lista)
-                if _is_parcial:
-                    _hdr = f"Parcial ({len(_lista)}) — Total {_pesos(_sum_tot)} | Cobrado {_pesos(_sum_cob)} | Pendiente {_pesos(_sum_pend)}"
-                else:
-                    _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_sum_tot)}"
-                with st.expander(_hdr):
-                    _by_cli = {}
-                    for _f in _lista:
-                        _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
-                        _by_cli.setdefault(_k, []).append(_f)
-                    for _cli, _fitems in sorted(_by_cli.items()):
-                        _cli_tot  = sum(float(f.get("total") or 0) for f in _fitems)
-                        _cli_cob  = sum(_fac_cobrado(f) for f in _fitems)
-                        _cli_pend = sum(_fac_saldo(f)   for f in _fitems)
-                        if _is_parcial:
-                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Total {_pesos(_cli_tot)} | Cobrado {_pesos(_cli_cob)} | Pendiente {_pesos(_cli_pend)}"
-                        else:
-                            _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_cli_tot)}"
-                        with st.expander(_cli_hdr):
-                            _rows = []
-                            for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-                                _ftot = float(_f.get("total") or 0)
-                                _fcob = _cobrado_por_fac.get(str(_f.get("id") or ""), 0.0)
-                                _fsal = max(0.0, _ftot - _fcob)
-                                _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
-                                _url = _f.get("url_factura") or ""
-                                if _is_parcial:
-                                    _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp,
-                                            "Total": _ftot, "Cobrado": _fcob, "Pendiente": _fsal, "PDF": _url}
-                                    _col_cfg = {
-                                        "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
-                                        "Cobrado":   st.column_config.NumberColumn("Cobrado",   format="$ %,.2f"),
-                                        "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
-                                        "PDF":       st.column_config.LinkColumn("PDF", display_text="Ver"),
-                                    }
-                                else:
-                                    _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp, "Total": _ftot, "PDF": _url}
-                                    _col_cfg = {
-                                        "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
-                                        "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
-                                    }
-                                _rows.append(_row)
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config=_col_cfg)
-
-        # Notas de crédito/débito
-        if notas_vig:
-            total_notas_net = sum(_nota_sign(f) * float(f.get("total") or 0) for f in notas_vig)
-            _notas_sign_str = f"— $ {_pesos(abs(total_notas_net))}" + (" (reducen pendiente)" if total_notas_net < 0 else " (aumentan pendiente)")
-            with st.expander(f"Notas C/D ({len(notas_vig)}) {_notas_sign_str}"):
-                _rows_notas = []
-                for _f in sorted(notas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
-                    _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
-                    _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
-                    _rows_notas.append({
-                        "Fecha": _fmt_fecha(_f.get("fecha_comp")),
-                        "Cliente": _cli,
-                        "Comprobante": _comp,
-                        "Monto": _nota_sign(_f) * float(_f.get("total") or 0),
-                        "PDF": _f.get("url_factura") or "",
-                    })
-                st.dataframe(pd.DataFrame(_rows_notas), use_container_width=True, hide_index=True,
-                             column_config={
-                                 "Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f"),
-                                 "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
-                             })
-
-        # Wix
-        _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
-        st.markdown(f"#### Wix · {_wix_fin_count} pedidos")
-        _w1, _w2, _w3, _w4 = st.columns(4)
-        _bal_metric(_w1, "Facturado",  f"$ {_pesos(total_wix)}",      "#1a1a1a")
-        _bal_metric(_w2, "Cobrado",    f"$ {_pesos(total_wix_cobr)}",  "#2e7d32")
-        _bal_metric(_w3, "Pendiente",  f"$ {_pesos(total_wix_pend)}",  "#c62828")
-        _bal_metric(_w4, "Anulado",    f"$ {_pesos(total_wix_anul)}",  "#757575")
-
-        for _label, _lista in [
-            ("Cobrado",    wix_cobradas),
-            ("Pendiente", wix_pendientes),
-            ("Anulado",    wix_anulados),
-        ]:
-            if _lista:
-                with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
-                    _by_cli = {}
-                    for _p in _lista:
-                        _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
-                        _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
-                        _by_cli.setdefault(_k, []).append(_p)
-                    for _cli, _pitems in sorted(_by_cli.items()):
-                        _ctot = sum(_wix_monto(_p) for _p in _pitems)
-                        with st.expander(f"{_cli} — {len(_pitems)} pedido{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ctot)}"):
-                            _rows = [{
-                                "Fecha":    _fmt_fecha(_p.get("createdDate")),
-                                "Pedido #": _p.get("number") or _p.get("id") or "—",
-                                "Total":    _wix_monto(_p),
-                            } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config={"Total": _cfg_monto})
-
-        # ── OTROS INGRESOS ──────────────────────────────────────────────────────
-        if _otros_ing_f:
-            st.markdown(f"#### Ingresos · {len(_otros_ing_f)} registros")
-            _oi_c1, _oi_c2, _oi_c3 = st.columns(3)
-            _bal_metric(_oi_c1, "Total",     f"$ {_pesos(total_otros_ing)}",  "#1a1a1a")
-            _bal_metric(_oi_c2, "Cobrado",   f"$ {_pesos(total_otros_cobr)}", "#2e7d32")
-            _bal_metric(_oi_c3, "Pendiente", f"$ {_pesos(total_otros_pend)}", "#c62828")
-            for _oi_est_lbl, _oi_est_disp in [("cobrado", "Cobrado"), ("pendiente", "Pendiente")]:
-                _oi_est_items = [o for o in _otros_ing_f if (o.get("estado") or "pendiente") == _oi_est_lbl]
-                if _oi_est_items:
-                    _oi_est_tot = sum(float(o.get("monto") or 0) for o in _oi_est_items)
-                    with st.expander(f"{_oi_est_disp} ({len(_oi_est_items)}) — $ {_pesos(_oi_est_tot)}"):
-                        _oi_by_rub = {}
-                        for _o in _oi_est_items:
-                            _rk = (_o.get("rubros_ingresos") or {}).get("nombre") or "—"
-                            _oi_by_rub.setdefault(_rk, []).append(_o)
-                        for _rk, _ritems in sorted(_oi_by_rub.items()):
-                            _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
-                            with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
-                                _oi_by_sub = {}
-                                for _o in _ritems:
-                                    _sk = (_o.get("subrubros_ingresos") or {}).get("nombre") or "—"
-                                    _oi_by_sub.setdefault(_sk, []).append(_o)
-                                for _sk, _sitems in sorted(_oi_by_sub.items()):
-                                    _stot = sum(float(o.get("monto") or 0) for o in _sitems)
-                                    with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
-                                        _rows = [{
-                                            "F. ingreso":  _fmt_fecha(o.get("fecha")),
-                                            "F. cobro":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
-                                            "Monto":       float(o.get("monto") or 0),
-                                            "Descripción": o.get("descripcion") or "",
-                                        } for o in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
-
-        # Ajustes positivos
-        _aj_pos = [a for a in _aj_todos_f if float(a.get("monto") or 0) >= 0]
-        if _aj_pos:
-            st.markdown(f"#### Ajustes positivos · {len(_aj_pos)} registros")
-            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_aj_pos)}", "#2e7d32")
-            with st.expander(f"Detalle ({len(_aj_pos)}) — $ {_pesos(total_aj_pos)}"):
-                _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
-                          "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
-                         for a in sorted(_aj_pos, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
-
-        # ── EGRESOS ─────────────────────────────────────────────────────────────
-        st.divider()
-        st.markdown(f"""
-<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
-  <h2 style='text-align:center;margin:0 0 14px 0'>Egresos</h2>
-  <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px'>
-    {_metric_cell("Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")}
-    {_metric_cell("Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")}
-    {_metric_cell("Pendiente", f"$ {_pesos(total_egr_pend)}", "#c62828")}
-    {_metric_cell("Anulado",   f"$ {_pesos(total_egr_anul)}", "#757575")}
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        # Compras
-        st.markdown(f"#### Compras · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
-        _ec1, _ec2, _ec3, _ec4 = st.columns(4)
-        _bal_metric(_ec1, "Total",     f"$ {_pesos(total_compras)}",    "#1a1a1a")
-        _bal_metric(_ec2, "Pagado",    f"$ {_pesos(total_comp_pag)}",   "#2e7d32")
-        _bal_metric(_ec3, "Pendiente", f"$ {_pesos(total_comp_pend)}",  "#c62828")
-        _bal_metric(_ec4, "Anulado",   f"$ {_pesos(total_comp_anul)}",  "#757575")
-        for _label, _lista in [
-            ("Pagado",    comp_pagadas),
-            ("Parcial",   comp_parciales),
-            ("Pendiente", comp_pendientes),
-            ("Anulado",   comp_anuladas),
-        ]:
-            if _lista:
-                _is_parc = (_label == "Parcial")
-                _c_tot  = sum(float(c.get("total") or 0) for c in _lista)
-                _c_pag  = sum(_pagado_comp(c) for c in _lista)
-                _c_pend = sum(_saldo_comp(c)  for c in _lista)
-                if _is_parc:
-                    _hdr = f"Parcial ({len(_lista)}) — Total {_pesos(_c_tot)} | Pagado {_pesos(_c_pag)} | Pendiente {_pesos(_c_pend)}"
-                else:
-                    _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_c_tot)}"
-                with st.expander(_hdr):
-                    _by_prov = {}
-                    for _c in _lista:
-                        _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
-                    for _prov, _pitems in sorted(_by_prov.items()):
-                        _p_tot  = sum(float(c.get("total") or 0) for c in _pitems)
-                        _p_pag  = sum(_pagado_comp(c) for c in _pitems)
-                        _p_pend = sum(_saldo_comp(c)  for c in _pitems)
-                        if _is_parc:
-                            _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — Total {_pesos(_p_tot)} | Pagado {_pesos(_p_pag)} | Pendiente {_pesos(_p_pend)}"
-                        else:
-                            _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_p_tot)}"
-                        with st.expander(_p_hdr):
-                            _rows = []
-                            for _c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                                _ctot = float(_c.get("total") or 0)
-                                _cpag = _pagado_comp(_c)
-                                _csal = _saldo_comp(_c)
-                                if _is_parc:
-                                    _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—",
-                                            "Total": _ctot, "Pagado": _cpag, "Pendiente": _csal}
-                                    _col_cfg = {
-                                        "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
-                                        "Pagado":    st.column_config.NumberColumn("Pagado",    format="$ %,.2f"),
-                                        "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
-                                    }
-                                else:
-                                    _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—", "Total": _ctot}
-                                    _col_cfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
-                                _rows.append(_row)
-                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                         column_config=_col_cfg)
-
-        # ── OTROS EGRESOS ────────────────────────────────────────────────────────
-        if _otros_egr_f:
-            st.markdown(f"#### Egresos · {len(_otros_egr_f)} registros")
-            _oe_c1, _oe_c2, _oe_c3 = st.columns(3)
-            _bal_metric(_oe_c1, "Total",     f"$ {_pesos(total_otros_egr)}",      "#1a1a1a")
-            _bal_metric(_oe_c2, "Pagado",    f"$ {_pesos(total_otros_egr_pag)}",  "#2e7d32")
-            _bal_metric(_oe_c3, "Pendiente", f"$ {_pesos(total_otros_egr_pend)}", "#c62828")
-            for _oe_est_lbl, _oe_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
-                _oe_est_items = [o for o in _otros_egr_f if (o.get("estado") or "pendiente") == _oe_est_lbl]
-                if _oe_est_items:
-                    _oe_est_tot = sum(float(o.get("monto") or 0) for o in _oe_est_items)
-                    with st.expander(f"{_oe_est_disp} ({len(_oe_est_items)}) — $ {_pesos(_oe_est_tot)}"):
-                        _oe_by_rub = {}
-                        for _o in _oe_est_items:
-                            _rk = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
-                            _oe_by_rub.setdefault(_rk, []).append(_o)
-                        for _rk, _ritems in sorted(_oe_by_rub.items()):
-                            _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
-                            with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
-                                _oe_by_sub = {}
-                                for _o in _ritems:
-                                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
-                                    _oe_by_sub.setdefault(_sk, []).append(_o)
-                                for _sk, _sitems in sorted(_oe_by_sub.items()):
-                                    _stot = sum(float(o.get("monto") or 0) for o in _sitems)
-                                    with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
-                                        _oe_by_item = {}
-                                        for _o in _sitems:
-                                            _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
-                                            _oe_by_item.setdefault(_ik, []).append(_o)
-                                        for _ik, _iitems in sorted(_oe_by_item.items()):
-                                            _itot = sum(float(o.get("monto") or 0) for o in _iitems)
-                                            with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
-                                                _rows = [{
-                                                    "F. egreso":   _fmt_fecha(o.get("fecha")),
-                                                    "Monto":       float(o.get("monto") or 0),
-                                                    "Descripción": o.get("descripcion") or "",
-                                                } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
-
-        # Ajustes negativos
-        _aj_neg = [a for a in _aj_todos_f if float(a.get("monto") or 0) < 0]
-        if _aj_neg:
-            st.markdown(f"#### Ajustes negativos · {len(_aj_neg)} registros")
-            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(abs(total_aj_neg))}", "#c62828")
-            with st.expander(f"Detalle ({len(_aj_neg)}) — $ {_pesos(abs(total_aj_neg))}"):
-                _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
-                          "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
-                         for a in sorted(_aj_neg, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
-
-        # ── RESULTADO ────────────────────────────────────────────────────────────
-        st.divider()
-        _ing_real   = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
-        _egr_real   = total_comp_pag + total_otros_egr_pag + abs(total_aj_neg)
-        _res_real   = _ing_real - _egr_real
-        _fic_color  = "#2e7d32" if resultado >= 0 else "#c62828"
-        _fic_signo  = "+" if resultado >= 0 else ""
-        _real_color = "#2e7d32" if _res_real >= 0 else "#c62828"
-        _real_signo = "+" if _res_real >= 0 else ""
-        def _metric_cell_sub(label, value, color, sub):
-            return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p><p style='margin:0;font-size:0.75rem;color:#999'>{sub}</p></div>"
-        st.markdown(f"""
-<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
-  <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
-  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
-    {_metric_cell_sub("Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
-    {_metric_cell_sub("Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        if total_retiros > 0:
+                _bal_desde_def = _hoy_bal.replace(day=1)
+            try:
+                _bal_hasta_def = date.fromisoformat(_cfg_bal.get("bal_hasta", ""))
+            except Exception:
+                _bal_hasta_def = _hoy_bal
+    
+            with st.form("form_bal_fechas", border=False):
+                _bc1, _bc2 = st.columns(2)
+                with _bc1:
+                    bal_desde = st.date_input("Desde", value=_bal_desde_def, key="bal_desde_in", format="DD/MM/YYYY")
+                with _bc2:
+                    bal_hasta = st.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta_in", format="DD/MM/YYYY")
+                _btn_bal = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+            if _btn_bal:
+                db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
+                st.rerun(scope="fragment")
+    
+            def _en_rango(fecha_str):
+                try:
+                    f = pd.to_datetime(str(fecha_str or "")).date()
+                    return bal_desde <= f <= bal_hasta
+                except Exception:
+                    return False
+    
+            # Filtrar por rango
+            facturas_vig  = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() != "S"]
+            notas_vig     = [f for f in facturas_vig if "NOTA" in str(f.get("tipo_comp") or "").upper()]
+            facturas_anul = [f for f in facturas_bal if _en_rango(f.get("fecha_comp")) and str(f.get("anulada","N")).upper() == "S"]
+            ped_wix_f     = [p for p in pedidos_wix_bal if _en_rango(p.get("createdDate"))]
+            if not compras_bal.empty:
+                compras_f = compras_bal[compras_bal["fecha"].apply(lambda v: _en_rango(str(v or "")))].copy()
+                compras_f["subtotal"] = pd.to_numeric(compras_f["cantidad"], errors="coerce").fillna(0) * pd.to_numeric(compras_f["precio"], errors="coerce").fillna(0)
+            else:
+                compras_f = pd.DataFrame()
+            comprobantes_f = [c for c in comprobantes_bal if _en_rango(str(c.get("fecha") or ""))]
+    
+            # Monto cobrado real por factura (via imputaciones de cobros)
+            _cobrado_por_fac = {}
+            for _cob in cobros_bal:
+                for _imp in (_cob.get("imputaciones") or []):
+                    _fid = str(_imp.get("id_comp_venta") or "")
+                    if _fid:
+                        _cobrado_por_fac[_fid] = _cobrado_por_fac.get(_fid, 0.0) + float(_imp.get("monto_imputado") or 0)
+    
+            # Monto pagado real por comprobante/gasto (via imputaciones de pagos a proveedores)
+            _pagado_por_comp = {}
+            for _pag in pagos_bal:
+                for _imp in (_pag.get("imputaciones") or []):
+                    _nro = str(_imp.get("nro_comprobante") or "")
+                    if _nro:
+                        _pagado_por_comp[_nro] = _pagado_por_comp.get(_nro, 0.0) + float(_imp.get("monto_imputado") or 0)
+    
+            def _fac_cob_real(f):
+                cob = _cobrado_por_fac.get(str(f.get("id") or ""), 0.0)
+                return min(float(f.get("total") or 0), cob)
+    
+            # Categorizar facturas DUX (excluir notas C/D de cobradas/parciales/pendientes)
+            _fac_solo = [f for f in facturas_vig if "NOTA" not in str(f.get("tipo_comp") or "").upper()]
+            fac_cobradas   = [f for f in _fac_solo if f.get("con_cobro") and _fac_cob_real(f) >= float(f.get("total") or 0)]
+            fac_parciales  = [f for f in _fac_solo if f.get("con_cobro") and _fac_cob_real(f) < float(f.get("total") or 0)]
+            fac_pendientes = [f for f in _fac_solo if not f.get("con_cobro")]
+    
+            # Categorizar Wix
+            wix_cobradas      = [p for p in ped_wix_f if str(p.get("paymentStatus") or "").upper() == "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+            wix_anulados      = [p for p in ped_wix_f if str(p.get("status") or "").upper() == "CANCELED"]
+            wix_pendientes    = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "FULFILLED" and str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED"]
+            wix_no_entregados = [p for p in ped_wix_f if str(p.get("fulfillmentStatus") or "").upper() == "NOT_FULFILLED" and str(p.get("status") or "").upper() != "CANCELED"]
+    
+            # Totales — cobrado y pendiente calculados con monto_imputado real
+            def _nota_sign(f):
+                return -1 if "CREDITO" in str(f.get("tipo_comp") or "").upper() else 1
+            total_facturas    = sum(_nota_sign(f) * float(f.get("total") or 0) for f in facturas_vig)
+            total_fac_cobr    = sum(_fac_cob_real(f) for f in _fac_solo)
+            total_fac_pend    = total_facturas - total_fac_cobr
+            total_fac_anul    = sum(float(f.get("total") or 0) for f in facturas_anul)
+            total_wix_cobr    = sum(_wix_monto(p) for p in wix_cobradas)
+            total_wix_pend    = sum(_wix_monto(p) for p in wix_pendientes)
+            total_wix_anul    = sum(_wix_monto(p) for p in wix_anulados)
+            total_wix         = total_wix_cobr + total_wix_pend
+            # Categorizar compras
+            def _pagado_comp(c):
+                return min(float(c.get("total") or 0), _pagado_por_comp.get(str(c.get("nro_comprobante") or ""), 0.0))
+            def _saldo_comp(c):
+                return max(0.0, float(c.get("total") or 0) - _pagado_comp(c))
+    
+            comp_pagadas    = [c for c in comprobantes_f if not c.get("pago_pendiente") and str(c.get("estado") or "").upper() != "ANULADA"]
+            comp_parciales  = [c for c in comprobantes_f if c.get("pago_pendiente") and _pagado_comp(c) > 0 and str(c.get("estado") or "").upper() != "ANULADA"]
+            comp_pendientes = [c for c in comprobantes_f if c.get("pago_pendiente") and _pagado_comp(c) == 0 and str(c.get("estado") or "").upper() != "ANULADA"]
+            comp_anuladas   = [c for c in comprobantes_f if str(c.get("estado") or "").upper() == "ANULADA"]
+    
+    
+            total_compras     = sum(float(c.get("total") or 0) for c in comp_pagadas + comp_parciales + comp_pendientes)
+    
+            # Ingresos
+            _otros_ing_todos = db.cargar_otros_ingresos()
+            _otros_ing_f     = [o for o in _otros_ing_todos if _en_rango(o.get("fecha"))]
+            total_otros_ing  = sum(float(o.get("monto") or 0) for o in _otros_ing_f)
+            total_otros_cobr = sum(float(o.get("monto") or 0) for o in _otros_ing_f if o.get("estado") == "cobrado")
+            total_otros_pend = sum(float(o.get("monto") or 0) for o in _otros_ing_f if o.get("estado") != "cobrado")
+    
+            total_ing_cobr  = total_fac_cobr + total_wix_cobr + total_otros_cobr
+            total_ing_pend  = total_fac_pend + total_wix_pend + total_otros_pend
+            total_ing_anul  = total_fac_anul + total_wix_anul
+    
+            # Egresos
+            _otros_egr_todos = db.cargar_otros_egresos()
+            _todos_rango     = [o for o in _otros_egr_todos if _en_rango(o.get("fecha"))]
+            _retiros_f       = [o for o in _todos_rango if (o.get("items_egresos") or {}).get("nombre") == "RETIRO"]
+            _otros_egr_f     = [o for o in _todos_rango if (o.get("items_egresos") or {}).get("nombre") != "RETIRO"]
+            total_otros_egr  = sum(float(o.get("monto") or 0) for o in _otros_egr_f)
+            total_otros_egr_pag  = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") == "pagado")
+            total_otros_egr_pend = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") != "pagado")
+            total_retiros     = sum(float(o.get("monto") or 0) for o in _retiros_f)
+            total_retiros_pag = sum(float(o.get("monto") or 0) for o in _retiros_f if o.get("estado") == "pagado")
+    
+            total_comp_pag  = sum(float(c.get("total") or 0) for c in comp_pagadas) + sum(_pagado_comp(c) for c in comp_parciales)
+            total_comp_pend = sum(_saldo_comp(c) for c in comp_parciales) + sum(float(c.get("total") or 0) for c in comp_pendientes)
+            total_comp_anul = sum(float(c.get("total") or 0) for c in comp_anuladas)
+            total_egr_pag   = total_comp_pag + total_otros_egr_pag
+            total_egr_pend  = total_comp_pend + total_otros_egr_pend
+            total_egr_anul  = total_comp_anul
+    
+            # Ajustes de caja (calculados antes de los totales para incluirlos)
+            _aj_cajas_map   = {c["id"]: c["nombre"] for c in db.cargar_cajas()}
+            _aj_todos_f     = [a for a in db.cargar_ajustes_caja() if a.get("tipo") == "ajuste" and _en_rango(a.get("fecha"))]
+            total_aj_pos    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) >= 0)
+            total_aj_neg    = sum(float(a.get("monto") or 0) for a in _aj_todos_f if float(a.get("monto") or 0) < 0)
+    
+            total_ingresos = total_facturas + total_wix + total_otros_ing + total_aj_pos
+            total_ing_cobr = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
+            total_ing_pend = total_fac_pend + total_wix_pend + total_otros_pend
+            total_egresos  = total_compras + total_otros_egr + abs(total_aj_neg)
+            total_egr_pag  = total_egr_pag + abs(total_aj_neg)
+            resultado      = total_ingresos - total_egresos
+    
+            # ── INGRESOS ────────────────────────────────────────────────────────────
             st.divider()
-            st.markdown(f"#### Retiros · {len(_retiros_f)} registros")
-            _ret_c1, _ret_c2, _ret_c3 = st.columns(3)
-            _total_retiros_pend = sum(float(o.get("monto") or 0) for o in _retiros_f if (o.get("estado") or "pendiente") != "pagado")
-            _bal_metric(_ret_c1, "Total",     f"$ {_pesos(total_retiros)}",       "#1a1a1a")
-            _bal_metric(_ret_c2, "Pagado",    f"$ {_pesos(total_retiros_pag)}",   "#2e7d32")
-            _bal_metric(_ret_c3, "Pendiente", f"$ {_pesos(_total_retiros_pend)}", "#c62828")
-            for _ret_est_lbl, _ret_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
-                _ret_est_items = [o for o in _retiros_f if (o.get("estado") or "pendiente") == _ret_est_lbl]
-                if _ret_est_items:
-                    _ret_est_tot = sum(float(o.get("monto") or 0) for o in _ret_est_items)
-                    with st.expander(f"{_ret_est_disp} ({len(_ret_est_items)}) — $ {_pesos(_ret_est_tot)}"):
-                        _ret_by_sub = {}
-                        for _o in _ret_est_items:
-                            _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
-                            _ret_by_sub.setdefault(_sk, []).append(_o)
-                        for _sk, _sitems in sorted(_ret_by_sub.items()):
-                            _stot = sum(float(o.get("monto") or 0) for o in _sitems)
-                            with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
-                                _ret_by_item = {}
-                                for _o in _sitems:
-                                    _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
-                                    _ret_by_item.setdefault(_ik, []).append(_o)
-                                for _ik, _iitems in sorted(_ret_by_item.items()):
-                                    _itot = sum(float(o.get("monto") or 0) for o in _iitems)
-                                    with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
-                                        _rows = [{
-                                            "F. retiro":   _fmt_fecha(o.get("fecha")),
-                                            "Monto":       float(o.get("monto") or 0),
-                                            "Descripción": o.get("descripcion") or "",
-                                        } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
-            _net_dev       = resultado - total_retiros
-            _net_real      = _res_real - total_retiros_pag
-            _net_dev_color = "#2e7d32" if _net_dev  >= 0 else "#c62828"
-            _net_dev_signo = "+" if _net_dev  >= 0 else ""
-            _net_real_color= "#2e7d32" if _net_real >= 0 else "#c62828"
-            _net_real_signo= "+" if _net_real >= 0 else ""
+            def _metric_cell(label, value, color):
+                return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p></div>"
             st.markdown(f"""
-<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
-  <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
-  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
-    {_metric_cell_sub("Devengado", f"{_net_dev_signo}$ {_pesos(abs(_net_dev))}", _net_dev_color, "Resultado − Retiros")}
-    {_metric_cell_sub("Percibido", f"{_net_real_signo}$ {_pesos(abs(_net_real))}", _net_real_color, "Percibido − Retiros pagados")}
-  </div>
-</div>""", unsafe_allow_html=True)
-
-
+    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+      <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos</h2>
+      <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px'>
+        {_metric_cell("Facturado", f"$ {_pesos(total_ingresos)}", "#1a1a1a")}
+        {_metric_cell("Cobrado",   f"$ {_pesos(total_ing_cobr)}", "#2e7d32")}
+        {_metric_cell("Pendiente", f"$ {_pesos(total_ing_pend)}", "#c62828")}
+        {_metric_cell("Anulado",   f"$ {_pesos(total_ing_anul)}", "#757575")}
+      </div>
+    </div>""", unsafe_allow_html=True)
+    
+            # Facturas DUX
+            st.markdown(f"#### DUX · {len(facturas_vig)} facturas"  + (f" · {len(notas_vig)} nota{'s' if len(notas_vig)!=1 else ''} C/D" if notas_vig else ""))
+            _c1, _c2, _c3, _c4 = st.columns(4)
+            _bal_metric(_c1, "Facturado",  f"$ {_pesos(total_facturas)}",  "#1a1a1a")
+            _bal_metric(_c2, "Cobrado",    f"$ {_pesos(total_fac_cobr)}",  "#2e7d32")
+            _bal_metric(_c3, "Pendiente",  f"$ {_pesos(total_fac_pend)}",  "#c62828")
+            _bal_metric(_c4, "Anulado",    f"$ {_pesos(total_fac_anul)}",  "#757575")
+            def _fac_cobrado(f):
+                return _fac_cob_real(f)
+            def _fac_saldo(f):
+                return max(0.0, float(f.get("total") or 0) - _fac_cobrado(f))
+    
+            for _label, _lista in [
+                ("Cobrado",   fac_cobradas),
+                ("Parcial",   fac_parciales),
+                ("Pendiente", fac_pendientes),
+                ("Anulado",   facturas_anul),
+            ]:
+                if _lista:
+                    _is_parcial = (_label == "Parcial")
+                    _sum_tot  = sum(float(f.get("total") or 0) for f in _lista)
+                    _sum_cob  = sum(_fac_cobrado(f) for f in _lista)
+                    _sum_pend = sum(_fac_saldo(f)   for f in _lista)
+                    if _is_parcial:
+                        _hdr = f"Parcial ({len(_lista)}) — Total {_pesos(_sum_tot)} | Cobrado {_pesos(_sum_cob)} | Pendiente {_pesos(_sum_pend)}"
+                    else:
+                        _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_sum_tot)}"
+                    with st.expander(_hdr):
+                        _by_cli = {}
+                        for _f in _lista:
+                            _k = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                            _by_cli.setdefault(_k, []).append(_f)
+                        for _cli, _fitems in sorted(_by_cli.items()):
+                            _cli_tot  = sum(float(f.get("total") or 0) for f in _fitems)
+                            _cli_cob  = sum(_fac_cobrado(f) for f in _fitems)
+                            _cli_pend = sum(_fac_saldo(f)   for f in _fitems)
+                            if _is_parcial:
+                                _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — Total {_pesos(_cli_tot)} | Cobrado {_pesos(_cli_cob)} | Pendiente {_pesos(_cli_pend)}"
+                            else:
+                                _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_cli_tot)}"
+                            with st.expander(_cli_hdr):
+                                _rows = []
+                                for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                                    _ftot = float(_f.get("total") or 0)
+                                    _fcob = _cobrado_por_fac.get(str(_f.get("id") or ""), 0.0)
+                                    _fsal = max(0.0, _ftot - _fcob)
+                                    _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
+                                    _url = _f.get("url_factura") or ""
+                                    if _is_parcial:
+                                        _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp,
+                                                "Total": _ftot, "Cobrado": _fcob, "Pendiente": _fsal, "PDF": _url}
+                                        _col_cfg = {
+                                            "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
+                                            "Cobrado":   st.column_config.NumberColumn("Cobrado",   format="$ %,.2f"),
+                                            "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
+                                            "PDF":       st.column_config.LinkColumn("PDF", display_text="Ver"),
+                                        }
+                                    else:
+                                        _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp, "Total": _ftot, "PDF": _url}
+                                        _col_cfg = {
+                                            "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
+                                            "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
+                                        }
+                                    _rows.append(_row)
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                             column_config=_col_cfg)
+    
+            # Notas de crédito/débito
+            if notas_vig:
+                total_notas_net = sum(_nota_sign(f) * float(f.get("total") or 0) for f in notas_vig)
+                _notas_sign_str = f"— $ {_pesos(abs(total_notas_net))}" + (" (reducen pendiente)" if total_notas_net < 0 else " (aumentan pendiente)")
+                with st.expander(f"Notas C/D ({len(notas_vig)}) {_notas_sign_str}"):
+                    _rows_notas = []
+                    for _f in sorted(notas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                        _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
+                        _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
+                        _rows_notas.append({
+                            "Fecha": _fmt_fecha(_f.get("fecha_comp")),
+                            "Cliente": _cli,
+                            "Comprobante": _comp,
+                            "Monto": _nota_sign(_f) * float(_f.get("total") or 0),
+                            "PDF": _f.get("url_factura") or "",
+                        })
+                    st.dataframe(pd.DataFrame(_rows_notas), use_container_width=True, hide_index=True,
+                                 column_config={
+                                     "Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f"),
+                                     "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
+                                 })
+    
+            # Wix
+            _wix_fin_count = len(wix_cobradas) + len(wix_pendientes)
+            st.markdown(f"#### Wix · {_wix_fin_count} pedidos")
+            _w1, _w2, _w3, _w4 = st.columns(4)
+            _bal_metric(_w1, "Facturado",  f"$ {_pesos(total_wix)}",      "#1a1a1a")
+            _bal_metric(_w2, "Cobrado",    f"$ {_pesos(total_wix_cobr)}",  "#2e7d32")
+            _bal_metric(_w3, "Pendiente",  f"$ {_pesos(total_wix_pend)}",  "#c62828")
+            _bal_metric(_w4, "Anulado",    f"$ {_pesos(total_wix_anul)}",  "#757575")
+    
+            for _label, _lista in [
+                ("Cobrado",    wix_cobradas),
+                ("Pendiente", wix_pendientes),
+                ("Anulado",    wix_anulados),
+            ]:
+                if _lista:
+                    with st.expander(f"{_label} ({len(_lista)}) — $ {_pesos(sum(_wix_monto(p) for p in _lista))}"):
+                        _by_cli = {}
+                        for _p in _lista:
+                            _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
+                            _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
+                            _by_cli.setdefault(_k, []).append(_p)
+                        for _cli, _pitems in sorted(_by_cli.items()):
+                            _ctot = sum(_wix_monto(_p) for _p in _pitems)
+                            with st.expander(f"{_cli} — {len(_pitems)} pedido{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ctot)}"):
+                                _rows = [{
+                                    "Fecha":    _fmt_fecha(_p.get("createdDate")),
+                                    "Pedido #": _p.get("number") or _p.get("id") or "—",
+                                    "Total":    _wix_monto(_p),
+                                } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                             column_config={"Total": _cfg_monto})
+    
+            # ── OTROS INGRESOS ──────────────────────────────────────────────────────
+            if _otros_ing_f:
+                st.markdown(f"#### Ingresos · {len(_otros_ing_f)} registros")
+                _oi_c1, _oi_c2, _oi_c3 = st.columns(3)
+                _bal_metric(_oi_c1, "Total",     f"$ {_pesos(total_otros_ing)}",  "#1a1a1a")
+                _bal_metric(_oi_c2, "Cobrado",   f"$ {_pesos(total_otros_cobr)}", "#2e7d32")
+                _bal_metric(_oi_c3, "Pendiente", f"$ {_pesos(total_otros_pend)}", "#c62828")
+                for _oi_est_lbl, _oi_est_disp in [("cobrado", "Cobrado"), ("pendiente", "Pendiente")]:
+                    _oi_est_items = [o for o in _otros_ing_f if (o.get("estado") or "pendiente") == _oi_est_lbl]
+                    if _oi_est_items:
+                        _oi_est_tot = sum(float(o.get("monto") or 0) for o in _oi_est_items)
+                        with st.expander(f"{_oi_est_disp} ({len(_oi_est_items)}) — $ {_pesos(_oi_est_tot)}"):
+                            _oi_by_rub = {}
+                            for _o in _oi_est_items:
+                                _rk = (_o.get("rubros_ingresos") or {}).get("nombre") or "—"
+                                _oi_by_rub.setdefault(_rk, []).append(_o)
+                            for _rk, _ritems in sorted(_oi_by_rub.items()):
+                                _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
+                                with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
+                                    _oi_by_sub = {}
+                                    for _o in _ritems:
+                                        _sk = (_o.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                                        _oi_by_sub.setdefault(_sk, []).append(_o)
+                                    for _sk, _sitems in sorted(_oi_by_sub.items()):
+                                        _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                                        with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                            _rows = [{
+                                                "F. ingreso":  _fmt_fecha(o.get("fecha")),
+                                                "F. cobro":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
+                                                "Monto":       float(o.get("monto") or 0),
+                                                "Descripción": o.get("descripcion") or "",
+                                            } for o in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                         column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+    
+            # Ajustes positivos
+            _aj_pos = [a for a in _aj_todos_f if float(a.get("monto") or 0) >= 0]
+            if _aj_pos:
+                st.markdown(f"#### Ajustes positivos · {len(_aj_pos)} registros")
+                _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_aj_pos)}", "#2e7d32")
+                with st.expander(f"Detalle ({len(_aj_pos)}) — $ {_pesos(total_aj_pos)}"):
+                    _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
+                              "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
+                             for a in sorted(_aj_pos, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                 column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+    
+            # ── EGRESOS ─────────────────────────────────────────────────────────────
+            st.divider()
+            st.markdown(f"""
+    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+      <h2 style='text-align:center;margin:0 0 14px 0'>Egresos</h2>
+      <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px'>
+        {_metric_cell("Total",     f"$ {_pesos(total_egresos)}", "#1a1a1a")}
+        {_metric_cell("Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")}
+        {_metric_cell("Pendiente", f"$ {_pesos(total_egr_pend)}", "#c62828")}
+        {_metric_cell("Anulado",   f"$ {_pesos(total_egr_anul)}", "#757575")}
+      </div>
+    </div>""", unsafe_allow_html=True)
+    
+            # Compras
+            st.markdown(f"#### Compras · {len(comp_pagadas) + len(comp_parciales) + len(comp_pendientes)} comprobantes")
+            _ec1, _ec2, _ec3, _ec4 = st.columns(4)
+            _bal_metric(_ec1, "Total",     f"$ {_pesos(total_compras)}",    "#1a1a1a")
+            _bal_metric(_ec2, "Pagado",    f"$ {_pesos(total_comp_pag)}",   "#2e7d32")
+            _bal_metric(_ec3, "Pendiente", f"$ {_pesos(total_comp_pend)}",  "#c62828")
+            _bal_metric(_ec4, "Anulado",   f"$ {_pesos(total_comp_anul)}",  "#757575")
+            for _label, _lista in [
+                ("Pagado",    comp_pagadas),
+                ("Parcial",   comp_parciales),
+                ("Pendiente", comp_pendientes),
+                ("Anulado",   comp_anuladas),
+            ]:
+                if _lista:
+                    _is_parc = (_label == "Parcial")
+                    _c_tot  = sum(float(c.get("total") or 0) for c in _lista)
+                    _c_pag  = sum(_pagado_comp(c) for c in _lista)
+                    _c_pend = sum(_saldo_comp(c)  for c in _lista)
+                    if _is_parc:
+                        _hdr = f"Parcial ({len(_lista)}) — Total {_pesos(_c_tot)} | Pagado {_pesos(_c_pag)} | Pendiente {_pesos(_c_pend)}"
+                    else:
+                        _hdr = f"{_label} ({len(_lista)}) — $ {_pesos(_c_tot)}"
+                    with st.expander(_hdr):
+                        _by_prov = {}
+                        for _c in _lista:
+                            _by_prov.setdefault(_c.get("proveedor") or "—", []).append(_c)
+                        for _prov, _pitems in sorted(_by_prov.items()):
+                            _p_tot  = sum(float(c.get("total") or 0) for c in _pitems)
+                            _p_pag  = sum(_pagado_comp(c) for c in _pitems)
+                            _p_pend = sum(_saldo_comp(c)  for c in _pitems)
+                            if _is_parc:
+                                _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — Total {_pesos(_p_tot)} | Pagado {_pesos(_p_pag)} | Pendiente {_pesos(_p_pend)}"
+                            else:
+                                _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_p_tot)}"
+                            with st.expander(_p_hdr):
+                                _rows = []
+                                for _c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                                    _ctot = float(_c.get("total") or 0)
+                                    _cpag = _pagado_comp(_c)
+                                    _csal = _saldo_comp(_c)
+                                    if _is_parc:
+                                        _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—",
+                                                "Total": _ctot, "Pagado": _cpag, "Pendiente": _csal}
+                                        _col_cfg = {
+                                            "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
+                                            "Pagado":    st.column_config.NumberColumn("Pagado",    format="$ %,.2f"),
+                                            "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
+                                        }
+                                    else:
+                                        _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—", "Total": _ctot}
+                                        _col_cfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
+                                    _rows.append(_row)
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                             column_config=_col_cfg)
+    
+            # ── OTROS EGRESOS ────────────────────────────────────────────────────────
+            if _otros_egr_f:
+                st.markdown(f"#### Egresos · {len(_otros_egr_f)} registros")
+                _oe_c1, _oe_c2, _oe_c3 = st.columns(3)
+                _bal_metric(_oe_c1, "Total",     f"$ {_pesos(total_otros_egr)}",      "#1a1a1a")
+                _bal_metric(_oe_c2, "Pagado",    f"$ {_pesos(total_otros_egr_pag)}",  "#2e7d32")
+                _bal_metric(_oe_c3, "Pendiente", f"$ {_pesos(total_otros_egr_pend)}", "#c62828")
+                for _oe_est_lbl, _oe_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
+                    _oe_est_items = [o for o in _otros_egr_f if (o.get("estado") or "pendiente") == _oe_est_lbl]
+                    if _oe_est_items:
+                        _oe_est_tot = sum(float(o.get("monto") or 0) for o in _oe_est_items)
+                        with st.expander(f"{_oe_est_disp} ({len(_oe_est_items)}) — $ {_pesos(_oe_est_tot)}"):
+                            _oe_by_rub = {}
+                            for _o in _oe_est_items:
+                                _rk = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
+                                _oe_by_rub.setdefault(_rk, []).append(_o)
+                            for _rk, _ritems in sorted(_oe_by_rub.items()):
+                                _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
+                                with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
+                                    _oe_by_sub = {}
+                                    for _o in _ritems:
+                                        _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                                        _oe_by_sub.setdefault(_sk, []).append(_o)
+                                    for _sk, _sitems in sorted(_oe_by_sub.items()):
+                                        _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                                        with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                            _oe_by_item = {}
+                                            for _o in _sitems:
+                                                _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
+                                                _oe_by_item.setdefault(_ik, []).append(_o)
+                                            for _ik, _iitems in sorted(_oe_by_item.items()):
+                                                _itot = sum(float(o.get("monto") or 0) for o in _iitems)
+                                                with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
+                                                    _rows = [{
+                                                        "F. egreso":   _fmt_fecha(o.get("fecha")),
+                                                        "Monto":       float(o.get("monto") or 0),
+                                                        "Descripción": o.get("descripcion") or "",
+                                                    } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                                 column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+    
+            # Ajustes negativos
+            _aj_neg = [a for a in _aj_todos_f if float(a.get("monto") or 0) < 0]
+            if _aj_neg:
+                st.markdown(f"#### Ajustes negativos · {len(_aj_neg)} registros")
+                _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(abs(total_aj_neg))}", "#c62828")
+                with st.expander(f"Detalle ({len(_aj_neg)}) — $ {_pesos(abs(total_aj_neg))}"):
+                    _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
+                              "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
+                             for a in sorted(_aj_neg, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                 column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+    
+            # ── RESULTADO ────────────────────────────────────────────────────────────
+            st.divider()
+            _ing_real   = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
+            _egr_real   = total_comp_pag + total_otros_egr_pag + abs(total_aj_neg)
+            _res_real   = _ing_real - _egr_real
+            _fic_color  = "#2e7d32" if resultado >= 0 else "#c62828"
+            _fic_signo  = "+" if resultado >= 0 else ""
+            _real_color = "#2e7d32" if _res_real >= 0 else "#c62828"
+            _real_signo = "+" if _res_real >= 0 else ""
+            def _metric_cell_sub(label, value, color, sub):
+                return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p><p style='margin:0;font-size:0.75rem;color:#999'>{sub}</p></div>"
+            st.markdown(f"""
+    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+      <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
+      <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+        {_metric_cell_sub("Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
+        {_metric_cell_sub("Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
+      </div>
+    </div>""", unsafe_allow_html=True)
+    
+            if total_retiros > 0:
+                st.divider()
+                st.markdown(f"#### Retiros · {len(_retiros_f)} registros")
+                _ret_c1, _ret_c2, _ret_c3 = st.columns(3)
+                _total_retiros_pend = sum(float(o.get("monto") or 0) for o in _retiros_f if (o.get("estado") or "pendiente") != "pagado")
+                _bal_metric(_ret_c1, "Total",     f"$ {_pesos(total_retiros)}",       "#1a1a1a")
+                _bal_metric(_ret_c2, "Pagado",    f"$ {_pesos(total_retiros_pag)}",   "#2e7d32")
+                _bal_metric(_ret_c3, "Pendiente", f"$ {_pesos(_total_retiros_pend)}", "#c62828")
+                for _ret_est_lbl, _ret_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
+                    _ret_est_items = [o for o in _retiros_f if (o.get("estado") or "pendiente") == _ret_est_lbl]
+                    if _ret_est_items:
+                        _ret_est_tot = sum(float(o.get("monto") or 0) for o in _ret_est_items)
+                        with st.expander(f"{_ret_est_disp} ({len(_ret_est_items)}) — $ {_pesos(_ret_est_tot)}"):
+                            _ret_by_sub = {}
+                            for _o in _ret_est_items:
+                                _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                                _ret_by_sub.setdefault(_sk, []).append(_o)
+                            for _sk, _sitems in sorted(_ret_by_sub.items()):
+                                _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                                with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                    _ret_by_item = {}
+                                    for _o in _sitems:
+                                        _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
+                                        _ret_by_item.setdefault(_ik, []).append(_o)
+                                    for _ik, _iitems in sorted(_ret_by_item.items()):
+                                        _itot = sum(float(o.get("monto") or 0) for o in _iitems)
+                                        with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
+                                            _rows = [{
+                                                "F. retiro":   _fmt_fecha(o.get("fecha")),
+                                                "Monto":       float(o.get("monto") or 0),
+                                                "Descripción": o.get("descripcion") or "",
+                                            } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                         column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                _net_dev       = resultado - total_retiros
+                _net_real      = _res_real - total_retiros_pag
+                _net_dev_color = "#2e7d32" if _net_dev  >= 0 else "#c62828"
+                _net_dev_signo = "+" if _net_dev  >= 0 else ""
+                _net_real_color= "#2e7d32" if _net_real >= 0 else "#c62828"
+                _net_real_signo= "+" if _net_real >= 0 else ""
+                st.markdown(f"""
+    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+      <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
+      <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+        {_metric_cell_sub("Devengado", f"{_net_dev_signo}$ {_pesos(abs(_net_dev))}", _net_dev_color, "Resultado − Retiros")}
+        {_metric_cell_sub("Percibido", f"{_net_real_signo}$ {_pesos(abs(_net_real))}", _net_real_color, "Percibido − Retiros pagados")}
+      </div>
+    </div>""", unsafe_allow_html=True)
+    
+    
+        _resumen_bal_frag()
 if _stab_movimientos:
     with _stab_movimientos:
         _render_movimiento_caja(cobros_bal, pagos_bal)
@@ -6735,302 +6743,309 @@ if tab_eg_pagos:
                          column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")})
 
 with tab_mapeo:
-    ts_mapeo_ph = st.empty()
-    ts_mapeo_ph.caption(
-        f"🕒 Última actualización: **{_fmt_ts(db.ultima_carga('mapping_wix_dux'))}**"
-    )
-
-    st.info(
-        "Mapeá cada producto de Wix con su equivalente en DUX. "
-        "Lo que no tenga equivalente, dejalo en **(sin mapear)**."
-    )
-
-    df_dux_p = db.cargar_productos()
-    df_wix_p = db.cargar_wix_productos()
-    falta_dux = df_dux_p.empty
-    falta_wix = df_wix_p.empty
-
-    if falta_dux or falta_wix:
-        faltantes = []
-        if falta_dux:
-            faltantes.append("📡 DUX Productos")
-        if falta_wix:
-            faltantes.append("🛍️ Wix Productos")
-        st.warning(
-            "Antes de mapear necesitás sincronizar: " + " y ".join(faltantes) + "."
+    @st.fragment
+    def _mapeo_wix_frag():
+        ts_mapeo_ph = st.empty()
+        ts_mapeo_ph.caption(
+            f"🕒 Última actualización: **{_fmt_ts(db.ultima_carga('mapping_wix_dux'))}**"
         )
-    else:
-        df_wix_p["wix_id"] = df_wix_p["wix_id"].astype(str)
-        df_wix_p["producto"] = df_wix_p["producto"].astype(str)
-        # Excluir packs (gestionados en pestaña 🎁 Packs Wix). Detectados por prefijo "PACK".
-        df_wix_p = df_wix_p[
-            ~df_wix_p["producto"].str.upper().str.startswith("PACK")
-        ]
-        df_wix_p = df_wix_p.sort_values("producto").reset_index(drop=True)
-
-        mapping_actual = {}
-        factor_actual = {}
-        df_map = db.cargar_mapping_wix_dux()
-        if not df_map.empty:
-            mapping_actual = dict(
-                zip(df_map["wix_id"].astype(str), df_map["dux_codigo"].astype(str))
-            )
-            for wid, f in zip(df_map["wix_id"].astype(str), df_map.get("factor", [])):
-                try:
-                    factor_actual[wid] = float(f)
-                except (ValueError, TypeError):
-                    factor_actual[wid] = 1.0
-
-        opciones_dux = ["(sin mapear)"] + [
-            f"{c} - {p}"
-            for c, p in zip(
-                df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str)
-            )
-        ]
-        label_to_codigo = {
-            f"{c} - {p}": c
-            for c, p in zip(
-                df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str)
-            )
-        }
-        codigo_to_label = {v: k for k, v in label_to_codigo.items()}
-
-        mapeados = sum(1 for v in mapping_actual.values() if v)
-        st.caption(
-            f"{mapeados} / {len(df_wix_p)} productos mapeados"
+    
+        st.info(
+            "Mapeá cada producto de Wix con su equivalente en DUX. "
+            "Lo que no tenga equivalente, dejalo en **(sin mapear)**."
         )
-
-        with st.form(key="form_mapeo_wix_dux", clear_on_submit=False):
-            guardar_map = st.form_submit_button(
-                "💾 Guardar mapeo", type="primary"
+    
+        df_dux_p = db.cargar_productos()
+        df_wix_p = db.cargar_wix_productos()
+        falta_dux = df_dux_p.empty
+        falta_wix = df_wix_p.empty
+    
+        if falta_dux or falta_wix:
+            faltantes = []
+            if falta_dux:
+                faltantes.append("📡 DUX Productos")
+            if falta_wix:
+                faltantes.append("🛍️ Wix Productos")
+            st.warning(
+                "Antes de mapear necesitás sincronizar: " + " y ".join(faltantes) + "."
             )
-
-            nuevo_mapping = {}
-            nuevo_factor = {}
-            for _, row in df_wix_p.iterrows():
-                wid = str(row["wix_id"])
-                wname = str(row["producto"])
-
-                current_codigo = mapping_actual.get(wid, "")
-
-                default_idx = 0
-                if current_codigo and current_codigo in codigo_to_label:
-                    try:
-                        default_idx = opciones_dux.index(
-                            codigo_to_label[current_codigo]
-                        )
-                    except ValueError:
-                        default_idx = 0
-
-                default_factor = float(factor_actual.get(wid, 1.0))
-
-                col_a, col_b, col_c = st.columns([2, 2, 1])
-                with col_a:
-                    st.markdown(f"**{wname}**")
-                    st.caption(f"Wix ID: `{wid}`")
-                with col_b:
-                    sel = st.selectbox(
-                        "DUX equivalente",
-                        opciones_dux,
-                        index=default_idx,
-                        key=f"map_{wid}",
-                        label_visibility="collapsed",
-                    )
-                with col_c:
-                    factor_val = st.number_input(
-                        "Factor",
-                        value=default_factor,
-                        min_value=0.0,
-                        step=0.25,
-                        format="%.4f",
-                        key=f"factor_{wid}",
-                        label_visibility="collapsed",
-                    )
-
-                if sel != "(sin mapear)":
-                    nuevo_mapping[wid] = label_to_codigo[sel]
-                    nuevo_factor[wid] = float(factor_val)
-
-        if guardar_map:
-            merged_map = nuevo_mapping
-            merged_factor = nuevo_factor
-
-            map_prod_dux = dict(
-                zip(df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str))
-            )
-            map_prod_wix = dict(zip(df_wix_p["wix_id"], df_wix_p["producto"]))
-
-            rows = []
-            for wid, code in merged_map.items():
-                if not code:
-                    continue
-                rows.append(
-                    {
-                        "wix_id": wid,
-                        "wix_producto": map_prod_wix.get(wid, ""),
-                        "dux_codigo": code,
-                        "dux_producto": map_prod_dux.get(code, ""),
-                        "factor": merged_factor.get(wid, 1.0),
-                    }
-                )
-
-            df_to_save = pd.DataFrame(
-                rows,
-                columns=[
-                    "wix_id",
-                    "wix_producto",
-                    "dux_codigo",
-                    "dux_producto",
-                    "factor",
-                ],
-            )
-            db.guardar_mapping_wix_dux(df_to_save)
-            try:
-                ts_mapeo_ph.caption(
-                    f"🕒 Última actualización: **{_fmt_ts(db.ultima_carga('mapping_wix_dux'))}**"
-                )
-            except Exception:
-                pass
-            st.success(f"✅ {len(rows)} mapeos guardados en Sheets.")
-
-with tab_packs:
-    ts_packs_ph = st.empty()
-
-    df_wix_p_packs = db.cargar_wix_productos()
-    df_dux_p_packs = db.cargar_productos()
-
-    if df_wix_p_packs.empty:
-        st.warning("Falta sincronizar 🛍️ Wix Productos primero.")
-    elif df_dux_p_packs.empty:
-        st.warning("Falta sincronizar 📡 DUX Productos primero.")
-    else:
-        df_packs = df_wix_p_packs[
-            df_wix_p_packs["producto"].astype(str).str.upper().str.startswith("PACK")
-        ].copy()
-
-        if df_packs.empty:
-            st.warning("No se encontraron productos PACK en Wix.")
         else:
-            opciones_dux_pack = [
+            df_wix_p["wix_id"] = df_wix_p["wix_id"].astype(str)
+            df_wix_p["producto"] = df_wix_p["producto"].astype(str)
+            # Excluir packs (gestionados en pestaña 🎁 Packs Wix). Detectados por prefijo "PACK".
+            df_wix_p = df_wix_p[
+                ~df_wix_p["producto"].str.upper().str.startswith("PACK")
+            ]
+            df_wix_p = df_wix_p.sort_values("producto").reset_index(drop=True)
+    
+            mapping_actual = {}
+            factor_actual = {}
+            df_map = db.cargar_mapping_wix_dux()
+            if not df_map.empty:
+                mapping_actual = dict(
+                    zip(df_map["wix_id"].astype(str), df_map["dux_codigo"].astype(str))
+                )
+                for wid, f in zip(df_map["wix_id"].astype(str), df_map.get("factor", [])):
+                    try:
+                        factor_actual[wid] = float(f)
+                    except (ValueError, TypeError):
+                        factor_actual[wid] = 1.0
+    
+            opciones_dux = ["(sin mapear)"] + [
                 f"{c} - {p}"
                 for c, p in zip(
-                    df_dux_p_packs["codigo"].astype(str),
-                    df_dux_p_packs["producto"].astype(str),
+                    df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str)
                 )
             ]
-            label_to_cod = {
-                f"{c} - {p}": (c, p)
+            label_to_codigo = {
+                f"{c} - {p}": c
                 for c, p in zip(
-                    df_dux_p_packs["codigo"].astype(str),
-                    df_dux_p_packs["producto"].astype(str),
+                    df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str)
                 )
             }
-
-            df_packs_saved = db.cargar_packs_wix()
-
-            with st.form("form_packs", clear_on_submit=False, border=False):
-                guardar_packs = st.form_submit_button(
-                    "💾 Guardar packs", type="primary"
+            codigo_to_label = {v: k for k, v in label_to_codigo.items()}
+    
+            mapeados = sum(1 for v in mapping_actual.values() if v)
+            st.caption(
+                f"{mapeados} / {len(df_wix_p)} productos mapeados"
+            )
+    
+            with st.form(key="form_mapeo_wix_dux", clear_on_submit=False):
+                guardar_map = st.form_submit_button(
+                    "💾 Guardar mapeo", type="primary"
                 )
-
-                editor_outputs = {}
-                for _, pack_row in df_packs.iterrows():
-                    pack_id = str(pack_row["wix_id"])
-                    pack_nombre = str(pack_row["producto"])
-
-                    st.markdown(f"### 🎁 {pack_nombre}")
-
-                    comp_actual = df_packs_saved[
-                        df_packs_saved["wix_id_pack"].astype(str) == pack_id
-                    ]
-                    if not comp_actual.empty:
-                        comp_view = pd.DataFrame(
-                            {
-                                "producto": [
-                                    f"{c} - {p}"
-                                    for c, p in zip(
-                                        comp_actual["dux_codigo"].astype(str),
-                                        comp_actual["dux_producto"].astype(str),
-                                    )
-                                ],
-                                "cantidad": comp_actual["cantidad"]
-                                .fillna(0)
-                                .astype(float)
-                                .values,
-                            }
-                        )
-                    else:
-                        comp_view = pd.DataFrame(
-                            {"producto": pd.Series(dtype=str), "cantidad": pd.Series(dtype=float)}
-                        )
-
-                    edited = st.data_editor(
-                        comp_view,
-                        use_container_width=False,
-                        num_rows="dynamic",
-                        column_config={
-                            "producto": st.column_config.SelectboxColumn(
-                                "Producto DUX",
-                                options=opciones_dux_pack,
-                                required=True,
-                            ),
-                            "cantidad": st.column_config.NumberColumn(
-                                "Cantidad",
-                                min_value=0.0,
-                                step=0.25,
-                                format="%.3f",
-                                required=True,
-                            ),
-                        },
-                        key=f"editor_pack_{pack_id}",
-                    )
-
-                    editor_outputs[pack_id] = (pack_nombre, edited)
-
-            if guardar_packs:
-                rows_save = []
-                for pack_id, (pack_nombre, edited) in editor_outputs.items():
-                    if edited is None or edited.empty:
-                        continue
-                    for _, r in edited.iterrows():
-                        prod_label = r.get("producto")
-                        if not prod_label or prod_label not in label_to_cod:
-                            continue
+    
+                nuevo_mapping = {}
+                nuevo_factor = {}
+                for _, row in df_wix_p.iterrows():
+                    wid = str(row["wix_id"])
+                    wname = str(row["producto"])
+    
+                    current_codigo = mapping_actual.get(wid, "")
+    
+                    default_idx = 0
+                    if current_codigo and current_codigo in codigo_to_label:
                         try:
-                            cant = float(r.get("cantidad") or 0)
-                        except (ValueError, TypeError):
-                            cant = 0.0
-                        if cant <= 0:
-                            continue
-                        codigo, producto_nombre = label_to_cod[prod_label]
-                        rows_save.append(
-                            {
-                                "wix_id_pack": pack_id,
-                                "pack_nombre": pack_nombre,
-                                "dux_codigo": codigo,
-                                "dux_producto": producto_nombre,
-                                "cantidad": cant,
-                            }
+                            default_idx = opciones_dux.index(
+                                codigo_to_label[current_codigo]
+                            )
+                        except ValueError:
+                            default_idx = 0
+    
+                    default_factor = float(factor_actual.get(wid, 1.0))
+    
+                    col_a, col_b, col_c = st.columns([2, 2, 1])
+                    with col_a:
+                        st.markdown(f"**{wname}**")
+                        st.caption(f"Wix ID: `{wid}`")
+                    with col_b:
+                        sel = st.selectbox(
+                            "DUX equivalente",
+                            opciones_dux,
+                            index=default_idx,
+                            key=f"map_{wid}",
+                            label_visibility="collapsed",
                         )
-
+                    with col_c:
+                        factor_val = st.number_input(
+                            "Factor",
+                            value=default_factor,
+                            min_value=0.0,
+                            step=0.25,
+                            format="%.4f",
+                            key=f"factor_{wid}",
+                            label_visibility="collapsed",
+                        )
+    
+                    if sel != "(sin mapear)":
+                        nuevo_mapping[wid] = label_to_codigo[sel]
+                        nuevo_factor[wid] = float(factor_val)
+    
+            if guardar_map:
+                merged_map = nuevo_mapping
+                merged_factor = nuevo_factor
+    
+                map_prod_dux = dict(
+                    zip(df_dux_p["codigo"].astype(str), df_dux_p["producto"].astype(str))
+                )
+                map_prod_wix = dict(zip(df_wix_p["wix_id"], df_wix_p["producto"]))
+    
+                rows = []
+                for wid, code in merged_map.items():
+                    if not code:
+                        continue
+                    rows.append(
+                        {
+                            "wix_id": wid,
+                            "wix_producto": map_prod_wix.get(wid, ""),
+                            "dux_codigo": code,
+                            "dux_producto": map_prod_dux.get(code, ""),
+                            "factor": merged_factor.get(wid, 1.0),
+                        }
+                    )
+    
                 df_to_save = pd.DataFrame(
-                    rows_save,
+                    rows,
                     columns=[
-                        "wix_id_pack",
-                        "pack_nombre",
+                        "wix_id",
+                        "wix_producto",
                         "dux_codigo",
                         "dux_producto",
-                        "cantidad",
+                        "factor",
                     ],
                 )
-                db.guardar_packs_wix(df_to_save)
-                st.success(
-                    f"✅ Packs guardados en Sheets ({len(rows_save)} líneas totales)."
-                )
-
-    ts_packs = db.ultima_carga("packs")
-    ts_packs_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_packs)}**")
-
+                db.guardar_mapping_wix_dux(df_to_save)
+                try:
+                    ts_mapeo_ph.caption(
+                        f"🕒 Última actualización: **{_fmt_ts(db.ultima_carga('mapping_wix_dux'))}**"
+                    )
+                except Exception:
+                    pass
+                st.success(f"✅ {len(rows)} mapeos guardados en Sheets.")
+    
+    _mapeo_wix_frag()
+with tab_packs:
+    @st.fragment
+    def _packs_wix_frag():
+        ts_packs_ph = st.empty()
+    
+        df_wix_p_packs = db.cargar_wix_productos()
+        df_dux_p_packs = db.cargar_productos()
+    
+        if df_wix_p_packs.empty:
+            st.warning("Falta sincronizar 🛍️ Wix Productos primero.")
+        elif df_dux_p_packs.empty:
+            st.warning("Falta sincronizar 📡 DUX Productos primero.")
+        else:
+            df_packs = df_wix_p_packs[
+                df_wix_p_packs["producto"].astype(str).str.upper().str.startswith("PACK")
+            ].copy()
+    
+            if df_packs.empty:
+                st.warning("No se encontraron productos PACK en Wix.")
+            else:
+                opciones_dux_pack = [
+                    f"{c} - {p}"
+                    for c, p in zip(
+                        df_dux_p_packs["codigo"].astype(str),
+                        df_dux_p_packs["producto"].astype(str),
+                    )
+                ]
+                label_to_cod = {
+                    f"{c} - {p}": (c, p)
+                    for c, p in zip(
+                        df_dux_p_packs["codigo"].astype(str),
+                        df_dux_p_packs["producto"].astype(str),
+                    )
+                }
+    
+                df_packs_saved = db.cargar_packs_wix()
+    
+                with st.form("form_packs", clear_on_submit=False, border=False):
+                    guardar_packs = st.form_submit_button(
+                        "💾 Guardar packs", type="primary"
+                    )
+    
+                    editor_outputs = {}
+                    for _, pack_row in df_packs.iterrows():
+                        pack_id = str(pack_row["wix_id"])
+                        pack_nombre = str(pack_row["producto"])
+    
+                        st.markdown(f"### 🎁 {pack_nombre}")
+    
+                        comp_actual = df_packs_saved[
+                            df_packs_saved["wix_id_pack"].astype(str) == pack_id
+                        ]
+                        if not comp_actual.empty:
+                            comp_view = pd.DataFrame(
+                                {
+                                    "producto": [
+                                        f"{c} - {p}"
+                                        for c, p in zip(
+                                            comp_actual["dux_codigo"].astype(str),
+                                            comp_actual["dux_producto"].astype(str),
+                                        )
+                                    ],
+                                    "cantidad": comp_actual["cantidad"]
+                                    .fillna(0)
+                                    .astype(float)
+                                    .values,
+                                }
+                            )
+                        else:
+                            comp_view = pd.DataFrame(
+                                {"producto": pd.Series(dtype=str), "cantidad": pd.Series(dtype=float)}
+                            )
+    
+                        edited = st.data_editor(
+                            comp_view,
+                            use_container_width=False,
+                            num_rows="dynamic",
+                            column_config={
+                                "producto": st.column_config.SelectboxColumn(
+                                    "Producto DUX",
+                                    options=opciones_dux_pack,
+                                    required=True,
+                                ),
+                                "cantidad": st.column_config.NumberColumn(
+                                    "Cantidad",
+                                    min_value=0.0,
+                                    step=0.25,
+                                    format="%.3f",
+                                    required=True,
+                                ),
+                            },
+                            key=f"editor_pack_{pack_id}",
+                        )
+    
+                        editor_outputs[pack_id] = (pack_nombre, edited)
+    
+                if guardar_packs:
+                    rows_save = []
+                    for pack_id, (pack_nombre, edited) in editor_outputs.items():
+                        if edited is None or edited.empty:
+                            continue
+                        for _, r in edited.iterrows():
+                            prod_label = r.get("producto")
+                            if not prod_label or prod_label not in label_to_cod:
+                                continue
+                            try:
+                                cant = float(r.get("cantidad") or 0)
+                            except (ValueError, TypeError):
+                                cant = 0.0
+                            if cant <= 0:
+                                continue
+                            codigo, producto_nombre = label_to_cod[prod_label]
+                            rows_save.append(
+                                {
+                                    "wix_id_pack": pack_id,
+                                    "pack_nombre": pack_nombre,
+                                    "dux_codigo": codigo,
+                                    "dux_producto": producto_nombre,
+                                    "cantidad": cant,
+                                }
+                            )
+    
+                    df_to_save = pd.DataFrame(
+                        rows_save,
+                        columns=[
+                            "wix_id_pack",
+                            "pack_nombre",
+                            "dux_codigo",
+                            "dux_producto",
+                            "cantidad",
+                        ],
+                    )
+                    db.guardar_packs_wix(df_to_save)
+                    st.success(
+                        f"✅ Packs guardados en Sheets ({len(rows_save)} líneas totales)."
+                    )
+                    st.rerun(scope="fragment")
+    
+        ts_packs = db.ultima_carga("packs")
+        ts_packs_ph.caption(f"🕒 Última actualización: **{_fmt_ts(ts_packs)}**")
+    
+    _packs_wix_frag()
 with tab_mixes:
     ts_mixes_ph = st.empty()
     st.markdown(

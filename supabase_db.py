@@ -76,6 +76,7 @@ def ultima_carga(clave):
         "proveedores": "proveedores",
         "wix_productos": "wix_productos",
         "mapping_wix_dux": "mapping_wix_dux",
+        "packs": "packs_wix",
         "gastos": "gastos",
         "dux_rubros": "rubros",
         "dux_subrubros": "subrubros",
