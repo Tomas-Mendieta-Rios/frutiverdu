@@ -3287,6 +3287,13 @@ if _sub_percibido:
                 st.markdown(f"#### Compras · {len(_pagos_rango)} pagos")
                 _ep1, _ep2 = st.columns(2)
                 _bal_metric(_ep1, "Pagado", f"$ {_pesos(total_pagado_compras)}", "#c62828")
+                _comp_tot_lkp = {str(c.get("nro_comprobante") or ""): float(c.get("total") or 0) for c in comprobantes_bal if c.get("nro_comprobante")}
+                _pag_por_comp = {}
+                for _px in pagos_bal:
+                    for _ix in (_px.get("imputaciones") or []):
+                        _nro = str(_ix.get("nro_comprobante") or "")
+                        if _nro:
+                            _pag_por_comp[_nro] = _pag_por_comp.get(_nro, 0.0) + float(_ix.get("monto_imputado") or 0)
                 _pag_by_prov = {}
                 for _p in sorted(_pagos_rango, key=lambda x: str(x.get("fecha") or "")):
                     _pk = str(_p.get("proveedor") or "—")
@@ -3294,9 +3301,35 @@ if _sub_percibido:
                 for _prov, _pitems in sorted(_pag_by_prov.items()):
                     _prov_tot = sum(float(p.get("monto") or 0) for p in _pitems)
                     with st.expander(f"{_prov} ({len(_pitems)}) — $ {_pesos(_prov_tot)}"):
-                        _rows = [{"Fecha": _fmt_fecha(p.get("fecha")), "Comprobante": p.get("nro_comprobante") or "—", "Monto": float(p.get("monto") or 0)} for p in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                        def _pago_row(p):
+                            _imps = p.get("imputaciones") or []
+                            _nro_comp = p.get("nro_comprobante") or "—"
+                            _comp_nro = (_imps[0].get("nro_comprobante") if _imps else None) or "—"
+                            _comp_tot = _comp_tot_lkp.get(str(_imps[0].get("nro_comprobante") or "") if _imps else "") or 0.0
+                            _pag_tot_comp = _pag_por_comp.get(str(_imps[0].get("nro_comprobante") or "") if _imps else "", 0.0)
+                            _monto = float(p.get("monto") or 0)
+                            return {
+                                "Fecha":       _fmt_fecha(p.get("fecha")),
+                                "Pago #":      _nro_comp,
+                                "Comprobante": _comp_nro,
+                                "Total Comp.": _comp_tot or None,
+                                "Pagado":      _monto,
+                                "_parcial":    bool(_comp_tot) and _pag_tot_comp < _comp_tot - 0.01,
+                            }
+                        _pag_cfg = {
+                            "Total Comp.": st.column_config.NumberColumn("Total Comp. ($)", format="$ %,.0f"),
+                            "Pagado":      st.column_config.NumberColumn("Pagado ($)", format="$ %,.0f"),
+                        }
+                        _all_prows = [_pago_row(p) for p in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        _pparc = [r for r in _all_prows if r["_parcial"]]
+                        _ptot  = [r for r in _all_prows if not r["_parcial"]]
+                        for _lbl, _lst in [("Parciales", _pparc), ("Totales", _ptot)]:
+                            if not _lst:
+                                continue
+                            _ltot = sum(r["Pagado"] for r in _lst)
+                            with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
+                                _df_rows = [{k: v for k, v in r.items() if k != "_parcial"} for r in _lst]
+                                st.dataframe(pd.DataFrame(_df_rows), use_container_width=True, hide_index=True, column_config=_pag_cfg)
 
             # Gastos (otros egresos sin RETIRO)
             if _gastos_p:
