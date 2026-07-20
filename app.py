@@ -3187,37 +3187,42 @@ if _sub_percibido:
                 for _c in sorted(_cobros_rango, key=lambda x: str(x.get("fecha") or "")):
                     _cli = _cli_nombre(_c)
                     _cob_by_cli.setdefault(_cli, []).append(_c)
-                def _cob_row(c):
-                    _imp = (c.get("imputaciones") or [{}])[0]
-                    _fac_id  = str(_imp.get("id_comp_venta") or "")
-                    _fac     = _fac_lkp.get(_fac_id) or {}
-                    _fac_tot = float(_fac.get("total") or 0)
-                    _tot_cob_fac = _cob_por_fac_p.get(_fac_id, 0.0)
-                    _cob_mto = float(c.get("monto") or 0)
-                    return {
-                        "Fecha":         _fmt_fecha(c.get("fecha")),
-                        "Cobro #":       c.get("nro_comprobante") or "—",
-                        "Factura":       _imp.get("nro_comprobante") or "—",
-                        "Total Factura": _fac_tot or None,
-                        "Cobrado":       _cob_mto,
-                        "PDF":           _fac.get("url_factura") or None,
-                        "_parcial":      bool(_fac_tot) and _tot_cob_fac < _fac_tot - 0.01,
-                    }
+                def _cob_rows(c):
+                    _imps = c.get("imputaciones") or []
+                    if not _imps:
+                        _imps = [{}]
+                    rows = []
+                    for _imp in _imps:
+                        _fac_id      = str(_imp.get("id_comp_venta") or "")
+                        _fac         = _fac_lkp.get(_fac_id) or {}
+                        _fac_tot     = float(_fac.get("total") or 0)
+                        _tot_cob_fac = _cob_por_fac_p.get(_fac_id, 0.0)
+                        _imp_mto     = float(_imp.get("monto_imputado") or c.get("monto") or 0)
+                        rows.append({
+                            "Fecha":         _fmt_fecha(c.get("fecha")),
+                            "Cobro #":       c.get("nro_comprobante") or "—",
+                            "Factura":       _imp.get("nro_comprobante") or "—",
+                            "Total Factura": _fac_tot or None,
+                            "Imputado":      _imp_mto,
+                            "PDF":           _fac.get("url_factura") or None,
+                            "_parcial":      bool(_fac_tot) and _tot_cob_fac < _fac_tot - 0.01,
+                        })
+                    return rows
                 _cob_cfg = {
                     "Total Factura": st.column_config.NumberColumn("Total Factura ($)", format="$ %,.0f"),
-                    "Cobrado":       st.column_config.NumberColumn("Cobrado ($)", format="$ %,.0f"),
+                    "Imputado":      st.column_config.NumberColumn("Imputado ($)", format="$ %,.0f"),
                     "PDF":           st.column_config.LinkColumn("PDF", display_text="Ver"),
                 }
-                _all_cob_rows = {cli: [_cob_row(c) for c in sorted(cobs, key=lambda x: str(x.get("fecha") or ""), reverse=True)] for cli, cobs in _cob_by_cli.items()}
+                _all_cob_rows = {cli: [r for c in sorted(cobs, key=lambda x: str(x.get("fecha") or ""), reverse=True) for r in _cob_rows(c)] for cli, cobs in _cob_by_cli.items()}
                 for _lbl, _is_parc in [("Parciales", True), ("Totales", False)]:
                     _grp = {cli: [r for r in rows if r["_parcial"] == _is_parc] for cli, rows in _all_cob_rows.items()}
                     _grp = {cli: rows for cli, rows in _grp.items() if rows}
                     if not _grp:
                         continue
-                    _grp_tot = sum(r["Cobrado"] for rows in _grp.values() for r in rows)
+                    _grp_tot = sum(r["Imputado"] for rows in _grp.values() for r in rows)
                     with st.expander(f"{_lbl} ({sum(len(v) for v in _grp.values())}) — $ {_pesos(_grp_tot)}"):
                         for _cli, _rows in sorted(_grp.items()):
-                            _ctot = sum(r["Cobrado"] for r in _rows)
+                            _ctot = sum(r["Imputado"] for r in _rows)
                             with st.expander(f"{_cli} ({len(_rows)}) — $ {_pesos(_ctot)}"):
                                 _df_rows = [{k: v for k, v in r.items() if k != "_parcial"} for r in _rows]
                                 st.dataframe(pd.DataFrame(_df_rows), use_container_width=True, hide_index=True, column_config=_cob_cfg)
