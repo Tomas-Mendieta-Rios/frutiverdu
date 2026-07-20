@@ -3169,7 +3169,7 @@ if _sub_percibido:
                 st.markdown(f"#### DUX · {len(_cobros_rango)} cobros")
                 _c1, _c2 = st.columns(2)
                 _bal_metric(_c1, "Cobrado", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")
-                _fac_url_lkp = {str(f.get("factura_id") or ""): f.get("url_factura") or "" for f in facturas_bal}
+                _fac_url_lkp = {str(f.get("id") or ""): f.get("url_factura") or "" for f in facturas_bal}
                 _cob_by_cli = {}
                 for _c in sorted(_cobros_rango, key=lambda x: str(x.get("fecha") or "")):
                     _cli = str(_c.get("nombre_cliente") or _c.get("cliente") or "—")
