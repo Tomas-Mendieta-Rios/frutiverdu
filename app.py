@@ -4390,17 +4390,19 @@ with tab_comprar:
             reverse=False,
         )
 
-        def_fent_list = []
-        if cfg_comprar.get("comprar_fechas_entrega"):
+        _manana = date.today() + timedelta(days=1)
+        def_desde = _manana
+        def_hasta = _manana
+        if cfg_comprar.get("comprar_fecha_desde"):
             try:
-                guardadas = cfg_comprar["comprar_fechas_entrega"].split(",")
-                def_fent_list = [f.strip() for f in guardadas if f.strip() in fechas_entrega_disp]
+                def_desde = pd.to_datetime(cfg_comprar["comprar_fecha_desde"]).date()
             except Exception:
                 pass
-        if not def_fent_list:
-            manana = str(date.today() + timedelta(days=1))
-            if manana in fechas_entrega_disp:
-                def_fent_list = [manana]
+        if cfg_comprar.get("comprar_fecha_hasta"):
+            try:
+                def_hasta = pd.to_datetime(cfg_comprar["comprar_fecha_hasta"]).date()
+            except Exception:
+                pass
 
         def_fstk = (
             pd.to_datetime(fechas_stock_disp[0]).date() if fechas_stock_disp else date.today()
@@ -4419,24 +4421,29 @@ with tab_comprar:
         ts_comprar_ph = st.empty()
 
         with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
-            col_fc1, col_fc2, col_fc3 = st.columns([1.5, 1.2, 1.2])
+            col_fc1, col_fc2, col_fc3, col_fc4 = st.columns([1, 1, 1.2, 1.2])
             with col_fc1:
-                fechas_entrega = st.multiselect(
-                    "📦 Fechas de entrega",
-                    options=fechas_entrega_disp,
-                    default=def_fent_list,
-                    key="comprar_fechas_entrega",
-                    format_func=_fmt_fecha,
-                    help="Elegí una o más fechas. Los pedidos de todas ellas se suman.",
+                fecha_desde_sel = st.date_input(
+                    "📦 Fechas de entrega — desde",
+                    value=def_desde,
+                    key="comprar_fecha_desde",
+                    format="DD/MM/YYYY",
                 )
             with col_fc2:
+                fecha_hasta_sel = st.date_input(
+                    "hasta",
+                    value=def_hasta,
+                    key="comprar_fecha_hasta",
+                    format="DD/MM/YYYY",
+                )
+            with col_fc3:
                 fecha_stock_sel = st.date_input(
                     "📦 Fecha de stock",
                     value=def_fstk,
                     key="comprar_fecha_stock",
                     format="DD/MM/YYYY",
                 )
-            with col_fc3:
+            with col_fc4:
                 dia_estimado_sel = st.selectbox(
                     "📈 Día de estimado",
                     options=DIAS_SEMANA,
@@ -4450,13 +4457,23 @@ with tab_comprar:
                 use_container_width=False,
             )
 
+        # Calcular fechas_entrega como todas las fechas en el rango que tienen pedidos asignados
+        if fecha_desde_sel <= fecha_hasta_sel:
+            fechas_entrega = [
+                f for f in fechas_entrega_disp
+                if fecha_desde_sel <= pd.to_datetime(f).date() <= fecha_hasta_sel
+            ]
+        else:
+            fechas_entrega = []
+
         if boton_actualizar:
             try:
                 ts_actualizar = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
                 db.guardar_config({
-                    "comprar_fechas_entrega": ",".join(fechas_entrega) if fechas_entrega else "",
+                    "comprar_fecha_desde": str(fecha_desde_sel),
+                    "comprar_fecha_hasta": str(fecha_hasta_sel),
                     "comprar_fecha_stock": str(fecha_stock_sel),
                     "comprar_dia_estimado": str(dia_estimado_sel),
                     "comprar_ultima_actualizacion": ts_actualizar,
