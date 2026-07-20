@@ -3180,22 +3180,40 @@ if _sub_percibido:
                 for _c in sorted(_cobros_rango, key=lambda x: str(x.get("fecha") or "")):
                     _cli = _cli_nombre(_c)
                     _cob_by_cli.setdefault(_cli, []).append(_c)
+                def _cob_row(c):
+                    _imp = (c.get("imputaciones") or [{}])[0]
+                    _fac_id  = str(_imp.get("id_comp_venta") or "")
+                    _fac     = _fac_lkp.get(_fac_id) or {}
+                    _fac_tot = float(_fac.get("total") or 0)
+                    _cob_mto = float(c.get("monto") or 0)
+                    return {
+                        "Fecha":         _fmt_fecha(c.get("fecha")),
+                        "Cobro #":       c.get("nro_comprobante") or "—",
+                        "Factura":       _imp.get("nro_comprobante") or "—",
+                        "Total Factura": _fac_tot or None,
+                        "Cobrado":       _cob_mto,
+                        "PDF":           _fac.get("url_factura") or None,
+                        "_parcial":      bool(_fac_tot) and _cob_mto < _fac_tot - 0.01,
+                    }
+                _cob_cfg = {
+                    "Total Factura": st.column_config.NumberColumn("Total Factura ($)", format="$ %,.0f"),
+                    "Cobrado":       st.column_config.NumberColumn("Cobrado ($)", format="$ %,.0f"),
+                    "PDF":           st.column_config.LinkColumn("PDF", display_text="Ver"),
+                }
+                _cob_cfg_parc = {**_cob_cfg}
                 for _cli, _cobs in sorted(_cob_by_cli.items()):
                     _tot = sum(float(c.get("monto") or 0) for c in _cobs)
                     with st.expander(f"{_cli} ({len(_cobs)}) — $ {_pesos(_tot)}"):
-                        _rows = []
-                        for c in _cobs:
-                            _imp = (c.get("imputaciones") or [{}])[0]
-                            _fac_id  = str(_imp.get("id_comp_venta") or "")
-                            _fac     = _fac_lkp.get(_fac_id) or {}
-                            _fac_nro = _imp.get("nro_comprobante") or "—"
-                            _fac_tot = float(_fac.get("total") or 0) or None
-                            _fac_url = _fac.get("url_factura") or None
-                            _rows.append({"Fecha": _fmt_fecha(c.get("fecha")), "Cobro #": c.get("nro_comprobante") or "—", "Factura": _fac_nro, "Total Factura": _fac_tot, "Cobrado": float(c.get("monto") or 0), "PDF": _fac_url})
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                     column_config={"Total Factura": st.column_config.NumberColumn("Total Factura ($)", format="$ %,.0f"),
-                                                    "Cobrado": st.column_config.NumberColumn("Cobrado ($)", format="$ %,.0f"),
-                                                    "PDF": st.column_config.LinkColumn("PDF", display_text="Ver")})
+                        _all_rows = [_cob_row(c) for c in sorted(_cobs, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        _parc = [r for r in _all_rows if r["_parcial"]]
+                        _tot_rows = [r for r in _all_rows if not r["_parcial"]]
+                        for _lbl, _lst in [("Parciales", _parc), ("Totales", _tot_rows)]:
+                            if not _lst:
+                                continue
+                            _ltot = sum(r["Cobrado"] for r in _lst)
+                            with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
+                                _df_rows = [{k: v for k, v in r.items() if k != "_parcial"} for r in _lst]
+                                st.dataframe(pd.DataFrame(_df_rows), use_container_width=True, hide_index=True, column_config=_cob_cfg)
 
             # Sección WIX cobros
             if _wix_cobrados:
