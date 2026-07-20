@@ -1656,7 +1656,7 @@ def _render_movimiento_caja(cobros, pagos):
             _desde = st.date_input("Desde", value=_desde_def, key="caja_desde_in", format="DD/MM/YYYY")
         with _cc2:
             _hasta_in = st.date_input("Hasta", value=_hasta_def, key="caja_hasta_in", format="DD/MM/YYYY")
-        _btn_caja = st.form_submit_button("Calcular", type="primary", use_container_width=True)
+        _btn_caja = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
     if _btn_caja:
         db.guardar_config({"caja_desde": str(_desde), "caja_hasta": str(_hasta_in)})
     _hasta = _hasta_in
@@ -2567,7 +2567,7 @@ if _sub_resumen:
                 bal_desde = st.date_input("Desde", value=_bal_desde_def, key="bal_desde_in", format="DD/MM/YYYY")
             with _bc2:
                 bal_hasta = st.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta_in", format="DD/MM/YYYY")
-            _btn_bal = st.form_submit_button("Calcular", type="primary", use_container_width=True)
+            _btn_bal = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
         if _btn_bal:
             db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
 
@@ -2661,8 +2661,8 @@ if _sub_resumen:
         # Egresos
         _otros_egr_todos = db.cargar_otros_egresos()
         _todos_rango     = [o for o in _otros_egr_todos if _en_rango(o.get("fecha"))]
-        _retiros_f       = [o for o in _todos_rango if (o.get("subrubros_egresos") or {}).get("nombre") == "RETIRO"]
-        _otros_egr_f     = [o for o in _todos_rango if (o.get("subrubros_egresos") or {}).get("nombre") != "RETIRO"]
+        _retiros_f       = [o for o in _todos_rango if (o.get("items_egresos") or {}).get("nombre") == "RETIRO"]
+        _otros_egr_f     = [o for o in _todos_rango if (o.get("items_egresos") or {}).get("nombre") != "RETIRO"]
         total_otros_egr  = sum(float(o.get("monto") or 0) for o in _otros_egr_f)
         total_otros_egr_pag  = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") == "pagado")
         total_otros_egr_pend = sum(float(o.get("monto") or 0) for o in _otros_egr_f if o.get("estado") != "pagado")
@@ -3131,7 +3131,7 @@ if _stab_ajustes:
                     _dc1, _dc2 = st.columns(2)
                     _aj_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_edit_desde")
                     _aj_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [a for a in _lista if _aj_e_desde <= _safe_date(a.get("fecha")) <= _aj_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3187,7 +3187,7 @@ if _stab_ajustes:
                     _dc1, _dc2 = st.columns(2)
                     _aj_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_all_desde")
                     _aj_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [a for a in _lista if _aj_v_desde <= _safe_date(a.get("fecha")) <= _aj_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3222,6 +3222,8 @@ if _stab_saldo_ini:
         with _si_tab_new:
             @st.fragment
             def _si_nuevo():
+                if st.session_state.pop("si_guardado_ok", False):
+                    st.success("Saldos iniciales guardados.")
                 _cajas, _inis = _si_get_data()
                 if not _cajas:
                     st.info("No hay cajas configuradas.")
@@ -3256,7 +3258,7 @@ if _stab_saldo_ini:
                         for _cj_id, _monto in _parsed.items():
                             db.guardar_ajuste_caja(_cj_id, _n_fecha, _monto, "Saldo inicial", tipo="inicial")
                         db.cargar_ajustes_caja.clear()
-                        st.toast("✅ Saldos iniciales guardados.", icon="✅")
+                        st.session_state["si_guardado_ok"] = True
                         st.rerun(scope="fragment")
             _si_nuevo()
 
@@ -3429,7 +3431,7 @@ if _stab_otros_ingresos:
                     _dc1, _dc2 = st.columns(2)
                     _oi_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_edit_desde")
                     _oi_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oi_e_desde <= _safe_date(o.get("fecha")) <= _oi_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3512,7 +3514,7 @@ if _stab_otros_ingresos:
                     _dc1, _dc2 = st.columns(2)
                     _oi_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_all_desde")
                     _oi_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oi_v_desde <= _safe_date(o.get("fecha")) <= _oi_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3646,7 +3648,7 @@ if _stab_otros_egresos:
                     _dc1, _dc2 = st.columns(2)
                     _oe_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_edit_desde")
                     _oe_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oe_e_desde <= _safe_date(o.get("fecha")) <= _oe_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3731,7 +3733,7 @@ if _stab_otros_egresos:
                     _dc1, _dc2 = st.columns(2)
                     _oe_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_all_desde")
                     _oe_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [o for o in _lista if _oe_v_desde <= _safe_date(o.get("fecha")) <= _oe_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3842,6 +3844,8 @@ if _stab_transferencias:
         with _tr_tab_new:
             @st.fragment
             def _tr_nuevo():
+                if st.session_state.pop("tr_guardado_ok", False):
+                    st.success("Transferencia registrada.")
                 _opts = _tr_get_cajas()
                 if len(_opts) < 2:
                     st.info("Se necesitan al menos 2 cajas activas.")
@@ -3865,7 +3869,7 @@ if _stab_transferencias:
                             st.error("El monto debe ser mayor a cero.")
                             return
                         db.guardar_transferencia(_n_fecha, _opts[_n_origen], _opts[_n_destino], _m, _n_concepto)
-                        st.toast("✅ Transferencia registrada.", icon="✅")
+                        st.session_state["tr_guardado_ok"] = True
                         st.rerun(scope="fragment")
             _tr_nuevo()
 
@@ -3881,7 +3885,7 @@ if _stab_transferencias:
                     _dc1, _dc2 = st.columns(2)
                     _tr_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_edit_desde")
                     _tr_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_edit_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [t for t in _lista if _tr_e_desde <= _safe_date(t.get("fecha")) <= _tr_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3939,7 +3943,7 @@ if _stab_transferencias:
                     _dc1, _dc2 = st.columns(2)
                     _tr_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_all_desde")
                     _tr_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_all_hasta")
-                    st.form_submit_button("Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
                 _lista = [t for t in _lista if _tr_v_desde <= _safe_date(t.get("fecha")) <= _tr_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -4083,12 +4087,10 @@ if tab_ing_cobros_wix:
                 _wc1, _wc2 = st.columns(2)
                 _wix_desde = _wc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_cob_desde")
                 _wix_hasta = _wc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_cob_hasta")
-                st.form_submit_button("Actualizar", type="primary")
+                st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
             _wix_sorted_cob = [o for o in _wix_sorted_cob
                                 if _wix_desde <= _safe_date(str(o.get("createdDate") or "")[:10]) <= _wix_hasta]
 
-            if st.session_state.pop("wix_cob_ok", False):
-                st.success("Guardado.")
             with st.form("form_cobros_wix_cajas", border=True):
                 _guardar_cob = st.form_submit_button("💾 Guardar fechas de cobro y cajas", type="primary")
                 _nuevas_fpago_cob = {}
@@ -4146,8 +4148,7 @@ if tab_ing_cobros_wix:
                 try:
                     db.asignar_cajas_pedidos_wix(_nuevas_cajas_cob)
                     db.guardar_fechas_pago_wix(_nuevas_fpago_cob)
-                    st.session_state["wix_cob_ok"] = True
-                    st.rerun()
+                    st.success("Guardado.")
                 except Exception as _e_cob:
                     st.error(f"❌ {_e_cob}")
 
@@ -4216,8 +4217,11 @@ with tab_sync:
         _prog_bar.progress(1.0, text="100%")
 
         _errors = [(_slabel, _msg) for _ok, _slabel, _msg in _results if not _ok]
-        for _slabel, _msg in _errors:
-            st.error(_msg)
+        if _errors:
+            for _slabel, _msg in _errors:
+                st.error(_msg)
+        else:
+            st.success("✅ Sincronización completada correctamente.")
 
 with tab_grupo_config:
     tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
@@ -5682,7 +5686,7 @@ with tab_dux:
 
             with st.form(key="form_dux_seleccion", clear_on_submit=False):
                 guardar_sel_dux = st.form_submit_button(
-                    "💾 Guardar selección de entregas", type="primary"
+                    "💾 Guardar selección de entregas", type="primary", use_container_width=True
                 )
 
                 nuevas_selecciones_dux = {}
@@ -6139,7 +6143,7 @@ with tab_wix:
 
             with st.form(key="form_wix_seleccion", clear_on_submit=False):
                 guardar_sel = st.form_submit_button(
-                    "💾 Guardar selección de entregas", type="primary"
+                    "💾 Guardar selección de entregas", type="primary", use_container_width=True
                 )
 
                 nuevas_selecciones = {}
