@@ -5639,152 +5639,158 @@ with tab_dux:
             "bajo `[dux] token = \"...\"`."
         )
     else:
-        all_orders_saved = []
-        selecciones_dux = db.cargar_selecciones("dux")
-        try:
-            all_orders_saved = _cargar_pedidos_dux_cached()
-        except Exception as e:
-            st.error(msg_error_sheets("leer pedidos DUX", e))
+        @st.fragment
+        def _dux_pedidos_frag():
+            all_orders_saved = []
+            selecciones_dux = db.cargar_selecciones("dux")
+            try:
+                all_orders_saved = _cargar_pedidos_dux_cached()
+            except Exception as e:
+                st.error(msg_error_sheets("leer pedidos DUX", e))
 
-        st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_dux'))}**")
+            st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_dux'))}**")
 
-        if all_orders_saved:
-            n_asignados = sum(1 for v in selecciones_dux.values() if v)
+            if all_orders_saved:
+                n_asignados = sum(1 for v in selecciones_dux.values() if v)
 
-            # Ordenar: más recientes primero
-            def _fecha_dux(o):
-                f = o.get("fecha") or ""
-                try:
-                    return pd.to_datetime(f)
-                except Exception:
-                    return pd.Timestamp.min
-            # Sort por nro_pedido DESC (mas reciente en numero arriba).
-            # Fallback -1 para los que no tengan numero parseable.
-            def _nro_dux_sort(o):
-                raw = _dux_get_first(
-                    o, ["nro_pedido", "nroPedido", "numero", "id"]
-                )
-                try:
-                    return int(str(raw).strip())
-                except (ValueError, TypeError):
-                    return -1
-
-            all_orders_sorted = sorted(
-                all_orders_saved, key=_nro_dux_sort, reverse=True
-            )
-
-            with st.form("form_dux_ped_filtro", border=False):
-                _ddc1, _ddc2 = st.columns(2)
-                _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
-                _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
-                st.form_submit_button("Actualizar", type="primary")
-            all_orders_sorted = [o for o in all_orders_sorted
-                                  if _dux_desde <= _fecha_dux(o).date() <= _dux_hasta]
-
-            if not all_orders_sorted:
-                st.info("No hay pedidos sincronizados todavía.")
-
-            with st.form(key="form_dux_seleccion", clear_on_submit=False):
-                guardar_sel_dux = st.form_submit_button(
-                    "💾 Guardar selección de entregas", type="primary", use_container_width=True
-                )
-
-                nuevas_selecciones_dux = {}
-                for i, orden in enumerate(all_orders_sorted, start=1):
-                    cliente_str = extraer_cliente_dux(orden)
-                    nro = _dux_get_first(
-                        orden,
-                        ["nro_pedido", "nroPedido", "numero", "id"],
+                # Ordenar: más recientes primero
+                def _fecha_dux(o):
+                    f = o.get("fecha") or ""
+                    try:
+                        return pd.to_datetime(f)
+                    except Exception:
+                        return pd.Timestamp.min
+                # Sort por nro_pedido DESC (mas reciente en numero arriba).
+                # Fallback -1 para los que no tengan numero parseable.
+                def _nro_dux_sort(o):
+                    raw = _dux_get_first(
+                        o, ["nro_pedido", "nroPedido", "numero", "id"]
                     )
-                    items = extraer_items_dux(orden)
+                    try:
+                        return int(str(raw).strip())
+                    except (ValueError, TypeError):
+                        return -1
 
-                    oid = str(orden.get("id") or nro or i)
-                    asignado_prev = selecciones_dux.get(oid)
-                    if asignado_prev:
-                        fecha_default_entrega = pd.to_datetime(asignado_prev).date()
-                    else:
-                        # Default: fecha de registro del pedido (cuando se cargo en DUX).
-                        # Fallback: manana.
-                        f_reg = _fecha_dux(orden)
-                        if f_reg and f_reg != pd.Timestamp.min:
-                            fecha_default_entrega = f_reg.date()
+                all_orders_sorted = sorted(
+                    all_orders_saved, key=_nro_dux_sort, reverse=True
+                )
+
+                with st.form("form_dux_ped_filtro", border=False):
+                    _ddc1, _ddc2 = st.columns(2)
+                    _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
+                    _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
+                all_orders_sorted = [o for o in all_orders_sorted
+                                      if _dux_desde <= _fecha_dux(o).date() <= _dux_hasta]
+
+                if not all_orders_sorted:
+                    st.info("No hay pedidos sincronizados todavía.")
+
+                with st.form(key="form_dux_seleccion", clear_on_submit=False):
+                    guardar_sel_dux = st.form_submit_button(
+                        "💾 Guardar selección de entregas", type="primary", use_container_width=True
+                    )
+
+                    nuevas_selecciones_dux = {}
+                    for i, orden in enumerate(all_orders_sorted, start=1):
+                        cliente_str = extraer_cliente_dux(orden)
+                        nro = _dux_get_first(
+                            orden,
+                            ["nro_pedido", "nroPedido", "numero", "id"],
+                        )
+                        items = extraer_items_dux(orden)
+
+                        oid = str(orden.get("id") or nro or i)
+                        asignado_prev = selecciones_dux.get(oid)
+                        if asignado_prev:
+                            fecha_default_entrega = pd.to_datetime(asignado_prev).date()
                         else:
-                            fecha_default_entrega = date.today() + timedelta(days=1)
-
-                    estado_fact = orden.get("estado_facturacion") or ""
-                    estado_badges = {
-                        "PENDIENTE": "🟡 Pendiente",
-                        "FACTURADO": "🟢 Facturado",
-                        "FACTURADO_PARCIAL": "🟠 Fact. parcial",
-                        "CERRADO": "⚫ Cerrado",
-                    }
-                    estado_badge = estado_badges.get(
-                        estado_fact, f"⚪ {estado_fact}" if estado_fact else ""
-                    )
-
-                    es_anulado = str(orden.get("anulado", "N")).upper() == "S"
-                    with st.container(border=True):
-                        c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
-                        with c_info:
-                            # Fecha de registro del pedido en DUX
-                            f_reg_dux = _fecha_dux(orden)
-                            registro_badge = ""
-                            if f_reg_dux and f_reg_dux != pd.Timestamp.min:
-                                registro_badge = (
-                                    f" · 📅 registrado {f_reg_dux.strftime('%d/%m/%Y')}"
-                                )
-                            anulado_badge = " · 🚫 **ANULADO**" if es_anulado else ""
-                            st.markdown(
-                                f"**#{nro or i}** — {cliente_str} · "
-                                f"{estado_badge}{registro_badge}{anulado_badge}"
-                            )
-                        if not es_anulado:
-                            with c_chk:
-                                asignar = st.checkbox(
-                                    "Asignar entrega",
-                                    value=bool(asignado_prev),
-                                    key=f"dux_chk_{oid}",
-                                )
-                            with c_fec:
-                                fecha_entrega = st.date_input(
-                                    "Fecha de entrega",
-                                    value=fecha_default_entrega,
-                                    key=f"dux_fent_{oid}",
-                                    format="DD/MM/YYYY",
-                                    label_visibility="collapsed",
-                                )
-
-                            if asignar:
-                                nuevas_selecciones_dux[oid] = str(fecha_entrega)
-
-                        with st.expander(f"Ver productos ({len(items)})"):
-                            if items:
-                                filas = [extraer_item_dux(it) for it in items]
-                                _df_items = pd.DataFrame(filas)
-                                _cols_show = [c for c in ["producto", "cantidad"] if c in _df_items.columns]
-                                st.dataframe(
-                                    _df_items[_cols_show],
-                                    use_container_width=False,
-                                    hide_index=True,
-                                )
+                            # Default: fecha de registro del pedido (cuando se cargo en DUX).
+                            # Fallback: manana.
+                            f_reg = _fecha_dux(orden)
+                            if f_reg and f_reg != pd.Timestamp.min:
+                                fecha_default_entrega = f_reg.date()
                             else:
-                                st.caption("Sin ítems registrados.")
+                                fecha_default_entrega = date.today() + timedelta(days=1)
 
-            if guardar_sel_dux:
-                try:
-                    db.guardar_selecciones("dux", nuevas_selecciones_dux)
-                    st.success(
-                        f"✅ {len(nuevas_selecciones_dux)} entregas guardadas en Sheets."
-                    )
-                    selecciones_dux = nuevas_selecciones_dux
-                except Exception as e:
-                    st.error(msg_error_sheets("guardar selecciones DUX", e))
+                        estado_fact = orden.get("estado_facturacion") or ""
+                        estado_badges = {
+                            "PENDIENTE": "🟡 Pendiente",
+                            "FACTURADO": "🟢 Facturado",
+                            "FACTURADO_PARCIAL": "🟠 Fact. parcial",
+                            "CERRADO": "⚫ Cerrado",
+                        }
+                        estado_badge = estado_badges.get(
+                            estado_fact, f"⚪ {estado_fact}" if estado_fact else ""
+                        )
+
+                        es_anulado = str(orden.get("anulado", "N")).upper() == "S"
+                        with st.container(border=True):
+                            c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
+                            with c_info:
+                                # Fecha de registro del pedido en DUX
+                                f_reg_dux = _fecha_dux(orden)
+                                registro_badge = ""
+                                if f_reg_dux and f_reg_dux != pd.Timestamp.min:
+                                    registro_badge = (
+                                        f" · 📅 registrado {f_reg_dux.strftime('%d/%m/%Y')}"
+                                    )
+                                anulado_badge = " · 🚫 **ANULADO**" if es_anulado else ""
+                                st.markdown(
+                                    f"**#{nro or i}** — {cliente_str} · "
+                                    f"{estado_badge}{registro_badge}{anulado_badge}"
+                                )
+                            if not es_anulado:
+                                with c_chk:
+                                    asignar = st.checkbox(
+                                        "Asignar entrega",
+                                        value=bool(asignado_prev),
+                                        key=f"dux_chk_{oid}",
+                                    )
+                                with c_fec:
+                                    fecha_entrega = st.date_input(
+                                        "Fecha de entrega",
+                                        value=fecha_default_entrega,
+                                        key=f"dux_fent_{oid}",
+                                        format="DD/MM/YYYY",
+                                        label_visibility="collapsed",
+                                    )
+
+                                if asignar:
+                                    nuevas_selecciones_dux[oid] = str(fecha_entrega)
+
+                            with st.expander(f"Ver productos ({len(items)})"):
+                                if items:
+                                    filas = [extraer_item_dux(it) for it in items]
+                                    _df_items = pd.DataFrame(filas)
+                                    _cols_show = [c for c in ["producto", "cantidad"] if c in _df_items.columns]
+                                    st.dataframe(
+                                        _df_items[_cols_show],
+                                        use_container_width=False,
+                                        hide_index=True,
+                                    )
+                                else:
+                                    st.caption("Sin ítems registrados.")
+
+                if guardar_sel_dux:
+                    try:
+                        db.guardar_selecciones("dux", nuevas_selecciones_dux)
+                        st.success(
+                            f"✅ {len(nuevas_selecciones_dux)} entregas guardadas en Sheets."
+                        )
+                        selecciones_dux = nuevas_selecciones_dux
+                        st.cache_data.clear()
+                        st.rerun(scope="fragment")
+                    except Exception as e:
+                        st.error(msg_error_sheets("guardar selecciones DUX", e))
 
 
-        else:
-            st.info(
-                "Todavía no hay pedidos guardados. Apretá **Sincronizar** para traerlos."
-            )
+            else:
+                st.info(
+                    "Todavía no hay pedidos guardados. Apretá **Sincronizar** para traerlos."
+                )
+
+        _dux_pedidos_frag()
 
 if tab_dux_productos:
     with tab_dux_productos:
@@ -6040,225 +6046,231 @@ with tab_wix:
             "Falta configurar las credenciales de Wix en `.streamlit/secrets.toml`."
         )
     else:
-        try:
-            wix_orders_saved = _cargar_pedidos_wix_cached()
-        except Exception as e:
-            st.error(msg_error_sheets("leer pedidos Wix", e))
-            wix_orders_saved = []
+        @st.fragment
+        def _wix_pedidos_frag():
+            try:
+                wix_orders_saved = _cargar_pedidos_wix_cached()
+            except Exception as e:
+                st.error(msg_error_sheets("leer pedidos Wix", e))
+                wix_orders_saved = []
 
-        st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_wix'))}**")
+            st.caption(f"🕒 Última sync: **{_fmt_ts(db.ultima_carga('pedidos_wix'))}**")
 
-        orders_saved = wix_orders_saved or []
-        selecciones = db.cargar_selecciones("wix")
+            orders_saved = wix_orders_saved or []
+            selecciones = db.cargar_selecciones("wix")
 
-        if not orders_saved:
-            st.info("Todavía no hay pedidos. Apretá **Sincronizar**.")
-        else:
-            pass
+            if not orders_saved:
+                st.info("Todavía no hay pedidos. Apretá **Sincronizar**.")
+            else:
+                pass
 
-            def _wix_contact(o):
-                bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
-                if bi.get("firstName") or bi.get("lastName"):
-                    return bi
-                si = (
-                    ((o.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
-                    .get("shippingDestination", {})
-                    .get("contactDetails", {})
-                ) or {}
-                if si.get("firstName") or si.get("lastName"):
-                    return si
-                return (o.get("buyerInfo", {}) or {}).get("contactDetails", {}) or {}
+                def _wix_contact(o):
+                    bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+                    if bi.get("firstName") or bi.get("lastName"):
+                        return bi
+                    si = (
+                        ((o.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
+                        .get("shippingDestination", {})
+                        .get("contactDetails", {})
+                    ) or {}
+                    if si.get("firstName") or si.get("lastName"):
+                        return si
+                    return (o.get("buyerInfo", {}) or {}).get("contactDetails", {}) or {}
 
-            def _wix_address(o):
-                bi = (o.get("billingInfo", {}) or {}).get("address", {}) or {}
-                if bi.get("addressLine") or bi.get("city"):
-                    return bi
-                si = (
-                    ((o.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
-                    .get("shippingDestination", {})
-                    .get("address", {})
-                ) or {}
-                return si or bi
+                def _wix_address(o):
+                    bi = (o.get("billingInfo", {}) or {}).get("address", {}) or {}
+                    if bi.get("addressLine") or bi.get("city"):
+                        return bi
+                    si = (
+                        ((o.get("shippingInfo", {}) or {}).get("logistics", {}) or {})
+                        .get("shippingDestination", {})
+                        .get("address", {})
+                    ) or {}
+                    return si or bi
 
-            def _fmt_addr(a):
-                if not a:
-                    return ""
-                parts = [
-                    a.get("addressLine"),
-                    a.get("addressLine2"),
-                    a.get("city"),
-                    a.get("subdivision"),
-                ]
-                return ", ".join(p for p in parts if p)
+                def _fmt_addr(a):
+                    if not a:
+                        return ""
+                    parts = [
+                        a.get("addressLine"),
+                        a.get("addressLine2"),
+                        a.get("city"),
+                        a.get("subdivision"),
+                    ]
+                    return ", ".join(p for p in parts if p)
 
-            def _wix_cliente(o):
-                c = _wix_contact(o)
-                nombre = ((c.get("firstName") or "") + " " + (c.get("lastName") or "")).strip()
-                return nombre or "(sin nombre)"
+                def _wix_cliente(o):
+                    c = _wix_contact(o)
+                    nombre = ((c.get("firstName") or "") + " " + (c.get("lastName") or "")).strip()
+                    return nombre or "(sin nombre)"
 
-            def _wix_email(o):
-                return (
-                    (o.get("buyerInfo", {}) or {}).get("email")
-                    or _wix_contact(o).get("email")
-                    or ""
-                )
-
-            def _wix_nro(o):
-                return str(o.get("number") or o.get("id", "?"))
-
-            # Ordenar Wix: más recientes primero (createdDate)
-            def _fecha_wix(o):
-                f = o.get("createdDate") or ""
-                try:
-                    ts = pd.to_datetime(f)
-                    # Wix devuelve fechas en UTC con tz: las convierto a naive
-                    # para poder comparar con Timestamps locales sin tz.
-                    if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
-                        ts = ts.tz_localize(None)
-                    return ts
-                except Exception:
-                    return pd.Timestamp.min
-            # Sort por number (Wix) DESC.
-            def _nro_wix_sort(o):
-                raw = o.get("number") or o.get("id") or ""
-                try:
-                    return int(str(raw).strip())
-                except (ValueError, TypeError):
-                    return -1
-
-            orders_saved_sorted = sorted(
-                orders_saved, key=_nro_wix_sort, reverse=True
-            )
-
-            with st.form("form_wix_ped_filtro", border=False):
-                _wpc1, _wpc2 = st.columns(2)
-                _wix_ped_desde = _wpc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_ped_desde")
-                _wix_ped_hasta = _wpc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_ped_hasta")
-                st.form_submit_button("Actualizar", type="primary")
-            orders_saved_sorted = [o for o in orders_saved_sorted
-                                    if _wix_ped_desde <= _fecha_wix(o).date() <= _wix_ped_hasta]
-
-            if not orders_saved_sorted:
-                st.info("No hay pedidos sincronizados todavía.")
-
-            with st.form(key="form_wix_seleccion", clear_on_submit=False):
-                guardar_sel = st.form_submit_button(
-                    "💾 Guardar selección de entregas", type="primary", use_container_width=True
-                )
-
-                nuevas_selecciones = {}
-                for o in orders_saved_sorted:
-                    nro = _wix_nro(o)
-                    cliente = _wix_cliente(o)
-                    items = o.get("lineItems", [])
-                    total = (
-                        o.get("priceSummary", {}).get("total", {}).get("formattedAmount", "")
+                def _wix_email(o):
+                    return (
+                        (o.get("buyerInfo", {}) or {}).get("email")
+                        or _wix_contact(o).get("email")
+                        or ""
                     )
-                    direccion = _fmt_addr(_wix_address(o))
-                    email = _wix_email(o)
 
-                    oid = o.get("id") or nro
-                    asignado_prev = selecciones.get(oid)
-                    if asignado_prev:
-                        fecha_default_entrega = pd.to_datetime(asignado_prev).date()
-                    else:
-                        # Default: fecha de creacion del pedido (Wix createdDate).
-                        # Fallback: manana.
-                        f_reg = _fecha_wix(o)
-                        if f_reg and f_reg != pd.Timestamp.min:
-                            fecha_default_entrega = f_reg.date()
+                def _wix_nro(o):
+                    return str(o.get("number") or o.get("id", "?"))
+
+                # Ordenar Wix: más recientes primero (createdDate)
+                def _fecha_wix(o):
+                    f = o.get("createdDate") or ""
+                    try:
+                        ts = pd.to_datetime(f)
+                        # Wix devuelve fechas en UTC con tz: las convierto a naive
+                        # para poder comparar con Timestamps locales sin tz.
+                        if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
+                            ts = ts.tz_localize(None)
+                        return ts
+                    except Exception:
+                        return pd.Timestamp.min
+                # Sort por number (Wix) DESC.
+                def _nro_wix_sort(o):
+                    raw = o.get("number") or o.get("id") or ""
+                    try:
+                        return int(str(raw).strip())
+                    except (ValueError, TypeError):
+                        return -1
+
+                orders_saved_sorted = sorted(
+                    orders_saved, key=_nro_wix_sort, reverse=True
+                )
+
+                with st.form("form_wix_ped_filtro", border=False):
+                    _wpc1, _wpc2 = st.columns(2)
+                    _wix_ped_desde = _wpc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_ped_desde")
+                    _wix_ped_hasta = _wpc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_ped_hasta")
+                    st.form_submit_button("Actualizar", type="primary")
+                orders_saved_sorted = [o for o in orders_saved_sorted
+                                        if _wix_ped_desde <= _fecha_wix(o).date() <= _wix_ped_hasta]
+
+                if not orders_saved_sorted:
+                    st.info("No hay pedidos sincronizados todavía.")
+
+                with st.form(key="form_wix_seleccion", clear_on_submit=False):
+                    guardar_sel = st.form_submit_button(
+                        "💾 Guardar selección de entregas", type="primary", use_container_width=True
+                    )
+
+                    nuevas_selecciones = {}
+                    for o in orders_saved_sorted:
+                        nro = _wix_nro(o)
+                        cliente = _wix_cliente(o)
+                        items = o.get("lineItems", [])
+                        total = (
+                            o.get("priceSummary", {}).get("total", {}).get("formattedAmount", "")
+                        )
+                        direccion = _fmt_addr(_wix_address(o))
+                        email = _wix_email(o)
+
+                        oid = o.get("id") or nro
+                        asignado_prev = selecciones.get(oid)
+                        if asignado_prev:
+                            fecha_default_entrega = pd.to_datetime(asignado_prev).date()
                         else:
-                            fecha_default_entrega = date.today() + timedelta(days=1)
+                            # Default: fecha de creacion del pedido (Wix createdDate).
+                            # Fallback: manana.
+                            f_reg = _fecha_wix(o)
+                            if f_reg and f_reg != pd.Timestamp.min:
+                                fecha_default_entrega = f_reg.date()
+                            else:
+                                fecha_default_entrega = date.today() + timedelta(days=1)
 
-                    es_cancelado = str(o.get("status", "")).upper() == "CANCELED"
-                    _pay_badges = {
-                        "PAID": "🟢 Pagado",
-                        "UNPAID": "🔴 Sin pagar",
-                        "PENDING": "🟡 Pago pendiente",
-                        "PARTIALLY_REFUNDED": "🟠 Parcialmente reembolsado",
-                        "FULLY_REFUNDED": "⚫ Reembolsado",
-                    }
-                    _ful_badges = {
-                        "FULFILLED": "✅ Entregado",
-                        "NOT_FULFILLED": "⏳ No entregado",
-                        "PARTIALLY_FULFILLED": "🔶 Entrega parcial",
-                    }
-                    pay_badge = _pay_badges.get(str(o.get("paymentStatus") or "").upper(), "")
-                    ful_badge = _ful_badges.get(str(o.get("fulfillmentStatus") or "").upper(), "")
-                    buyer_note = o.get("buyerNote") or ""
-                    with st.container(border=True):
-                        c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
-                        with c_info:
-                            f_reg_wix = _fecha_wix(o)
-                            registro_badge = ""
-                            if f_reg_wix and f_reg_wix != pd.Timestamp.min:
-                                registro_badge = f" · 📅 {f_reg_wix.strftime('%d/%m/%Y')}"
-                            cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
-                            badges_line = " · ".join(b for b in [pay_badge, ful_badge] if b)
-                            st.markdown(
-                                f"**#{nro}** — {cliente} · "
-                                f"**{total}**{registro_badge}{cancelado_badge}"
-                                + (f" · {badges_line}" if badges_line else "")
-                            )
-                            detalles = []
-                            if direccion:
-                                detalles.append(f"📍 {direccion}")
-                            if email:
-                                detalles.append(f"✉️ {email}")
-                            if buyer_note:
-                                detalles.append(f"💬 {buyer_note}")
-                            if detalles:
-                                st.caption(" · ".join(detalles))
-                        if not es_cancelado:
-                            with c_chk:
-                                asignar = st.checkbox(
-                                    "Asignar entrega",
-                                    value=bool(asignado_prev),
-                                    key=f"wix_chk_{oid}",
+                        es_cancelado = str(o.get("status", "")).upper() == "CANCELED"
+                        _pay_badges = {
+                            "PAID": "🟢 Pagado",
+                            "UNPAID": "🔴 Sin pagar",
+                            "PENDING": "🟡 Pago pendiente",
+                            "PARTIALLY_REFUNDED": "🟠 Parcialmente reembolsado",
+                            "FULLY_REFUNDED": "⚫ Reembolsado",
+                        }
+                        _ful_badges = {
+                            "FULFILLED": "✅ Entregado",
+                            "NOT_FULFILLED": "⏳ No entregado",
+                            "PARTIALLY_FULFILLED": "🔶 Entrega parcial",
+                        }
+                        pay_badge = _pay_badges.get(str(o.get("paymentStatus") or "").upper(), "")
+                        ful_badge = _ful_badges.get(str(o.get("fulfillmentStatus") or "").upper(), "")
+                        buyer_note = o.get("buyerNote") or ""
+                        with st.container(border=True):
+                            c_info, c_chk, c_fec = st.columns([4, 1.2, 1.6])
+                            with c_info:
+                                f_reg_wix = _fecha_wix(o)
+                                registro_badge = ""
+                                if f_reg_wix and f_reg_wix != pd.Timestamp.min:
+                                    registro_badge = f" · 📅 {f_reg_wix.strftime('%d/%m/%Y')}"
+                                cancelado_badge = " · 🚫 **CANCELADO**" if es_cancelado else ""
+                                badges_line = " · ".join(b for b in [pay_badge, ful_badge] if b)
+                                st.markdown(
+                                    f"**#{nro}** — {cliente} · "
+                                    f"**{total}**{registro_badge}{cancelado_badge}"
+                                    + (f" · {badges_line}" if badges_line else "")
                                 )
-                            with c_fec:
-                                fecha_entrega = st.date_input(
-                                    "Fecha de entrega",
-                                    value=fecha_default_entrega,
-                                    key=f"wix_fent_{oid}",
-                                    format="DD/MM/YYYY",
-                                    label_visibility="collapsed",
-                                )
-
-                            if asignar:
-                                nuevas_selecciones[oid] = str(fecha_entrega)
-
-                        if items:
-                            with st.expander(f"Ver productos ({len(items)})"):
-                                filas = []
-                                for it in items:
-                                    nombre_obj = it.get("productName", {}) or {}
-                                    nombre = (
-                                        nombre_obj.get("original")
-                                        or nombre_obj.get("translated")
-                                        or ""
+                                detalles = []
+                                if direccion:
+                                    detalles.append(f"📍 {direccion}")
+                                if email:
+                                    detalles.append(f"✉️ {email}")
+                                if buyer_note:
+                                    detalles.append(f"💬 {buyer_note}")
+                                if detalles:
+                                    st.caption(" · ".join(detalles))
+                            if not es_cancelado:
+                                with c_chk:
+                                    asignar = st.checkbox(
+                                        "Asignar entrega",
+                                        value=bool(asignado_prev),
+                                        key=f"wix_chk_{oid}",
                                     )
-                                    price_obj = it.get("price") or {}
-                                    filas.append(
-                                        {
-                                            "producto": nombre,
-                                            "cantidad": it.get("quantity", 0),
-                                            "precio unit.": price_obj.get("formattedAmount") or "",
-                                        }
+                                with c_fec:
+                                    fecha_entrega = st.date_input(
+                                        "Fecha de entrega",
+                                        value=fecha_default_entrega,
+                                        key=f"wix_fent_{oid}",
+                                        format="DD/MM/YYYY",
+                                        label_visibility="collapsed",
                                     )
-                                st.dataframe(
-                                    pd.DataFrame(filas),
-                                    use_container_width=False,
-                                    hide_index=True,
-                                )
 
-            if guardar_sel:
-                try:
-                    db.guardar_selecciones("wix", nuevas_selecciones)
-                    selecciones = nuevas_selecciones
-                    st.success(f"✅ {len(nuevas_selecciones)} entregas guardadas.")
-                except Exception as e:
-                    st.error(msg_error_sheets("guardar selecciones Wix", e))
+                                if asignar:
+                                    nuevas_selecciones[oid] = str(fecha_entrega)
+
+                            if items:
+                                with st.expander(f"Ver productos ({len(items)})"):
+                                    filas = []
+                                    for it in items:
+                                        nombre_obj = it.get("productName", {}) or {}
+                                        nombre = (
+                                            nombre_obj.get("original")
+                                            or nombre_obj.get("translated")
+                                            or ""
+                                        )
+                                        price_obj = it.get("price") or {}
+                                        filas.append(
+                                            {
+                                                "producto": nombre,
+                                                "cantidad": it.get("quantity", 0),
+                                                "precio unit.": price_obj.get("formattedAmount") or "",
+                                            }
+                                        )
+                                    st.dataframe(
+                                        pd.DataFrame(filas),
+                                        use_container_width=False,
+                                        hide_index=True,
+                                    )
+
+                if guardar_sel:
+                    try:
+                        db.guardar_selecciones("wix", nuevas_selecciones)
+                        selecciones = nuevas_selecciones
+                        st.success(f"✅ {len(nuevas_selecciones)} entregas guardadas.")
+                        st.cache_data.clear()
+                        st.rerun(scope="fragment")
+                    except Exception as e:
+                        st.error(msg_error_sheets("guardar selecciones Wix", e))
+
+        _wix_pedidos_frag()
 
 
 if tab_wix_productos:
