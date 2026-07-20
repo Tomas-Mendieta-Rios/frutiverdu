@@ -1444,7 +1444,7 @@ tab_grupo_config          = _tabs_dict.get("tab_grupo_config")
 tab_grupo_config_avanzada = _tabs_dict.get("tab_grupo_config_avanzada")
 
 # Sub-tab pre-init (in case parent tab is not visible for this role)
-_sub_resumen = _sub_pendientes = tab_ing_cobros_wix = None
+_sub_resumen = _sub_percibido = _sub_pendientes = tab_ing_cobros_wix = None
 _stab_movimientos = _stab_transferencias = _stab_ajustes = _stab_saldo_ini = _stab_otros_ingresos = _stab_otros_egresos = None
 tab_eg_compras = tab_eg_gastos = tab_eg_pagos = None
 tab_ing_facturas = tab_ing_cobros = None
@@ -1455,8 +1455,8 @@ tab_ing_cobros_wix = None
 
 if tab_tesoreria:
     with tab_tesoreria:
-        _sub_resumen, _sub_pendientes, _stab_movimientos, tab_ing_cobros_wix, _stab_otros_ingresos, _stab_otros_egresos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
-            "📊 Resumen", "⏳ Pendientes y deudores", "📊 Movimientos", "💳 Cobros Wix", "💰 Ingresos", "💸 Egresos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
+        _sub_resumen, _sub_percibido, _sub_pendientes, _stab_movimientos, tab_ing_cobros_wix, _stab_otros_ingresos, _stab_otros_egresos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
+            "📊 Resumen", "📊 Percibido", "⏳ Pendientes y deudores", "📊 Movimientos", "💳 Cobros Wix", "💰 Ingresos", "💸 Egresos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
         ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -3069,6 +3069,284 @@ if _sub_resumen:
     
     
         _resumen_bal_frag()
+if _sub_percibido:
+    with _sub_percibido:
+        @st.fragment
+        def _percibido_frag():
+            _hoy = date.today()
+
+            def _metric_cell(label, value, color):
+                return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p></div>"
+
+            def _metric_cell_sub(label, value, color, sub):
+                return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p><p style='margin:0;font-size:0.75rem;color:#999'>{sub}</p></div>"
+
+            # Config de fechas (keys distintos: perc_desde, perc_hasta)
+            try:
+                _perc_desde_def = date.fromisoformat(_cfg_bal.get("perc_desde", ""))
+            except Exception:
+                _perc_desde_def = _hoy.replace(day=1)
+            try:
+                _perc_hasta_def = date.fromisoformat(_cfg_bal.get("perc_hasta", ""))
+            except Exception:
+                _perc_hasta_def = _hoy
+
+            with st.form("form_perc_fechas", border=False):
+                _pc1, _pc2 = st.columns(2)
+                with _pc1:
+                    perc_desde = st.date_input("Desde", value=_perc_desde_def, key="perc_desde_in", format="DD/MM/YYYY")
+                with _pc2:
+                    perc_hasta = st.date_input("Hasta", value=_perc_hasta_def, key="perc_hasta_in", format="DD/MM/YYYY")
+                _btn_perc = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+            if _btn_perc:
+                db.guardar_config({"perc_desde": str(perc_desde), "perc_hasta": str(perc_hasta)})
+
+            def _perc_en_rango(fecha_str):
+                try:
+                    f = pd.to_datetime(str(fecha_str or "")).date()
+                    return perc_desde <= f <= perc_hasta
+                except Exception:
+                    return False
+
+            # Cargar datos adicionales
+            _fechas_pago_wix_p = db.cargar_fechas_pago_wix()
+            _otros_ing_p = db.cargar_otros_ingresos()
+            _otros_egr_p = db.cargar_otros_egresos()
+
+            # ── COBROS DUX ────────────────────────────────────────────────
+            _cobros_rango = [c for c in cobros_bal if _perc_en_rango(c.get("fecha"))]
+            total_cobrado_dux = sum(float(c.get("monto") or 0) for c in _cobros_rango)
+
+            # ── COBROS WIX ────────────────────────────────────────────────
+            _wix_cobrados = []
+            for o in pedidos_wix_bal:
+                oid = str(o.get("id") or "")
+                fp = _fechas_pago_wix_p.get(oid)
+                if fp and _perc_en_rango(fp):
+                    _wix_cobrados.append(o)
+            total_cobrado_wix = sum(_wix_monto(o) for o in _wix_cobrados)
+
+            # ── OTROS INGRESOS ────────────────────────────────────────────
+            _oi_rango = [o for o in _otros_ing_p if _perc_en_rango(o.get("fecha_movimiento") or o.get("fecha"))]
+            total_otros_ing = sum(float(o.get("monto") or 0) for o in _oi_rango)
+
+            total_ingresos = total_cobrado_dux + total_cobrado_wix + total_otros_ing
+
+            # ── PAGOS PROVEEDORES ─────────────────────────────────────────
+            _pagos_rango = [p for p in pagos_bal if _perc_en_rango(p.get("fecha"))]
+            total_pagado_compras = sum(
+                sum(float(l.get("monto") or 0) for l in p.get("lineas_pago", []))
+                for p in _pagos_rango
+            )
+            if total_pagado_compras == 0:
+                total_pagado_compras = sum(float(p.get("monto") or p.get("total") or 0) for p in _pagos_rango)
+
+            # ── OTROS EGRESOS ─────────────────────────────────────────────
+            _oe_rango = [o for o in _otros_egr_p if _perc_en_rango(o.get("fecha_movimiento") or o.get("fecha"))]
+            _retiros_p = [o for o in _oe_rango if (o.get("items_egresos") or {}).get("nombre") == "RETIRO"]
+            _gastos_p  = [o for o in _oe_rango if (o.get("items_egresos") or {}).get("nombre") != "RETIRO"]
+            total_gastos = sum(float(o.get("monto") or 0) for o in _gastos_p)
+            total_retiros_p = sum(float(o.get("monto") or 0) for o in _retiros_p)
+
+            total_egresos = total_pagado_compras + total_gastos
+            resultado_op = total_ingresos - total_egresos
+            resultado_neto = resultado_op - total_retiros_p
+
+            # ── INGRESOS ────────────────────────────────────────────────────────────
+            st.divider()
+            st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos percibidos</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px'>
+    {_metric_cell("DUX", f"$ {_pesos(total_cobrado_dux)}", "#1565c0")}
+    {_metric_cell("WIX", f"$ {_pesos(total_cobrado_wix)}", "#1565c0")}
+    {_metric_cell("Otros", f"$ {_pesos(total_otros_ing)}", "#1565c0")}
+  </div>
+  <div style='text-align:center;margin-top:10px;font-size:1.1em;font-weight:600'>Total: $ {_pesos(total_ingresos)}</div>
+</div>""", unsafe_allow_html=True)
+
+            # Sección DUX cobros
+            if _cobros_rango:
+                st.markdown(f"#### DUX · {len(_cobros_rango)} cobros")
+                _c1, _c2 = st.columns(2)
+                _bal_metric(_c1, "Cobrado", f"$ {_pesos(total_cobrado_dux)}", "#1565c0")
+                _cob_by_cli = {}
+                for _c in sorted(_cobros_rango, key=lambda x: str(x.get("fecha") or "")):
+                    _cli = str(_c.get("nombre_cliente") or _c.get("cliente") or "—")
+                    _cob_by_cli.setdefault(_cli, []).append(_c)
+                for _cli, _cobs in sorted(_cob_by_cli.items()):
+                    _tot = sum(float(c.get("monto") or 0) for c in _cobs)
+                    with st.expander(f"{_cli} ({len(_cobs)}) — $ {_pesos(_tot)}"):
+                        _rows = [{"Fecha": _fmt_fecha(c.get("fecha")), "Comprobante": c.get("nro_comprobante") or "—", "Monto": float(c.get("monto") or 0)} for c in _cobs]
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+
+            # Sección WIX cobros
+            if _wix_cobrados:
+                st.markdown(f"#### WIX · {len(_wix_cobrados)} pedidos")
+                _w1, _w2 = st.columns(2)
+                _bal_metric(_w1, "Cobrado", f"$ {_pesos(total_cobrado_wix)}", "#1565c0")
+                _wix_by_cli = {}
+                for _p in _wix_cobrados:
+                    _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
+                    _k = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
+                    _wix_by_cli.setdefault(_k, []).append(_p)
+                for _cli, _pitems in sorted(_wix_by_cli.items()):
+                    _ctot = sum(_wix_monto(_p) for _p in _pitems)
+                    with st.expander(f"{_cli} ({len(_pitems)}) — $ {_pesos(_ctot)}"):
+                        _rows = [{
+                            "Fecha":    _fmt_fecha(_fechas_pago_wix_p.get(str(_p.get("id") or "")) or _p.get("createdDate")),
+                            "Pedido #": _p.get("number") or _p.get("id") or "—",
+                            "Total":    _wix_monto(_p),
+                        } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Total": st.column_config.NumberColumn("Total ($)", format="$ %,.0f")})
+
+            # Sección Otros ingresos
+            if _oi_rango:
+                st.markdown(f"#### Otros ingresos · {len(_oi_rango)} registros")
+                _oi_c1, _oi_c2 = st.columns(2)
+                _bal_metric(_oi_c1, "Total", f"$ {_pesos(total_otros_ing)}", "#1565c0")
+                _oi_by_est = {}
+                for _o in _oi_rango:
+                    _ek = _o.get("estado") or "pendiente"
+                    _oi_by_est.setdefault(_ek, []).append(_o)
+                for _ek, _eitems in sorted(_oi_by_est.items()):
+                    _etot = sum(float(o.get("monto") or 0) for o in _eitems)
+                    with st.expander(f"{_ek.capitalize()} ({len(_eitems)}) — $ {_pesos(_etot)}"):
+                        _oi_by_rub = {}
+                        for _o in _eitems:
+                            _rk = (_o.get("rubros_ingresos") or {}).get("nombre") or "—"
+                            _oi_by_rub.setdefault(_rk, []).append(_o)
+                        for _rk, _ritems in sorted(_oi_by_rub.items()):
+                            _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
+                            with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
+                                _oi_by_sub = {}
+                                for _o in _ritems:
+                                    _sk = (_o.get("subrubros_ingresos") or {}).get("nombre") or "—"
+                                    _oi_by_sub.setdefault(_sk, []).append(_o)
+                                for _sk, _sitems in sorted(_oi_by_sub.items()):
+                                    _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                                    with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                        _rows = [{
+                                            "F. ingreso":  _fmt_fecha(o.get("fecha")),
+                                            "F. cobro":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
+                                            "Monto":       float(o.get("monto") or 0),
+                                            "Descripción": o.get("descripcion") or "",
+                                        } for o in sorted(_sitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
+                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+
+            # ── EGRESOS ─────────────────────────────────────────────────────────────
+            st.divider()
+            st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Egresos percibidos</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+    {_metric_cell("Compras", f"$ {_pesos(total_pagado_compras)}", "#c62828")}
+    {_metric_cell("Gastos", f"$ {_pesos(total_gastos)}", "#c62828")}
+  </div>
+  <div style='text-align:center;margin-top:10px;font-size:1.1em;font-weight:600'>Total: $ {_pesos(total_egresos)}</div>
+</div>""", unsafe_allow_html=True)
+
+            # Compras (pagos proveedores)
+            if _pagos_rango:
+                st.markdown(f"#### Compras · {len(_pagos_rango)} pagos")
+                _ep1, _ep2 = st.columns(2)
+                _bal_metric(_ep1, "Pagado", f"$ {_pesos(total_pagado_compras)}", "#c62828")
+                _pag_by_prov = {}
+                for _p in sorted(_pagos_rango, key=lambda x: str(x.get("fecha") or "")):
+                    _pk = str(_p.get("proveedor") or "—")
+                    _pag_by_prov.setdefault(_pk, []).append(_p)
+                for _prov, _pitems in sorted(_pag_by_prov.items()):
+                    _prov_tot = sum(float(p.get("monto") or 0) for p in _pitems)
+                    with st.expander(f"{_prov} ({len(_pitems)}) — $ {_pesos(_prov_tot)}"):
+                        _rows = [{"Fecha": _fmt_fecha(p.get("fecha")), "Monto": float(p.get("monto") or 0)} for p in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+
+            # Gastos (otros egresos sin RETIRO)
+            if _gastos_p:
+                st.markdown(f"#### Gastos · {len(_gastos_p)} registros")
+                _eg1, _eg2 = st.columns(2)
+                _bal_metric(_eg1, "Total", f"$ {_pesos(total_gastos)}", "#c62828")
+                _oe_by_rub = {}
+                for _o in _gastos_p:
+                    _rk = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
+                    _oe_by_rub.setdefault(_rk, []).append(_o)
+                for _rk, _ritems in sorted(_oe_by_rub.items()):
+                    _rtot = sum(float(o.get("monto") or 0) for o in _ritems)
+                    with st.expander(f"{_rk} ({len(_ritems)}) — $ {_pesos(_rtot)}"):
+                        _oe_by_sub = {}
+                        for _o in _ritems:
+                            _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                            _oe_by_sub.setdefault(_sk, []).append(_o)
+                        for _sk, _sitems in sorted(_oe_by_sub.items()):
+                            _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                            with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                                _oe_by_item = {}
+                                for _o in _sitems:
+                                    _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
+                                    _oe_by_item.setdefault(_ik, []).append(_o)
+                                for _ik, _iitems in sorted(_oe_by_item.items()):
+                                    _itot = sum(float(o.get("monto") or 0) for o in _iitems)
+                                    with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
+                                        _rows = [{
+                                            "F. egreso":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
+                                            "Monto":       float(o.get("monto") or 0),
+                                            "Descripción": o.get("descripcion") or "",
+                                        } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
+                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+
+            # ── RESULTADO OPERATIVO ──────────────────────────────────────────────────
+            st.divider()
+            res_color = "#2e7d32" if resultado_op >= 0 else "#c62828"
+            res_signo = "+" if resultado_op >= 0 else ""
+            st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
+  <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
+  <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
+</div>""", unsafe_allow_html=True)
+
+            # Retiros
+            if _retiros_p:
+                st.divider()
+                st.markdown(f"#### Retiros · {len(_retiros_p)} registros")
+                _ret_c1, _ret_c2 = st.columns(2)
+                _bal_metric(_ret_c1, "Total", f"$ {_pesos(total_retiros_p)}", "#c62828")
+                _ret_by_sub = {}
+                for _o in _retiros_p:
+                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                    _ret_by_sub.setdefault(_sk, []).append(_o)
+                for _sk, _sitems in sorted(_ret_by_sub.items()):
+                    _stot = sum(float(o.get("monto") or 0) for o in _sitems)
+                    with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
+                        _ret_by_item = {}
+                        for _o in _sitems:
+                            _ik = (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—"
+                            _ret_by_item.setdefault(_ik, []).append(_o)
+                        for _ik, _iitems in sorted(_ret_by_item.items()):
+                            _itot = sum(float(o.get("monto") or 0) for o in _iitems)
+                            with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
+                                _rows = [{
+                                    "F. retiro":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
+                                    "Monto":       float(o.get("monto") or 0),
+                                    "Descripción": o.get("descripcion") or "",
+                                } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
+                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+
+                # Resultado neto
+                _neto_color = "#2e7d32" if resultado_neto >= 0 else "#c62828"
+                _neto_signo = "+" if resultado_neto >= 0 else ""
+                st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+  <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
+  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+    {_metric_cell_sub("Operativo", f"{res_signo}$ {_pesos(abs(resultado_op))}", res_color, "Ingresos − Egresos")}
+    {_metric_cell_sub("Neto", f"{_neto_signo}$ {_pesos(abs(resultado_neto))}", _neto_color, "Operativo − Retiros")}
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        _percibido_frag()
 if _stab_movimientos:
     with _stab_movimientos:
         _render_movimiento_caja(cobros_bal, pagos_bal)
