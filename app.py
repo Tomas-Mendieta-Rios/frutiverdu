@@ -4373,559 +4373,565 @@ if tab_probar:
 
 with tab_comprar:
 
+    @st.fragment
+    def _comprar_frag():
 
-    # Cargar fechas guardadas (si existen). Fallback solo la primera vez.
-    cfg_comprar = db.cargar_config()
-    fechas_stock_disp = db.fechas_stock()
-    dias_est_disp = db.dias_semana_con_estimado()
 
-    # Fechas disponibles con pedidos asignados (union DUX + Wix)
-    _sels_dux = db.cargar_selecciones("dux")
-    _sels_wix = db.cargar_selecciones("wix")
-    fechas_entrega_disp = sorted(
-        set(_sels_dux.values()) | set(_sels_wix.values()),
-        reverse=False,
-    )
+        # Cargar fechas guardadas (si existen). Fallback solo la primera vez.
+        cfg_comprar = db.cargar_config()
+        fechas_stock_disp = db.fechas_stock()
+        dias_est_disp = db.dias_semana_con_estimado()
 
-    def_fent_list = []
-    if cfg_comprar.get("comprar_fechas_entrega"):
-        try:
-            guardadas = cfg_comprar["comprar_fechas_entrega"].split(",")
-            def_fent_list = [f.strip() for f in guardadas if f.strip() in fechas_entrega_disp]
-        except Exception:
-            pass
-    if not def_fent_list:
-        manana = str(date.today() + timedelta(days=1))
-        if manana in fechas_entrega_disp:
-            def_fent_list = [manana]
+        # Fechas disponibles con pedidos asignados (union DUX + Wix)
+        _sels_dux = db.cargar_selecciones("dux")
+        _sels_wix = db.cargar_selecciones("wix")
+        fechas_entrega_disp = sorted(
+            set(_sels_dux.values()) | set(_sels_wix.values()),
+            reverse=False,
+        )
 
-    def_fstk = (
-        pd.to_datetime(fechas_stock_disp[0]).date() if fechas_stock_disp else date.today()
-    )
-    if cfg_comprar.get("comprar_fecha_stock"):
-        try:
-            def_fstk = pd.to_datetime(cfg_comprar["comprar_fecha_stock"]).date()
-        except Exception:
-            pass
+        def_fent_list = []
+        if cfg_comprar.get("comprar_fechas_entrega"):
+            try:
+                guardadas = cfg_comprar["comprar_fechas_entrega"].split(",")
+                def_fent_list = [f.strip() for f in guardadas if f.strip() in fechas_entrega_disp]
+            except Exception:
+                pass
+        if not def_fent_list:
+            manana = str(date.today() + timedelta(days=1))
+            if manana in fechas_entrega_disp:
+                def_fent_list = [manana]
 
-    # Default dia estimado
-    def_dia_est = DIAS_SEMANA[date.today().weekday()]
-    if cfg_comprar.get("comprar_dia_estimado") in DIAS_SEMANA:
-        def_dia_est = cfg_comprar["comprar_dia_estimado"]
+        def_fstk = (
+            pd.to_datetime(fechas_stock_disp[0]).date() if fechas_stock_disp else date.today()
+        )
+        if cfg_comprar.get("comprar_fecha_stock"):
+            try:
+                def_fstk = pd.to_datetime(cfg_comprar["comprar_fecha_stock"]).date()
+            except Exception:
+                pass
 
-    ts_comprar_ph = st.empty()
+        # Default dia estimado
+        def_dia_est = DIAS_SEMANA[date.today().weekday()]
+        if cfg_comprar.get("comprar_dia_estimado") in DIAS_SEMANA:
+            def_dia_est = cfg_comprar["comprar_dia_estimado"]
 
-    with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
-        col_fc1, col_fc2, col_fc3 = st.columns([1.5, 1.2, 1.2])
-        with col_fc1:
-            fechas_entrega = st.multiselect(
-                "📦 Fechas de entrega",
-                options=fechas_entrega_disp,
-                default=def_fent_list,
-                key="comprar_fechas_entrega",
-                format_func=_fmt_fecha,
-                help="Elegí una o más fechas. Los pedidos de todas ellas se suman.",
+        ts_comprar_ph = st.empty()
+
+        with st.form("form_fechas_comprar", clear_on_submit=False, border=False):
+            col_fc1, col_fc2, col_fc3 = st.columns([1.5, 1.2, 1.2])
+            with col_fc1:
+                fechas_entrega = st.multiselect(
+                    "📦 Fechas de entrega",
+                    options=fechas_entrega_disp,
+                    default=def_fent_list,
+                    key="comprar_fechas_entrega",
+                    format_func=_fmt_fecha,
+                    help="Elegí una o más fechas. Los pedidos de todas ellas se suman.",
+                )
+            with col_fc2:
+                fecha_stock_sel = st.date_input(
+                    "📦 Fecha de stock",
+                    value=def_fstk,
+                    key="comprar_fecha_stock",
+                    format="DD/MM/YYYY",
+                )
+            with col_fc3:
+                dia_estimado_sel = st.selectbox(
+                    "📈 Día de estimado",
+                    options=DIAS_SEMANA,
+                    format_func=lambda d: DIAS_DISPLAY[d],
+                    index=DIAS_SEMANA.index(def_dia_est),
+                    key="comprar_dia_estimado",
+                )
+            boton_actualizar = st.form_submit_button(
+                "🔄 Calcular",
+                type="primary",
+                use_container_width=True,
             )
-        with col_fc2:
-            fecha_stock_sel = st.date_input(
-                "📦 Fecha de stock",
-                value=def_fstk,
-                key="comprar_fecha_stock",
-                format="DD/MM/YYYY",
+
+        if boton_actualizar:
+            try:
+                ts_actualizar = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                db.guardar_config({
+                    "comprar_fechas_entrega": ",".join(fechas_entrega) if fechas_entrega else "",
+                    "comprar_fecha_stock": str(fecha_stock_sel),
+                    "comprar_dia_estimado": str(dia_estimado_sel),
+                    "comprar_ultima_actualizacion": ts_actualizar,
+                })
+                cfg_comprar["comprar_ultima_actualizacion"] = ts_actualizar
+            except Exception:
+                pass
+            st.cache_data.clear()
+
+        ts_actualizar_ultimo = cfg_comprar.get("comprar_ultima_actualizacion")
+        ts_comprar_ph.caption(
+            f"🕒 Última actualización: **{_fmt_ts(ts_actualizar_ultimo)}**"
+        )
+
+        if str(fecha_stock_sel) not in (fechas_stock_disp or []):
+            st.warning(
+                f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
+                f"Se va a usar **0 para todos los productos**."
             )
-        with col_fc3:
-            dia_estimado_sel = st.selectbox(
-                "📈 Día de estimado",
-                options=DIAS_SEMANA,
-                format_func=lambda d: DIAS_DISPLAY[d],
-                index=DIAS_SEMANA.index(def_dia_est),
-                key="comprar_dia_estimado",
+        if dia_estimado_sel not in (dias_est_disp or []):
+            st.warning(
+                f"⚠️ No hay estimado cargado para {DIAS_DISPLAY[dia_estimado_sel]}. "
+                f"Se va a usar **0 para todos los productos**."
             )
-        boton_actualizar = st.form_submit_button(
-            "🔄 Calcular",
-            type="primary",
-            use_container_width=True,
-        )
 
-    if boton_actualizar:
-        try:
-            ts_actualizar = pd.Timestamp.now(tz="America/Argentina/Buenos_Aires").strftime(
-                "%Y-%m-%d %H:%M:%S"
+        pedidos_actual = cargar_pedidos_dux_aggregated(
+            productos,
+            dia_estimado=dia_estimado_sel,
+            fecha_compra=fechas_entrega if fechas_entrega else None,
+        )
+        stock_actual = db.cargar_stock(fecha=fecha_stock_sel)
+        # Para mantener compatibilidad con el resto del código de la pestaña
+        fecha_compra = fechas_entrega
+
+        # Helper de fechas (usado en labels de varios expanders).
+        def _fmt_fechas_label(fechas):
+            if not fechas:
+                return ""
+            items = sorted(set(str(f) for f in (
+                fechas if isinstance(fechas, (list, tuple, set)) else [fechas]
+            )))
+            if len(items) == 1:
+                return f"({items[0]})"
+            return f"({items[0]} a {items[-1]})"
+
+        _lab_ped = _fmt_fechas_label(fechas_entrega)
+
+        wix_sin_mapear = st.session_state.get("_wix_sin_mapear", {})
+        if wix_sin_mapear:
+            lineas = "\n".join(
+                f"- **{v['nombre']}** × {v['cantidad']:g}"
+                for v in wix_sin_mapear.values()
             )
-            db.guardar_config({
-                "comprar_fechas_entrega": ",".join(fechas_entrega) if fechas_entrega else "",
-                "comprar_fecha_stock": str(fecha_stock_sel),
-                "comprar_dia_estimado": str(dia_estimado_sel),
-                "comprar_ultima_actualizacion": ts_actualizar,
-            })
-            cfg_comprar["comprar_ultima_actualizacion"] = ts_actualizar
-        except Exception:
-            pass
-        st.cache_data.clear()
+            st.warning(
+                "⚠️ Hay pedidos Wix con productos **sin mapear** — no se están sumando al total:\n\n"
+                f"{lineas}\n\n"
+                "Andá a 🔗 Mapeo Wix↔DUX para asignarlos."
+            )
 
-    ts_actualizar_ultimo = cfg_comprar.get("comprar_ultima_actualizacion")
-    ts_comprar_ph.caption(
-        f"🕒 Última actualización: **{_fmt_ts(ts_actualizar_ultimo)}**"
-    )
+        mixes_sin_config = st.session_state.get("_mixes_sin_config", [])
+        if mixes_sin_config:
+            lineas_mix = "\n".join(f"- **{m}**" for m in mixes_sin_config)
+            st.warning(
+                "⚠️ Hay pedidos de productos **MIX sin configurar** — entran al total como MIX en vez de desglozarse en componentes:\n\n"
+                f"{lineas_mix}\n\n"
+                "Andá a ⚙️ Mixes DUX para configurar sus componentes."
+            )
 
-    if str(fecha_stock_sel) not in (fechas_stock_disp or []):
-        st.warning(
-            f"⚠️ No hay stock cargado para el {fecha_stock_sel}. "
-            f"Se va a usar **0 para todos los productos**."
-        )
-    if dia_estimado_sel not in (dias_est_disp or []):
-        st.warning(
-            f"⚠️ No hay estimado cargado para {DIAS_DISPLAY[dia_estimado_sel]}. "
-            f"Se va a usar **0 para todos los productos**."
-        )
-
-    pedidos_actual = cargar_pedidos_dux_aggregated(
-        productos,
-        dia_estimado=dia_estimado_sel,
-        fecha_compra=fechas_entrega if fechas_entrega else None,
-    )
-    stock_actual = db.cargar_stock(fecha=fecha_stock_sel)
-    # Para mantener compatibilidad con el resto del código de la pestaña
-    fecha_compra = fechas_entrega
-
-    # Helper de fechas (usado en labels de varios expanders).
-    def _fmt_fechas_label(fechas):
-        if not fechas:
-            return ""
-        items = sorted(set(str(f) for f in (
-            fechas if isinstance(fechas, (list, tuple, set)) else [fechas]
-        )))
-        if len(items) == 1:
-            return f"({items[0]})"
-        return f"({items[0]} a {items[-1]})"
-
-    _lab_ped = _fmt_fechas_label(fechas_entrega)
-
-    wix_sin_mapear = st.session_state.get("_wix_sin_mapear", {})
-    if wix_sin_mapear:
-        lineas = "\n".join(
-            f"- **{v['nombre']}** × {v['cantidad']:g}"
-            for v in wix_sin_mapear.values()
-        )
-        st.warning(
-            "⚠️ Hay pedidos Wix con productos **sin mapear** — no se están sumando al total:\n\n"
-            f"{lineas}\n\n"
-            "Andá a 🔗 Mapeo Wix↔DUX para asignarlos."
-        )
-
-    mixes_sin_config = st.session_state.get("_mixes_sin_config", [])
-    if mixes_sin_config:
-        lineas_mix = "\n".join(f"- **{m}**" for m in mixes_sin_config)
-        st.warning(
-            "⚠️ Hay pedidos de productos **MIX sin configurar** — entran al total como MIX en vez de desglozarse en componentes:\n\n"
-            f"{lineas_mix}\n\n"
-            "Andá a ⚙️ Mixes DUX para configurar sus componentes."
-        )
-
-    # Expander con los pedidos que estan siendo contados, para poder verificar
-    _dux_contados = st.session_state.get("_dux_contados", [])
-    _wix_contados = st.session_state.get("_wix_contados", [])
-    _total_pedidos = len(_dux_contados) + len(_wix_contados)
-    with st.expander(
-        f"📋 Ver pedidos que se están contando {_lab_ped} ({_total_pedidos})",
-        expanded=False,
-    ):
-        if not _total_pedidos:
-            st.caption("No hay pedidos asignados a esta fecha de entrega.")
-        else:
-            if _dux_contados:
-                st.markdown(f"**DUX ({len(_dux_contados)})**")
-                for o in _dux_contados:
-                    nro = _dux_get_first(
-                        o, ["nro_pedido", "nroPedido", "numero", "id"]
-                    )
-                    cliente = extraer_cliente_dux(o)
-                    items = extraer_items_dux(o)
-                    with st.expander(
-                        f"#{nro or '-'} · {cliente} · {len(items)} ítems",
-                        expanded=False,
-                    ):
-                        if items:
-                            filas_it = [extraer_item_dux(it) for it in items]
-                            st.dataframe(
-                                pd.DataFrame(filas_it)[["producto", "cantidad"]].rename(
-                                    columns={"producto": "Prod", "cantidad": "Cant"}
-                                ),
-                                use_container_width=False,
-                                hide_index=True,
-                            )
-                        else:
-                            st.caption("Sin items en este pedido.")
-
-            if _wix_contados:
-                st.markdown(f"**Wix ({len(_wix_contados)})**")
-                for o in _wix_contados:
-                    nro = o.get("number") or o.get("id", "")
-                    bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
-                    nombre_w = (
-                        f"{bi.get('firstName', '') or ''} {bi.get('lastName', '') or ''}".strip()
-                        or "(sin cliente)"
-                    )
-                    items_w = o.get("lineItems") or []
-                    with st.expander(
-                        f"#{nro} · {nombre_w} · {len(items_w)} ítems",
-                        expanded=False,
-                    ):
-                        if items_w:
-                            filas_iw = []
-                            for li in items_w:
-                                nombre_prod = (
-                                    (li.get("productName") or {}).get("translated")
-                                    or (li.get("productName") or {}).get("original")
-                                    or ""
+        # Expander con los pedidos que estan siendo contados, para poder verificar
+        _dux_contados = st.session_state.get("_dux_contados", [])
+        _wix_contados = st.session_state.get("_wix_contados", [])
+        _total_pedidos = len(_dux_contados) + len(_wix_contados)
+        with st.expander(
+            f"📋 Ver pedidos que se están contando {_lab_ped} ({_total_pedidos})",
+            expanded=False,
+        ):
+            if not _total_pedidos:
+                st.caption("No hay pedidos asignados a esta fecha de entrega.")
+            else:
+                if _dux_contados:
+                    st.markdown(f"**DUX ({len(_dux_contados)})**")
+                    for o in _dux_contados:
+                        nro = _dux_get_first(
+                            o, ["nro_pedido", "nroPedido", "numero", "id"]
+                        )
+                        cliente = extraer_cliente_dux(o)
+                        items = extraer_items_dux(o)
+                        with st.expander(
+                            f"#{nro or '-'} · {cliente} · {len(items)} ítems",
+                            expanded=False,
+                        ):
+                            if items:
+                                filas_it = [extraer_item_dux(it) for it in items]
+                                st.dataframe(
+                                    pd.DataFrame(filas_it)[["producto", "cantidad"]].rename(
+                                        columns={"producto": "Prod", "cantidad": "Cant"}
+                                    ),
+                                    use_container_width=False,
+                                    hide_index=True,
                                 )
-                                filas_iw.append({
-                                    "Prod": nombre_prod,
-                                    "Cant": li.get("quantity") or 0,
-                                })
-                            st.dataframe(
-                                pd.DataFrame(filas_iw),
-                                use_container_width=False,
-                                hide_index=True,
-                            )
-                        else:
-                            st.caption("Sin items en este pedido.")
+                            else:
+                                st.caption("Sin items en este pedido.")
 
-    # Expander para ver el stock crudo de la fecha elegida
-    _stk_view = stock_actual[stock_actual["cantidad"].astype(float) > 0] if (
-        stock_actual is not None and not stock_actual.empty
-    ) else pd.DataFrame()
-    with st.expander(
-        f"📦 Ver stock cargado del {fecha_stock_sel} ({len(_stk_view)} con cantidad > 0)",
-        expanded=False,
-    ):
-        if _stk_view.empty:
-            st.caption("Sin stock cargado para esta fecha.")
-        else:
-            st.dataframe(
-                _stk_view[["producto", "cantidad"]]
-                .assign(
-                    _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
-                    _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
-                )
-                .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
-                .rename(columns={"producto": "Producto", "cantidad": "Cant"}),
-                use_container_width=False,
-                hide_index=True,
-            )
+                if _wix_contados:
+                    st.markdown(f"**Wix ({len(_wix_contados)})**")
+                    for o in _wix_contados:
+                        nro = o.get("number") or o.get("id", "")
+                        bi = (o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+                        nombre_w = (
+                            f"{bi.get('firstName', '') or ''} {bi.get('lastName', '') or ''}".strip()
+                            or "(sin cliente)"
+                        )
+                        items_w = o.get("lineItems") or []
+                        with st.expander(
+                            f"#{nro} · {nombre_w} · {len(items_w)} ítems",
+                            expanded=False,
+                        ):
+                            if items_w:
+                                filas_iw = []
+                                for li in items_w:
+                                    nombre_prod = (
+                                        (li.get("productName") or {}).get("translated")
+                                        or (li.get("productName") or {}).get("original")
+                                        or ""
+                                    )
+                                    filas_iw.append({
+                                        "Prod": nombre_prod,
+                                        "Cant": li.get("quantity") or 0,
+                                    })
+                                st.dataframe(
+                                    pd.DataFrame(filas_iw),
+                                    use_container_width=False,
+                                    hide_index=True,
+                                )
+                            else:
+                                st.caption("Sin items en este pedido.")
 
-    # Expander para ver el estimado del dia elegido
-    _est_view = db.cargar_estimado_semanal(dia=dia_estimado_sel)
-    if not _est_view.empty:
-        _est_view = _est_view[_est_view["estimado"].astype(float) > 0]
-    with st.expander(
-        f"📈 Ver estimado de {DIAS_DISPLAY.get(dia_estimado_sel, dia_estimado_sel)} ({len(_est_view)} con estimado > 0)",
-        expanded=False,
-    ):
-        if _est_view.empty:
-            st.caption("Sin estimado cargado para este día.")
-        else:
-            st.dataframe(
-                _est_view[["producto", "estimado"]]
-                .assign(
-                    _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
-                    _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
-                )
-                .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
-                .rename(columns={"producto": "Producto", "estimado": "Cant"}),
-                use_container_width=False,
-                hide_index=True,
-            )
-
-    # Expander resumen crudo por codigo (sin conversiones): pedido + estimado + stock
-    _raw = pedidos_actual.copy()
-    _raw["codigo"] = _raw["codigo"].astype(str)
-    if stock_actual is not None and not stock_actual.empty:
-        _stk_map = dict(
-            zip(stock_actual["codigo"].astype(str), stock_actual["cantidad"].astype(float))
-        )
-        _raw["stock"] = _raw["codigo"].map(_stk_map).fillna(0.0).astype(float)
-    else:
-        _raw["stock"] = 0.0
-    _raw_view = _raw[
-        (_raw["cantidad"].astype(float) > 0)
-        | (_raw["estimado"].astype(float) > 0)
-        | (_raw["stock"].astype(float) > 0)
-    ].copy()
-    with st.expander(
-        f"🔍 Ver total a comprar **SIN** desglozar ({len(_raw_view)})",
-        expanded=False,
-    ):
-        # Aclaracion compacta sobre como se decide el color del producto base
-        # a partir de sus variantes (regla de prioridad).
-        st.caption(
-            "ℹ️ El color del producto sigue la **peor variante**: "
-            "si una está en :red[**rojo**] → todo rojo. "
-            "Sino, si alguna está en :gray[**gris**] → gris. "
-            "Solo si todas están en :green[**verde**] → verde."
-        )
-
-        if _raw_view.empty:
-            st.caption("Sin datos.")
-        else:
-            _raw_view = _raw_view.rename(columns={"cantidad": "pedido"}).sort_values("producto")
-            _raw_view["a_comprar"] = (
-                _raw_view["pedido"].astype(float)
-                + _raw_view["estimado"].astype(float)
-                - _raw_view["stock"].astype(float)
-            )
-
-            def _color_ac(v):
-                if v > 0.001:
-                    return "color: #d11; font-weight: bold;"
-                if v < -0.001:
-                    return "color: #1a8a1a; font-weight: bold;"
-                return "color: #666;"
-
-            # Partir producto en base / variante (mismo patron que Stock tab).
-            def _split_producto_raw(p):
-                s = str(p)
-                if " - " in s:
-                    base, var = s.rsplit(" - ", 1)
-                    return base.strip(), var.strip()
-                return s, ""
-
-            _split_raw = _raw_view["producto"].apply(_split_producto_raw)
-            _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
-            _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
-
-            # Decidir color del expander segun prioridad rojo > gris > verde.
-            # Mismo criterio que _color_ac:
-            #   a_comprar > 0.001  -> rojo  (falta comprar)
-            #   a_comprar < -0.001 -> verde (sobra)
-            #   else               -> gris  (balanceado)
-            def _color_base(df):
-                vals = df["a_comprar"].astype(float)
-                if (vals > 0.001).any():
-                    return "red"
-                if ((vals >= -0.001) & (vals <= 0.001)).any():
-                    return "gray"
-                return "green"
-
-            for base_name, df_base in _raw_view.groupby("Base", sort=True):
-                n_var = len(df_base)
-                _label_txt = (
-                    f"📦 {base_name} "
-                    f"({n_var} variante{'s' if n_var != 1 else ''})"
-                )
-                _color = _color_base(df_base)
-                _label = f":{_color}[**{_label_txt}**]"
-                with st.expander(_label, expanded=False):
-                    _disp = (
-                        df_base[[
-                            "Variante",
-                            "stock", "pedido", "estimado", "a_comprar",
-                        ]]
-                        .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
-                        .sort_values("_prio")
-                        .drop(columns="_prio")
-                        .rename(columns={
-                            "Variante": "Var",
-                            "stock": "S",
-                            "pedido": "P",
-                            "estimado": "E",
-                            "a_comprar": "T",
-                        })
+        # Expander para ver el stock crudo de la fecha elegida
+        _stk_view = stock_actual[stock_actual["cantidad"].astype(float) > 0] if (
+            stock_actual is not None and not stock_actual.empty
+        ) else pd.DataFrame()
+        with st.expander(
+            f"📦 Ver stock cargado del {fecha_stock_sel} ({len(_stk_view)} con cantidad > 0)",
+            expanded=False,
+        ):
+            if _stk_view.empty:
+                st.caption("Sin stock cargado para esta fecha.")
+            else:
+                st.dataframe(
+                    _stk_view[["producto", "cantidad"]]
+                    .assign(
+                        _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
+                        _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
                     )
-                    styled = (
-                        _disp.style
-                        .map(_color_ac, subset=["T"])
-                        .format({
-                            "P": "{:.2f}",
-                            "S": "{:.2f}",
-                            "E": "{:.2f}",
-                            "T": lambda v: f"{abs(v):.2f}",
-                        })
-                    )
-                    st.dataframe(
-                        styled,
-                        use_container_width=False,
-                        hide_index=True,
-                    )
+                    .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
+                    .rename(columns={"producto": "Producto", "cantidad": "Cant"}),
+                    use_container_width=False,
+                    hide_index=True,
+                )
 
+        # Expander para ver el estimado del dia elegido
+        _est_view = db.cargar_estimado_semanal(dia=dia_estimado_sel)
+        if not _est_view.empty:
+            _est_view = _est_view[_est_view["estimado"].astype(float) > 0]
+        with st.expander(
+            f"📈 Ver estimado de {DIAS_DISPLAY.get(dia_estimado_sel, dia_estimado_sel)} ({len(_est_view)} con estimado > 0)",
+            expanded=False,
+        ):
+            if _est_view.empty:
+                st.caption("Sin estimado cargado para este día.")
+            else:
+                st.dataframe(
+                    _est_view[["producto", "estimado"]]
+                    .assign(
+                        _base=lambda d: d["producto"].str.rsplit(" - ", n=1).str[0],
+                        _prio=lambda d: d["producto"].str.rsplit(" - ", n=1).str[-1].map(_prio_unidad),
+                    )
+                    .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
+                    .rename(columns={"producto": "Producto", "estimado": "Cant"}),
+                    use_container_width=False,
+                    hide_index=True,
+                )
+
+        # Expander resumen crudo por codigo (sin conversiones): pedido + estimado + stock
+        _raw = pedidos_actual.copy()
+        _raw["codigo"] = _raw["codigo"].astype(str)
+        if stock_actual is not None and not stock_actual.empty:
+            _stk_map = dict(
+                zip(stock_actual["codigo"].astype(str), stock_actual["cantidad"].astype(float))
+            )
+            _raw["stock"] = _raw["codigo"].map(_stk_map).fillna(0.0).astype(float)
+        else:
+            _raw["stock"] = 0.0
+        _raw_view = _raw[
+            (_raw["cantidad"].astype(float) > 0)
+            | (_raw["estimado"].astype(float) > 0)
+            | (_raw["stock"].astype(float) > 0)
+        ].copy()
+        with st.expander(
+            f"🔍 Ver total a comprar **SIN** desglozar ({len(_raw_view)})",
+            expanded=False,
+        ):
+            # Aclaracion compacta sobre como se decide el color del producto base
+            # a partir de sus variantes (regla de prioridad).
             st.caption(
-                "**Total** = `pedido + estimado − stock` (por código, sin conversiones)."
+                "ℹ️ El color del producto sigue la **peor variante**: "
+                "si una está en :red[**rojo**] → todo rojo. "
+                "Sino, si alguna está en :gray[**gris**] → gris. "
+                "Solo si todas están en :green[**verde**] → verde."
             )
 
-    # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
+            if _raw_view.empty:
+                st.caption("Sin datos.")
+            else:
+                _raw_view = _raw_view.rename(columns={"cantidad": "pedido"}).sort_values("producto")
+                _raw_view["a_comprar"] = (
+                    _raw_view["pedido"].astype(float)
+                    + _raw_view["estimado"].astype(float)
+                    - _raw_view["stock"].astype(float)
+                )
 
-    grafo = construir_grafo_conversion(compuestos)
+                def _color_ac(v):
+                    if v > 0.001:
+                        return "color: #d11; font-weight: bold;"
+                    if v < -0.001:
+                        return "color: #1a8a1a; font-weight: bold;"
+                    return "color: #666;"
 
-    prod_temp = productos.copy()
-    partes_pr = prod_temp["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
-    prod_temp["base"] = partes_pr[0].str.strip()
-    prod_temp["unidad"] = (
-        partes_pr[1].fillna("").str.strip()
-        if 1 in partes_pr.columns
-        else ""
-    )
+                # Partir producto en base / variante (mismo patron que Stock tab).
+                def _split_producto_raw(p):
+                    s = str(p)
+                    if " - " in s:
+                        base, var = s.rsplit(" - ", 1)
+                        return base.strip(), var.strip()
+                    return s, ""
 
-    ped = pedidos_actual.dropna(subset=["producto"]).copy()
-    ped["cantidad"] = ped["cantidad"].fillna(0).astype(float)
-    if "estimado" not in ped.columns:
-        ped["estimado"] = 0.0
-    ped["estimado"] = ped["estimado"].fillna(0).astype(float)
-    partes_ped = ped["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
-    ped["base"] = partes_ped[0].str.strip() if not partes_ped.empty else ""
+                _split_raw = _raw_view["producto"].apply(_split_producto_raw)
+                _raw_view["Base"] = _split_raw.apply(lambda t: t[0])
+                _raw_view["Variante"] = _split_raw.apply(lambda t: t[1])
 
-    if stock_actual is not None and not stock_actual.empty:
-        stk = stock_actual.dropna(subset=["producto"]).copy()
-        stk["cantidad"] = stk["cantidad"].fillna(0)
-        partes_stk = stk["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
-        stk["base"] = partes_stk[0].str.strip() if not partes_stk.empty else ""
-    else:
-        stk = pd.DataFrame(
-            columns=["codigo", "producto", "unidad_medida", "cantidad", "base"]
+                # Decidir color del expander segun prioridad rojo > gris > verde.
+                # Mismo criterio que _color_ac:
+                #   a_comprar > 0.001  -> rojo  (falta comprar)
+                #   a_comprar < -0.001 -> verde (sobra)
+                #   else               -> gris  (balanceado)
+                def _color_base(df):
+                    vals = df["a_comprar"].astype(float)
+                    if (vals > 0.001).any():
+                        return "red"
+                    if ((vals >= -0.001) & (vals <= 0.001)).any():
+                        return "gray"
+                    return "green"
+
+                for base_name, df_base in _raw_view.groupby("Base", sort=True):
+                    n_var = len(df_base)
+                    _label_txt = (
+                        f"📦 {base_name} "
+                        f"({n_var} variante{'s' if n_var != 1 else ''})"
+                    )
+                    _color = _color_base(df_base)
+                    _label = f":{_color}[**{_label_txt}**]"
+                    with st.expander(_label, expanded=False):
+                        _disp = (
+                            df_base[[
+                                "Variante",
+                                "stock", "pedido", "estimado", "a_comprar",
+                            ]]
+                            .assign(_prio=lambda d: d["Variante"].map(_prio_unidad))
+                            .sort_values("_prio")
+                            .drop(columns="_prio")
+                            .rename(columns={
+                                "Variante": "Var",
+                                "stock": "S",
+                                "pedido": "P",
+                                "estimado": "E",
+                                "a_comprar": "T",
+                            })
+                        )
+                        styled = (
+                            _disp.style
+                            .map(_color_ac, subset=["T"])
+                            .format({
+                                "P": "{:.2f}",
+                                "S": "{:.2f}",
+                                "E": "{:.2f}",
+                                "T": lambda v: f"{abs(v):.2f}",
+                            })
+                        )
+                        st.dataframe(
+                            styled,
+                            use_container_width=False,
+                            hide_index=True,
+                        )
+
+                st.caption(
+                    "**Total** = `pedido + estimado − stock` (por código, sin conversiones)."
+                )
+
+        # Si no hay pedidos sincronizados, la tabla queda vacia (sin warning)
+
+        grafo = construir_grafo_conversion(compuestos)
+
+        prod_temp = productos.copy()
+        partes_pr = prod_temp["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+        prod_temp["base"] = partes_pr[0].str.strip()
+        prod_temp["unidad"] = (
+            partes_pr[1].fillna("").str.strip()
+            if 1 in partes_pr.columns
+            else ""
         )
 
-    # Mostrar productos que tengan ALGUN valor: pedido, estimado o stock
-    ped_relevante = ped[(ped["cantidad"] > 0) | (ped["estimado"] > 0)]
-    bases_set = set(ped_relevante["base"].unique())
-    if not stk.empty:
-        bases_set |= set(stk[stk["cantidad"] > 0]["base"].unique())
-    bases = sorted(bases_set)
+        ped = pedidos_actual.dropna(subset=["producto"]).copy()
+        ped["cantidad"] = ped["cantidad"].fillna(0).astype(float)
+        if "estimado" not in ped.columns:
+            ped["estimado"] = 0.0
+        ped["estimado"] = ped["estimado"].fillna(0).astype(float)
+        partes_ped = ped["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+        ped["base"] = partes_ped[0].str.strip() if not partes_ped.empty else ""
 
-    # Headers cortos (S/Pedido/E/T) en las tablas del desglozado.
-    # Las fechas correspondientes ya se muestran en los labels de los
-    # expanders de arriba (Ver stock / Ver pedidos / Ver estimado).
-
-    with st.expander(
-        f"🔧 Ver total a comprar **desglozado** ({len(bases)})",
-        expanded=False,
-    ):
-        for base in bases:
-            opciones_grupo = prod_temp[prod_temp["base"] == base]
-            if opciones_grupo.empty:
-                continue
-
-            codigos_familia = opciones_grupo["codigo"].astype(str).tolist()
-            componentes = componentes_conectados(codigos_familia, grafo)
-
-            ped_base = ped[ped["base"] == base]
-            stk_base = stk[stk["base"] == base] if not stk.empty else stk
-
-            pedido_codigos = set(
-                ped_base[
-                    (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
-                ]["codigo"].astype(str)
+        if stock_actual is not None and not stock_actual.empty:
+            stk = stock_actual.dropna(subset=["producto"]).copy()
+            stk["cantidad"] = stk["cantidad"].fillna(0)
+            partes_stk = stk["producto"].astype(str).str.rsplit(" - ", n=1, expand=True)
+            stk["base"] = partes_stk[0].str.strip() if not partes_stk.empty else ""
+        else:
+            stk = pd.DataFrame(
+                columns=["codigo", "producto", "unidad_medida", "cantidad", "base"]
             )
-            stock_codigos = (
-                set(stk_base[stk_base["cantidad"] > 0]["codigo"].astype(str))
-                if not stk_base.empty
-                else set()
-            )
-            codigos_con_valor = pedido_codigos | stock_codigos
 
-            for comp in componentes:
-                if not (comp & codigos_con_valor):
+        # Mostrar productos que tengan ALGUN valor: pedido, estimado o stock
+        ped_relevante = ped[(ped["cantidad"] > 0) | (ped["estimado"] > 0)]
+        bases_set = set(ped_relevante["base"].unique())
+        if not stk.empty:
+            bases_set |= set(stk[stk["cantidad"] > 0]["base"].unique())
+        bases = sorted(bases_set)
+
+        # Headers cortos (S/Pedido/E/T) en las tablas del desglozado.
+        # Las fechas correspondientes ya se muestran en los labels de los
+        # expanders de arriba (Ver stock / Ver pedidos / Ver estimado).
+
+        with st.expander(
+            f"🔧 Ver total a comprar **desglozado** ({len(bases)})",
+            expanded=False,
+        ):
+            for base in bases:
+                opciones_grupo = prod_temp[prod_temp["base"] == base]
+                if opciones_grupo.empty:
                     continue
 
-                comp_productos = opciones_grupo[
-                    opciones_grupo["codigo"].astype(str).isin(comp)
-                ]
-                # Lista de unidades unicas preservando orden
-                unidades_unicas = list(dict.fromkeys(comp_productos["unidad"].tolist()))
+                codigos_familia = opciones_grupo["codigo"].astype(str).tolist()
+                componentes = componentes_conectados(codigos_familia, grafo)
 
-                # Calcular totales para CADA unidad de la familia
-                resultados = []
-                for unidad in unidades_unicas:
-                    codigo_destino = str(
-                        comp_productos[comp_productos["unidad"] == unidad].iloc[0]["codigo"]
-                    )
-                    total_ped = 0.0
-                    total_est = 0.0
-                    for _, fila in ped_base.iterrows():
-                        if str(fila["codigo"]) not in comp:
-                            continue
-                        factor = convertir(grafo, str(fila["codigo"]), codigo_destino)
-                        if factor is None:
-                            continue
-                        total_ped += float(fila["cantidad"]) * factor
-                        total_est += float(fila["estimado"]) * factor
+                ped_base = ped[ped["base"] == base]
+                stk_base = stk[stk["base"] == base] if not stk.empty else stk
 
-                    total_stk = 0.0
-                    if not stk_base.empty:
-                        for _, fila in stk_base.iterrows():
+                pedido_codigos = set(
+                    ped_base[
+                        (ped_base["cantidad"] > 0) | (ped_base["estimado"] > 0)
+                    ]["codigo"].astype(str)
+                )
+                stock_codigos = (
+                    set(stk_base[stk_base["cantidad"] > 0]["codigo"].astype(str))
+                    if not stk_base.empty
+                    else set()
+                )
+                codigos_con_valor = pedido_codigos | stock_codigos
+
+                for comp in componentes:
+                    if not (comp & codigos_con_valor):
+                        continue
+
+                    comp_productos = opciones_grupo[
+                        opciones_grupo["codigo"].astype(str).isin(comp)
+                    ]
+                    # Lista de unidades unicas preservando orden
+                    unidades_unicas = list(dict.fromkeys(comp_productos["unidad"].tolist()))
+
+                    # Calcular totales para CADA unidad de la familia
+                    resultados = []
+                    for unidad in unidades_unicas:
+                        codigo_destino = str(
+                            comp_productos[comp_productos["unidad"] == unidad].iloc[0]["codigo"]
+                        )
+                        total_ped = 0.0
+                        total_est = 0.0
+                        for _, fila in ped_base.iterrows():
                             if str(fila["codigo"]) not in comp:
-                                continue
-                            cant = float(fila["cantidad"])
-                            if cant == 0:
                                 continue
                             factor = convertir(grafo, str(fila["codigo"]), codigo_destino)
                             if factor is None:
                                 continue
-                            total_stk += cant * factor
+                            total_ped += float(fila["cantidad"]) * factor
+                            total_est += float(fila["estimado"]) * factor
 
-                    resultados.append({
-                        "codigo": codigo_destino,
-                        "unidad": unidad,
-                        "pedido": total_ped,
-                        "estimado": total_est,
-                        "stock": total_stk,
-                        "diff": total_ped - total_stk,
-                        "diff_est": (total_ped + total_est) - total_stk,
-                    })
+                        total_stk = 0.0
+                        if not stk_base.empty:
+                            for _, fila in stk_base.iterrows():
+                                if str(fila["codigo"]) not in comp:
+                                    continue
+                                cant = float(fila["cantidad"])
+                                if cant == 0:
+                                    continue
+                                factor = convertir(grafo, str(fila["codigo"]), codigo_destino)
+                                if factor is None:
+                                    continue
+                                total_stk += cant * factor
 
-                if not resultados:
-                    continue
-
-                # Status overall (todos los diff dentro de la familia deberian tener el mismo signo)
-                primer = resultados[0]["diff_est"]
-                if primer > 0.001:
-                    icono = "🔴"
-                elif primer < -0.001:
-                    icono = "🟢"
-                else:
-                    icono = "⚪"
-
-                # Nombre: si la familia tiene un solo producto, usar su nombre completo
-                nombre = (
-                    comp_productos.iloc[0]["producto"] if len(comp) == 1 else base
-                )
-
-                with st.expander(f"{icono} **{nombre}**", expanded=False):
-                    df_show = pd.DataFrame([
-                        {
-                            "Var": r["unidad"],
-                            "S": r["stock"],
-                            "P": r["pedido"],
-                            "E": r["estimado"],
-                            "T": r["diff_est"],
-                        }
-                        for r in sorted(resultados, key=lambda r: _prio_unidad(r["unidad"]))
-                    ])
-
-                    def _color_diff(v):
-                        try:
-                            n = float(v)
-                        except (ValueError, TypeError):
-                            return ""
-                        if n > 0.001:
-                            return "color: #d11; font-weight: bold"
-                        if n < -0.001:
-                            return "color: #1a8a1a; font-weight: bold"
-                        return ""
-
-                    styled_grupo = (
-                        df_show.style
-                        .format({
-                            "P": "{:,.2f}",
-                            "S": "{:,.2f}",
-                            "E": "{:,.2f}",
-                            "T": lambda v: f"{abs(float(v)):,.2f}",
+                        resultados.append({
+                            "codigo": codigo_destino,
+                            "unidad": unidad,
+                            "pedido": total_ped,
+                            "estimado": total_est,
+                            "stock": total_stk,
+                            "diff": total_ped - total_stk,
+                            "diff_est": (total_ped + total_est) - total_stk,
                         })
-                        .map(_color_diff, subset=["T"])
+
+                    if not resultados:
+                        continue
+
+                    # Status overall (todos los diff dentro de la familia deberian tener el mismo signo)
+                    primer = resultados[0]["diff_est"]
+                    if primer > 0.001:
+                        icono = "🔴"
+                    elif primer < -0.001:
+                        icono = "🟢"
+                    else:
+                        icono = "⚪"
+
+                    # Nombre: si la familia tiene un solo producto, usar su nombre completo
+                    nombre = (
+                        comp_productos.iloc[0]["producto"] if len(comp) == 1 else base
                     )
-                    st.dataframe(
-                        styled_grupo,
-                        use_container_width=False,
-                        hide_index=True,
-                    )
+
+                    with st.expander(f"{icono} **{nombre}**", expanded=False):
+                        df_show = pd.DataFrame([
+                            {
+                                "Var": r["unidad"],
+                                "S": r["stock"],
+                                "P": r["pedido"],
+                                "E": r["estimado"],
+                                "T": r["diff_est"],
+                            }
+                            for r in sorted(resultados, key=lambda r: _prio_unidad(r["unidad"]))
+                        ])
+
+                        def _color_diff(v):
+                            try:
+                                n = float(v)
+                            except (ValueError, TypeError):
+                                return ""
+                            if n > 0.001:
+                                return "color: #d11; font-weight: bold"
+                            if n < -0.001:
+                                return "color: #1a8a1a; font-weight: bold"
+                            return ""
+
+                        styled_grupo = (
+                            df_show.style
+                            .format({
+                                "P": "{:,.2f}",
+                                "S": "{:,.2f}",
+                                "E": "{:,.2f}",
+                                "T": lambda v: f"{abs(float(v)):,.2f}",
+                            })
+                            .map(_color_diff, subset=["T"])
+                        )
+                        st.dataframe(
+                            styled_grupo,
+                            use_container_width=False,
+                            hide_index=True,
+                        )
+
+
+    _comprar_frag()
 
 with tab_estimado:
     dia_actual = DIAS_SEMANA[date.today().weekday()]
