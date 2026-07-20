@@ -3169,7 +3169,7 @@ if _sub_percibido:
                 st.markdown(f"#### DUX · {len(_cobros_rango)} cobros")
                 _c1, _c2 = st.columns(2)
                 _bal_metric(_c1, "Cobrado", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")
-                _fac_url_lkp = {str(f.get("id") or ""): f.get("url_factura") or "" for f in facturas_bal}
+                _fac_lkp = {str(f.get("id") or ""): f for f in facturas_bal}
                 _cob_by_cli = {}
                 for _c in sorted(_cobros_rango, key=lambda x: str(x.get("fecha") or "")):
                     _cli = str(_c.get("nombre_cliente") or _c.get("cliente") or "—")
@@ -3180,12 +3180,15 @@ if _sub_percibido:
                         _rows = []
                         for c in _cobs:
                             _imp = (c.get("imputaciones") or [{}])[0]
-                            _fac_nro = _imp.get("nro_comprobante") or "—"
                             _fac_id  = str(_imp.get("id_comp_venta") or "")
-                            _fac_url = _fac_url_lkp.get(_fac_id) or None
-                            _rows.append({"Fecha": _fmt_fecha(c.get("fecha")), "Cobro #": c.get("nro_comprobante") or "—", "Factura": _fac_nro, "Monto": float(c.get("monto") or 0), "PDF": _fac_url})
+                            _fac     = _fac_lkp.get(_fac_id) or {}
+                            _fac_nro = _imp.get("nro_comprobante") or "—"
+                            _fac_tot = float(_fac.get("total") or 0) or None
+                            _fac_url = _fac.get("url_factura") or None
+                            _rows.append({"Fecha": _fmt_fecha(c.get("fecha")), "Cobro #": c.get("nro_comprobante") or "—", "Factura": _fac_nro, "Total Factura": _fac_tot, "Cobrado": float(c.get("monto") or 0), "PDF": _fac_url})
                         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f"),
+                                     column_config={"Total Factura": st.column_config.NumberColumn("Total Factura ($)", format="$ %,.0f"),
+                                                    "Cobrado": st.column_config.NumberColumn("Cobrado ($)", format="$ %,.0f"),
                                                     "PDF": st.column_config.LinkColumn("PDF", display_text="Ver")})
 
             # Sección WIX cobros
@@ -3267,7 +3270,7 @@ if _sub_percibido:
                 for _prov, _pitems in sorted(_pag_by_prov.items()):
                     _prov_tot = sum(float(p.get("monto") or 0) for p in _pitems)
                     with st.expander(f"{_prov} ({len(_pitems)}) — $ {_pesos(_prov_tot)}"):
-                        _rows = [{"Fecha": _fmt_fecha(p.get("fecha")), "Monto": float(p.get("monto") or 0)} for p in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        _rows = [{"Fecha": _fmt_fecha(p.get("fecha")), "Comprobante": p.get("nro_comprobante") or "—", "Monto": float(p.get("monto") or 0)} for p in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
