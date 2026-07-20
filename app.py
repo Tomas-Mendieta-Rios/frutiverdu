@@ -3306,26 +3306,31 @@ if _sub_percibido:
                         _nro = str(_ix.get("nro_comprobante") or "")
                         if _nro:
                             _pag_por_comp[_nro] = _pag_por_comp.get(_nro, 0.0) + float(_ix.get("monto_imputado") or 0)
-                def _pago_row(p):
+                def _pago_rows(p):
                     _imps = p.get("imputaciones") or []
-                    _comp_nro_key = str(_imps[0].get("nro_comprobante") or "") if _imps else ""
-                    _comp_tot = _comp_tot_lkp.get(_comp_nro_key) or 0.0
-                    _pag_tot_comp = _pag_por_comp.get(_comp_nro_key, 0.0)
-                    _monto = float(p.get("monto") or 0)
-                    return {
-                        "Fecha":       _fmt_fecha(p.get("fecha")),
-                        "Pago #":      p.get("nro_comprobante") or "—",
-                        "Comprobante": (_imps[0].get("nro_comprobante") if _imps else None) or "—",
-                        "Total Comp.": _comp_tot or None,
-                        "Pagado":      _monto,
-                        "_prov":       str(p.get("proveedor") or "—"),
-                        "_parcial":    bool(_comp_tot) and _pag_tot_comp < _comp_tot - 0.01,
-                    }
+                    if not _imps:
+                        _imps = [{}]
+                    rows = []
+                    for _imp in _imps:
+                        _comp_nro_key = str(_imp.get("nro_comprobante") or "")
+                        _comp_tot     = _comp_tot_lkp.get(_comp_nro_key) or 0.0
+                        _pag_tot_comp = _pag_por_comp.get(_comp_nro_key, 0.0)
+                        _imp_mto      = float(_imp.get("monto_imputado") or p.get("monto") or 0)
+                        rows.append({
+                            "Fecha":       _fmt_fecha(p.get("fecha")),
+                            "Pago #":      p.get("nro_comprobante") or "—",
+                            "Comprobante": _comp_nro_key or "—",
+                            "Imputado":    _imp_mto,
+                            "Total Comp.": _comp_tot or None,
+                            "_prov":       str(p.get("proveedor") or "—"),
+                            "_parcial":    bool(_comp_tot) and _pag_tot_comp < _comp_tot - 0.01,
+                        })
+                    return rows
                 _pag_cfg = {
+                    "Imputado":    st.column_config.NumberColumn("Imputado ($)", format="$ %,.0f"),
                     "Total Comp.": st.column_config.NumberColumn("Total Comp. ($)", format="$ %,.0f"),
-                    "Pagado":      st.column_config.NumberColumn("Pagado ($)", format="$ %,.0f"),
                 }
-                _all_pag_rows = [_pago_row(p) for p in sorted(_pagos_rango, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                _all_pag_rows = [r for p in sorted(_pagos_rango, key=lambda x: str(x.get("fecha") or ""), reverse=True) for r in _pago_rows(p)]
                 for _lbl, _is_parc in [("Parciales", True), ("Totales", False)]:
                     _grp_p = {}
                     for _r in _all_pag_rows:
@@ -3333,10 +3338,10 @@ if _sub_percibido:
                             _grp_p.setdefault(_r["_prov"], []).append(_r)
                     if not _grp_p:
                         continue
-                    _grp_p_tot = sum(r["Pagado"] for rows in _grp_p.values() for r in rows)
+                    _grp_p_tot = sum(r["Imputado"] for rows in _grp_p.values() for r in rows)
                     with st.expander(f"{_lbl} ({sum(len(v) for v in _grp_p.values())}) — $ {_pesos(_grp_p_tot)}"):
                         for _prov, _prows in sorted(_grp_p.items()):
-                            _ptot = sum(r["Pagado"] for r in _prows)
+                            _ptot = sum(r["Imputado"] for r in _prows)
                             with st.expander(f"{_prov} ({len(_prows)}) — $ {_pesos(_ptot)}"):
                                 _df_rows = [{k: v for k, v in r.items() if k not in ("_parcial", "_prov")} for r in _prows]
                                 st.dataframe(pd.DataFrame(_df_rows), use_container_width=True, hide_index=True, column_config=_pag_cfg)
