@@ -510,8 +510,8 @@ def guardar_selecciones(fuente, selecciones):
 
 def cargar_pedidos_dux():
     client = get_client()
-    resp_orders = _exec(client.table("pedidos_dux").select("*").limit(10000))
-    if not resp_orders.data:
+    orders_data = _fetch_all_rows(client, "pedidos_dux")
+    if not orders_data:
         return []
 
     all_items = _fetch_all(client, "pedidos_dux_items")
@@ -534,7 +534,7 @@ def cargar_pedidos_dux():
             })
 
     pedidos = []
-    for r in resp_orders.data:
+    for r in orders_data:
         oid = str(r.get("order_id") or "")
         pedidos.append({
             "id": oid,
