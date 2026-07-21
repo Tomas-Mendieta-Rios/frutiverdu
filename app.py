@@ -7596,64 +7596,51 @@ if tab_rubros_ingresos:
                 _ni_nm  = st.text_input("Nombre del item", key="ri_ni_nombre").strip().upper()
                 if st.button("Guardar item", key="ri_ni_save"):
                     if _ni_nm and _ni_sub and _ni_sub in _ni_sub_opts:
-                        db.guardar_item_ingreso(_ni_nm, _ni_sub_opts[_ni_sub])
-                        db.cargar_items_ingresos.clear()
-                        st.toast("✅ Item agregado.")
-                        st.rerun(scope="fragment")
+                        try:
+                            db.guardar_item_ingreso(_ni_nm, _ni_sub_opts[_ni_sub])
+                            db.cargar_items_ingresos.clear()
+                            st.toast("✅ Item agregado.")
+                            st.rerun(scope="fragment")
+                        except Exception:
+                            st.error(f"Ya existe el item **{_ni_nm}** en ese subrubro.")
 
         _items = db.cargar_items_ingresos()
         if _items:
             st.markdown("**Items**")
             for _i in _items:
-                _links = _i.get("items_ingresos_subrubros") or []
-                _paths = []
-                for _lnk in _links:
-                    _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
-                    _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
-                    _sub_nm = _sub_i.get("nombre", "—")
-                    _paths.append(f"{_rub_nm} › {_sub_nm}")
-                _ic1, _ic2, _ic3 = st.columns([4, 1, 1])
-                _ic1.write(f"**{_i['nombre']}** — {', '.join(_paths) if _paths else '(sin subrubro)'}")
+                _sub_i  = _sub_map.get(_i.get("subrubro_id")) or {}
+                _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
+                _sub_nm = _sub_i.get("nombre", "—")
+                _ic1, _ic2 = st.columns([5, 1])
+                _ic1.write(f"**{_i['nombre']}** — {_rub_nm} › {_sub_nm}")
                 if _ic2.button("✏️", key=f"ri_ei_{_i['id']}"):
                     st.session_state[f"ri_edit_i_{_i['id']}"] = True
-                    st.rerun(scope="fragment")
-                if _ic3.button("🗑️", key=f"ri_di_{_i['id']}"):
-                    db.eliminar_item_ingreso(_i["id"])
-                    db.cargar_items_ingresos.clear()
-                    st.toast("🗑️ Item eliminado.")
                     st.rerun(scope="fragment")
                 if st.session_state.get(f"ri_edit_i_{_i['id']}"):
                     with st.container(border=True):
                         _e_nm = st.text_input("Nombre", value=_i["nombre"], key=f"ri_enm_{_i['id']}")
-                        if _links:
-                            st.markdown("**Subrubros vinculados:**")
-                            for _lnk in _links:
-                                _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
-                                _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
-                                _sub_nm = _sub_i.get("nombre", "—")
-                                _lc1, _lc2 = st.columns([5, 1])
-                                _lc1.write(f"{_rub_nm} › {_sub_nm}")
-                                if _lc2.button("✕", key=f"ri_unlink_{_i['id']}_{_lnk['subrubro_id']}"):
-                                    db.eliminar_link_item_ingreso_subrubro(_i["id"], _lnk["subrubro_id"])
-                                    db.cargar_items_ingresos.clear()
-                                    st.rerun(scope="fragment")
-                        st.markdown("**Agregar subrubro:**")
-                        _add_rub = st.selectbox("Rubro", options=[""] + list(_rub_opts.keys()), key=f"ri_addlnk_rub_{_i['id']}")
-                        _add_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if _add_rub and s["rubro_id"] == _rub_opts.get(_add_rub)}
-                        _add_sub = st.selectbox("Subrubro", options=[""] + list(_add_sub_opts.keys()), key=f"ri_addlnk_sub_{_i['id']}")
-                        _ec1, _ec2, _ec3 = st.columns(3)
-                        if _ec1.button("💾 Nombre", key=f"ri_isave_{_i['id']}"):
-                            db.actualizar_item_ingreso(_i["id"], _e_nm.strip().upper())
+                        _curr_sub_id = _i.get("subrubro_id")
+                        _curr_rub_id = (_sub_map.get(_curr_sub_id) or {}).get("rubro_id")
+                        _curr_rub_nm = _rub_map.get(_curr_rub_id, "")
+                        _curr_sub_nm = (_sub_map.get(_curr_sub_id) or {}).get("nombre", "")
+                        _rub_keys = [""] + list(_rub_opts.keys())
+                        _e_rub = st.selectbox("Rubro", options=_rub_keys,
+                                               index=_rub_keys.index(_curr_rub_nm) if _curr_rub_nm in _rub_keys else 0,
+                                               key=f"ri_erub_{_i['id']}")
+                        _e_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if _e_rub and s["rubro_id"] == _rub_opts.get(_e_rub)}
+                        _sub_keys = [""] + list(_e_sub_opts.keys())
+                        _e_sub = st.selectbox("Subrubro", options=_sub_keys,
+                                               index=_sub_keys.index(_curr_sub_nm) if _curr_sub_nm in _sub_keys else 0,
+                                               key=f"ri_esub_{_i['id']}")
+                        _ec1, _ec2 = st.columns(2)
+                        if _ec1.button("💾 Guardar", key=f"ri_isave_{_i['id']}"):
+                            _new_sub_id = _e_sub_opts.get(_e_sub) if _e_sub else _curr_sub_id
+                            db.actualizar_item_ingreso(_i["id"], _e_nm.strip().upper(), _new_sub_id)
                             db.cargar_items_ingresos.clear()
                             st.session_state.pop(f"ri_edit_i_{_i['id']}", None)
                             st.toast("✅ Item actualizado.")
                             st.rerun(scope="fragment")
-                        if _ec2.button("🔗 Vincular", key=f"ri_addlnk_{_i['id']}"):
-                            if _add_sub in _add_sub_opts:
-                                db.agregar_link_item_ingreso_subrubro(_i["id"], _add_sub_opts[_add_sub])
-                                db.cargar_items_ingresos.clear()
-                                st.rerun(scope="fragment")
-                        if _ec3.button("❌ Cancelar", key=f"ri_ican_{_i['id']}"):
+                        if _ec2.button("❌ Cancelar", key=f"ri_ican_{_i['id']}"):
                             st.session_state.pop(f"ri_edit_i_{_i['id']}", None)
                             st.rerun(scope="fragment")
 
@@ -7773,64 +7760,51 @@ if tab_re:
                     _ni_nm   = st.text_input("Nombre del item", key="re_ni_nombre").strip().upper()
                     if st.button("Guardar item", key="re_ni_save"):
                         if _ni_nm and _ni_sub and _ni_sub in _ni_sub_opts:
-                            db.guardar_item_egreso(_ni_nm, _ni_sub_opts[_ni_sub])
-                            db.cargar_items_egresos.clear()
-                            st.toast("✅ Item agregado.", icon="✅")
-                            st.rerun(scope="fragment")
+                            try:
+                                db.guardar_item_egreso(_ni_nm, _ni_sub_opts[_ni_sub])
+                                db.cargar_items_egresos.clear()
+                                st.toast("✅ Item agregado.", icon="✅")
+                                st.rerun(scope="fragment")
+                            except Exception:
+                                st.error(f"Ya existe el item **{_ni_nm}** en ese subrubro.")
 
             _items = db.cargar_items_egresos()
             if _items:
                 st.markdown("**Items**")
                 for _i in _items:
-                    _links = _i.get("items_egresos_subrubros") or []
-                    _paths = []
-                    for _lnk in _links:
-                        _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
-                        _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
-                        _sub_nm = _sub_i.get("nombre", "—")
-                        _paths.append(f"{_rub_nm} › {_sub_nm}")
-                    _ic1, _ic2, _ic3 = st.columns([4, 1, 1])
-                    _ic1.write(f"**{_i['nombre']}** — {', '.join(_paths) if _paths else '(sin subrubro)'}")
+                    _sub_i  = _sub_map.get(_i.get("subrubro_id")) or {}
+                    _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
+                    _sub_nm = _sub_i.get("nombre", "—")
+                    _ic1, _ic2 = st.columns([5, 1])
+                    _ic1.write(f"**{_i['nombre']}** — {_rub_nm} › {_sub_nm}")
                     if _ic2.button("✏️", key=f"re_ei_{_i['id']}"):
                         st.session_state[f"re_edit_i_{_i['id']}"] = True
-                        st.rerun(scope="fragment")
-                    if _ic3.button("🗑️", key=f"re_di_{_i['id']}"):
-                        db.eliminar_item_egreso(_i["id"])
-                        db.cargar_items_egresos.clear()
-                        st.toast("🗑️ Item eliminado.", icon="🗑️")
                         st.rerun(scope="fragment")
                     if st.session_state.get(f"re_edit_i_{_i['id']}"):
                         with st.container(border=True):
                             _e_nm = st.text_input("Nombre", value=_i["nombre"], key=f"re_enm_{_i['id']}")
-                            if _links:
-                                st.markdown("**Subrubros vinculados:**")
-                                for _lnk in _links:
-                                    _sub_i  = _sub_map.get(_lnk["subrubro_id"]) or {}
-                                    _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
-                                    _sub_nm = _sub_i.get("nombre", "—")
-                                    _lc1, _lc2 = st.columns([5, 1])
-                                    _lc1.write(f"{_rub_nm} › {_sub_nm}")
-                                    if _lc2.button("✕", key=f"re_unlink_{_i['id']}_{_lnk['subrubro_id']}"):
-                                        db.eliminar_link_item_subrubro(_i["id"], _lnk["subrubro_id"])
-                                        db.cargar_items_egresos.clear()
-                                        st.rerun(scope="fragment")
-                            st.markdown("**Agregar subrubro:**")
-                            _add_rub = st.selectbox("Rubro", options=[""] + list(_rub_opts.keys()), key=f"re_addlnk_rub_{_i['id']}")
-                            _add_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if _add_rub and s["rubro_id"] == _rub_opts.get(_add_rub)}
-                            _add_sub = st.selectbox("Subrubro", options=[""] + list(_add_sub_opts.keys()), key=f"re_addlnk_sub_{_i['id']}")
-                            _ec1, _ec2, _ec3 = st.columns(3)
-                            if _ec1.button("💾 Nombre", key=f"re_isave_{_i['id']}"):
-                                db.actualizar_item_egreso(_i["id"], _e_nm.strip().upper())
+                            _curr_sub_id = _i.get("subrubro_id")
+                            _curr_rub_id = (_sub_map.get(_curr_sub_id) or {}).get("rubro_id")
+                            _curr_rub_nm = _rub_map.get(_curr_rub_id, "")
+                            _curr_sub_nm = (_sub_map.get(_curr_sub_id) or {}).get("nombre", "")
+                            _rub_keys = [""] + list(_rub_opts.keys())
+                            _e_rub = st.selectbox("Rubro", options=_rub_keys,
+                                                   index=_rub_keys.index(_curr_rub_nm) if _curr_rub_nm in _rub_keys else 0,
+                                                   key=f"re_erub_{_i['id']}")
+                            _e_sub_opts = {s["nombre"]: s["id"] for s in _all_subs if _e_rub and s["rubro_id"] == _rub_opts.get(_e_rub)}
+                            _sub_keys = [""] + list(_e_sub_opts.keys())
+                            _e_sub = st.selectbox("Subrubro", options=_sub_keys,
+                                                   index=_sub_keys.index(_curr_sub_nm) if _curr_sub_nm in _sub_keys else 0,
+                                                   key=f"re_esub_{_i['id']}")
+                            _ec1, _ec2 = st.columns(2)
+                            if _ec1.button("💾 Guardar", key=f"re_isave_{_i['id']}"):
+                                _new_sub_id = _e_sub_opts.get(_e_sub) if _e_sub else _curr_sub_id
+                                db.actualizar_item_egreso(_i["id"], _e_nm.strip().upper(), _new_sub_id)
                                 db.cargar_items_egresos.clear()
                                 st.session_state.pop(f"re_edit_i_{_i['id']}", None)
                                 st.toast("✅ Item actualizado.")
                                 st.rerun(scope="fragment")
-                            if _ec2.button("🔗 Vincular", key=f"re_addlnk_{_i['id']}"):
-                                if _add_sub in _add_sub_opts:
-                                    db.agregar_link_item_subrubro(_i["id"], _add_sub_opts[_add_sub])
-                                    db.cargar_items_egresos.clear()
-                                    st.rerun(scope="fragment")
-                            if _ec3.button("❌ Cancelar", key=f"re_ican_{_i['id']}"):
+                            if _ec2.button("❌ Cancelar", key=f"re_ican_{_i['id']}"):
                                 st.session_state.pop(f"re_edit_i_{_i['id']}", None)
                                 st.rerun(scope="fragment")
 

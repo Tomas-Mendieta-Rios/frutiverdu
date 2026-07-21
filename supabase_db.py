@@ -2044,51 +2044,28 @@ def eliminar_subrubro_ingreso(id):
 def cargar_items_ingresos(subrubro_id=None):
     client = get_client()
     if subrubro_id is not None:
-        resp = _exec(client.table("items_ingresos_subrubros")
-            .select("items_ingresos(id, nombre)")
-            .eq("subrubro_id", subrubro_id))
-        return sorted(
-            [row["items_ingresos"] for row in (resp.data or []) if row.get("items_ingresos")],
-            key=lambda x: x.get("nombre", "")
-        )
+        resp = _exec(client.table("items_ingresos")
+            .select("id, nombre")
+            .eq("subrubro_id", subrubro_id)
+            .order("nombre"))
+        return resp.data or []
     resp = _exec(client.table("items_ingresos")
-        .select("id, nombre, items_ingresos_subrubros(subrubro_id)")
+        .select("id, nombre, subrubro_id")
         .order("nombre"))
     return resp.data or []
 
 
 def guardar_item_ingreso(nombre, subrubro_id):
     client = get_client()
-    resp = client.table("items_ingresos").upsert({"nombre": nombre}, on_conflict="nombre").execute()
-    item_id = resp.data[0]["id"]
-    client.table("items_ingresos_subrubros").upsert(
-        {"item_id": item_id, "subrubro_id": subrubro_id},
-        on_conflict="item_id,subrubro_id"
-    ).execute()
+    client.table("items_ingresos").insert({"nombre": nombre, "subrubro_id": subrubro_id}).execute()
 
 
-def actualizar_item_ingreso(id, nombre):
+def actualizar_item_ingreso(id, nombre, subrubro_id=None):
     client = get_client()
-    client.table("items_ingresos").update({"nombre": nombre}).eq("id", id).execute()
-
-
-def eliminar_item_ingreso(id):
-    client = get_client()
-    client.table("items_ingresos").delete().eq("id", id).execute()
-
-
-def agregar_link_item_ingreso_subrubro(item_id, subrubro_id):
-    client = get_client()
-    client.table("items_ingresos_subrubros").upsert(
-        {"item_id": item_id, "subrubro_id": subrubro_id},
-        on_conflict="item_id,subrubro_id"
-    ).execute()
-
-
-def eliminar_link_item_ingreso_subrubro(item_id, subrubro_id):
-    client = get_client()
-    client.table("items_ingresos_subrubros") \
-        .delete().eq("item_id", item_id).eq("subrubro_id", subrubro_id).execute()
+    data = {"nombre": nombre}
+    if subrubro_id is not None:
+        data["subrubro_id"] = subrubro_id
+    client.table("items_ingresos").update(data).eq("id", id).execute()
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -2180,46 +2157,28 @@ def eliminar_subrubro_egreso(id):
 def cargar_items_egresos(subrubro_id=None):
     client = get_client()
     if subrubro_id is not None:
-        resp = client.table("items_egresos_subrubros") \
-            .select("items_egresos(id, nombre)") \
+        resp = client.table("items_egresos") \
+            .select("id, nombre") \
             .eq("subrubro_id", subrubro_id) \
+            .order("nombre") \
             .execute()
-        items = [row["items_egresos"] for row in (resp.data or []) if row.get("items_egresos")]
-        return sorted(items, key=lambda x: x.get("nombre", ""))
+        return resp.data or []
     resp = client.table("items_egresos") \
-        .select("id, nombre, items_egresos_subrubros(subrubro_id)") \
+        .select("id, nombre, subrubro_id") \
         .order("nombre") \
         .execute()
     return resp.data or []
 
 def guardar_item_egreso(nombre, subrubro_id):
     client = get_client()
-    resp = client.table("items_egresos").upsert({"nombre": nombre}, on_conflict="nombre").execute()
-    item_id = resp.data[0]["id"]
-    client.table("items_egresos_subrubros").upsert(
-        {"item_id": item_id, "subrubro_id": subrubro_id},
-        on_conflict="item_id,subrubro_id"
-    ).execute()
+    client.table("items_egresos").insert({"nombre": nombre, "subrubro_id": subrubro_id}).execute()
 
-def actualizar_item_egreso(id, nombre):
+def actualizar_item_egreso(id, nombre, subrubro_id=None):
     client = get_client()
-    client.table("items_egresos").update({"nombre": nombre}).eq("id", id).execute()
-
-def eliminar_item_egreso(id):
-    client = get_client()
-    client.table("items_egresos").delete().eq("id", id).execute()
-
-def agregar_link_item_subrubro(item_id, subrubro_id):
-    client = get_client()
-    client.table("items_egresos_subrubros").upsert(
-        {"item_id": item_id, "subrubro_id": subrubro_id},
-        on_conflict="item_id,subrubro_id"
-    ).execute()
-
-def eliminar_link_item_subrubro(item_id, subrubro_id):
-    client = get_client()
-    client.table("items_egresos_subrubros") \
-        .delete().eq("item_id", item_id).eq("subrubro_id", subrubro_id).execute()
+    data = {"nombre": nombre}
+    if subrubro_id is not None:
+        data["subrubro_id"] = subrubro_id
+    client.table("items_egresos").update(data).eq("id", id).execute()
 
 @st.cache_data(ttl=60, show_spinner=False)
 def cargar_otros_egresos():
