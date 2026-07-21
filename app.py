@@ -2758,7 +2758,7 @@ if _sub_resumen:
                                     _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
                                     _url = _f.get("url_factura") or ""
                                     if _is_parcial:
-                                        _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp,
+                                        _row = {"Fecha devengada": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp,
                                                 "Total": _ftot, "Cobrado": _fcob, "Pendiente": _fsal, "PDF": _url}
                                         _col_cfg = {
                                             "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
@@ -2767,7 +2767,7 @@ if _sub_resumen:
                                             "PDF":       st.column_config.LinkColumn("PDF", display_text="Ver"),
                                         }
                                     else:
-                                        _row = {"Fecha": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp, "Total": _ftot, "PDF": _url}
+                                        _row = {"Fecha devengada": _fmt_fecha(_f.get("fecha_comp")), "Comprobante": _comp, "Total": _ftot, "PDF": _url}
                                         _col_cfg = {
                                             "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
                                             "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
@@ -2786,7 +2786,7 @@ if _sub_resumen:
                         _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                         _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
                         _rows_notas.append({
-                            "Fecha": _fmt_fecha(_f.get("fecha_comp")),
+                            "Fecha devengada": _fmt_fecha(_f.get("fecha_comp")),
                             "Cliente": _cli,
                             "Comprobante": _comp,
                             "Monto": _nota_sign(_f) * float(_f.get("total") or 0),
@@ -2823,7 +2823,7 @@ if _sub_resumen:
                             _ctot = sum(_wix_monto(_p) for _p in _pitems)
                             with st.expander(f"{_cli} — {len(_pitems)} pedido{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_ctot)}"):
                                 _rows = [{
-                                    "Fecha":    _fmt_fecha(_p.get("createdDate")),
+                                    "Fecha devengada":    _fmt_fecha(_p.get("createdDate")),
                                     "Pedido #": _p.get("number") or _p.get("id") or "—",
                                     "Total":    _wix_monto(_p),
                                 } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
@@ -2871,7 +2871,7 @@ if _sub_resumen:
                 st.markdown(f"#### Ajustes positivos · {len(_aj_pos)} registros")
                 _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_aj_pos)}", "#2e7d32")
                 with st.expander(f"Detalle ({len(_aj_pos)}) — $ {_pesos(total_aj_pos)}"):
-                    _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
+                    _rows = [{"Fecha devengada": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
                               "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
                              for a in sorted(_aj_pos, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                     st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
@@ -2931,7 +2931,7 @@ if _sub_resumen:
                                     _cpag = _pagado_comp(_c)
                                     _csal = _saldo_comp(_c)
                                     if _is_parc:
-                                        _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—",
+                                        _row = {"Fecha devengada": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—",
                                                 "Total": _ctot, "Pagado": _cpag, "Pendiente": _csal}
                                         _col_cfg = {
                                             "Total":     st.column_config.NumberColumn("Total",     format="$ %,.2f"),
@@ -2939,7 +2939,7 @@ if _sub_resumen:
                                             "Pendiente": st.column_config.NumberColumn("Pendiente", format="$ %,.2f"),
                                         }
                                     else:
-                                        _row = {"Fecha": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—", "Total": _ctot}
+                                        _row = {"Fecha devengada": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—", "Total": _ctot}
                                         _col_cfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
                                     _rows.append(_row)
                                 st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
@@ -2992,7 +2992,7 @@ if _sub_resumen:
                 st.markdown(f"#### Ajustes negativos · {len(_aj_neg)} registros")
                 _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(abs(total_aj_neg))}", "#c62828")
                 with st.expander(f"Detalle ({len(_aj_neg)}) — $ {_pesos(abs(total_aj_neg))}"):
-                    _rows = [{"Fecha": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
+                    _rows = [{"Fecha devengada": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
                               "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
                              for a in sorted(_aj_neg, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
                     st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
@@ -4366,7 +4366,7 @@ if tab_ingresos:
                     for _f in _facturas:
                         _fac_df_rows.append({
                             "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
-                            "Fecha": _fmt_fecha(_f.get("fecha_comp")),
+                            "Fecha devengada": _fmt_fecha(_f.get("fecha_comp")),
                             "Cliente": f"{_f.get('apellido_razon_soc','')} {_f.get('nombre','')}".strip(),
                             "CUIT": _f.get("cuit", ""),
                             "Nro Pedido": _f.get("nro_pedido", ""),
