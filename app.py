@@ -7620,7 +7620,10 @@ if tab_rubros_ingresos:
                 _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
                 _sub_nm = _sub_i.get("nombre", "—")
                 _activo = _i.get("activo", True)
-                _label  = f"{_rub_nm} › {_sub_nm} › ~~{_i['nombre']}~~ *(anulado)*" if not _activo else f"{_rub_nm} › {_sub_nm} › **{_i['nombre']}**"
+                if not _activo:
+                    _label = f":red[{_rub_nm} › {_sub_nm} › ~~{_i['nombre']}~~  **[ANULADO]**]"
+                else:
+                    _label = f"{_rub_nm} › {_sub_nm} › **{_i['nombre']}**"
                 _ic1, _ic2 = st.columns([5, 1])
                 _ic1.write(_label)
                 if _ic2.button("✏️", key=f"ri_ei_{_i['id']}"):
@@ -7795,7 +7798,10 @@ if tab_re:
                     _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
                     _sub_nm = _sub_i.get("nombre", "—")
                     _activo = _i.get("activo", True)
-                    _label  = f"{_rub_nm} › {_sub_nm} › ~~{_i['nombre']}~~ *(anulado)*" if not _activo else f"{_rub_nm} › {_sub_nm} › **{_i['nombre']}**"
+                    if not _activo:
+                        _label = f":red[{_rub_nm} › {_sub_nm} › ~~{_i['nombre']}~~  **[ANULADO]**]"
+                    else:
+                        _label = f"{_rub_nm} › {_sub_nm} › **{_i['nombre']}**"
                     _ic1, _ic2 = st.columns([5, 1])
                     _ic1.write(_label)
                     if _ic2.button("✏️", key=f"re_ei_{_i['id']}"):
