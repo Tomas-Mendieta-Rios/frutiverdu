@@ -3048,6 +3048,15 @@ if _sub_resumen:
                 _bal_metric(_ret_c1, "Total",     f"$ {_pesos(total_retiros)}",       "#1a1a1a")
                 _bal_metric(_ret_c2, "Pagado",    f"$ {_pesos(total_retiros_pag)}",   "#2e7d32")
                 _bal_metric(_ret_c3, "Pendiente", f"$ {_pesos(_total_retiros_pend)}", "#c62828")
+                _ret_subs_dev = {}
+                for _o in _retiros_f:
+                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                    _ret_subs_dev.setdefault(_sk, 0.0)
+                    _ret_subs_dev[_sk] += float(_o.get("monto") or 0)
+                if _ret_subs_dev:
+                    _rs_cols = st.columns(len(_ret_subs_dev))
+                    for _rc, (_sk, _sv) in zip(_rs_cols, sorted(_ret_subs_dev.items())):
+                        _bal_metric(_rc, _sk, f"$ {_pesos(_sv)}", "#c62828")
                 for _ret_est_lbl, _ret_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
                     _ret_est_items = [o for o in _retiros_f if (o.get("estado") or "pendiente") == _ret_est_lbl]
                     if _ret_est_items:
@@ -3418,6 +3427,15 @@ if _sub_percibido:
                 st.markdown(f"#### Retiros · {len(_retiros_p)} registros")
                 _ret_c1, _ret_c2 = st.columns(2)
                 _bal_metric(_ret_c1, "Total", f"$ {_pesos(total_retiros_p)}", "#c62828")
+                _ret_subs_p = {}
+                for _o in _retiros_p:
+                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                    _ret_subs_p.setdefault(_sk, 0.0)
+                    _ret_subs_p[_sk] += float(_o.get("monto") or 0)
+                if _ret_subs_p:
+                    _rsp_cols = st.columns(len(_ret_subs_p))
+                    for _rc, (_sk, _sv) in zip(_rsp_cols, sorted(_ret_subs_p.items())):
+                        _bal_metric(_rc, _sk, f"$ {_pesos(_sv)}", "#c62828")
                 _ret_by_sub = {}
                 for _o in _retiros_p:
                     _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
