@@ -2857,8 +2857,8 @@ if _sub_resumen:
                                         _stot = sum(float(o.get("monto") or 0) for o in _sitems)
                                         with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
                                             _rows = [{
-                                                "F. ingreso":  _fmt_fecha(o.get("fecha")),
-                                                "F. cobro":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
+                                                "Fecha devengada":  _fmt_fecha(o.get("fecha")),
+                                                "Fecha percibida":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
                                                 "Monto":       float(o.get("monto") or 0),
                                                 "Descripción": o.get("descripcion") or "",
                                             } for o in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -2979,7 +2979,7 @@ if _sub_resumen:
                                                 _itot = sum(float(o.get("monto") or 0) for o in _iitems)
                                                 with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                                     _rows = [{
-                                                        "F. egreso":   _fmt_fecha(o.get("fecha")),
+                                                        "Fecha devengada":   _fmt_fecha(o.get("fecha")),
                                                         "Monto":       float(o.get("monto") or 0),
                                                         "Descripción": o.get("descripcion") or "",
                                                     } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -3046,7 +3046,7 @@ if _sub_resumen:
                                         _itot = sum(float(o.get("monto") or 0) for o in _iitems)
                                         with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                             _rows = [{
-                                                "F. retiro":   _fmt_fecha(o.get("fecha")),
+                                                "Fecha devengada":   _fmt_fecha(o.get("fecha")),
                                                 "Monto":       float(o.get("monto") or 0),
                                                 "Descripción": o.get("descripcion") or "",
                                             } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -3275,8 +3275,8 @@ if _sub_percibido:
                                     _stot = sum(float(o.get("monto") or 0) for o in _sitems)
                                     with st.expander(f"{_sk} ({len(_sitems)}) — $ {_pesos(_stot)}"):
                                         _rows = [{
-                                            "F. ingreso":  _fmt_fecha(o.get("fecha")),
-                                            "F. cobro":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
+                                            "Fecha devengada":  _fmt_fecha(o.get("fecha")),
+                                            "Fecha percibida":    _fmt_fecha(o.get("fecha_movimiento")) if o.get("fecha_movimiento") else "—",
                                             "Monto":       float(o.get("monto") or 0),
                                             "Descripción": o.get("descripcion") or "",
                                         } for o in sorted(_sitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
@@ -3373,7 +3373,7 @@ if _sub_percibido:
                                     _itot = sum(float(o.get("monto") or 0) for o in _iitems)
                                     with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                         _rows = [{
-                                            "F. egreso":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
+                                            "Fecha devengada":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
                                             "Monto":       float(o.get("monto") or 0),
                                             "Descripción": o.get("descripcion") or "",
                                         } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
@@ -3411,7 +3411,7 @@ if _sub_percibido:
                             _itot = sum(float(o.get("monto") or 0) for o in _iitems)
                             with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                 _rows = [{
-                                    "F. retiro":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
+                                    "Fecha devengada":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
                                     "Monto":       float(o.get("monto") or 0),
                                     "Descripción": o.get("descripcion") or "",
                                 } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
@@ -3903,8 +3903,8 @@ if _stab_otros_ingresos:
                                 for _s_nm, _s_items in sorted(_subs.items()):
                                     _s_tot = sum(float(x.get("monto") or 0) for x in _s_items)
                                     with st.expander(f"{_s_nm} ({len(_s_items)}) — $ {_pesos(_s_tot)}"):
-                                        _rows = [{"Fecha": _fmt_fecha(_oi.get("fecha")),
-                                                  "F. cobro": _fmt_fecha(_oi.get("fecha_movimiento")) if _oi.get("fecha_movimiento") else "—",
+                                        _rows = [{"Fecha devengada": _fmt_fecha(_oi.get("fecha")),
+                                                  "Fecha percibida": _fmt_fecha(_oi.get("fecha_movimiento")) if _oi.get("fecha_movimiento") else "—",
                                                   "Item": (_oi.get("items_ingresos") or {}).get("nombre") or "—",
                                                   "Monto": float(_oi.get("monto") or 0),
                                                   "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
