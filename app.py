@@ -4022,18 +4022,18 @@ if _stab_otros_egresos:
                 _lista = [o for o in _lista if _oe_e_desde <= _safe_date(o.get("fecha")) <= _oe_e_hasta]
 
                 # Filtros rubro / subrubro / item
-                _rubros_en_lista = sorted({((_o.get("rubros_egresos") or {}).get("nombre") or "—") for _o in _lista})
+                _rubros_en_lista = sorted({(o.get("rubros_egresos") or {}).get("nombre") or "—" for o in _lista})
                 _fil_rubro = st.selectbox("Rubro", ["Todos"] + _rubros_en_lista, key="oe_fil_rubro")
                 if _fil_rubro != "Todos":
-                    _lista = [o for o in _lista if ((_o := o).get("rubros_egresos") or {}).get("nombre") == _fil_rubro]
-                _subs_en_lista = sorted({((_o.get("subrubros_egresos") or {}).get("nombre") or "—") for _o in _lista})
+                    _lista = [o for o in _lista if (o.get("rubros_egresos") or {}).get("nombre") == _fil_rubro]
+                _subs_en_lista = sorted({(o.get("subrubros_egresos") or {}).get("nombre") or "—" for o in _lista})
                 _fil_sub = st.selectbox("Subrubro", ["Todos"] + _subs_en_lista, key="oe_fil_sub")
                 if _fil_sub != "Todos":
-                    _lista = [o for o in _lista if ((_o := o).get("subrubros_egresos") or {}).get("nombre") == _fil_sub]
-                _items_en_lista = sorted({((_o.get("items_egresos") or {}).get("nombre") or "—") for _o in _lista})
+                    _lista = [o for o in _lista if (o.get("subrubros_egresos") or {}).get("nombre") == _fil_sub]
+                _items_en_lista = sorted({(o.get("items_egresos") or {}).get("nombre") or "—" for o in _lista})
                 _fil_item = st.selectbox("Item", ["Todos"] + _items_en_lista, key="oe_fil_item")
                 if _fil_item != "Todos":
-                    _lista = [o for o in _lista if ((_o := o).get("items_egresos") or {}).get("nombre") == _fil_item]
+                    _lista = [o for o in _lista if (o.get("items_egresos") or {}).get("nombre") == _fil_item]
 
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
