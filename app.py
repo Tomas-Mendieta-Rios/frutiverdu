@@ -4418,109 +4418,114 @@ if tab_ingresos:
 
 if tab_ing_cobros_wix:
     with tab_ing_cobros_wix:
-        try:
-            _cajas_cob = db.cargar_cajas()
-        except Exception:
-            _cajas_cob = []
-        _cajas_activas_cob = [c for c in _cajas_cob if c.get("activa", True)]
-        _cajas_names_cob = [c["nombre"] for c in _cajas_activas_cob]
-        _cajas_por_id_cob = {c["id"]: c["nombre"] for c in _cajas_cob}
-        _cajas_por_nombre_cob = {c["nombre"]: c["id"] for c in _cajas_cob}
-
-        try:
-            _wix_orders_cob = db.cargar_pedidos_wix()
-        except Exception as _e_wc:
-            st.error(f"No se pudieron cargar los pedidos Wix: {_e_wc}")
-            _wix_orders_cob = []
-
-        if not _wix_orders_cob:
-            st.info("No hay pedidos Wix sincronizados.")
-        else:
-            _wix_sorted_cob = sorted(
-                _wix_orders_cob,
-                key=lambda o: int(str(o.get("number") or 0)),
-                reverse=True,
-            )[:100]
-
-            _sels_wix_cob = db.cargar_selecciones("wix")
+        @st.fragment
+        def _frag_cobros_wix():
             try:
-                _fechas_pago_cob = db.cargar_fechas_pago_wix()
+                _cajas_cob = db.cargar_cajas()
             except Exception:
-                _fechas_pago_cob = {}
+                _cajas_cob = []
+            _cajas_activas_cob = [c for c in _cajas_cob if c.get("activa", True)]
+            _cajas_names_cob = [c["nombre"] for c in _cajas_activas_cob]
+            _cajas_por_id_cob = {c["id"]: c["nombre"] for c in _cajas_cob}
+            _cajas_por_nombre_cob = {c["nombre"]: c["id"] for c in _cajas_cob}
 
-            _pay_map = {"PAID": "✅ Pagado", "UNPAID": "❌ Sin pagar", "PENDING": "🟡 Pendiente",
-                        "PARTIALLY_REFUNDED": "🟠 Parcial", "FULLY_REFUNDED": "⚫ Reembolsado"}
-            _ful_map = {"FULFILLED": "✅ Entregado", "NOT_FULFILLED": "⏳ Pendiente",
-                        "PARTIALLY_FULFILLED": "🔶 Parcial"}
+            try:
+                _wix_orders_cob = db.cargar_pedidos_wix()
+            except Exception as _e_wc:
+                st.error(f"No se pudieron cargar los pedidos Wix: {_e_wc}")
+                _wix_orders_cob = []
 
-            with st.form("form_wix_cob_filtro", border=False):
-                _wc1, _wc2 = st.columns(2)
-                _wix_desde = _wc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_cob_desde")
-                _wix_hasta = _wc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_cob_hasta")
-                st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
-            _wix_sorted_cob = [o for o in _wix_sorted_cob
-                                if _wix_desde <= _safe_date(str(o.get("createdDate") or "")[:10]) <= _wix_hasta]
+            if not _wix_orders_cob:
+                st.info("No hay pedidos Wix sincronizados.")
+            else:
+                _wix_sorted_cob = sorted(
+                    _wix_orders_cob,
+                    key=lambda o: int(str(o.get("number") or 0)),
+                    reverse=True,
+                )[:100]
 
-            with st.form("form_cobros_wix_cajas", border=True):
-                _guardar_cob = st.form_submit_button("💾 Guardar fechas de cobro y cajas", type="primary")
-                _nuevas_fpago_cob = {}
-                _nuevas_cajas_cob = {}
-                for _o in _wix_sorted_cob:
-                    _nro_c = _o.get("number") or _o.get("id") or ""
-                    _oid_c = str(_o.get("id") or _nro_c)
-                    _bi = (_o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
-                    _nombre_c = (
-                        f"{_bi.get('firstName', '')} {_bi.get('lastName', '')}".strip()
-                        or (_o.get("buyerInfo") or {}).get("email", "")
-                        or "—"
-                    )
-                    _caja_id_c = _o.get("caja_id")
-                    _fecha_pago_raw = _fechas_pago_cob.get(_oid_c)
-                    try:
-                        _fecha_pago_val = date.fromisoformat(_fecha_pago_raw) if _fecha_pago_raw else None
-                    except Exception:
-                        _fecha_pago_val = None
-                    _total_c = (_o.get("priceSummary", {}) or {}).get("total", {}).get("formattedAmount", "")
-                    _pay_c = _pay_map.get(str(_o.get("paymentStatus") or "").upper(), "❌ Sin pagar")
-                    _ful_c = _ful_map.get(str(_o.get("fulfillmentStatus") or "").upper(), "⏳ No entregado")
-                    _fped_c = _fmt_fecha(_o.get("createdDate"))
-                    _fent_c = _fmt_fecha(_sels_wix_cob.get(_oid_c))
-
-                    with st.container(border=True):
-                        _ci, _cd, _cc = st.columns([5, 2, 2])
-                        with _ci:
-                            st.markdown(f"**#{_nro_c} — {_nombre_c} · {_total_c}**")
-                            _info2 = f" · 🚚 entrega {_fent_c}" if _fent_c and _fent_c != "—" else " · 🚚 —"
-                            st.caption(f"{_pay_c} · {_ful_c} · 📅 pedido {_fped_c}{_info2}")
-                        with _cd:
-                            _fp_new = st.date_input(
-                                "F. pago",
-                                value=_fecha_pago_val,
-                                key=f"fpago_{_oid_c}",
-                                format="DD/MM/YYYY",
-                                label_visibility="collapsed",
-                            )
-                        with _cc:
-                            _current_caja_c = _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None
-                            _caja_opts_c = ["—"] + _cajas_names_cob
-                            _caja_idx_c = _caja_opts_c.index(_current_caja_c) if _current_caja_c in _caja_opts_c else 0
-                            _caja_new = st.selectbox(
-                                "Caja",
-                                options=_caja_opts_c,
-                                index=_caja_idx_c,
-                                key=f"caja_{_oid_c}",
-                                label_visibility="collapsed",
-                            )
-                    _nuevas_fpago_cob[_oid_c] = str(_fp_new) if _fp_new is not None else None
-                    _nuevas_cajas_cob[_oid_c] = _cajas_por_nombre_cob.get(_caja_new) if _caja_new != "—" else None
-
-            if _guardar_cob:
+                _sels_wix_cob = db.cargar_selecciones("wix")
                 try:
-                    db.asignar_cajas_pedidos_wix(_nuevas_cajas_cob)
-                    db.guardar_fechas_pago_wix(_nuevas_fpago_cob)
-                    st.success("Guardado.")
-                except Exception as _e_cob:
-                    st.error(f"❌ {_e_cob}")
+                    _fechas_pago_cob = db.cargar_fechas_pago_wix()
+                except Exception:
+                    _fechas_pago_cob = {}
+
+                _pay_map = {"PAID": "✅ Pagado", "UNPAID": "❌ Sin pagar", "PENDING": "🟡 Pendiente",
+                            "PARTIALLY_REFUNDED": "🟠 Parcial", "FULLY_REFUNDED": "⚫ Reembolsado"}
+                _ful_map = {"FULFILLED": "✅ Entregado", "NOT_FULFILLED": "⏳ Pendiente",
+                            "PARTIALLY_FULFILLED": "🔶 Parcial"}
+
+                with st.form("form_wix_cob_filtro", border=False):
+                    _wc1, _wc2 = st.columns(2)
+                    _wix_desde = _wc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_cob_desde")
+                    _wix_hasta = _wc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_cob_hasta")
+                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                _wix_sorted_cob = [o for o in _wix_sorted_cob
+                                    if _wix_desde <= _safe_date(str(o.get("createdDate") or "")[:10]) <= _wix_hasta]
+
+                with st.form("form_cobros_wix_cajas", border=True):
+                    _guardar_cob = st.form_submit_button("💾 Guardar fechas de cobro y cajas", type="primary")
+                    _nuevas_fpago_cob = {}
+                    _nuevas_cajas_cob = {}
+                    for _o in _wix_sorted_cob:
+                        _nro_c = _o.get("number") or _o.get("id") or ""
+                        _oid_c = str(_o.get("id") or _nro_c)
+                        _bi = (_o.get("billingInfo", {}) or {}).get("contactDetails", {}) or {}
+                        _nombre_c = (
+                            f"{_bi.get('firstName', '')} {_bi.get('lastName', '')}".strip()
+                            or (_o.get("buyerInfo") or {}).get("email", "")
+                            or "—"
+                        )
+                        _caja_id_c = _o.get("caja_id")
+                        _fecha_pago_raw = _fechas_pago_cob.get(_oid_c)
+                        try:
+                            _fecha_pago_val = date.fromisoformat(_fecha_pago_raw) if _fecha_pago_raw else None
+                        except Exception:
+                            _fecha_pago_val = None
+                        _total_c = (_o.get("priceSummary", {}) or {}).get("total", {}).get("formattedAmount", "")
+                        _pay_c = _pay_map.get(str(_o.get("paymentStatus") or "").upper(), "❌ Sin pagar")
+                        _ful_c = _ful_map.get(str(_o.get("fulfillmentStatus") or "").upper(), "⏳ No entregado")
+                        _fped_c = _fmt_fecha(_o.get("createdDate"))
+                        _fent_c = _fmt_fecha(_sels_wix_cob.get(_oid_c))
+
+                        with st.container(border=True):
+                            _ci, _cd, _cc = st.columns([5, 2, 2])
+                            with _ci:
+                                st.markdown(f"**#{_nro_c} — {_nombre_c} · {_total_c}**")
+                                _info2 = f" · 🚚 entrega {_fent_c}" if _fent_c and _fent_c != "—" else " · 🚚 —"
+                                st.caption(f"{_pay_c} · {_ful_c} · 📅 pedido {_fped_c}{_info2}")
+                            with _cd:
+                                _fp_new = st.date_input(
+                                    "F. pago",
+                                    value=_fecha_pago_val,
+                                    key=f"fpago_{_oid_c}",
+                                    format="DD/MM/YYYY",
+                                    label_visibility="collapsed",
+                                )
+                            with _cc:
+                                _current_caja_c = _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None
+                                _caja_opts_c = ["—"] + _cajas_names_cob
+                                _caja_idx_c = _caja_opts_c.index(_current_caja_c) if _current_caja_c in _caja_opts_c else 0
+                                _caja_new = st.selectbox(
+                                    "Caja",
+                                    options=_caja_opts_c,
+                                    index=_caja_idx_c,
+                                    key=f"caja_{_oid_c}",
+                                    label_visibility="collapsed",
+                                )
+                        _nuevas_fpago_cob[_oid_c] = str(_fp_new) if _fp_new is not None else None
+                        _nuevas_cajas_cob[_oid_c] = _cajas_por_nombre_cob.get(_caja_new) if _caja_new != "—" else None
+
+                if _guardar_cob:
+                    try:
+                        db.asignar_cajas_pedidos_wix(_nuevas_cajas_cob)
+                        db.guardar_fechas_pago_wix(_nuevas_fpago_cob)
+                        db.cargar_pedidos_wix.clear()
+                        st.success("Guardado.")
+                        st.rerun(scope="fragment")
+                    except Exception as _e_cob:
+                        st.error(f"❌ {_e_cob}")
+        _frag_cobros_wix()
 
 with tab_sync:
     _hoy_sync = date.today()
