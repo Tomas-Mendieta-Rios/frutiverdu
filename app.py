@@ -2890,6 +2890,8 @@ if _sub_resumen:
     
             # ── EGRESOS ─────────────────────────────────────────────────────────────
             st.divider()
+            _pct_pag = round(total_egr_pag / total_egresos * 100, 1) if total_egresos > 0 else 0.0
+            _pct_pag_color = "#2e7d32" if _pct_pag >= 80 else ("#f57c00" if _pct_pag >= 50 else "#c62828")
             st.markdown(f"""
     <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
       <h2 style='text-align:center;margin:0 0 14px 0'>Egresos</h2>
@@ -2898,6 +2900,15 @@ if _sub_resumen:
         {_metric_cell("Pagado",    f"$ {_pesos(total_egr_pag)}", "#2e7d32")}
         {_metric_cell("Pendiente", f"$ {_pesos(total_egr_pend)}", "#c62828")}
         {_metric_cell("Anulado",   f"$ {_pesos(total_egr_anul)}", "#757575")}
+      </div>
+      <div style='margin-top:14px'>
+        <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px'>
+          <span style='font-size:0.8rem;font-weight:600;color:#777'>Pagado del total de egresos</span>
+          <span style='font-size:1.1rem;font-weight:700;color:{_pct_pag_color}'>{_pct_pag}%</span>
+        </div>
+        <div style='background:#d0d7e3;border-radius:6px;height:10px;overflow:hidden'>
+          <div style='background:{_pct_pag_color};width:{min(_pct_pag,100)}%;height:100%;border-radius:6px;transition:width 0.3s'></div>
+        </div>
       </div>
     </div>""", unsafe_allow_html=True)
     
