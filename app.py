@@ -7605,7 +7605,14 @@ if tab_rubros_ingresos:
                             st.error(f"Ya existe el item **{_ni_nm}** en ese subrubro.")
 
         _mostrar_anulados_i = st.toggle("Mostrar anulados", value=False, key="ri_mostrar_anulados")
-        _items = db.cargar_items_ingresos(incluir_anulados=_mostrar_anulados_i)
+        _items = sorted(
+            db.cargar_items_ingresos(incluir_anulados=_mostrar_anulados_i),
+            key=lambda i: (
+                _rub_map.get((_sub_map.get(i.get("subrubro_id")) or {}).get("rubro_id"), ""),
+                (_sub_map.get(i.get("subrubro_id")) or {}).get("nombre", ""),
+                i.get("nombre", "")
+            )
+        )
         if _items:
             st.markdown("**Items**")
             for _i in _items:
@@ -7773,7 +7780,14 @@ if tab_re:
                                 st.error(f"Ya existe el item **{_ni_nm}** en ese subrubro.")
 
             _mostrar_anulados_e = st.toggle("Mostrar anulados", value=False, key="re_mostrar_anulados")
-            _items = db.cargar_items_egresos(incluir_anulados=_mostrar_anulados_e)
+            _items = sorted(
+                db.cargar_items_egresos(incluir_anulados=_mostrar_anulados_e),
+                key=lambda i: (
+                    _rub_map.get((_sub_map.get(i.get("subrubro_id")) or {}).get("rubro_id"), ""),
+                    (_sub_map.get(i.get("subrubro_id")) or {}).get("nombre", ""),
+                    i.get("nombre", "")
+                )
+            )
             if _items:
                 st.markdown("**Items**")
                 for _i in _items:
