@@ -1400,7 +1400,7 @@ facturas_bal     = db.cargar_facturas()
 pedidos_wix_bal  = db.cargar_pedidos_wix()
 compras_bal      = db.cargar_compras()
 comprobantes_bal = db.cargar_comprobantes_compra()
-# gastos_bal       = db.cargar_gastos()  # no se usa
+gastos_bal       = db.cargar_gastos()
 cobros_bal       = db.cargar_cobros()
 pagos_bal        = db.cargar_pagos_proveedores()
 
@@ -4562,7 +4562,7 @@ with tab_sync:
     if sincronizar_todo:
         # Orden: DUX[0], Wix (en el gap del rate limit), DUX[1..n]
         _sync_steps = [
-            # ("Gastos",               _sync_gastos),  # no se usa
+            ("Gastos",               _sync_gastos),
             ("Pedidos Wix",          _sync_pedidos_wix),
             ("Pagos a proveedores",  _sync_pagos_proveedores),
             ("Compras",              _sync_compras),
