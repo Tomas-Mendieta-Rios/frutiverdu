@@ -2452,8 +2452,8 @@ if _sub_pendientes:
                             _ltot = sum(_pend_saldo_c(c) for c in _lst)
                             with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
                                 _rows = [{
-                                    "Fecha":       _fmt_fecha(_c.get("fecha")),
-                                    "Comprobante": _c.get("nro_comprobante") or "—",
+                                    "Fecha devengada": _fmt_fecha(_c.get("fecha")),
+                                    "Comprobante":     _c.get("nro_comprobante") or "—",
                                     "Total":       float(_c.get("total") or 0),
                                     **( {"Pagado": _pend_pagado_c(_c), "Saldo": _pend_saldo_c(_c)} if _lbl == "Parciales" else {} ),
                                 } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -2476,8 +2476,8 @@ if _sub_pendientes:
                     _rtot = sum(float(o.get("monto") or 0) for o in _rlst)
                     with st.expander(f"{_rub} ({len(_rlst)}) — $ {_pesos(_rtot)}"):
                         _rows = [{
-                            "Fecha":    _fmt_fecha(_o.get("fecha")),
-                            "Subrubro": (_o.get("subrubros_egresos") or {}).get("nombre") or "—",
+                            "Fecha devengada": _fmt_fecha(_o.get("fecha")),
+                            "Subrubro":        (_o.get("subrubros_egresos") or {}).get("nombre") or "—",
                             "Item":     (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—",
                             "Monto":    float(_o.get("monto") or 0),
                         } for _o in sorted(_rlst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
@@ -2515,8 +2515,8 @@ if _sub_pendientes:
                             _ltot = sum(_pend_saldo_f(f) for f in _lst)
                             with st.expander(f"{_lbl} ({len(_lst)}) — $ {_pesos(_ltot)}"):
                                 _rows = [{
-                                    "Fecha":       _fmt_fecha(_f.get("fecha_comp")),
-                                    "Comprobante": f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
+                                    "Fecha devengada": _fmt_fecha(_f.get("fecha_comp")),
+                                    "Comprobante":     f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip(),
                                     "Total":       float(_f.get("total") or 0),
                                     **( {"Cobrado": _pend_cobrado_f(_f), "Saldo": _pend_saldo_f(_f)} if _lbl == "Parciales" else {} ),
                                     "PDF":         _f.get("url_factura") or None,
@@ -2544,9 +2544,9 @@ if _sub_pendientes:
                     _ctot = sum(_wix_monto(p) for p in _citems)
                     with st.expander(f"{_cli} ({len(_citems)}) — $ {_pesos(_ctot)}"):
                         _rows = [{
-                            "Fecha":    _fmt_fecha(_p.get("createdDate")),
-                            "Pedido #": _p.get("number") or _p.get("id") or "—",
-                            "Total":    _wix_monto(_p),
+                            "Fecha devengada": _fmt_fecha(_p.get("createdDate")),
+                            "Pedido #":        _p.get("number") or _p.get("id") or "—",
+                            "Total":           _wix_monto(_p),
                         } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
                         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
                                      column_config={"Total": _cfg_monto})
@@ -3199,8 +3199,8 @@ if _sub_percibido:
                         _tot_cob_fac = _cob_por_fac_p.get(_fac_id, 0.0)
                         _imp_mto     = float(_imp.get("monto_imputado") or c.get("monto") or 0)
                         rows.append({
-                            "Fecha":         _fmt_fecha(c.get("fecha")),
-                            "Cobro #":       c.get("nro_comprobante") or "—",
+                            "Fecha percibida": _fmt_fecha(c.get("fecha")),
+                            "Cobro #":         c.get("nro_comprobante") or "—",
                             "Factura":       _imp.get("nro_comprobante") or "—",
                             "PDF":           _fac.get("url_factura") or None,
                             "Imputado":      _imp_mto,
@@ -3241,8 +3241,8 @@ if _sub_percibido:
                     _ctot = sum(_wix_monto(_p) for _p in _pitems)
                     with st.expander(f"{_cli} ({len(_pitems)}) — $ {_pesos(_ctot)}"):
                         _rows = [{
-                            "Fecha":    _fmt_fecha(_fechas_pago_wix_p.get(str(_p.get("id") or "")) or _p.get("createdDate")),
-                            "Pedido #": _p.get("number") or _p.get("id") or "—",
+                            "Fecha percibida": _fmt_fecha(_fechas_pago_wix_p.get(str(_p.get("id") or "")) or _p.get("createdDate")),
+                            "Pedido #":        _p.get("number") or _p.get("id") or "—",
                             "Total":    _wix_monto(_p),
                         } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
                         st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
@@ -3317,8 +3317,8 @@ if _sub_percibido:
                         _pag_tot_comp = _pag_por_comp.get(_comp_nro_key, 0.0)
                         _imp_mto      = float(_imp.get("monto_imputado") or p.get("monto") or 0)
                         rows.append({
-                            "Fecha":       _fmt_fecha(p.get("fecha")),
-                            "Pago #":      p.get("nro_comprobante") or "—",
+                            "Fecha percibida": _fmt_fecha(p.get("fecha")),
+                            "Pago #":          p.get("nro_comprobante") or "—",
                             "Comprobante": _comp_nro_key or "—",
                             "Imputado":    _imp_mto,
                             "Total Comp.": _comp_tot or None,
@@ -3373,7 +3373,7 @@ if _sub_percibido:
                                     _itot = sum(float(o.get("monto") or 0) for o in _iitems)
                                     with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                         _rows = [{
-                                            "Fecha devengada":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
+                                            "Fecha percibida":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
                                             "Monto":       float(o.get("monto") or 0),
                                             "Descripción": o.get("descripcion") or "",
                                         } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
@@ -3411,7 +3411,7 @@ if _sub_percibido:
                             _itot = sum(float(o.get("monto") or 0) for o in _iitems)
                             with st.expander(f"{_ik} ({len(_iitems)}) — $ {_pesos(_itot)}"):
                                 _rows = [{
-                                    "Fecha devengada":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
+                                    "Fecha percibida":   _fmt_fecha(o.get("fecha_movimiento") or o.get("fecha")),
                                     "Monto":       float(o.get("monto") or 0),
                                     "Descripción": o.get("descripcion") or "",
                                 } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
