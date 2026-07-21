@@ -2041,18 +2041,17 @@ def eliminar_subrubro_ingreso(id):
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def cargar_items_ingresos(subrubro_id=None):
+def cargar_items_ingresos(subrubro_id=None, incluir_anulados=False):
     client = get_client()
     if subrubro_id is not None:
-        resp = _exec(client.table("items_ingresos")
-            .select("id, nombre")
-            .eq("subrubro_id", subrubro_id)
-            .order("nombre"))
-        return resp.data or []
-    resp = _exec(client.table("items_ingresos")
-        .select("id, nombre, subrubro_id")
-        .order("nombre"))
-    return resp.data or []
+        q = client.table("items_ingresos").select("id, nombre, activo").eq("subrubro_id", subrubro_id)
+        if not incluir_anulados:
+            q = q.eq("activo", True)
+        return _exec(q.order("nombre")).data or []
+    q = client.table("items_ingresos").select("id, nombre, subrubro_id, activo")
+    if not incluir_anulados:
+        q = q.eq("activo", True)
+    return _exec(q.order("nombre")).data or []
 
 
 def guardar_item_ingreso(nombre, subrubro_id):
@@ -2060,11 +2059,13 @@ def guardar_item_ingreso(nombre, subrubro_id):
     client.table("items_ingresos").insert({"nombre": nombre, "subrubro_id": subrubro_id}).execute()
 
 
-def actualizar_item_ingreso(id, nombre, subrubro_id=None):
+def actualizar_item_ingreso(id, nombre, subrubro_id=None, activo=None):
     client = get_client()
     data = {"nombre": nombre}
     if subrubro_id is not None:
         data["subrubro_id"] = subrubro_id
+    if activo is not None:
+        data["activo"] = activo
     client.table("items_ingresos").update(data).eq("id", id).execute()
 
 
@@ -2154,30 +2155,29 @@ def eliminar_subrubro_egreso(id):
     client.table("subrubros_egresos").delete().eq("id", id).execute()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def cargar_items_egresos(subrubro_id=None):
+def cargar_items_egresos(subrubro_id=None, incluir_anulados=False):
     client = get_client()
     if subrubro_id is not None:
-        resp = client.table("items_egresos") \
-            .select("id, nombre") \
-            .eq("subrubro_id", subrubro_id) \
-            .order("nombre") \
-            .execute()
-        return resp.data or []
-    resp = client.table("items_egresos") \
-        .select("id, nombre, subrubro_id") \
-        .order("nombre") \
-        .execute()
-    return resp.data or []
+        q = client.table("items_egresos").select("id, nombre, activo").eq("subrubro_id", subrubro_id)
+        if not incluir_anulados:
+            q = q.eq("activo", True)
+        return q.order("nombre").execute().data or []
+    q = client.table("items_egresos").select("id, nombre, subrubro_id, activo")
+    if not incluir_anulados:
+        q = q.eq("activo", True)
+    return q.order("nombre").execute().data or []
 
 def guardar_item_egreso(nombre, subrubro_id):
     client = get_client()
     client.table("items_egresos").insert({"nombre": nombre, "subrubro_id": subrubro_id}).execute()
 
-def actualizar_item_egreso(id, nombre, subrubro_id=None):
+def actualizar_item_egreso(id, nombre, subrubro_id=None, activo=None):
     client = get_client()
     data = {"nombre": nombre}
     if subrubro_id is not None:
         data["subrubro_id"] = subrubro_id
+    if activo is not None:
+        data["activo"] = activo
     client.table("items_egresos").update(data).eq("id", id).execute()
 
 @st.cache_data(ttl=60, show_spinner=False)

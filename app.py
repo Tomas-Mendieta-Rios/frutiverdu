@@ -7604,15 +7604,18 @@ if tab_rubros_ingresos:
                         except Exception:
                             st.error(f"Ya existe el item **{_ni_nm}** en ese subrubro.")
 
-        _items = db.cargar_items_ingresos()
+        _mostrar_anulados_i = st.toggle("Mostrar anulados", value=False, key="ri_mostrar_anulados")
+        _items = db.cargar_items_ingresos(incluir_anulados=_mostrar_anulados_i)
         if _items:
             st.markdown("**Items**")
             for _i in _items:
                 _sub_i  = _sub_map.get(_i.get("subrubro_id")) or {}
                 _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
                 _sub_nm = _sub_i.get("nombre", "—")
+                _activo = _i.get("activo", True)
+                _label  = f"~~{_i['nombre']}~~ — {_rub_nm} › {_sub_nm} *(anulado)*" if not _activo else f"**{_i['nombre']}** — {_rub_nm} › {_sub_nm}"
                 _ic1, _ic2 = st.columns([5, 1])
-                _ic1.write(f"**{_i['nombre']}** — {_rub_nm} › {_sub_nm}")
+                _ic1.write(_label)
                 if _ic2.button("✏️", key=f"ri_ei_{_i['id']}"):
                     st.session_state[f"ri_edit_i_{_i['id']}"] = True
                     st.rerun(scope="fragment")
@@ -7632,10 +7635,11 @@ if tab_rubros_ingresos:
                         _e_sub = st.selectbox("Subrubro", options=_sub_keys,
                                                index=_sub_keys.index(_curr_sub_nm) if _curr_sub_nm in _sub_keys else 0,
                                                key=f"ri_esub_{_i['id']}")
+                        _e_activo = st.checkbox("Activo", value=_activo, key=f"ri_eact_{_i['id']}")
                         _ec1, _ec2 = st.columns(2)
                         if _ec1.button("💾 Guardar", key=f"ri_isave_{_i['id']}"):
                             _new_sub_id = _e_sub_opts.get(_e_sub) if _e_sub else _curr_sub_id
-                            db.actualizar_item_ingreso(_i["id"], _e_nm.strip().upper(), _new_sub_id)
+                            db.actualizar_item_ingreso(_i["id"], _e_nm.strip().upper(), _new_sub_id, _e_activo)
                             db.cargar_items_ingresos.clear()
                             st.session_state.pop(f"ri_edit_i_{_i['id']}", None)
                             st.toast("✅ Item actualizado.")
@@ -7768,15 +7772,18 @@ if tab_re:
                             except Exception:
                                 st.error(f"Ya existe el item **{_ni_nm}** en ese subrubro.")
 
-            _items = db.cargar_items_egresos()
+            _mostrar_anulados_e = st.toggle("Mostrar anulados", value=False, key="re_mostrar_anulados")
+            _items = db.cargar_items_egresos(incluir_anulados=_mostrar_anulados_e)
             if _items:
                 st.markdown("**Items**")
                 for _i in _items:
                     _sub_i  = _sub_map.get(_i.get("subrubro_id")) or {}
                     _rub_nm = _rub_map.get(_sub_i.get("rubro_id"), "—")
                     _sub_nm = _sub_i.get("nombre", "—")
+                    _activo = _i.get("activo", True)
+                    _label  = f"~~{_i['nombre']}~~ — {_rub_nm} › {_sub_nm} *(anulado)*" if not _activo else f"**{_i['nombre']}** — {_rub_nm} › {_sub_nm}"
                     _ic1, _ic2 = st.columns([5, 1])
-                    _ic1.write(f"**{_i['nombre']}** — {_rub_nm} › {_sub_nm}")
+                    _ic1.write(_label)
                     if _ic2.button("✏️", key=f"re_ei_{_i['id']}"):
                         st.session_state[f"re_edit_i_{_i['id']}"] = True
                         st.rerun(scope="fragment")
@@ -7796,10 +7803,11 @@ if tab_re:
                             _e_sub = st.selectbox("Subrubro", options=_sub_keys,
                                                    index=_sub_keys.index(_curr_sub_nm) if _curr_sub_nm in _sub_keys else 0,
                                                    key=f"re_esub_{_i['id']}")
+                            _e_activo = st.checkbox("Activo", value=_activo, key=f"re_eact_{_i['id']}")
                             _ec1, _ec2 = st.columns(2)
                             if _ec1.button("💾 Guardar", key=f"re_isave_{_i['id']}"):
                                 _new_sub_id = _e_sub_opts.get(_e_sub) if _e_sub else _curr_sub_id
-                                db.actualizar_item_egreso(_i["id"], _e_nm.strip().upper(), _new_sub_id)
+                                db.actualizar_item_egreso(_i["id"], _e_nm.strip().upper(), _new_sub_id, _e_activo)
                                 db.cargar_items_egresos.clear()
                                 st.session_state.pop(f"re_edit_i_{_i['id']}", None)
                                 st.toast("✅ Item actualizado.")
