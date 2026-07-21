@@ -2698,6 +2698,8 @@ if _sub_resumen:
             st.divider()
             def _metric_cell(label, value, color):
                 return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p></div>"
+            _pct_cobr = round(total_ing_cobr / total_ingresos * 100, 1) if total_ingresos > 0 else 0.0
+            _pct_color = "#2e7d32" if _pct_cobr >= 80 else ("#f57c00" if _pct_cobr >= 50 else "#c62828")
             st.markdown(f"""
     <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
       <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos</h2>
@@ -2706,6 +2708,15 @@ if _sub_resumen:
         {_metric_cell("Cobrado",   f"$ {_pesos(total_ing_cobr)}", "#2e7d32")}
         {_metric_cell("Pendiente", f"$ {_pesos(total_ing_pend)}", "#c62828")}
         {_metric_cell("Anulado",   f"$ {_pesos(total_ing_anul)}", "#757575")}
+      </div>
+      <div style='margin-top:14px'>
+        <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px'>
+          <span style='font-size:0.8rem;font-weight:600;color:#777'>Cobrado del total facturado</span>
+          <span style='font-size:1.1rem;font-weight:700;color:{_pct_color}'>{_pct_cobr}%</span>
+        </div>
+        <div style='background:#d0d7e3;border-radius:6px;height:10px;overflow:hidden'>
+          <div style='background:{_pct_color};width:{min(_pct_cobr,100)}%;height:100%;border-radius:6px;transition:width 0.3s'></div>
+        </div>
       </div>
     </div>""", unsafe_allow_html=True)
     
