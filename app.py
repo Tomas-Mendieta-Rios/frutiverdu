@@ -3432,7 +3432,10 @@ if _sub_percibido:
         _percibido_frag()
 if _stab_movimientos:
     with _stab_movimientos:
-        _render_movimiento_caja(cobros_bal, pagos_bal)
+        @st.fragment
+        def _frag_movimientos():
+            _render_movimiento_caja(cobros_bal, pagos_bal)
+        _frag_movimientos()
 
 if _stab_ajustes:
     with _stab_ajustes:
