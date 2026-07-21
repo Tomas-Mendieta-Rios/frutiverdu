@@ -3054,9 +3054,18 @@ if _sub_resumen:
                     _ret_subs_dev.setdefault(_sk, 0.0)
                     _ret_subs_dev[_sk] += float(_o.get("monto") or 0)
                 if _ret_subs_dev:
-                    _rs_cols = st.columns(len(_ret_subs_dev))
-                    for _rc, (_sk, _sv) in zip(_rs_cols, sorted(_ret_subs_dev.items())):
-                        _bal_metric(_rc, _sk, f"$ {_pesos(_sv)}", "#c62828")
+                    _bars_dev = "".join(
+                        f"<div style='margin-bottom:8px'>"
+                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                        f"<span style='font-size:0.82rem;font-weight:600'>{_sk}</span>"
+                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_sv)} · {round(_sv/total_retiros*100,1) if total_retiros else 0}%</span>"
+                        f"</div>"
+                        f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
+                        f"<div style='background:#c62828;width:{round(_sv/total_retiros*100,1) if total_retiros else 0}%;height:100%;border-radius:5px'></div>"
+                        f"</div></div>"
+                        for _sk, _sv in sorted(_ret_subs_dev.items())
+                    )
+                    st.markdown(_bars_dev, unsafe_allow_html=True)
                 for _ret_est_lbl, _ret_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
                     _ret_est_items = [o for o in _retiros_f if (o.get("estado") or "pendiente") == _ret_est_lbl]
                     if _ret_est_items:
@@ -3433,9 +3442,18 @@ if _sub_percibido:
                     _ret_subs_p.setdefault(_sk, 0.0)
                     _ret_subs_p[_sk] += float(_o.get("monto") or 0)
                 if _ret_subs_p:
-                    _rsp_cols = st.columns(len(_ret_subs_p))
-                    for _rc, (_sk, _sv) in zip(_rsp_cols, sorted(_ret_subs_p.items())):
-                        _bal_metric(_rc, _sk, f"$ {_pesos(_sv)}", "#c62828")
+                    _bars_p = "".join(
+                        f"<div style='margin-bottom:8px'>"
+                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                        f"<span style='font-size:0.82rem;font-weight:600'>{_sk}</span>"
+                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_sv)} · {round(_sv/total_retiros_p*100,1) if total_retiros_p else 0}%</span>"
+                        f"</div>"
+                        f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
+                        f"<div style='background:#c62828;width:{round(_sv/total_retiros_p*100,1) if total_retiros_p else 0}%;height:100%;border-radius:5px'></div>"
+                        f"</div></div>"
+                        for _sk, _sv in sorted(_ret_subs_p.items())
+                    )
+                    st.markdown(_bars_p, unsafe_allow_html=True)
                 _ret_by_sub = {}
                 for _o in _retiros_p:
                     _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
