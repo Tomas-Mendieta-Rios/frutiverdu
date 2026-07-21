@@ -3028,7 +3028,7 @@ if _sub_resumen:
             _fic_color  = "#2e7d32" if resultado >= 0 else "#c62828"
             _fic_signo  = "+" if resultado >= 0 else ""
             _real_color = "#2e7d32" if _res_real >= 0 else "#c62828"
-            _real_signo = "+" if _res_real >= 0 else ""
+            _real_signo = "+" if _res_real >= 0 else "-"
             def _metric_cell_sub(label, value, color, sub):
                 return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p><p style='margin:0;font-size:0.75rem;color:#999'>{sub}</p></div>"
             st.markdown(f"""
@@ -3095,9 +3095,9 @@ if _sub_resumen:
                 _net_dev       = resultado - total_retiros
                 _net_real      = _res_real - total_retiros_pag
                 _net_dev_color = "#2e7d32" if _net_dev  >= 0 else "#c62828"
-                _net_dev_signo = "+" if _net_dev  >= 0 else ""
+                _net_dev_signo = "+" if _net_dev  >= 0 else "-"
                 _net_real_color= "#2e7d32" if _net_real >= 0 else "#c62828"
-                _net_real_signo= "+" if _net_real >= 0 else ""
+                _net_real_signo= "+" if _net_real >= 0 else "-"
                 st.markdown(f"""
     <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
       <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
@@ -3423,7 +3423,7 @@ if _sub_percibido:
             # ── RESULTADO OPERATIVO ──────────────────────────────────────────────────
             st.divider()
             res_color = "#2e7d32" if resultado_op >= 0 else "#c62828"
-            res_signo = "+" if resultado_op >= 0 else ""
+            res_signo = "+" if resultado_op >= 0 else "-"
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
@@ -3478,7 +3478,7 @@ if _sub_percibido:
 
                 # Resultado neto
                 _neto_color = "#2e7d32" if resultado_neto >= 0 else "#c62828"
-                _neto_signo = "+" if resultado_neto >= 0 else ""
+                _neto_signo = "+" if resultado_neto >= 0 else "-"
                 st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
   <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
