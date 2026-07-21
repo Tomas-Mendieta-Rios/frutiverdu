@@ -4479,7 +4479,9 @@ if tab_ing_cobros_wix:
                                     if _wix_desde <= _safe_date(str(o.get("createdDate") or "")[:10]) <= _wix_hasta]
 
                 with st.form("form_cobros_wix_cajas", border=True):
-                    _guardar_cob = st.form_submit_button("💾 Guardar fechas de cobro y cajas", type="primary")
+                    _gcb1, _gcb2 = st.columns([2, 5])
+                    _guardar_cob = _gcb1.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
+                    _gcb2.markdown("<p style='margin-top:8px'>fechas de cobro y cajas</p>", unsafe_allow_html=True)
                     _nuevas_fpago_cob = {}
                     _nuevas_cajas_cob = {}
                     for _o in _wix_sorted_cob:
