@@ -4429,6 +4429,15 @@ if _stab_aportes_socios:
                 if not _lista:
                     st.info("No hay registros todavía.")
                     return
+                with st.form("form_as_edit_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _as_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="as_edit_desde")
+                    _as_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="as_edit_hasta")
+                    st.form_submit_button("🔄 Filtrar", type="primary", use_container_width=True)
+                _lista = [a for a in _lista if _as_e_desde <= _safe_date(a.get("fecha")) <= _as_e_hasta]
+                if not _lista:
+                    st.info("Sin registros en el período.")
+                    return
                 for _a in _lista:
                     _aid   = _a["id"]
                     _fecha = _safe_date(_a.get("fecha"))
@@ -4472,16 +4481,16 @@ if _stab_aportes_socios:
         with _as_tab3:
             @st.fragment
             def _as_todos():
-                _lista = db.cargar_aportes_socios()
-                if not _lista:
+                _lista_full = db.cargar_aportes_socios()
+                if not _lista_full:
                     st.info("No hay registros todavía.")
                     return
-                # Saldo por socio
+                # Saldo por socio (siempre total, sin filtro de fecha)
                 st.markdown("#### Saldo actual por socio")
                 _saldo_cols = st.columns(max(len(_as_socios), 1))
                 for _ci, _soc in enumerate(_as_socios):
-                    _aportes  = sum(float(a["monto"]) for a in _lista if a["socio"] == _soc and a["tipo"] == "aporte")
-                    _devol    = sum(float(a["monto"]) for a in _lista if a["socio"] == _soc and a["tipo"] == "devolucion")
+                    _aportes  = sum(float(a["monto"]) for a in _lista_full if a["socio"] == _soc and a["tipo"] == "aporte")
+                    _devol    = sum(float(a["monto"]) for a in _lista_full if a["socio"] == _soc and a["tipo"] == "devolucion")
                     _saldo    = _aportes - _devol
                     _color    = "#2e7d32" if _saldo > 0 else "#c62828" if _saldo < 0 else "#555"
                     _saldo_cols[_ci].markdown(
@@ -4492,6 +4501,13 @@ if _stab_aportes_socios:
                         f"</div>", unsafe_allow_html=True
                     )
                 st.divider()
+                # Filtro fecha para listado
+                with st.form("form_as_todos_filtro", border=False):
+                    _dc1, _dc2 = st.columns(2)
+                    _as_t_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="as_todos_desde")
+                    _as_t_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="as_todos_hasta")
+                    st.form_submit_button("🔄 Filtrar", type="primary", use_container_width=True)
+                _lista = [a for a in _lista_full if _as_t_desde <= _safe_date(a.get("fecha")) <= _as_t_hasta]
                 # Listado
                 _rows = []
                 for _a in _lista:
