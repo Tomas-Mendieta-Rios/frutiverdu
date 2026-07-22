@@ -1445,7 +1445,7 @@ tab_grupo_config_avanzada = _tabs_dict.get("tab_grupo_config_avanzada")
 
 # Sub-tab pre-init (in case parent tab is not visible for this role)
 _sub_resumen = _sub_percibido = _sub_pendientes = tab_ing_cobros_wix = None
-_stab_movimientos = _stab_transferencias = _stab_ajustes = _stab_saldo_ini = _stab_otros_ingresos = _stab_otros_egresos = None
+_stab_movimientos = _stab_transferencias = _stab_ajustes = _stab_saldo_ini = _stab_otros_ingresos = _stab_otros_egresos = _stab_aportes_socios = None
 tab_eg_compras = tab_eg_gastos = tab_eg_pagos = None
 tab_ing_facturas = tab_ing_cobros = None
 tab_dux_productos = tab_dux_rubros = tab_wix_productos = None
@@ -1455,8 +1455,8 @@ tab_ing_cobros_wix = None
 
 if tab_tesoreria:
     with tab_tesoreria:
-        _sub_resumen, _sub_percibido, _sub_pendientes, _stab_movimientos, tab_ing_cobros_wix, _stab_otros_ingresos, _stab_otros_egresos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini = st.tabs([
-            "📊 Resumen", "📊 Percibido", "⏳ Pendientes y deudores", "📊 Movimientos", "💳 Cobros Wix", "💰 Ingresos", "💸 Egresos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial",
+        _sub_resumen, _sub_percibido, _sub_pendientes, _stab_movimientos, tab_ing_cobros_wix, _stab_otros_ingresos, _stab_otros_egresos, _stab_transferencias, _stab_ajustes, _stab_saldo_ini, _stab_aportes_socios = st.tabs([
+            "📊 Resumen", "📊 Percibido", "⏳ Pendientes y deudores", "📊 Movimientos", "💳 Cobros Wix", "💰 Ingresos", "💸 Egresos", "↔️ Transferencias", "🔧 Ajustes", "💵 Saldo inicial", "🤝 Préstamos socios",
         ])
 
 # Tabs ocultas (definidas como None para que las referencias no rompan)
@@ -4298,6 +4298,141 @@ if tab_iva:
         _bal_metric(_sc2, "IVA Débito",                f"$ {_pesos(_iva_debito)}",           "#6a1b9a")
         _bal_metric(_sc3, "Crédito fiscal necesario",  f"$ {_pesos(_sim_credito_needed)}",   "#e65100")
         _bal_metric(_sc4, "Facturas de compra (10.5%)", f"$ {_pesos(_sim_facturas_needed)}", "#2e7d32")
+
+if _stab_aportes_socios:
+    with _stab_aportes_socios:
+        st.subheader("🤝 Préstamos socios")
+
+        _as_cajas     = db.cargar_cajas()
+        _as_caja_map  = {c["id"]: c["nombre"] for c in _as_cajas}
+        _as_caja_opts = {c["nombre"]: c["id"] for c in _as_cajas if c.get("activa")}
+        _as_socios    = ["AM", "Carlos"]
+        _as_tipos     = {"aporte": "Préstamo al negocio", "devolucion": "Devolución al socio"}
+
+        _as_lista = db.cargar_aportes_socios()
+
+        _as_tab1, _as_tab2, _as_tab3 = st.tabs(["➕ Ingresar", "✏️ Editar / Eliminar", "📋 Todos"])
+
+        def _as_render_fields(pfx, defaults=None):
+            d = defaults or {}
+            socio_idx  = _as_socios.index(d.get("socio", "AM")) if d.get("socio") in _as_socios else 0
+            tipo_idx   = list(_as_tipos.keys()).index(d.get("tipo", "aporte")) if d.get("tipo") in _as_tipos else 0
+            socio  = st.selectbox("Socio", options=_as_socios, index=socio_idx, key=f"{pfx}_socio")
+            tipo   = st.selectbox("Tipo", options=list(_as_tipos.keys()), format_func=lambda x: _as_tipos[x], index=tipo_idx, key=f"{pfx}_tipo")
+            fecha  = st.date_input("Fecha", value=d.get("fecha", date.today()), format="DD/MM/YYYY", key=f"{pfx}_fecha")
+            monto_str = st.text_input("Monto ($)", value=d.get("monto_str", ""), key=f"{pfx}_monto")
+            try:
+                monto = float(monto_str.replace(",", ".")) if monto_str else 0.0
+            except ValueError:
+                monto = 0.0
+            caja_idx = ([""] + list(_as_caja_opts.keys())).index(d.get("caja_nm", "")) if d.get("caja_nm") in _as_caja_opts else 0
+            caja     = st.selectbox("Caja", options=[""] + list(_as_caja_opts.keys()), index=caja_idx, key=f"{pfx}_caja")
+            concepto = st.text_input("Concepto (opcional)", value=d.get("concepto", ""), key=f"{pfx}_concepto")
+            return {"socio": socio, "tipo": tipo, "fecha": fecha, "monto": monto,
+                    "caja": caja, "caja_id": _as_caja_opts.get(caja), "concepto": concepto}
+
+        with _as_tab1:
+            @st.fragment
+            def _as_nuevo():
+                if st.session_state.pop("as_guardado_ok", False):
+                    st.success("Guardado.")
+                v = _as_render_fields("as_n")
+                if st.button("💾 Guardar", type="primary", key="as_guardar_btn"):
+                    if v["monto"] <= 0:
+                        st.error("El monto debe ser mayor a 0.")
+                    else:
+                        db.guardar_aporte_socio(v["socio"], v["tipo"], v["fecha"], v["monto"], v["concepto"], v["caja_id"])
+                        db.cargar_aportes_socios.clear()
+                        st.session_state["as_guardado_ok"] = True
+                        st.rerun(scope="fragment")
+            _as_nuevo()
+
+        with _as_tab2:
+            @st.fragment
+            def _as_editar():
+                _lista = db.cargar_aportes_socios()
+                if not _lista:
+                    st.info("No hay registros todavía.")
+                    return
+                for _a in _lista:
+                    _aid   = _a["id"]
+                    _fecha = _safe_date(_a.get("fecha"))
+                    _fs    = _fecha.strftime("%d/%m/%Y") if _fecha != date.min else "—"
+                    _tipo_lbl = _as_tipos.get(_a.get("tipo", "aporte"), _a.get("tipo", ""))
+                    _caja_nm  = (_a.get("cajas") or {}).get("nombre") or _as_caja_map.get(_a.get("caja_id"), "—")
+                    _lbl = f"**{_a.get('socio')}** · {_tipo_lbl} · {_fs} · $ {float(_a.get('monto') or 0):,.0f}"
+                    if _a.get("concepto"):
+                        _lbl += f" · {_a['concepto']}"
+                    with st.container(border=True):
+                        _ca, _cb, _cc = st.columns([5, 1, 1])
+                        _ca.markdown(_lbl)
+                        if _cb.button("✏️", key=f"as_edit_{_aid}"):
+                            st.session_state[f"as_editing_{_aid}"] = True
+                        if _cc.button("🗑️", key=f"as_del_{_aid}"):
+                            db.eliminar_aporte_socio(_aid)
+                            db.cargar_aportes_socios.clear()
+                            st.rerun(scope="fragment")
+                        if st.session_state.get(f"as_editing_{_aid}"):
+                            _def = {
+                                "socio": _a.get("socio", "AM"),
+                                "tipo":  _a.get("tipo", "aporte"),
+                                "fecha": _fecha if _fecha != date.min else date.today(),
+                                "monto_str": str(float(_a.get("monto") or 0)),
+                                "caja_nm": _caja_nm if _caja_nm in _as_caja_opts else "",
+                                "concepto": _a.get("concepto") or "",
+                            }
+                            with st.container(border=True):
+                                _ev = _as_render_fields(f"as_e{_aid}", defaults=_def)
+                                _gs, _gc = st.columns(2)
+                                if _gs.button("💾 Guardar", key=f"as_esave_{_aid}", type="primary"):
+                                    db.actualizar_aporte_socio(_aid, _ev["socio"], _ev["tipo"], _ev["fecha"], _ev["monto"], _ev["concepto"], _ev["caja_id"])
+                                    db.cargar_aportes_socios.clear()
+                                    st.session_state.pop(f"as_editing_{_aid}", None)
+                                    st.rerun(scope="fragment")
+                                if _gc.button("Cancelar", key=f"as_ecanc_{_aid}"):
+                                    st.session_state.pop(f"as_editing_{_aid}", None)
+                                    st.rerun(scope="fragment")
+            _as_editar()
+
+        with _as_tab3:
+            @st.fragment
+            def _as_todos():
+                _lista = db.cargar_aportes_socios()
+                if not _lista:
+                    st.info("No hay registros todavía.")
+                    return
+                # Saldo por socio
+                st.markdown("#### Saldo actual por socio")
+                _saldo_cols = st.columns(len(_as_socios))
+                for _ci, _soc in enumerate(_as_socios):
+                    _aportes  = sum(float(a["monto"]) for a in _lista if a["socio"] == _soc and a["tipo"] == "aporte")
+                    _devol    = sum(float(a["monto"]) for a in _lista if a["socio"] == _soc and a["tipo"] == "devolucion")
+                    _saldo    = _aportes - _devol
+                    _color    = "#2e7d32" if _saldo > 0 else "#c62828" if _saldo < 0 else "#555"
+                    _saldo_cols[_ci].markdown(
+                        f"<div style='background:#eef2f7;border-radius:8px;padding:12px 16px'>"
+                        f"<p style='margin:0;font-size:0.85rem;font-weight:600;color:#777'>{_soc}</p>"
+                        f"<p style='margin:4px 0 0;font-size:1.2rem;font-weight:700;color:{_color}'>$ {_pesos(_saldo)}</p>"
+                        f"<p style='margin:0;font-size:0.75rem;color:#999'>Aportó $ {_pesos(_aportes)} · Devuelto $ {_pesos(_devol)}</p>"
+                        f"</div>", unsafe_allow_html=True
+                    )
+                st.divider()
+                # Listado
+                _rows = []
+                for _a in _lista:
+                    _fecha = _safe_date(_a.get("fecha"))
+                    _caja_nm = (_a.get("cajas") or {}).get("nombre") or _as_caja_map.get(_a.get("caja_id"), "—")
+                    _rows.append({
+                        "Fecha":    _fecha.strftime("%d/%m/%Y") if _fecha != date.min else "—",
+                        "Socio":    _a.get("socio", ""),
+                        "Tipo":     _as_tipos.get(_a.get("tipo", ""), _a.get("tipo", "")),
+                        "Monto":    float(_a.get("monto") or 0),
+                        "Caja":     _caja_nm,
+                        "Concepto": _a.get("concepto") or "—",
+                    })
+                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                             column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.0f")})
+            _as_todos()
 
 if _stab_transferencias:
     with _stab_transferencias:

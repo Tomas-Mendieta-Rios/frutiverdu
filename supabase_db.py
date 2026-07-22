@@ -2220,3 +2220,38 @@ def actualizar_otro_egreso(id, fecha, rubro_id, subrubro_id, item_id, monto, caj
 def eliminar_otro_egreso(id):
     client = get_client()
     client.table("otros_egresos").delete().eq("id", id).execute()
+
+
+# ── APORTES SOCIOS ───────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cargar_aportes_socios():
+    client = get_client()
+    resp = _exec(client.table("aportes_socios").select("*, cajas(nombre)").order("fecha", desc=True))
+    return resp.data or []
+
+def guardar_aporte_socio(socio, tipo, fecha, monto, concepto, caja_id):
+    client = get_client()
+    client.table("aportes_socios").insert({
+        "socio":    socio,
+        "tipo":     tipo,
+        "fecha":    str(fecha),
+        "monto":    float(monto),
+        "concepto": concepto or None,
+        "caja_id":  caja_id or None,
+    }).execute()
+
+def actualizar_aporte_socio(id, socio, tipo, fecha, monto, concepto, caja_id):
+    client = get_client()
+    client.table("aportes_socios").update({
+        "socio":    socio,
+        "tipo":     tipo,
+        "fecha":    str(fecha),
+        "monto":    float(monto),
+        "concepto": concepto or None,
+        "caja_id":  caja_id or None,
+    }).eq("id", id).execute()
+
+def eliminar_aporte_socio(id):
+    client = get_client()
+    client.table("aportes_socios").delete().eq("id", id).execute()
