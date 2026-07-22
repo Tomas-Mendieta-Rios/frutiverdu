@@ -3527,25 +3527,37 @@ if _sub_percibido:
             _socios_db = db.cargar_socios()
             _socios_pct = [(s["nombre"], float(s["pct"]) / 100) for s in _socios_db] or [("AM", 0.25), ("Carlos", 0.75)]
             _aportes_all = db.cargar_aportes_socios()
-            # Saldo por préstamo individual usando aporte_id en devoluciones
-            _devs_x_ap = {}
-            for _ap in _aportes_all:
-                if _ap.get("tipo") == "devolucion" and _ap.get("aporte_id"):
-                    _aid2 = _ap["aporte_id"]
-                    _devs_x_ap[_aid2] = _devs_x_ap.get(_aid2, 0.0) + float(_ap.get("monto") or 0)
-            # Cuota sugerida por socio: suma de cuotas de cada préstamo con saldo > 0
+            # FIFO: devoluciones se descuentan del préstamo más viejo por socio
             _prest_pend = {}
-            for _ap in _aportes_all:
-                if _ap.get("tipo") != "aporte":
-                    continue
-                _sn     = _ap.get("socio", "")
-                _monto  = float(_ap.get("monto") or 0)
-                _saldo  = max(_monto - _devs_x_ap.get(_ap["id"], 0.0), 0.0)
-                if _saldo <= 0:
-                    continue
-                _dias   = _ap.get("cuotas")
-                _cuota  = min(_monto / _dias * 30, _saldo) if _dias else _saldo
-                _prest_pend[_sn] = _prest_pend.get(_sn, 0.0) + _cuota
+            for _sn in set(a.get("socio", "") for a in _aportes_all if a.get("tipo") == "aporte"):
+                _aps_sn  = sorted(
+                    [a for a in _aportes_all if a.get("socio") == _sn and a.get("tipo") == "aporte"],
+                    key=lambda a: str(a.get("fecha") or "")
+                )
+                _devs_sn = sorted(
+                    [a for a in _aportes_all if a.get("socio") == _sn and a.get("tipo") == "devolucion"],
+                    key=lambda a: str(a.get("fecha") or "")
+                )
+                # Aplicar devoluciones FIFO
+                _saldos = [float(a.get("monto") or 0) for a in _aps_sn]
+                for _dv in _devs_sn:
+                    _dm = float(_dv.get("monto") or 0)
+                    for _i in range(len(_saldos)):
+                        if _dm <= 0:
+                            break
+                        _desc = min(_dm, _saldos[_i])
+                        _saldos[_i] -= _desc
+                        _dm -= _desc
+                # Cuota sugerida: suma de cuotas de cada préstamo con saldo > 0
+                _sugerido_sn = 0.0
+                for _ap, _saldo in zip(_aps_sn, _saldos):
+                    if _saldo <= 0:
+                        continue
+                    _dias  = _ap.get("cuotas")
+                    _cuota = min(float(_ap["monto"]) / _dias * 30, _saldo) if _dias else _saldo
+                    _sugerido_sn += _cuota
+                if _sugerido_sn > 0:
+                    _prest_pend[_sn] = _sugerido_sn
             _total_prest = sum(_prest_pend.values())
             if resultado_op > 0 or _total_prest > 0:
                 _base_sug  = max(resultado_op, 0.0)
@@ -4441,8 +4453,7 @@ if _stab_aportes_socios:
             caja_idx = ([""] + list(_as_caja_opts.keys())).index(d.get("caja_nm", "")) if d.get("caja_nm") in _as_caja_opts else 0
             caja     = st.selectbox("Caja", options=[""] + list(_as_caja_opts.keys()), index=caja_idx, key=f"{pfx}_caja")
             concepto = st.text_input("Concepto (opcional)", value=d.get("concepto", ""), key=f"{pfx}_concepto")
-            cuotas    = None
-            aporte_id = None
+            cuotas = None
             if tipo == "aporte":
                 cuotas_str = st.text_input("Devolver en N días (opcional)", value=str(d["cuotas"]) if d.get("cuotas") else "", placeholder="ej: 90", key=f"{pfx}_cuotas")
                 try:
@@ -4452,39 +4463,9 @@ if _stab_aportes_socios:
                 if cuotas and monto > 0:
                     _cuota_dia = monto / cuotas
                     st.caption(f"$ {_pesos(_cuota_dia)} / día · $ {_pesos(_cuota_dia * 30)} / mes estimado")
-            elif tipo == "devolucion":
-                # Mostrar préstamos pendientes del socio para imputar
-                _aps_socio = [
-                    a for a in _as_lista
-                    if a.get("socio") == socio and a.get("tipo") == "aporte"
-                ]
-                # Calcular saldo por préstamo
-                _devs_por_aporte = {}
-                for _d2 in _as_lista:
-                    if _d2.get("tipo") == "devolucion" and _d2.get("aporte_id"):
-                        _aid2 = _d2["aporte_id"]
-                        _devs_por_aporte[_aid2] = _devs_por_aporte.get(_aid2, 0.0) + float(_d2.get("monto") or 0)
-                _aps_con_saldo = [
-                    a for a in _aps_socio
-                    if float(a.get("monto") or 0) - _devs_por_aporte.get(a["id"], 0.0) > 0
-                ]
-                if _aps_con_saldo:
-                    def _lbl_ap(a):
-                        _f  = _safe_date(a.get("fecha")).strftime("%d/%m/%Y")
-                        _sd = float(a["monto"]) - _devs_por_aporte.get(a["id"], 0.0)
-                        _dias = a.get("cuotas")
-                        _extra = f" · {_dias}d" if _dias else ""
-                        return f"{_f} · $ {_pesos(float(a['monto']))} (saldo $ {_pesos(_sd)}){_extra}"
-                    _ap_opts  = {_lbl_ap(a): a["id"] for a in _aps_con_saldo}
-                    _def_lbl  = next((k for k, v in _ap_opts.items() if v == d.get("aporte_id")), None)
-                    _def_idx  = list(_ap_opts.keys()).index(_def_lbl) if _def_lbl else 0
-                    _ap_sel   = st.selectbox("Imputar al préstamo", options=list(_ap_opts.keys()), index=_def_idx, key=f"{pfx}_aporte_id")
-                    aporte_id = _ap_opts[_ap_sel]
-                else:
-                    st.info("No hay préstamos pendientes para este socio.")
             return {"socio": socio, "tipo": tipo, "fecha": fecha, "monto": monto,
                     "caja": caja, "caja_id": _as_caja_opts.get(caja), "concepto": concepto,
-                    "cuotas": cuotas, "aporte_id": aporte_id}
+                    "cuotas": cuotas}
 
         with _as_tab1:
             @st.fragment
@@ -4496,7 +4477,7 @@ if _stab_aportes_socios:
                     if v["monto"] <= 0:
                         st.error("El monto debe ser mayor a 0.")
                     else:
-                        db.guardar_aporte_socio(v["socio"], v["tipo"], v["fecha"], v["monto"], v["concepto"], v["caja_id"], v.get("cuotas"), v.get("aporte_id"))
+                        db.guardar_aporte_socio(v["socio"], v["tipo"], v["fecha"], v["monto"], v["concepto"], v["caja_id"], v.get("cuotas"))
                         db.cargar_aportes_socios.clear()
                         st.session_state["as_guardado_ok"] = True
                         st.rerun(scope="fragment")
@@ -4549,13 +4530,12 @@ if _stab_aportes_socios:
                                 "caja_nm":   _caja_nm if _caja_nm in _as_caja_opts else "",
                                 "concepto":  _a.get("concepto") or "",
                                 "cuotas":    _a.get("cuotas"),
-                                "aporte_id": _a.get("aporte_id"),
                             }
                             with st.container(border=True):
                                 _ev = _as_render_fields(f"as_e{_aid}", defaults=_def)
                                 _gs, _gc = st.columns(2)
                                 if _gs.button("💾 Guardar", key=f"as_esave_{_aid}", type="primary"):
-                                    db.actualizar_aporte_socio(_aid, _ev["socio"], _ev["tipo"], _ev["fecha"], _ev["monto"], _ev["concepto"], _ev["caja_id"], _ev.get("cuotas"), _ev.get("aporte_id"))
+                                    db.actualizar_aporte_socio(_aid, _ev["socio"], _ev["tipo"], _ev["fecha"], _ev["monto"], _ev["concepto"], _ev["caja_id"], _ev.get("cuotas"))
                                     db.cargar_aportes_socios.clear()
                                     st.session_state.pop(f"as_editing_{_aid}", None)
                                     st.rerun(scope="fragment")
