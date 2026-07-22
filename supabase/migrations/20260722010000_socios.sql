@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS socios (
+    id      BIGSERIAL PRIMARY KEY,
+    nombre  TEXT NOT NULL UNIQUE,
+    pct     NUMERIC NOT NULL DEFAULT 0,
+    activo  BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO socios (nombre, pct) VALUES ('AM', 25), ('Carlos', 75)
+ON CONFLICT (nombre) DO NOTHING;

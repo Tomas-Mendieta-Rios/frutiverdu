@@ -3461,8 +3461,9 @@ if _sub_percibido:
                     f"</div></div>"
                 )
             _ret_sug_html = ""
+            _socios_db = db.cargar_socios()
+            _socios_pct = [(s["nombre"], float(s["pct"]) / 100) for s in _socios_db] or [("AM", 0.25), ("Carlos", 0.75)]
             if resultado_op > 0:
-                _socios_pct = [("AM", 0.25), ("Carlos", 0.75)]
                 _bars_sug = "".join(_ret_bar_op(n, resultado_op * p, resultado_op) for n, p in _socios_pct)
                 _ret_sug_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
   <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro sugerido</p>
@@ -4306,7 +4307,8 @@ if _stab_aportes_socios:
         _as_cajas     = db.cargar_cajas()
         _as_caja_map  = {c["id"]: c["nombre"] for c in _as_cajas}
         _as_caja_opts = {c["nombre"]: c["id"] for c in _as_cajas if c.get("activa")}
-        _as_socios    = ["AM", "Carlos"]
+        _as_socios_rows = db.cargar_socios()
+        _as_socios    = [s["nombre"] for s in _as_socios_rows] or ["AM", "Carlos"]
         _as_tipos     = {"aporte": "Préstamo al negocio", "devolucion": "Devolución al socio"}
 
         _as_lista = db.cargar_aportes_socios()
@@ -4403,7 +4405,7 @@ if _stab_aportes_socios:
                     return
                 # Saldo por socio
                 st.markdown("#### Saldo actual por socio")
-                _saldo_cols = st.columns(len(_as_socios))
+                _saldo_cols = st.columns(max(len(_as_socios), 1))
                 for _ci, _soc in enumerate(_as_socios):
                     _aportes  = sum(float(a["monto"]) for a in _lista if a["socio"] == _soc and a["tipo"] == "aporte")
                     _devol    = sum(float(a["monto"]) for a in _lista if a["socio"] == _soc and a["tipo"] == "devolucion")

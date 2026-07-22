@@ -2222,6 +2222,14 @@ def eliminar_otro_egreso(id):
     client.table("otros_egresos").delete().eq("id", id).execute()
 
 
+# ── SOCIOS ───────────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=300, show_spinner=False)
+def cargar_socios():
+    client = get_client()
+    resp = _exec(client.table("socios").select("*").eq("activo", True).order("nombre"))
+    return resp.data or []
+
 # ── APORTES SOCIOS ───────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=60, show_spinner=False)
