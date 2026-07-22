@@ -3507,10 +3507,8 @@ if _sub_percibido:
                 _neto_signo = "+" if resultado_neto >= 0 else "-"
                 st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
-  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
-    {_metric_cell_sub("Operativo", f"{res_signo}$ {_pesos(abs(resultado_op))}", res_color, "Ingresos − Egresos")}
-    {_metric_cell_sub("Neto", f"{_neto_signo}$ {_pesos(abs(resultado_neto))}", _neto_color, "Operativo − Retiros")}
-  </div>
+  <div style='text-align:center;font-size:1.5em;font-weight:700;color:{_neto_color}'>{_neto_signo}$ {_pesos(abs(resultado_neto))}</div>
+  <div style='text-align:center;color:#666;font-size:0.9em'>Operativo − Retiros</div>
 </div>""", unsafe_allow_html=True)
 
         _percibido_frag()
