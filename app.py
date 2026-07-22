@@ -4107,22 +4107,26 @@ if _stab_otros_ingresos:
                         for _oi in items_grp:
                             _r = (_oi.get("rubros_ingresos") or {}).get("nombre") or _oi_rubro_map.get(_oi.get("rubro_id"), "—")
                             _s = (_oi.get("subrubros_ingresos") or {}).get("nombre") or "—"
-                            _by_rub.setdefault(_r, {}).setdefault(_s, []).append(_oi)
+                            _it = (_oi.get("items_ingresos") or {}).get("nombre") or "—"
+                            _by_rub.setdefault(_r, {}).setdefault(_s, {}).setdefault(_it, []).append(_oi)
                         for _r_nm, _subs in sorted(_by_rub.items()):
-                            _r_tot = sum(float(x.get("monto") or 0) for s in _subs.values() for x in s)
-                            with st.expander(f"{_r_nm} ({sum(len(v) for v in _subs.values())}) — $ {_pesos(_r_tot)}"):
-                                for _s_nm, _s_items in sorted(_subs.items()):
-                                    _s_tot = sum(float(x.get("monto") or 0) for x in _s_items)
-                                    with st.expander(f"{_s_nm} ({len(_s_items)}) — $ {_pesos(_s_tot)}"):
-                                        _rows = [{"Fecha devengada": _fmt_fecha(_oi.get("fecha")),
-                                                  "Fecha percibida": _fmt_fecha(_oi.get("fecha_movimiento")) if _oi.get("fecha_movimiento") else "—",
-                                                  "Item": (_oi.get("items_ingresos") or {}).get("nombre") or "—",
-                                                  "Monto": float(_oi.get("monto") or 0),
-                                                  "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
-                                                  "Descripción": _oi.get("descripcion") or ""}
-                                                 for _oi in sorted(_s_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
-                                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
+                            _r_tot = sum(float(x.get("monto") or 0) for s in _subs.values() for items in s.values() for x in items)
+                            with st.expander(f"{_r_nm} ({sum(len(x) for s in _subs.values() for x in s.values())}) — $ {_pesos(_r_tot)}"):
+                                for _s_nm, _s_items_by_item in sorted(_subs.items()):
+                                    _s_tot = sum(float(x.get("monto") or 0) for items in _s_items_by_item.values() for x in items)
+                                    _s_cnt = sum(len(v) for v in _s_items_by_item.values())
+                                    with st.expander(f"{_s_nm} ({_s_cnt}) — $ {_pesos(_s_tot)}"):
+                                        for _it_nm, _it_items in sorted(_s_items_by_item.items()):
+                                            _it_tot = sum(float(x.get("monto") or 0) for x in _it_items)
+                                            with st.expander(f"{_it_nm} ({len(_it_items)}) — $ {_pesos(_it_tot)}"):
+                                                _rows = [{"Fecha devengada": _fmt_fecha(_oi.get("fecha")),
+                                                          "Fecha percibida": _fmt_fecha(_oi.get("fecha_movimiento")) if _oi.get("fecha_movimiento") else "—",
+                                                          "Monto": float(_oi.get("monto") or 0),
+                                                          "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
+                                                          "Descripción": _oi.get("descripcion") or ""}
+                                                         for _oi in sorted(_it_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                             column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
                 _pend = [x for x in _lista if x.get("estado") != "cobrado"]
                 _cobr = [x for x in _lista if x.get("estado") == "cobrado"]
                 if _pend:
