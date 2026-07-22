@@ -3031,19 +3031,9 @@ if _sub_resumen:
             _real_signo = "+" if _res_real >= 0 else "-"
             def _metric_cell_sub(label, value, color, sub):
                 return f"<div><p style='margin:0;font-size:0.8rem;font-weight:600;color:#777'>{label}</p><p style='margin:2px 0 0;font-size:1.25rem;font-weight:700;color:{color}'>{value}</p><p style='margin:0;font-size:0.75rem;color:#999'>{sub}</p></div>"
-            st.markdown(f"""
-    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
-      <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
-      <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
-        {_metric_cell_sub("Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
-        {_metric_cell_sub("Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
-      </div>
-    </div>""", unsafe_allow_html=True)
-    
+            _ret_subs_dev = {}
+            _ret_subs_pag = {}
             if total_retiros > 0:
-                # Barras retiro por persona como % del resultado
-                _ret_subs_dev = {}
-                _ret_subs_pag = {}
                 for _o in _retiros_f:
                     _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
                     _amt = float(_o.get("monto") or 0)
@@ -3052,25 +3042,42 @@ if _sub_resumen:
                     if (_o.get("estado") or "pendiente") == "pagado":
                         _ret_subs_pag.setdefault(_sk, 0.0)
                         _ret_subs_pag[_sk] += _amt
-                def _ret_bar(sk, sv, base, color):
-                    _pct = round(sv / base * 100, 1) if base > 0 else 0.0
-                    return (
-                        f"<div style='margin-bottom:8px'>"
-                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                        f"<span style='font-size:0.82rem;font-weight:600'>{sk}</span>"
-                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(sv)} · {_pct}%</span>"
-                        f"</div>"
-                        f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
-                        f"<div style='background:{color};width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
-                        f"</div></div>"
-                    )
-                _rc_left, _rc_right = st.columns(2)
-                with _rc_left:
-                    st.markdown("<p style='font-size:0.8rem;font-weight:600;color:#777;margin-bottom:6px'>Retiro / Resultado devengado</p>", unsafe_allow_html=True)
-                    st.markdown("".join(_ret_bar(sk, sv, resultado, "#c62828") for sk, sv in sorted(_ret_subs_dev.items())), unsafe_allow_html=True)
-                with _rc_right:
-                    st.markdown("<p style='font-size:0.8rem;font-weight:600;color:#777;margin-bottom:6px'>Retiro / Resultado percibido</p>", unsafe_allow_html=True)
-                    st.markdown("".join(_ret_bar(sk, _ret_subs_pag.get(sk, 0.0), _res_real, "#c62828") for sk, sv in sorted(_ret_subs_dev.items())), unsafe_allow_html=True)
+            def _ret_bar(sk, sv, base, color):
+                _pct = round(sv / base * 100, 1) if base > 0 else 0.0
+                return (
+                    f"<div style='margin-bottom:6px'>"
+                    f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                    f"<span style='font-size:0.82rem;font-weight:600'>{sk}</span>"
+                    f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(sv)} · {_pct}%</span>"
+                    f"</div>"
+                    f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
+                    f"<div style='background:{color};width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
+                    f"</div></div>"
+                )
+            _bars_dev_html = "".join(_ret_bar(sk, sv, resultado, "#c62828") for sk, sv in sorted(_ret_subs_dev.items())) if _ret_subs_dev and resultado > 0 else ""
+            _bars_perc_html = "".join(_ret_bar(sk, _ret_subs_pag.get(sk, 0.0), _res_real, "#c62828") for sk in sorted(_ret_subs_dev)) if _ret_subs_dev and _res_real > 0 else ""
+            _ret_section_html = f"""
+      <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
+        <div>
+          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado devengado</p>
+          {_bars_dev_html}
+        </div>
+        <div>
+          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado percibido</p>
+          {_bars_perc_html}
+        </div>
+      </div>""" if (_bars_dev_html or _bars_perc_html) else ""
+            st.markdown(f"""
+    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+      <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
+      <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+        {_metric_cell_sub("Devengado", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
+        {_metric_cell_sub("Percibido", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
+      </div>
+      {_ret_section_html}
+    </div>""", unsafe_allow_html=True)
+
+            if total_retiros > 0:
                 st.divider()
                 st.markdown(f"#### Retiros · {len(_retiros_f)} registros")
                 _ret_c1, _ret_c2, _ret_c3 = st.columns(3)
@@ -3436,34 +3443,36 @@ if _sub_percibido:
             st.divider()
             res_color = "#2e7d32" if resultado_op >= 0 else "#c62828"
             res_signo = "+" if resultado_op >= 0 else "-"
+            _ret_subs_op = {}
+            for _o in _retiros_p:
+                _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                _ret_subs_op.setdefault(_sk, 0.0)
+                _ret_subs_op[_sk] += float(_o.get("monto") or 0)
+            def _ret_bar_op(sk, sv, base):
+                _pct = round(sv / base * 100, 1) if base > 0 else 0.0
+                return (
+                    f"<div style='margin-bottom:6px'>"
+                    f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                    f"<span style='font-size:0.82rem;font-weight:600'>{sk}</span>"
+                    f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(sv)} · {_pct}%</span>"
+                    f"</div>"
+                    f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
+                    f"<div style='background:#c62828;width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
+                    f"</div></div>"
+                )
+            _ret_op_html = ""
+            if _ret_subs_op and resultado_op > 0:
+                _bars_op = "".join(_ret_bar_op(sk, sv, resultado_op) for sk, sv in sorted(_ret_subs_op.items()))
+                _ret_op_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
+  <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado operativo</p>
+  {_bars_op}
+</div>"""
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
   <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
+  {_ret_op_html}
 </div>""", unsafe_allow_html=True)
-
-            # Barras retiro por persona como % del resultado operativo
-            if _retiros_p:
-                _ret_subs_op = {}
-                for _o in _retiros_p:
-                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
-                    _ret_subs_op.setdefault(_sk, 0.0)
-                    _ret_subs_op[_sk] += float(_o.get("monto") or 0)
-                if _ret_subs_op and resultado_op != 0:
-                    st.markdown("<p style='font-size:0.8rem;font-weight:600;color:#777;margin:8px 0 6px'>Retiro / Resultado operativo percibido</p>", unsafe_allow_html=True)
-                    def _ret_bar_p(sk, sv, base):
-                        _pct = round(sv / base * 100, 1) if base > 0 else 0.0
-                        return (
-                            f"<div style='margin-bottom:8px'>"
-                            f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                            f"<span style='font-size:0.82rem;font-weight:600'>{sk}</span>"
-                            f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(sv)} · {_pct}%</span>"
-                            f"</div>"
-                            f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
-                            f"<div style='background:#c62828;width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
-                            f"</div></div>"
-                        )
-                    st.markdown("".join(_ret_bar_p(sk, sv, resultado_op) for sk, sv in sorted(_ret_subs_op.items())), unsafe_allow_html=True)
 
             # Retiros
             if _retiros_p:
