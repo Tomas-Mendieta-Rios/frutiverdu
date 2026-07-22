@@ -3554,36 +3554,33 @@ if _sub_percibido:
                     _prest_pend[_sn] = _sugerido_sn
             _total_prest = sum(_prest_pend.values())
             if resultado_op > 0 or _total_prest > 0:
-                _base_sug = max(resultado_op, 0.0)
+                _base_sug  = max(resultado_op, 0.0)
+                _prest_cap = min(_total_prest, _base_sug)
+                _net_op    = _base_sug - _prest_cap
+                _base_b    = max(_base_sug, 1.0)
                 def _bar_sug2(nombre, pct):
-                    _op      = _base_sug * pct
-                    _pr      = _prest_pend.get(nombre, 0.0)
-                    _total   = _op + _pr
-                    _base_b  = max(_total, _base_sug, 1.0)
-                    _pct_op  = round(_op / _base_b * 100, 1)
-                    _pct_tot = round(_total / _base_b * 100, 1)
-                    _pr_html = ""
-                    if _pr > 0:
-                        _pr_html = (
-                            f"<div style='margin-top:3px'>"
-                            f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                            f"<span style='font-size:0.75rem;color:#1565c0'>+ préstamo</span>"
-                            f"<span style='font-size:0.75rem;color:#1565c0'>$ {_pesos(_total)} · {_pct_tot}%</span>"
-                            f"</div>"
-                            f"<div style='background:#c8cdd8;border-radius:5px;height:6px;overflow:hidden'>"
-                            f"<div style='background:#1565c0;width:{min(_pct_tot,100)}%;height:100%;border-radius:5px'></div>"
-                            f"</div></div>"
-                        )
+                    _op_puro  = _base_sug * pct
+                    _op_ajust = _net_op * pct + _prest_pend.get(nombre, 0.0)
+                    _pct_op   = round(_op_puro  / _base_b * 100, 1)
+                    _pct_aj   = round(_op_ajust / _base_b * 100, 1)
+                    _lbl_aj   = "+ préstamo" if _prest_pend.get(nombre, 0.0) > 0 else "ajustado"
                     return (
                         f"<div style='margin-bottom:10px'>"
                         f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
                         f"<span style='font-size:0.82rem;font-weight:600'>{nombre}</span>"
-                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_op)} · {_pct_op}%</span>"
+                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_op_puro)} · {_pct_op}%</span>"
                         f"</div>"
                         f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
                         f"<div style='background:#c62828;width:{min(_pct_op,100)}%;height:100%;border-radius:5px'></div>"
                         f"</div>"
-                        f"{_pr_html}"
+                        f"<div style='margin-top:3px'>"
+                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                        f"<span style='font-size:0.75rem;color:#1565c0'>{_lbl_aj}</span>"
+                        f"<span style='font-size:0.75rem;color:#1565c0'>$ {_pesos(_op_ajust)} · {_pct_aj}%</span>"
+                        f"</div>"
+                        f"<div style='background:#c8cdd8;border-radius:5px;height:6px;overflow:hidden'>"
+                        f"<div style='background:#1565c0;width:{min(_pct_aj,100)}%;height:100%;border-radius:5px'></div>"
+                        f"</div></div>"
                         f"</div>"
                     )
                 _bars_sug = "".join(_bar_sug2(n, p) for n, p in _socios_pct)
