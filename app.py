@@ -1637,6 +1637,10 @@ def _render_movimiento_caja(cobros, pagos):
         _otros_egr_mov = db.cargar_otros_egresos()
     except Exception:
         _otros_egr_mov = []
+    try:
+        _aportes_socios_mov = db.cargar_aportes_socios()
+    except Exception:
+        _aportes_socios_mov = []
 
     _cfg_caja = db.cargar_config()
     try:
@@ -1940,6 +1944,38 @@ def _render_movimiento_caja(cobros, pagos):
             "Monto": _monto, "imputaciones": [], "_parcial": False,
         })
 
+    # Aportes / devoluciones socios
+    for _as in _aportes_socios_mov:
+        try:
+            _asf = pd.to_datetime(str(_as.get("fecha") or "")).date()
+        except Exception:
+            continue
+        if not (_desde <= _asf <= _hasta):
+            continue
+        _caja_id = _as.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck:
+            continue
+        _monto = float(_as.get("monto") or 0)
+        _es_aporte = _as.get("tipo") == "aporte"
+        _t = _por_caja.setdefault(_ck, {"Entradas": 0.0, "Sal. Compras": 0.0, "Sal. Gastos": 0.0, "detalle": []})
+        if _es_aporte:
+            _t["Entradas"] += _monto
+        else:
+            _t["Sal. Compras"] += _monto
+        _tipo_lbl = "Préstamo socio" if _es_aporte else "Devolución socio"
+        _conc = f"{_tipo_lbl} — {_as.get('socio', '')}"
+        if _as.get("concepto"):
+            _conc += f" ({_as['concepto']})"
+        _t["detalle"].append({
+            "Fecha": _asf, "Tipo": "Entrada" if _es_aporte else "Salida",
+            "Cat.": _tipo_lbl, "Concepto": _conc,
+            "Proveedor": "", "Cliente": _as.get("socio", ""),
+            "Cobro #": "", "Pago #": "", "Cheque": "",
+            "Facturas": "", "Total factura": 0.0, "Cobrado total": 0.0, "Saldo": 0.0,
+            "Monto": _monto, "imputaciones": [], "_parcial": False,
+        })
+
     # Transferencias entre cajas
     _transferencias = db.cargar_transferencias()
     for _tr in _transferencias:
@@ -2078,6 +2114,17 @@ def _render_movimiento_caja(cobros, pagos):
         if not _ck or _oef < _ini_fecha_hist.get(_ck, date.min):
             continue
         _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"] += float(_oe.get("monto") or 0)
+    for _as in _aportes_socios_mov:
+        try:
+            _asf = pd.to_datetime(str(_as.get("fecha") or "")).date()
+        except Exception:
+            continue
+        _caja_id = _as.get("caja_id")
+        _ck = _cajas_map.get(_caja_id)
+        if not _ck or _asf < _ini_fecha_hist.get(_ck, date.min):
+            continue
+        _lado = "Entradas" if _as.get("tipo") == "aporte" else "Salidas"
+        _hist_total.setdefault(_ck, {"Entradas": 0.0, "Salidas": 0.0})[_lado] += float(_as.get("monto") or 0)
 
     # Totales del período seleccionado (_desde/_hasta) — misma lógica que _hist_total
     _periodo_total = {}
