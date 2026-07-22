@@ -2230,6 +2230,21 @@ def cargar_socios():
     resp = _exec(client.table("socios").select("*").eq("activo", True).order("nombre"))
     return resp.data or []
 
+def actualizar_pct_socio(id, pct):
+    client = get_client()
+    _exec(client.table("socios").update({"pct": pct}).eq("id", id))
+    cargar_socios.clear()
+
+def guardar_socio(nombre, pct):
+    client = get_client()
+    _exec(client.table("socios").insert({"nombre": nombre, "pct": pct}))
+    cargar_socios.clear()
+
+def eliminar_socio(id):
+    client = get_client()
+    _exec(client.table("socios").update({"activo": False}).eq("id", id))
+    cargar_socios.clear()
+
 # ── APORTES SOCIOS ───────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=60, show_spinner=False)
