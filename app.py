@@ -6182,9 +6182,14 @@ with tab_dux:
                     _ddc1, _ddc2 = st.columns(2)
                     _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
                     _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
+                    _dux_orden = st.selectbox("Ordenar por", ["Fecha (más reciente)", "Número de pedido (mayor)"], key="dux_ped_orden")
                     st.form_submit_button("🔄 Actualizar", type="primary")
                 all_orders_sorted = [o for o in all_orders_sorted
                                       if _dux_desde <= _fecha_dux(o).date() <= _dux_hasta]
+                if _dux_orden == "Fecha (más reciente)":
+                    all_orders_sorted = sorted(all_orders_sorted, key=_fecha_dux, reverse=True)
+                else:
+                    all_orders_sorted = sorted(all_orders_sorted, key=_nro_dux_sort, reverse=True)
 
                 if not all_orders_sorted:
                     st.info("No hay pedidos sincronizados todavía.")
