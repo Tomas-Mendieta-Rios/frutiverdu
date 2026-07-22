@@ -3471,24 +3471,6 @@ if _sub_percibido:
                 st.markdown(f"#### Retiros · {len(_retiros_p)} registros")
                 _ret_c1, _ret_c2 = st.columns(2)
                 _bal_metric(_ret_c1, "Total", f"$ {_pesos(total_retiros_p)}", "#c62828")
-                _ret_subs_p = {}
-                for _o in _retiros_p:
-                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
-                    _ret_subs_p.setdefault(_sk, 0.0)
-                    _ret_subs_p[_sk] += float(_o.get("monto") or 0)
-                if _ret_subs_p:
-                    _bars_p = "".join(
-                        f"<div style='margin-bottom:8px'>"
-                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                        f"<span style='font-size:0.82rem;font-weight:600'>{_sk}</span>"
-                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_sv)} · {round(_sv/total_retiros_p*100,1) if total_retiros_p else 0}%</span>"
-                        f"</div>"
-                        f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
-                        f"<div style='background:#c62828;width:{round(_sv/total_retiros_p*100,1) if total_retiros_p else 0}%;height:100%;border-radius:5px'></div>"
-                        f"</div></div>"
-                        for _sk, _sv in sorted(_ret_subs_p.items())
-                    )
-                    st.markdown(_bars_p, unsafe_allow_html=True)
                 _ret_by_sub = {}
                 for _o in _retiros_p:
                     _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
