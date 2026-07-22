@@ -3460,6 +3460,14 @@ if _sub_percibido:
                     f"<div style='background:#c62828;width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
                     f"</div></div>"
                 )
+            _ret_sug_html = ""
+            if resultado_op > 0:
+                _socios_pct = [("AM", 0.25), ("Carlos", 0.75)]
+                _bars_sug = "".join(_ret_bar_op(n, resultado_op * p, resultado_op) for n, p in _socios_pct)
+                _ret_sug_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
+  <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro sugerido</p>
+  {_bars_sug}
+</div>"""
             _ret_op_html = ""
             if _ret_subs_op and resultado_op > 0:
                 _bars_op = "".join(_ret_bar_op(sk, sv, resultado_op) for sk, sv in sorted(_ret_subs_op.items()))
@@ -3471,6 +3479,7 @@ if _sub_percibido:
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
   <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
+  {_ret_sug_html}
   {_ret_op_html}
 </div>""", unsafe_allow_html=True)
 
