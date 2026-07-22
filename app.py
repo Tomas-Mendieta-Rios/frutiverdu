@@ -4356,7 +4356,7 @@ if _stab_aportes_socios:
         _as_caja_opts = {c["nombre"]: c["id"] for c in _as_cajas if c.get("activa")}
         _as_socios_rows = db.cargar_socios()
         _as_socios    = [s["nombre"] for s in _as_socios_rows] or ["AM", "Carlos"]
-        _as_tipos     = {"aporte": "Préstamo al negocio", "devolucion": "Devolución al socio"}
+        _as_tipos     = {"aporte": "PRÉSTAMO", "devolucion": "DEVOLUCIÓN"}
 
         _as_lista = db.cargar_aportes_socios()
 
