@@ -3963,7 +3963,7 @@ if _stab_otros_ingresos:
                             _est_badge = "🟢" if _oi_est == "cobrado" else "🟡"
                             _item_str = f" · {_oi_it_nm}" if _oi_it_nm else ""
                             _fmov_str = f" · F.cobro: {_oi_fmov}" if _oi_fmov else ""
-                            st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm}{_item_str} · **$ {_oi_mn:,.0f}**{_fmov_str}")
+                            st.markdown(f"{_est_badge} **{_oi_fch}** · {_oi_r_nm} / {_oi_s_nm}{_item_str} · **$ {_oi_mn:,.0f}** · {_oi_cj_nm}{_fmov_str}")
                         with _cb:
                             if st.button("✏️", key=f"oi_edit_{_oi_id}", help="Editar"):
                                 st.session_state[f"oi_editing_{_oi_id}"] = True
@@ -4195,7 +4195,7 @@ if _stab_otros_egresos:
                             _est_badge = "🟢" if _oe_est == "pagado" else "🟡"
                             _item_str = f" · {_oe_item}" if _oe_item else ""
                             _fmov_str = f" · F.pago: {_oe_fmov}" if _oe_fmov else ""
-                            st.markdown(f"{_est_badge} **{_oe_fch}** · {_oe_r_nm} / {_oe_s_nm}{_item_str} · **$ {_oe_mn:,.0f}**{_fmov_str}")
+                            st.markdown(f"{_est_badge} **{_oe_fch}** · {_oe_r_nm} / {_oe_s_nm}{_item_str} · **$ {_oe_mn:,.0f}** · {_oe_cj_nm}{_fmov_str}")
                         with _cb:
                             if st.button("✏️", key=f"oe_edit_{_oe_id}", help="Editar"):
                                 st.session_state[f"oe_editing_{_oe_id}"] = True
@@ -4409,7 +4409,7 @@ if _stab_aportes_socios:
                     _fs    = _fecha.strftime("%d/%m/%Y") if _fecha != date.min else "—"
                     _tipo_lbl = _as_tipos.get(_a.get("tipo", "aporte"), _a.get("tipo", ""))
                     _caja_nm  = (_a.get("cajas") or {}).get("nombre") or _as_caja_map.get(_a.get("caja_id"), "—")
-                    _lbl = f"**{_a.get('socio')}** · {_tipo_lbl} · {_fs} · $ {float(_a.get('monto') or 0):,.0f}"
+                    _lbl = f"**{_a.get('socio')}** · {_tipo_lbl} · {_fs} · $ {float(_a.get('monto') or 0):,.0f} · {_caja_nm}"
                     if _a.get("concepto"):
                         _lbl += f" · {_a['concepto']}"
                     with st.container(border=True):
