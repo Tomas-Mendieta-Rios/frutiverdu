@@ -1963,13 +1963,13 @@ def _render_movimiento_caja(cobros, pagos):
             _t["Entradas"] += _monto
         else:
             _t["Sal. Compras"] += _monto
-        _tipo_lbl = "Préstamo socio" if _es_aporte else "Devolución socio"
+        _tipo_lbl = "PRÉSTAMO" if _es_aporte else "DEVOLUCIÓN"
         _conc = f"{_tipo_lbl} — {_as.get('socio', '')}"
         if _as.get("concepto"):
             _conc += f" ({_as['concepto']})"
         _t["detalle"].append({
             "Fecha": _asf, "Tipo": "Entrada" if _es_aporte else "Salida",
-            "Cat.": _tipo_lbl, "Concepto": _conc,
+            "Cat.": _tipo_lbl.capitalize(), "Concepto": _conc,
             "Proveedor": "", "Cliente": _as.get("socio", ""),
             "Cobro #": "", "Pago #": "", "Cheque": "",
             "Facturas": "", "Total factura": 0.0, "Cobrado total": 0.0, "Saldo": 0.0,
