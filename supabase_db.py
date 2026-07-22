@@ -2253,28 +2253,30 @@ def cargar_aportes_socios():
     resp = _exec(client.table("aportes_socios").select("*, cajas(nombre)").order("fecha", desc=True))
     return resp.data or []
 
-def guardar_aporte_socio(socio, tipo, fecha, monto, concepto, caja_id, cuotas=None):
+def guardar_aporte_socio(socio, tipo, fecha, monto, concepto, caja_id, cuotas=None, aporte_id=None):
     client = get_client()
     client.table("aportes_socios").insert({
-        "socio":    socio,
-        "tipo":     tipo,
-        "fecha":    str(fecha),
-        "monto":    float(monto),
-        "concepto": concepto or None,
-        "caja_id":  caja_id or None,
-        "cuotas":   int(cuotas) if cuotas else None,
+        "socio":     socio,
+        "tipo":      tipo,
+        "fecha":     str(fecha),
+        "monto":     float(monto),
+        "concepto":  concepto or None,
+        "caja_id":   caja_id or None,
+        "cuotas":    int(cuotas) if cuotas else None,
+        "aporte_id": int(aporte_id) if aporte_id else None,
     }).execute()
 
-def actualizar_aporte_socio(id, socio, tipo, fecha, monto, concepto, caja_id, cuotas=None):
+def actualizar_aporte_socio(id, socio, tipo, fecha, monto, concepto, caja_id, cuotas=None, aporte_id=None):
     client = get_client()
     client.table("aportes_socios").update({
-        "socio":    socio,
-        "tipo":     tipo,
-        "fecha":    str(fecha),
-        "monto":    float(monto),
-        "concepto": concepto or None,
-        "caja_id":  caja_id or None,
-        "cuotas":   int(cuotas) if cuotas else None,
+        "socio":     socio,
+        "tipo":      tipo,
+        "fecha":     str(fecha),
+        "monto":     float(monto),
+        "concepto":  concepto or None,
+        "caja_id":   caja_id or None,
+        "cuotas":    int(cuotas) if cuotas else None,
+        "aporte_id": int(aporte_id) if aporte_id else None,
     }).eq("id", id).execute()
 
 def eliminar_aporte_socio(id):

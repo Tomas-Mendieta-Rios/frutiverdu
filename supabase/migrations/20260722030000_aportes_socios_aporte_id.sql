@@ -1,0 +1,1 @@
+ALTER TABLE aportes_socios ADD COLUMN IF NOT EXISTS aporte_id BIGINT REFERENCES aportes_socios(id) ON DELETE SET NULL;
