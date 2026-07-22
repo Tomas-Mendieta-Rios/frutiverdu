@@ -1,0 +1,1 @@
+ALTER TABLE aportes_socios ADD COLUMN IF NOT EXISTS cuotas INT;

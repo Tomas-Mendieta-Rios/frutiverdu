@@ -4429,8 +4429,17 @@ if _stab_aportes_socios:
             caja_idx = ([""] + list(_as_caja_opts.keys())).index(d.get("caja_nm", "")) if d.get("caja_nm") in _as_caja_opts else 0
             caja     = st.selectbox("Caja", options=[""] + list(_as_caja_opts.keys()), index=caja_idx, key=f"{pfx}_caja")
             concepto = st.text_input("Concepto (opcional)", value=d.get("concepto", ""), key=f"{pfx}_concepto")
+            cuotas = None
+            if tipo == "aporte":
+                cuotas_str = st.text_input("Devolver en N meses (opcional)", value=str(d["cuotas"]) if d.get("cuotas") else "", placeholder="ej: 6", key=f"{pfx}_cuotas")
+                try:
+                    cuotas = int(cuotas_str) if cuotas_str.strip() else None
+                except ValueError:
+                    cuotas = None
+                if cuotas and monto > 0:
+                    st.caption(f"Cuota sugerida: $ {_pesos(monto / cuotas)} / mes")
             return {"socio": socio, "tipo": tipo, "fecha": fecha, "monto": monto,
-                    "caja": caja, "caja_id": _as_caja_opts.get(caja), "concepto": concepto}
+                    "caja": caja, "caja_id": _as_caja_opts.get(caja), "concepto": concepto, "cuotas": cuotas}
 
         with _as_tab1:
             @st.fragment
@@ -4442,7 +4451,7 @@ if _stab_aportes_socios:
                     if v["monto"] <= 0:
                         st.error("El monto debe ser mayor a 0.")
                     else:
-                        db.guardar_aporte_socio(v["socio"], v["tipo"], v["fecha"], v["monto"], v["concepto"], v["caja_id"])
+                        db.guardar_aporte_socio(v["socio"], v["tipo"], v["fecha"], v["monto"], v["concepto"], v["caja_id"], v.get("cuotas"))
                         db.cargar_aportes_socios.clear()
                         st.session_state["as_guardado_ok"] = True
                         st.rerun(scope="fragment")
@@ -4470,7 +4479,11 @@ if _stab_aportes_socios:
                     _fs    = _fecha.strftime("%d/%m/%Y") if _fecha != date.min else "—"
                     _tipo_lbl = _as_tipos.get(_a.get("tipo", "aporte"), _a.get("tipo", ""))
                     _caja_nm  = (_a.get("cajas") or {}).get("nombre") or _as_caja_map.get(_a.get("caja_id"), "—")
-                    _lbl = f"**{_a.get('socio')}** · {_tipo_lbl} · {_fs} · $ {float(_a.get('monto') or 0):,.0f} · {_caja_nm}"
+                    _monto_a  = float(_a.get("monto") or 0)
+                    _cuotas_a = _a.get("cuotas")
+                    _lbl = f"**{_a.get('socio')}** · {_tipo_lbl} · {_fs} · $ {_monto_a:,.0f} · {_caja_nm}"
+                    if _cuotas_a and _a.get("tipo") == "aporte":
+                        _lbl += f" · {_cuotas_a} meses ($ {_pesos(_monto_a / _cuotas_a)}/mes)"
                     if _a.get("concepto"):
                         _lbl += f" · {_a['concepto']}"
                     with st.container(border=True):
@@ -4490,12 +4503,13 @@ if _stab_aportes_socios:
                                 "monto_str": str(float(_a.get("monto") or 0)),
                                 "caja_nm": _caja_nm if _caja_nm in _as_caja_opts else "",
                                 "concepto": _a.get("concepto") or "",
+                                "cuotas": _a.get("cuotas"),
                             }
                             with st.container(border=True):
                                 _ev = _as_render_fields(f"as_e{_aid}", defaults=_def)
                                 _gs, _gc = st.columns(2)
                                 if _gs.button("💾 Guardar", key=f"as_esave_{_aid}", type="primary"):
-                                    db.actualizar_aporte_socio(_aid, _ev["socio"], _ev["tipo"], _ev["fecha"], _ev["monto"], _ev["concepto"], _ev["caja_id"])
+                                    db.actualizar_aporte_socio(_aid, _ev["socio"], _ev["tipo"], _ev["fecha"], _ev["monto"], _ev["concepto"], _ev["caja_id"], _ev.get("cuotas"))
                                     db.cargar_aportes_socios.clear()
                                     st.session_state.pop(f"as_editing_{_aid}", None)
                                     st.rerun(scope="fragment")
