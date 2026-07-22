@@ -3548,23 +3548,8 @@ if _sub_percibido:
                         _desc = min(_dm, _saldos[_i])
                         _saldos[_i] -= _desc
                         _dm -= _desc
-                # Cuota proporcional a los días del período seleccionado
-                _sugerido_sn = 0.0
-                for _ap, _saldo in zip(_aps_sn, _saldos):
-                    if _saldo <= 0:
-                        continue
-                    _dias      = _ap.get("cuotas")
-                    _fecha_ap  = _safe_date(_ap.get("fecha"))
-                    if _dias:
-                        from datetime import timedelta
-                        _fecha_fin_ap   = _fecha_ap + timedelta(days=_dias)
-                        _inicio_efec    = max(perc_desde, _fecha_ap)
-                        _fin_efec       = min(perc_hasta, _fecha_fin_ap)
-                        _dias_en_per    = max((_fin_efec - _inicio_efec).days, 0)
-                        _cuota = min(float(_ap["monto"]) / _dias * _dias_en_per, _saldo)
-                    else:
-                        _cuota = _saldo if _fecha_ap <= perc_hasta else 0.0
-                    _sugerido_sn += _cuota
+                # Saldo pendiente por préstamo (después de FIFO)
+                _sugerido_sn = sum(_saldo for _saldo in _saldos if _saldo > 0)
                 if _sugerido_sn > 0:
                     _prest_pend[_sn] = _sugerido_sn
             _total_prest = sum(_prest_pend.values())
@@ -4462,19 +4447,8 @@ if _stab_aportes_socios:
             caja_idx = ([""] + list(_as_caja_opts.keys())).index(d.get("caja_nm", "")) if d.get("caja_nm") in _as_caja_opts else 0
             caja     = st.selectbox("Caja", options=[""] + list(_as_caja_opts.keys()), index=caja_idx, key=f"{pfx}_caja")
             concepto = st.text_input("Concepto (opcional)", value=d.get("concepto", ""), key=f"{pfx}_concepto")
-            cuotas = None
-            if tipo == "aporte":
-                cuotas_str = st.text_input("Devolver en N días (opcional)", value=str(d["cuotas"]) if d.get("cuotas") else "", placeholder="ej: 90", key=f"{pfx}_cuotas")
-                try:
-                    cuotas = int(cuotas_str) if cuotas_str.strip() else None
-                except ValueError:
-                    cuotas = None
-                if cuotas and monto > 0:
-                    _cuota_dia = monto / cuotas
-                    st.caption(f"$ {_pesos(_cuota_dia)} / día · $ {_pesos(_cuota_dia * 30)} / mes estimado")
             return {"socio": socio, "tipo": tipo, "fecha": fecha, "monto": monto,
-                    "caja": caja, "caja_id": _as_caja_opts.get(caja), "concepto": concepto,
-                    "cuotas": cuotas}
+                    "caja": caja, "caja_id": _as_caja_opts.get(caja), "concepto": concepto}
 
         with _as_tab1:
             @st.fragment
@@ -4486,7 +4460,7 @@ if _stab_aportes_socios:
                     if v["monto"] <= 0:
                         st.error("El monto debe ser mayor a 0.")
                     else:
-                        db.guardar_aporte_socio(v["socio"], v["tipo"], v["fecha"], v["monto"], v["concepto"], v["caja_id"], v.get("cuotas"))
+                        db.guardar_aporte_socio(v["socio"], v["tipo"], v["fecha"], v["monto"], v["concepto"], v["caja_id"])
                         db.cargar_aportes_socios.clear()
                         st.session_state["as_guardado_ok"] = True
                         st.rerun(scope="fragment")
@@ -4517,8 +4491,6 @@ if _stab_aportes_socios:
                     _monto_a  = float(_a.get("monto") or 0)
                     _cuotas_a = _a.get("cuotas")
                     _lbl = f"**{_a.get('socio')}** · {_tipo_lbl} · {_fs} · $ {_monto_a:,.0f} · {_caja_nm}"
-                    if _cuotas_a and _a.get("tipo") == "aporte":
-                        _lbl += f" · {_cuotas_a} días ($ {_pesos(_monto_a / _cuotas_a)}/día · $ {_pesos(_monto_a / _cuotas_a * 30)}/mes)"
                     if _a.get("concepto"):
                         _lbl += f" · {_a['concepto']}"
                     with st.container(border=True):
@@ -4544,7 +4516,7 @@ if _stab_aportes_socios:
                                 _ev = _as_render_fields(f"as_e{_aid}", defaults=_def)
                                 _gs, _gc = st.columns(2)
                                 if _gs.button("💾 Guardar", key=f"as_esave_{_aid}", type="primary"):
-                                    db.actualizar_aporte_socio(_aid, _ev["socio"], _ev["tipo"], _ev["fecha"], _ev["monto"], _ev["concepto"], _ev["caja_id"], _ev.get("cuotas"))
+                                    db.actualizar_aporte_socio(_aid, _ev["socio"], _ev["tipo"], _ev["fecha"], _ev["monto"], _ev["concepto"], _ev["caja_id"])
                                     db.cargar_aportes_socios.clear()
                                     st.session_state.pop(f"as_editing_{_aid}", None)
                                     st.rerun(scope="fragment")
