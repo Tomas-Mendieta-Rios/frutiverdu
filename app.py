@@ -3548,13 +3548,22 @@ if _sub_percibido:
                         _desc = min(_dm, _saldos[_i])
                         _saldos[_i] -= _desc
                         _dm -= _desc
-                # Cuota sugerida: suma de cuotas de cada préstamo con saldo > 0
+                # Cuota proporcional a los días del período seleccionado
                 _sugerido_sn = 0.0
                 for _ap, _saldo in zip(_aps_sn, _saldos):
                     if _saldo <= 0:
                         continue
-                    _dias  = _ap.get("cuotas")
-                    _cuota = min(float(_ap["monto"]) / _dias * 30, _saldo) if _dias else _saldo
+                    _dias      = _ap.get("cuotas")
+                    _fecha_ap  = _safe_date(_ap.get("fecha"))
+                    if _dias:
+                        from datetime import timedelta
+                        _fecha_fin_ap   = _fecha_ap + timedelta(days=_dias)
+                        _inicio_efec    = max(perc_desde, _fecha_ap)
+                        _fin_efec       = min(perc_hasta, _fecha_fin_ap)
+                        _dias_en_per    = max((_fin_efec - _inicio_efec).days, 0)
+                        _cuota = min(float(_ap["monto"]) / _dias * _dias_en_per, _saldo)
+                    else:
+                        _cuota = _saldo if _fecha_ap <= perc_hasta else 0.0
                     _sugerido_sn += _cuota
                 if _sugerido_sn > 0:
                     _prest_pend[_sn] = _sugerido_sn
