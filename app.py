@@ -7128,6 +7128,11 @@ if tab_eg_compras:
                 pd.to_numeric(df_compras_all["cantidad"], errors="coerce").fillna(0)
                 * pd.to_numeric(df_compras_all["precio"], errors="coerce").fillna(0)
             )
+            _busq_prod = st.text_input("Buscar producto", placeholder="ej: tomate, papa...", key="compras_buscar_prod")
+            if _busq_prod.strip():
+                df_compras_all = df_compras_all[
+                    df_compras_all["producto_nombre"].astype(str).str.contains(_busq_prod.strip(), case=False, na=False)
+                ]
             grupos = df_compras_all.groupby(
                 ["comprobante", "fecha", "proveedor_nombre", "condicion_pago"],
                 dropna=False, sort=False,
