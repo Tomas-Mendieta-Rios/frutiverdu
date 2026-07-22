@@ -3442,6 +3442,29 @@ if _sub_percibido:
   <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
 </div>""", unsafe_allow_html=True)
 
+            # Barras retiro por persona como % del resultado operativo
+            if _retiros_p:
+                _ret_subs_op = {}
+                for _o in _retiros_p:
+                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                    _ret_subs_op.setdefault(_sk, 0.0)
+                    _ret_subs_op[_sk] += float(_o.get("monto") or 0)
+                if _ret_subs_op and resultado_op != 0:
+                    st.markdown("<p style='font-size:0.8rem;font-weight:600;color:#777;margin:8px 0 6px'>Retiro / Resultado operativo percibido</p>", unsafe_allow_html=True)
+                    def _ret_bar_p(sk, sv, base):
+                        _pct = round(sv / base * 100, 1) if base > 0 else 0.0
+                        return (
+                            f"<div style='margin-bottom:8px'>"
+                            f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                            f"<span style='font-size:0.82rem;font-weight:600'>{sk}</span>"
+                            f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(sv)} · {_pct}%</span>"
+                            f"</div>"
+                            f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
+                            f"<div style='background:#c62828;width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
+                            f"</div></div>"
+                        )
+                    st.markdown("".join(_ret_bar_p(sk, sv, resultado_op) for sk, sv in sorted(_ret_subs_op.items())), unsafe_allow_html=True)
+
             # Retiros
             if _retiros_p:
                 st.divider()
