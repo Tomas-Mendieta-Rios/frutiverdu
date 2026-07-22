@@ -3041,6 +3041,36 @@ if _sub_resumen:
     </div>""", unsafe_allow_html=True)
     
             if total_retiros > 0:
+                # Barras retiro por persona como % del resultado
+                _ret_subs_dev = {}
+                _ret_subs_pag = {}
+                for _o in _retiros_f:
+                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
+                    _amt = float(_o.get("monto") or 0)
+                    _ret_subs_dev.setdefault(_sk, 0.0)
+                    _ret_subs_dev[_sk] += _amt
+                    if (_o.get("estado") or "pendiente") == "pagado":
+                        _ret_subs_pag.setdefault(_sk, 0.0)
+                        _ret_subs_pag[_sk] += _amt
+                def _ret_bar(sk, sv, base, color):
+                    _pct = round(sv / base * 100, 1) if base > 0 else 0.0
+                    return (
+                        f"<div style='margin-bottom:8px'>"
+                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                        f"<span style='font-size:0.82rem;font-weight:600'>{sk}</span>"
+                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(sv)} · {_pct}%</span>"
+                        f"</div>"
+                        f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
+                        f"<div style='background:{color};width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
+                        f"</div></div>"
+                    )
+                _rc_left, _rc_right = st.columns(2)
+                with _rc_left:
+                    st.markdown("<p style='font-size:0.8rem;font-weight:600;color:#777;margin-bottom:6px'>Retiro / Resultado devengado</p>", unsafe_allow_html=True)
+                    st.markdown("".join(_ret_bar(sk, sv, resultado, "#c62828") for sk, sv in sorted(_ret_subs_dev.items())), unsafe_allow_html=True)
+                with _rc_right:
+                    st.markdown("<p style='font-size:0.8rem;font-weight:600;color:#777;margin-bottom:6px'>Retiro / Resultado percibido</p>", unsafe_allow_html=True)
+                    st.markdown("".join(_ret_bar(sk, _ret_subs_pag.get(sk, 0.0), _res_real, "#c62828") for sk, sv in sorted(_ret_subs_dev.items())), unsafe_allow_html=True)
                 st.divider()
                 st.markdown(f"#### Retiros · {len(_retiros_f)} registros")
                 _ret_c1, _ret_c2, _ret_c3 = st.columns(3)
@@ -3048,24 +3078,6 @@ if _sub_resumen:
                 _bal_metric(_ret_c1, "Total",     f"$ {_pesos(total_retiros)}",       "#1a1a1a")
                 _bal_metric(_ret_c2, "Pagado",    f"$ {_pesos(total_retiros_pag)}",   "#2e7d32")
                 _bal_metric(_ret_c3, "Pendiente", f"$ {_pesos(_total_retiros_pend)}", "#c62828")
-                _ret_subs_dev = {}
-                for _o in _retiros_f:
-                    _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
-                    _ret_subs_dev.setdefault(_sk, 0.0)
-                    _ret_subs_dev[_sk] += float(_o.get("monto") or 0)
-                if _ret_subs_dev:
-                    _bars_dev = "".join(
-                        f"<div style='margin-bottom:8px'>"
-                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                        f"<span style='font-size:0.82rem;font-weight:600'>{_sk}</span>"
-                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_sv)} · {round(_sv/total_retiros*100,1) if total_retiros else 0}%</span>"
-                        f"</div>"
-                        f"<div style='background:#d0d7e3;border-radius:5px;height:8px;overflow:hidden'>"
-                        f"<div style='background:#c62828;width:{round(_sv/total_retiros*100,1) if total_retiros else 0}%;height:100%;border-radius:5px'></div>"
-                        f"</div></div>"
-                        for _sk, _sv in sorted(_ret_subs_dev.items())
-                    )
-                    st.markdown(_bars_dev, unsafe_allow_html=True)
                 for _ret_est_lbl, _ret_est_disp in [("pagado", "Pagado"), ("pendiente", "Pendiente")]:
                     _ret_est_items = [o for o in _retiros_f if (o.get("estado") or "pendiente") == _ret_est_lbl]
                     if _ret_est_items:
