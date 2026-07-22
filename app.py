@@ -3532,8 +3532,18 @@ if _sub_percibido:
                 _sn = _ap.get("socio", "")
                 _sm = float(_ap.get("monto") or 0)
                 _saldo_prestamo[_sn] = _saldo_prestamo.get(_sn, 0.0) + (_sm if _ap.get("tipo") == "aporte" else -_sm)
-            # Solo saldos pendientes (positivos)
-            _prest_pend = {n: max(v, 0.0) for n, v in _saldo_prestamo.items()}
+            # Recupero sugerido por socio: cuota mensual si tiene días, saldo pendiente si no
+            _prest_pend = {}
+            for _sn in set(a.get("socio","") for a in _aportes_all):
+                _saldo = max(_saldo_prestamo.get(_sn, 0.0), 0.0)
+                if _saldo <= 0:
+                    continue
+                _cuota_mensual = sum(
+                    float(a["monto"]) / int(a["cuotas"]) * 30
+                    for a in _aportes_all
+                    if a.get("socio") == _sn and a.get("tipo") == "aporte" and a.get("cuotas")
+                )
+                _prest_pend[_sn] = min(_cuota_mensual, _saldo) if _cuota_mensual > 0 else _saldo
             _total_prest = sum(_prest_pend.values())
             if resultado_op > 0 or _total_prest > 0:
                 _base_sug  = max(resultado_op, 0.0)
@@ -3547,7 +3557,7 @@ if _sub_percibido:
                     _pct_bar  = round(_total / (_base_sug or 1) * 100, 1)
                     _detalle  = f"<span style='font-size:0.75rem;color:#888;margin-top:1px;display:block'>"
                     if _parte_pr > 0:
-                        _detalle += f"$ {_pesos(_parte_op)} resultado + $ {_pesos(_parte_pr)} préstamo"
+                        _detalle += f"$ {_pesos(_parte_op)} resultado + $ {_pesos(_parte_pr)} cuota préstamo"
                     else:
                         _detalle += f"$ {_pesos(_parte_op)} del resultado"
                     _detalle += "</span>"
@@ -4431,13 +4441,14 @@ if _stab_aportes_socios:
             concepto = st.text_input("Concepto (opcional)", value=d.get("concepto", ""), key=f"{pfx}_concepto")
             cuotas = None
             if tipo == "aporte":
-                cuotas_str = st.text_input("Devolver en N meses (opcional)", value=str(d["cuotas"]) if d.get("cuotas") else "", placeholder="ej: 6", key=f"{pfx}_cuotas")
+                cuotas_str = st.text_input("Devolver en N días (opcional)", value=str(d["cuotas"]) if d.get("cuotas") else "", placeholder="ej: 90", key=f"{pfx}_cuotas")
                 try:
                     cuotas = int(cuotas_str) if cuotas_str.strip() else None
                 except ValueError:
                     cuotas = None
                 if cuotas and monto > 0:
-                    st.caption(f"Cuota sugerida: $ {_pesos(monto / cuotas)} / mes")
+                    _cuota_dia = monto / cuotas
+                    st.caption(f"$ {_pesos(_cuota_dia)} / día · $ {_pesos(_cuota_dia * 30)} / mes estimado")
             return {"socio": socio, "tipo": tipo, "fecha": fecha, "monto": monto,
                     "caja": caja, "caja_id": _as_caja_opts.get(caja), "concepto": concepto, "cuotas": cuotas}
 
@@ -4483,7 +4494,7 @@ if _stab_aportes_socios:
                     _cuotas_a = _a.get("cuotas")
                     _lbl = f"**{_a.get('socio')}** · {_tipo_lbl} · {_fs} · $ {_monto_a:,.0f} · {_caja_nm}"
                     if _cuotas_a and _a.get("tipo") == "aporte":
-                        _lbl += f" · {_cuotas_a} meses ($ {_pesos(_monto_a / _cuotas_a)}/mes)"
+                        _lbl += f" · {_cuotas_a} días ($ {_pesos(_monto_a / _cuotas_a)}/día · $ {_pesos(_monto_a / _cuotas_a * 30)}/mes)"
                     if _a.get("concepto"):
                         _lbl += f" · {_a['concepto']}"
                     with st.container(border=True):
