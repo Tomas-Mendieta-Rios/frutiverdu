@@ -3532,10 +3532,17 @@ if _sub_percibido:
                 _sn = _ap.get("socio", "")
                 _sm = float(_ap.get("monto") or 0)
                 _saldo_prestamo[_sn] = _saldo_prestamo.get(_sn, 0.0) + (_sm if _ap.get("tipo") == "aporte" else -_sm)
-            if resultado_op > 0 or any(_saldo_prestamo.get(n, 0) > 0 for n, _ in _socios_pct):
+            # Solo saldos pendientes (positivos)
+            _prest_pend = {n: max(v, 0.0) for n, v in _saldo_prestamo.items()}
+            _total_prest = sum(_prest_pend.values())
+            if resultado_op > 0 or _total_prest > 0:
                 _base_sug = max(resultado_op, 0.0)
-                _bars_sug = "".join(
-                    _ret_bar_op(n, _base_sug * p + max(_saldo_prestamo.get(n, 0.0), 0.0), _base_sug or 1)
+                # Recuperar préstamos del pozo; si superan el resultado, se escalan
+                _prest_cap = min(_total_prest, _base_sug)
+                _factor_p  = (_prest_cap / _total_prest) if _total_prest > 0 else 0.0
+                _net_op    = _base_sug - _prest_cap
+                _bars_sug  = "".join(
+                    _ret_bar_op(n, _net_op * p + _prest_pend.get(n, 0.0) * _factor_p, _base_sug or 1)
                     for n, p in _socios_pct
                 )
                 _ret_sug_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
@@ -4531,61 +4538,45 @@ if _stab_aportes_socios:
                 if st.session_state.pop("as_pct_ok", False):
                     st.success("Guardado.")
                 _socios_edit = db.cargar_socios()
-                # Editar porcentajes existentes
-                if _socios_edit:
-                    st.markdown("#### Socios activos")
-                    _total_pct = sum(float(s["pct"]) for s in _socios_edit)
-                    _pct_color = "#2e7d32" if abs(_total_pct - 100) < 0.01 else "#c62828"
-                    st.markdown(
-                        f"<p style='margin:0 0 12px;font-size:0.85rem;color:{_pct_color};font-weight:600'>"
-                        f"Total: {_total_pct:.1f}% {'✓' if abs(_total_pct - 100) < 0.01 else '— debe sumar 100%'}</p>",
-                        unsafe_allow_html=True
-                    )
-                    with st.form("form_as_pct_edit", border=False):
-                        _new_pcts = {}
+                if not _socios_edit:
+                    st.info("No hay socios cargados.")
+                    return
+                _total_pct = sum(float(s["pct"]) for s in _socios_edit)
+                _pct_ok    = abs(_total_pct - 100) < 0.01
+                _pct_color = "#2e7d32" if _pct_ok else "#c62828"
+                with st.form("form_as_pct_edit", border=False):
+                    if st.form_submit_button("💾 Guardar porcentajes", type="primary", use_container_width=True):
+                        _new_pcts_vals = {}
                         for _s in _socios_edit:
-                            _c1, _c2 = st.columns([3, 2])
-                            _c1.markdown(f"**{_s['nombre']}**")
-                            _new_pcts[_s["id"]] = _c2.number_input(
-                                "%", min_value=0.0, max_value=100.0, value=float(_s["pct"]),
-                                step=0.5, format="%.1f", key=f"as_pct_{_s['id']}",
-                                label_visibility="collapsed"
-                            )
-                        if st.form_submit_button("💾 Guardar porcentajes", type="primary", use_container_width=True):
-                            _sum = sum(_new_pcts.values())
-                            if abs(_sum - 100) > 0.01:
-                                st.error(f"Los porcentajes deben sumar 100% (actual: {_sum:.1f}%).")
-                            else:
-                                for _sid, _pct_val in _new_pcts.items():
-                                    db.actualizar_pct_socio(_sid, _pct_val)
-                                db.cargar_socios.clear()
-                                st.session_state["as_pct_ok"] = True
-                                st.rerun(scope="fragment")
-                    st.divider()
-                # Agregar nuevo socio
-                st.markdown("#### Agregar socio")
-                with st.form("form_as_pct_nuevo", border=False):
-                    _c1, _c2 = st.columns([3, 2])
-                    _new_nombre = _c1.text_input("Nombre", placeholder="ej: María")
-                    _new_pct    = _c2.number_input("% Retiro", min_value=0.0, max_value=100.0, value=0.0, step=0.5, format="%.1f")
-                    if st.form_submit_button("➕ Agregar", use_container_width=True):
-                        if not _new_nombre.strip():
-                            st.error("Ingresá un nombre.")
-                        elif _new_pct <= 0:
-                            st.error("El porcentaje debe ser mayor a 0.")
+                            _raw = st.session_state.get(f"as_pct_{_s['id']}", str(float(_s["pct"])))
+                            try:
+                                _new_pcts_vals[_s["id"]] = float(str(_raw).replace(",", "."))
+                            except ValueError:
+                                _new_pcts_vals[_s["id"]] = float(_s["pct"])
+                        _sum = sum(_new_pcts_vals.values())
+                        if abs(_sum - 100) > 0.01:
+                            st.error(f"Los porcentajes deben sumar 100% (actual: {_sum:.1f}%).")
                         else:
-                            db.guardar_socio(_new_nombre.strip(), _new_pct)
+                            for _sid, _pct_val in _new_pcts_vals.items():
+                                db.actualizar_pct_socio(_sid, _pct_val)
+                            db.cargar_socios.clear()
                             st.session_state["as_pct_ok"] = True
                             st.rerun(scope="fragment")
-                # Eliminar (soft delete)
-                if _socios_edit:
-                    st.divider()
-                    st.markdown("#### Eliminar socio")
-                    _del_opts = {s["nombre"]: s["id"] for s in _socios_edit}
-                    _del_sel  = st.selectbox("Socio", options=list(_del_opts.keys()), key="as_pct_del_sel")
-                    if st.button("🗑️ Eliminar", key="as_pct_del_btn"):
-                        db.eliminar_socio(_del_opts[_del_sel])
-                        st.rerun(scope="fragment")
+                    st.markdown(
+                        f"<p style='margin:4px 0 12px;font-size:0.82rem;color:{_pct_color};font-weight:600'>"
+                        f"Total: {_total_pct:.1f}% {'✓' if _pct_ok else '— debe sumar 100%'}</p>",
+                        unsafe_allow_html=True
+                    )
+                    for _s in _socios_edit:
+                        with st.container(border=True):
+                            _c1, _c2 = st.columns([3, 2])
+                            _c1.markdown(f"**{_s['nombre']}**")
+                            _c2.text_input(
+                                "%", value=str(float(_s["pct"])),
+                                key=f"as_pct_{_s['id']}",
+                                label_visibility="collapsed",
+                                placeholder="ej: 75.0"
+                            )
             _as_pct()
 
 if _stab_transferencias:
