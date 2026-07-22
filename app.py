@@ -3526,8 +3526,18 @@ if _sub_percibido:
             _ret_sug_html = ""
             _socios_db = db.cargar_socios()
             _socios_pct = [(s["nombre"], float(s["pct"]) / 100) for s in _socios_db] or [("AM", 0.25), ("Carlos", 0.75)]
-            if resultado_op > 0:
-                _bars_sug = "".join(_ret_bar_op(n, resultado_op * p, resultado_op) for n, p in _socios_pct)
+            _aportes_all = db.cargar_aportes_socios()
+            _saldo_prestamo = {}
+            for _ap in _aportes_all:
+                _sn = _ap.get("socio", "")
+                _sm = float(_ap.get("monto") or 0)
+                _saldo_prestamo[_sn] = _saldo_prestamo.get(_sn, 0.0) + (_sm if _ap.get("tipo") == "aporte" else -_sm)
+            if resultado_op > 0 or any(_saldo_prestamo.get(n, 0) > 0 for n, _ in _socios_pct):
+                _base_sug = max(resultado_op, 0.0)
+                _bars_sug = "".join(
+                    _ret_bar_op(n, _base_sug * p + max(_saldo_prestamo.get(n, 0.0), 0.0), _base_sug or 1)
+                    for n, p in _socios_pct
+                )
                 _ret_sug_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
   <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro sugerido</p>
   {_bars_sug}
