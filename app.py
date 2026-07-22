@@ -2272,10 +2272,10 @@ def _render_movimiento_caja(cobros, pagos):
         _sal_gastos_parc = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") == "Gasto" and r.get("_parcial")]
         _sal_transf  = [r for r in _det if r.get("Cat.") == "Transferencia" and r.get("Tipo") == "Salida"]
         _ent_transf  = [r for r in _det if r.get("Cat.") == "Transferencia" and r.get("Tipo") == "Entrada"]
-        _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto", "Transferencia")]
+        _sal_otros   = [r for r in _det if r.get("Tipo") == "Salida" and r.get("Cat.") not in ("Compra", "Gasto", "Transferencia", "Devolución")]
 
-        _entradas_real      = [r for r in _entradas if r.get("Cat.") not in ("Transferencia", "Otro ingreso") and not r.get("_parcial")]
-        _entradas_real_parc = [r for r in _entradas if r.get("Cat.") not in ("Transferencia", "Otro ingreso") and r.get("_parcial")]
+        _entradas_real      = [r for r in _entradas if r.get("Cat.") not in ("Transferencia", "Otro ingreso", "Préstamo") and not r.get("_parcial")]
+        _entradas_real_parc = [r for r in _entradas if r.get("Cat.") not in ("Transferencia", "Otro ingreso", "Préstamo") and r.get("_parcial")]
         _ent_otros_ing      = [r for r in _entradas if r.get("Cat.") == "Otro ingreso"]
 
         # Dedup cobros: un cobro puede tener múltiples cobranza lines en la misma caja
@@ -2350,6 +2350,22 @@ def _render_movimiento_caja(cobros, pagos):
                 _egr_rows = [{"Fecha": r["Fecha"], "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
                              for r in sorted(_sal_egresos, key=lambda x: x["Fecha"], reverse=True)]
                 st.dataframe(pd.DataFrame(_egr_rows), use_container_width=True, hide_index=True,
+                             column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
+        _ent_prestamos = [r for r in _det if r.get("Cat.") == "Préstamo"]
+        if _ent_prestamos:
+            _tot_prest = sum(r["Monto"] for r in _ent_prestamos)
+            with st.expander(f"ENTRADAS - PRÉSTAMOS ({len(_ent_prestamos)}) — {_fmt_monto(_tot_prest)}"):
+                _prest_rows = [{"Fecha": r["Fecha"], "Socio": r.get("Cliente", ""), "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
+                               for r in sorted(_ent_prestamos, key=lambda x: x["Fecha"], reverse=True)]
+                st.dataframe(pd.DataFrame(_prest_rows), use_container_width=True, hide_index=True,
+                             column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
+        _sal_devoluciones = [r for r in _det if r.get("Cat.") == "Devolución"]
+        if _sal_devoluciones:
+            _tot_devol = sum(r["Monto"] for r in _sal_devoluciones)
+            with st.expander(f"SALIDAS - DEVOLUCIONES ({len(_sal_devoluciones)}) — {_fmt_monto(_tot_devol)}"):
+                _devol_rows = [{"Fecha": r["Fecha"], "Socio": r.get("Cliente", ""), "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
+                               for r in sorted(_sal_devoluciones, key=lambda x: x["Fecha"], reverse=True)]
+                st.dataframe(pd.DataFrame(_devol_rows), use_container_width=True, hide_index=True,
                              column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
         _aj_ent = [_aj for _aj in _aj_caja_periodo if float(_aj.get("monto") or 0) >= 0]
