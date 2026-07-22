@@ -4925,13 +4925,21 @@ if tab_ing_cobros_wix:
                                 _info2 = f" · 🚚 entrega {_fent_c}" if _fent_c and _fent_c != "—" else " · 🚚 —"
                                 st.caption(f"{_pay_c} · {_ful_c} · 📅 pedido {_fped_c}{_info2}")
                             with _cd:
-                                _fp_new = st.date_input(
-                                    "F. pago",
-                                    value=_fecha_pago_val,
-                                    key=f"fpago_{_oid_c}",
-                                    format="DD/MM/YYYY",
-                                    label_visibility="collapsed",
+                                _sin_fecha = st.checkbox(
+                                    "Sin fecha",
+                                    value=(_fecha_pago_val is None),
+                                    key=f"sinfecha_{_oid_c}",
                                 )
+                                if _sin_fecha:
+                                    _fp_new = None
+                                else:
+                                    _fp_new = st.date_input(
+                                        "F. pago",
+                                        value=_fecha_pago_val or date.today(),
+                                        key=f"fpago_{_oid_c}",
+                                        format="DD/MM/YYYY",
+                                        label_visibility="collapsed",
+                                    )
                             with _cc:
                                 _current_caja_c = _cajas_por_id_cob.get(_caja_id_c) if _caja_id_c else None
                                 _caja_opts_c = ["—"] + _cajas_names_cob
