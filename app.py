@@ -3824,14 +3824,14 @@ if _stab_saldo_ini:
                         _ini_actual = float(_aj_ini.get("monto") or 0)
                         _n_vals[_cj["id"]] = st.text_input(
                             f"{_cj['nombre']}",
-                            value=f"{_ini_actual:,.2f}" if _ini_actual != int(_ini_actual) else f"{int(_ini_actual):,}",
+                            value=str(int(_ini_actual)) if _ini_actual == int(_ini_actual) else str(_ini_actual),
                             key=f"si_n_{_cj['id']}",
                         )
                     if st.button("💾 Guardar saldos", type="primary", width='stretch', key="si_n_save"):
                         _parsed = {}
                         for _cj_id, _s in _n_vals.items():
                             try:
-                                _parsed[_cj_id] = float(str(_s).replace(",", "").strip())
+                                _parsed[_cj_id] = float(str(_s).replace(",", ".").strip())
                             except ValueError:
                                 st.error("Monto inválido.")
                                 return
