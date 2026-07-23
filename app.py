@@ -5038,6 +5038,7 @@ with tab_sync:
             for _slabel, _msg in _errors:
                 st.error(_msg)
         else:
+            db.guardar_config({"dux_fecha_desde": str(sync_desde), "dux_fecha_hasta": str(sync_hasta)})
             st.success("✅ Sincronización completada correctamente.")
 
 with tab_grupo_config:
