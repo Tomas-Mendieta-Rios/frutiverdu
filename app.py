@@ -6,7 +6,6 @@ import time
 import warnings
 from datetime import date, timedelta, datetime, timezone
 
-warnings.filterwarnings("ignore", message=".*use_container_width.*")
 warnings.filterwarnings("ignore", message=".*label.*got an empty value.*")
 
 # Silenciar deprecation warnings de Streamlit que inundan los logs
@@ -257,7 +256,7 @@ if st.session_state["auth_user"] is None:
     with st.form("login_form"):
         _lu = st.text_input("Usuario")
         _lp = st.text_input("Contraseña", type="password")
-        _lb = st.form_submit_button("Ingresar", type="primary", use_container_width=True)
+        _lb = st.form_submit_button("Ingresar", type="primary", width='stretch')
     if _lb:
         _users_cfg = st.secrets.get("users", {})
         _udata = _users_cfg.get(_lu.lower(), {})
@@ -321,7 +320,7 @@ _col_sesh, _col_logout = st.columns([8, 1])
 with _col_sesh:
     st.caption(f"👤 Sesión: **{_usuario_actual}**")
 with _col_logout:
-    if st.button("Cerrar sesión", key="logout_top", use_container_width=True):
+    if st.button("Cerrar sesión", key="logout_top", width='stretch'):
         st.session_state["auth_user"] = None
         st.session_state.pop("usuario_app", None)
         st.query_params.clear()
@@ -1660,7 +1659,7 @@ def _render_movimiento_caja(cobros, pagos):
             _desde = st.date_input("Desde", value=_desde_def, key="caja_desde_in", format="DD/MM/YYYY")
         with _cc2:
             _hasta_in = st.date_input("Hasta", value=_hasta_def, key="caja_hasta_in", format="DD/MM/YYYY")
-        _btn_caja = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+        _btn_caja = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
     if _btn_caja:
         db.guardar_config({"caja_desde": str(_desde), "caja_hasta": str(_hasta_in)})
     _hasta = _hasta_in
@@ -2297,7 +2296,7 @@ def _render_movimiento_caja(cobros, pagos):
             with st.expander(f"ENTRADAS - VENTAS ({len(_df_ent)}) — {_fmt_monto(_tot_ent)}"):
                 st.dataframe(
                     _df_ent[["Cobro #", "Fecha", "Cliente", "Monto"]],
-                    use_container_width=True, hide_index=True,
+                    width='stretch', hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
         if _ent_otros_ing:
@@ -2305,14 +2304,14 @@ def _render_movimiento_caja(cobros, pagos):
             with st.expander(f"ENTRADAS - INGRESOS ({len(_ent_otros_ing)}) — {_fmt_monto(_tot_oi)}"):
                 _oi_rows = [{"Fecha": r["Fecha"], "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
                             for r in sorted(_ent_otros_ing, key=lambda x: x["Fecha"], reverse=True)]
-                st.dataframe(pd.DataFrame(_oi_rows), use_container_width=True, hide_index=True,
+                st.dataframe(pd.DataFrame(_oi_rows), width='stretch', hide_index=True,
                              column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         if _ent_transf:
             _tot_et = sum(r["Monto"] for r in _ent_transf)
             with st.expander(f"ENTRADAS - TRANSFERENCIAS ({len(_ent_transf)}) — {_fmt_monto(_tot_et)}"):
                 st.dataframe(
                     pd.DataFrame(_ent_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
-                    use_container_width=True, hide_index=True,
+                    width='stretch', hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
         if _sal_transf:
@@ -2320,7 +2319,7 @@ def _render_movimiento_caja(cobros, pagos):
             with st.expander(f"SALIDAS - TRANSFERENCIAS ({len(_sal_transf)}) — {_fmt_monto(_tot_st)}"):
                 st.dataframe(
                     pd.DataFrame(_sal_transf)[["Fecha", "Desde", "Hacia", "Concepto", "Monto"]],
-                    use_container_width=True, hide_index=True,
+                    width='stretch', hide_index=True,
                     column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                 )
         for _titulo, _rows in [
@@ -2340,7 +2339,7 @@ def _render_movimiento_caja(cobros, pagos):
                 with st.expander(f"{_titulo} ({len(_df_rows)}) — {_fmt_monto(_tot_rows)}"):
                     st.dataframe(
                         _df_rows[_cols_sel],
-                        use_container_width=True, hide_index=True,
+                        width='stretch', hide_index=True,
                         column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto},
                     )
         _sal_egresos = [r for r in _sal_otros if r.get("Cat.") == "Otro egreso"]
@@ -2349,7 +2348,7 @@ def _render_movimiento_caja(cobros, pagos):
             with st.expander(f"SALIDAS - EGRESOS ({len(_sal_egresos)}) — {_fmt_monto(_tot_egr)}"):
                 _egr_rows = [{"Fecha": r["Fecha"], "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
                              for r in sorted(_sal_egresos, key=lambda x: x["Fecha"], reverse=True)]
-                st.dataframe(pd.DataFrame(_egr_rows), use_container_width=True, hide_index=True,
+                st.dataframe(pd.DataFrame(_egr_rows), width='stretch', hide_index=True,
                              column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         _ent_prestamos = [r for r in _det if r.get("Cat.") == "Préstamo"]
         if _ent_prestamos:
@@ -2357,7 +2356,7 @@ def _render_movimiento_caja(cobros, pagos):
             with st.expander(f"ENTRADAS - PRÉSTAMOS ({len(_ent_prestamos)}) — {_fmt_monto(_tot_prest)}"):
                 _prest_rows = [{"Fecha": r["Fecha"], "Socio": r.get("Cliente", ""), "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
                                for r in sorted(_ent_prestamos, key=lambda x: x["Fecha"], reverse=True)]
-                st.dataframe(pd.DataFrame(_prest_rows), use_container_width=True, hide_index=True,
+                st.dataframe(pd.DataFrame(_prest_rows), width='stretch', hide_index=True,
                              column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         _sal_devoluciones = [r for r in _det if r.get("Cat.") == "Devolución"]
         if _sal_devoluciones:
@@ -2365,7 +2364,7 @@ def _render_movimiento_caja(cobros, pagos):
             with st.expander(f"SALIDAS - DEVOLUCIONES ({len(_sal_devoluciones)}) — {_fmt_monto(_tot_devol)}"):
                 _devol_rows = [{"Fecha": r["Fecha"], "Socio": r.get("Cliente", ""), "Concepto": r.get("Concepto", ""), "Monto": r["Monto"]}
                                for r in sorted(_sal_devoluciones, key=lambda x: x["Fecha"], reverse=True)]
-                st.dataframe(pd.DataFrame(_devol_rows), use_container_width=True, hide_index=True,
+                st.dataframe(pd.DataFrame(_devol_rows), width='stretch', hide_index=True,
                              column_config={"Fecha": _cfg_fecha, "Monto": _cfg_monto})
         _aj_caja_periodo = _ajustes_periodo.get(_caja, [])
         _aj_ent = [_aj for _aj in _aj_caja_periodo if float(_aj.get("monto") or 0) >= 0]
@@ -2375,7 +2374,7 @@ def _render_movimiento_caja(cobros, pagos):
                 _aj_sum = abs(sum(float(_aj.get("monto") or 0) for _aj in _aj_grp))
                 with st.expander(f"{_aj_lbl} ({len(_aj_grp)}) — {_fmt_monto(_aj_sum)}"):
                     _aj_rows = [{"Fecha": _aj.get("fecha"), "Monto": abs(float(_aj.get("monto") or 0)) if _aj_abs else float(_aj.get("monto") or 0), "Nota": _aj.get("nota") or ""} for _aj in _aj_grp]
-                    st.dataframe(pd.DataFrame(_aj_rows), use_container_width=True, hide_index=True,
+                    st.dataframe(pd.DataFrame(_aj_rows), width='stretch', hide_index=True,
                         column_config={"Fecha": _cfg_fecha, "Monto": st.column_config.NumberColumn("Monto", format="$ %.2f")})
         st.divider()
 
@@ -2438,7 +2437,7 @@ if _sub_pendientes:
                     _pend_desde = st.date_input("Desde", value=_pend_desde_def, key="pend_desde_in", format="DD/MM/YYYY")
                 with _fc2:
                     _pend_hasta = st.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta_in", format="DD/MM/YYYY")
-                _btn_pend = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                _btn_pend = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
             if _btn_pend:
                 db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
     
@@ -2524,7 +2523,7 @@ if _sub_pendientes:
                                 if _lbl == "Parciales":
                                     _ccfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
                                     _ccfg["Saldo"]  = st.column_config.NumberColumn("Saldo",  format="$ %,.2f")
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_ccfg)
+                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True, column_config=_ccfg)
     
             # Egresos: agrupar por Rubro
             _pend_big("Egresos", _pesos(_total_pend_gas), "#c62828")
@@ -2544,7 +2543,7 @@ if _sub_pendientes:
                             "Item":     (_o.get("items_egresos") or {}).get("nombre") or _o.get("item") or "—",
                             "Monto":    float(_o.get("monto") or 0),
                         } for _o in sorted(_rlst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                        st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                      column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f")})
     
             st.divider()
@@ -2591,7 +2590,7 @@ if _sub_pendientes:
                                 if _lbl == "Parciales":
                                     _fcfg["Cobrado"] = st.column_config.NumberColumn("Cobrado", format="$ %,.2f")
                                     _fcfg["Saldo"]   = st.column_config.NumberColumn("Saldo",   format="$ %,.2f")
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True, column_config=_fcfg)
+                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True, column_config=_fcfg)
     
             # Wix: agrupar por Cliente (no hay parciales en Wix)
             _pend_big("Wix", _pesos(_total_deud_wix), "#c62828")
@@ -2611,7 +2610,7 @@ if _sub_pendientes:
                             "Pedido #":        _p.get("number") or _p.get("id") or "—",
                             "Total":           _wix_monto(_p),
                         } for _p in sorted(_citems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                        st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                      column_config={"Total": _cfg_monto})
     
         _pendientes_frag()
@@ -2635,7 +2634,7 @@ if _sub_resumen:
                     bal_desde = st.date_input("Desde", value=_bal_desde_def, key="bal_desde_in", format="DD/MM/YYYY")
                 with _bc2:
                     bal_hasta = st.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta_in", format="DD/MM/YYYY")
-                _btn_bal = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                _btn_bal = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
             if _btn_bal:
                 db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
     
@@ -2847,7 +2846,7 @@ if _sub_resumen:
                                             "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
                                         }
                                     _rows.append(_row)
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                              column_config=_col_cfg)
     
             # Notas de crédito/débito
@@ -2866,7 +2865,7 @@ if _sub_resumen:
                             "Monto": _nota_sign(_f) * float(_f.get("total") or 0),
                             "PDF": _f.get("url_factura") or "",
                         })
-                    st.dataframe(pd.DataFrame(_rows_notas), use_container_width=True, hide_index=True,
+                    st.dataframe(pd.DataFrame(_rows_notas), width='stretch', hide_index=True,
                                  column_config={
                                      "Monto": st.column_config.NumberColumn("Monto", format="$ %,.2f"),
                                      "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver"),
@@ -2901,7 +2900,7 @@ if _sub_resumen:
                                     "Pedido #": _p.get("number") or _p.get("id") or "—",
                                     "Total":    _wix_monto(_p),
                                 } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                              column_config={"Total": _cfg_monto})
     
             # ── OTROS INGRESOS ──────────────────────────────────────────────────────
@@ -2936,7 +2935,7 @@ if _sub_resumen:
                                                 "Monto":       float(o.get("monto") or 0),
                                                 "Descripción": o.get("descripcion") or "",
                                             } for o in sorted(_sitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                            st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                          column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
     
             # Ajustes positivos
@@ -2948,7 +2947,7 @@ if _sub_resumen:
                     _rows = [{"Fecha devengada": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
                               "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
                              for a in sorted(_aj_pos, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                    st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                  column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
     
             # ── EGRESOS ─────────────────────────────────────────────────────────────
@@ -3027,7 +3026,7 @@ if _sub_resumen:
                                         _row = {"Fecha devengada": _fmt_fecha(_c.get("fecha")), "Comprobante": _c.get("nro_comprobante") or "—", "Total": _ctot}
                                         _col_cfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
                                     _rows.append(_row)
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                              column_config=_col_cfg)
     
             # ── OTROS EGRESOS ────────────────────────────────────────────────────────
@@ -3068,7 +3067,7 @@ if _sub_resumen:
                                                         "Monto":       float(o.get("monto") or 0),
                                                         "Descripción": o.get("descripcion") or "",
                                                     } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                    st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                                  column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
     
             # Ajustes negativos
@@ -3080,7 +3079,7 @@ if _sub_resumen:
                     _rows = [{"Fecha devengada": _fmt_fecha(a.get("fecha")), "Caja": _aj_cajas_map.get(a.get("caja_id"), "—"),
                               "Monto": float(a.get("monto") or 0), "Nota": a.get("nota") or ""}
                              for a in sorted(_aj_neg, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                    st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                  column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
     
             # ── RESULTADO ────────────────────────────────────────────────────────────
@@ -3172,7 +3171,7 @@ if _sub_resumen:
                                                 "Monto":       float(o.get("monto") or 0),
                                                 "Descripción": o.get("descripcion") or "",
                                             } for o in sorted(_iitems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                            st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                          column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
                 _net_dev       = resultado - total_retiros
                 _net_real      = _res_real - total_retiros_pag
@@ -3219,7 +3218,7 @@ if _sub_percibido:
                     perc_desde = st.date_input("Desde", value=_perc_desde_def, key="perc_desde_in", format="DD/MM/YYYY")
                 with _pc2:
                     perc_hasta = st.date_input("Hasta", value=_perc_hasta_def, key="perc_hasta_in", format="DD/MM/YYYY")
-                _btn_perc = st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                _btn_perc = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
             if _btn_perc:
                 db.guardar_config({"perc_desde": str(perc_desde), "perc_hasta": str(perc_hasta)})
 
@@ -3347,7 +3346,7 @@ if _sub_percibido:
                             _ctot = sum(r["Imputado"] for r in _rows)
                             with st.expander(f"{_cli} ({len(_rows)}) — $ {_pesos(_ctot)}"):
                                 _df_rows = [{k: v for k, v in r.items() if k != "_parcial"} for r in _rows]
-                                st.dataframe(pd.DataFrame(_df_rows), use_container_width=True, hide_index=True, column_config=_cob_cfg)
+                                st.dataframe(pd.DataFrame(_df_rows), width='stretch', hide_index=True, column_config=_cob_cfg)
 
             # Sección WIX cobros
             if _wix_cobrados:
@@ -3367,7 +3366,7 @@ if _sub_percibido:
                             "Pedido #":        _p.get("number") or _p.get("id") or "—",
                             "Total":    _wix_monto(_p),
                         } for _p in sorted(_pitems, key=lambda x: str(x.get("createdDate") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                        st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                      column_config={"Total": st.column_config.NumberColumn("Total ($)", format="$ %,.0f")})
 
             # Sección Otros ingresos
@@ -3402,7 +3401,7 @@ if _sub_percibido:
                                             "Monto":       float(o.get("monto") or 0),
                                             "Descripción": o.get("descripcion") or "",
                                         } for o in sorted(_sitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
-                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                        st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
             # ── EGRESOS ─────────────────────────────────────────────────────────────
@@ -3466,7 +3465,7 @@ if _sub_percibido:
                             _ptot = sum(r["Imputado"] for r in _prows)
                             with st.expander(f"{_prov} ({len(_prows)}) — $ {_pesos(_ptot)}"):
                                 _df_rows = [{k: v for k, v in r.items() if k not in ("_parcial", "_prov")} for r in _prows]
-                                st.dataframe(pd.DataFrame(_df_rows), use_container_width=True, hide_index=True, column_config=_pag_cfg)
+                                st.dataframe(pd.DataFrame(_df_rows), width='stretch', hide_index=True, column_config=_pag_cfg)
 
             # Gastos (otros egresos sin RETIRO)
             if _gastos_p:
@@ -3499,7 +3498,7 @@ if _sub_percibido:
                                             "Monto":       float(o.get("monto") or 0),
                                             "Descripción": o.get("descripcion") or "",
                                         } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
-                                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                        st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
             # ── RESULTADO OPERATIVO ──────────────────────────────────────────────────
@@ -3628,7 +3627,7 @@ if _sub_percibido:
                                     "Monto":       float(o.get("monto") or 0),
                                     "Descripción": o.get("descripcion") or "",
                                 } for o in sorted(_iitems, key=lambda x: str(x.get("fecha_movimiento") or x.get("fecha") or ""), reverse=True)]
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                              column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
                 # Resultado neto
@@ -3683,7 +3682,7 @@ if _stab_ajustes:
                     _n_monto = st.text_input("Diferencia ($)", value="0", key="aj_n_monto",
                                              help="Positivo si sobra plata, negativo si falta.")
                     _n_nota  = st.text_input("Nota (opcional)", key="aj_n_nota")
-                    if st.button("💾 Guardar ajuste", type="primary", use_container_width=True, key="aj_n_save"):
+                    if st.button("💾 Guardar ajuste", type="primary", width='stretch', key="aj_n_save"):
                         try:
                             _m = float(str(_n_monto).replace(",", ".").strip())
                         except ValueError:
@@ -3712,7 +3711,7 @@ if _stab_ajustes:
                     _dc1, _dc2 = st.columns(2)
                     _aj_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_edit_desde")
                     _aj_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_edit_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [a for a in _lista if _aj_e_desde <= _safe_date(a.get("fecha")) <= _aj_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3738,7 +3737,7 @@ if _stab_ajustes:
                             _e_monto = st.text_input("Diferencia ($)", value=str(_a.get("monto") or "0"), key=f"aj_em_{_aid}")
                             _e_nota  = st.text_input("Nota (opcional)", value=_a.get("nota") or "", key=f"aj_en_{_aid}")
                             _sc1, _sc2 = st.columns(2)
-                            if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"aj_es_{_aid}"):
+                            if _sc1.button("💾 Guardar", type="primary", width='stretch', key=f"aj_es_{_aid}"):
                                 try:
                                     _em = float(str(_e_monto).replace(",", ".").strip())
                                 except ValueError:
@@ -3750,7 +3749,7 @@ if _stab_ajustes:
                                     st.session_state.pop(f"aj_editing_{_aid}", None)
                                     st.toast("✅ Ajuste actualizado.", icon="✅")
                                     st.rerun(scope="fragment")
-                            if _sc2.button("Cancelar", use_container_width=True, key=f"aj_ec2_{_aid}"):
+                            if _sc2.button("Cancelar", width='stretch', key=f"aj_ec2_{_aid}"):
                                 st.session_state.pop(f"aj_editing_{_aid}", None)
                                 st.rerun(scope="fragment")
             _aj_editar_eliminar()
@@ -3768,7 +3767,7 @@ if _stab_ajustes:
                     _dc1, _dc2 = st.columns(2)
                     _aj_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="aj_all_desde")
                     _aj_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="aj_all_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [a for a in _lista if _aj_v_desde <= _safe_date(a.get("fecha")) <= _aj_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -3782,7 +3781,7 @@ if _stab_ajustes:
                     with st.expander(f"{_cj_nm} ({len(_cj_items)}) — $ {_pesos(_cj_total)}"):
                         _rows = [{"Fecha": _fmt_fecha(_a.get("fecha")), "Monto": float(_a.get("monto") or 0), "Nota": _a.get("nota") or "—"}
                                  for _a in _cj_items]
-                        st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                        st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _aj_todos_vista()
 
@@ -3828,7 +3827,7 @@ if _stab_saldo_ini:
                             value=str(int(_ini_actual)) if _ini_actual == int(_ini_actual) else str(_ini_actual),
                             key=f"si_n_{_cj['id']}",
                         )
-                    if st.button("💾 Guardar saldos", type="primary", use_container_width=True, key="si_n_save"):
+                    if st.button("💾 Guardar saldos", type="primary", width='stretch', key="si_n_save"):
                         _parsed = {}
                         for _cj_id, _s in _n_vals.items():
                             try:
@@ -3862,7 +3861,7 @@ if _stab_saldo_ini:
                     with st.container(border=True):
                         _gh1, _gh2 = st.columns([8, 2])
                         _gh1.markdown(f"**Corte: {_f_str}**")
-                        if _gh2.button("🗑️ Eliminar grupo", key=f"si_delgrp_{_gkey}", use_container_width=True):
+                        if _gh2.button("🗑️ Eliminar grupo", key=f"si_delgrp_{_gkey}", width='stretch'):
                             for _, _aj in _items:
                                 db.eliminar_ajuste_caja(_aj["id"])
                             db.cargar_ajustes_caja.clear()
@@ -3879,7 +3878,7 @@ if _stab_saldo_ini:
                                 _m_actual = float(_aj.get("monto") or 0)
                                 _e_monto = st.text_input("Monto ($)", value=str(int(_m_actual)) if _m_actual == int(_m_actual) else str(_m_actual), key=f"si_em_{_aid}")
                                 _sc1, _sc2 = st.columns(2)
-                                if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"si_es_{_aid}"):
+                                if _sc1.button("💾 Guardar", type="primary", width='stretch', key=f"si_es_{_aid}"):
                                     try:
                                         _em = float(str(_e_monto).replace(",", ".").strip())
                                     except ValueError:
@@ -3890,7 +3889,7 @@ if _stab_saldo_ini:
                                     db.cargar_ajustes_caja.clear()
                                     st.toast("✅ Saldo actualizado.")
                                     st.rerun(scope="fragment")
-                                if _sc2.button("Cancelar", use_container_width=True, key=f"si_ec_{_aid}"):
+                                if _sc2.button("Cancelar", width='stretch', key=f"si_ec_{_aid}"):
                                     st.session_state.pop(f"si_editing_{_aid}", None)
                                     st.rerun(scope="fragment")
             _si_editar_eliminar()
@@ -3911,7 +3910,7 @@ if _stab_saldo_ini:
                         "Fecha corte":   _f.strftime("%d/%m/%Y") if _f != date.min else "—",
                         "Saldo inicial": float(_aj.get("monto") or 0),
                     })
-                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                              column_config={"Saldo inicial": st.column_config.NumberColumn("Saldo inicial ($)", format="$ %,.0f")})
             _si_todos_vista()
 
@@ -4012,7 +4011,7 @@ if _stab_otros_ingresos:
                     _dc1, _dc2 = st.columns(2)
                     _oi_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_edit_desde")
                     _oi_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_edit_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [o for o in _lista if _oi_e_desde <= _safe_date(o.get("fecha")) <= _oi_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -4095,7 +4094,7 @@ if _stab_otros_ingresos:
                     _dc1, _dc2 = st.columns(2)
                     _oi_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oi_all_desde")
                     _oi_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oi_all_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [o for o in _lista if _oi_v_desde <= _safe_date(o.get("fecha")) <= _oi_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -4125,7 +4124,7 @@ if _stab_otros_ingresos:
                                                           "Caja": _oi_caja_map.get(_oi.get("caja_id"), "—"),
                                                           "Descripción": _oi.get("descripcion") or ""}
                                                          for _oi in sorted(_it_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                              column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
                 _pend = [x for x in _lista if x.get("estado") != "cobrado"]
                 _cobr = [x for x in _lista if x.get("estado") == "cobrado"]
@@ -4233,7 +4232,7 @@ if _stab_otros_egresos:
                     _dc1, _dc2 = st.columns(2)
                     _oe_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_edit_desde")
                     _oe_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_edit_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [o for o in _lista if _oe_e_desde <= _safe_date(o.get("fecha")) <= _oe_e_hasta]
 
                 # Filtros rubro / subrubro / item
@@ -4333,7 +4332,7 @@ if _stab_otros_egresos:
                     _dc1, _dc2 = st.columns(2)
                     _oe_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="oe_all_desde")
                     _oe_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="oe_all_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [o for o in _lista if _oe_v_desde <= _safe_date(o.get("fecha")) <= _oe_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -4364,7 +4363,7 @@ if _stab_otros_egresos:
                                                           "Caja": _oe_caja_map.get(_oe.get("caja_id"), "—"),
                                                           "Descripción": _oe.get("descripcion") or ""}
                                                          for _oe in sorted(_it_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                              column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
                 _pend_oe = [x for x in _lista if x.get("estado") != "pagado"]
                 _pag_oe  = [x for x in _lista if x.get("estado") == "pagado"]
@@ -4396,7 +4395,7 @@ if tab_iva:
                 _iva_hasta = st.date_input("Hasta", value=_iva_hasta_def, key="iva_hasta_in", format="DD/MM/YYYY")
             with _ivc3:
                 _sim_target_str = st.text_input("IVA que quiero pagar ($)", value="0", key="sim_iva_target", placeholder="ej: 2000000")
-            _btn_iva = st.form_submit_button("Calcular", type="primary", use_container_width=True)
+            _btn_iva = st.form_submit_button("Calcular", type="primary", width='stretch')
         if _btn_iva:
             db.guardar_config({"iva_desde": str(_iva_desde), "iva_hasta": str(_iva_hasta)})
 
@@ -4488,7 +4487,7 @@ if _stab_aportes_socios:
                     _dc1, _dc2 = st.columns(2)
                     _as_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="as_edit_desde")
                     _as_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="as_edit_hasta")
-                    st.form_submit_button("🔄 Filtrar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Filtrar", type="primary", width='stretch')
                 _lista = [a for a in _lista if _as_e_desde <= _safe_date(a.get("fecha")) <= _as_e_hasta]
                 if not _lista:
                     st.info("Sin registros en el período.")
@@ -4564,7 +4563,7 @@ if _stab_aportes_socios:
                     _dc1, _dc2 = st.columns(2)
                     _as_t_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="as_todos_desde")
                     _as_t_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="as_todos_hasta")
-                    st.form_submit_button("🔄 Filtrar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Filtrar", type="primary", width='stretch')
                 _lista = [a for a in _lista_full if _as_t_desde <= _safe_date(a.get("fecha")) <= _as_t_hasta]
                 # Listado
                 _rows = []
@@ -4579,7 +4578,7 @@ if _stab_aportes_socios:
                         "Caja":     _caja_nm,
                         "Concepto": _a.get("concepto") or "—",
                     })
-                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                              column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %,.0f")})
             _as_todos()
 
@@ -4596,7 +4595,7 @@ if _stab_aportes_socios:
                 _pct_ok    = abs(_total_pct - 100) < 0.01
                 _pct_color = "#2e7d32" if _pct_ok else "#c62828"
                 with st.form("form_as_pct_edit", border=False):
-                    if st.form_submit_button("💾 Guardar porcentajes", type="primary", use_container_width=True):
+                    if st.form_submit_button("💾 Guardar porcentajes", type="primary", width='stretch'):
                         _new_pcts_vals = {}
                         for _s in _socios_edit:
                             _raw = st.session_state.get(f"as_pct_{_s['id']}", str(float(_s["pct"])))
@@ -4663,7 +4662,7 @@ if _stab_transferencias:
                     _n_destino  = st.selectbox("Hacia",  options=list(_opts.keys()), key="tr_n_destino")
                     _n_monto    = st.text_input("Monto ($)", value="", placeholder="0", key="tr_n_monto")
                     _n_concepto = st.text_input("Concepto (opcional)", key="tr_n_concepto")
-                    if st.button("💾 Registrar", type="primary", use_container_width=True, key="tr_n_save"):
+                    if st.button("💾 Registrar", type="primary", width='stretch', key="tr_n_save"):
                         try:
                             _m = float(str(_n_monto).replace(",", ".").strip())
                         except ValueError:
@@ -4692,7 +4691,7 @@ if _stab_transferencias:
                     _dc1, _dc2 = st.columns(2)
                     _tr_e_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_edit_desde")
                     _tr_e_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_edit_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [t for t in _lista if _tr_e_desde <= _safe_date(t.get("fecha")) <= _tr_e_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -4721,7 +4720,7 @@ if _stab_transferencias:
                             _e_monto    = st.text_input("Monto ($)", value=str(_t.get("monto") or "0"), key=f"tr_em_{_tid}")
                             _e_concepto = st.text_input("Concepto (opcional)", value=_t.get("concepto") or "", key=f"tr_ec_{_tid}")
                             _sc1, _sc2 = st.columns(2)
-                            if _sc1.button("💾 Guardar", type="primary", use_container_width=True, key=f"tr_es_{_tid}"):
+                            if _sc1.button("💾 Guardar", type="primary", width='stretch', key=f"tr_es_{_tid}"):
                                 try:
                                     _em = float(str(_e_monto).replace(",", ".").strip())
                                 except ValueError:
@@ -4734,7 +4733,7 @@ if _stab_transferencias:
                                 st.session_state.pop(f"tr_editing_{_tid}", None)
                                 st.toast("✅ Transferencia actualizada.", icon="✅")
                                 st.rerun(scope="fragment")
-                            if _sc2.button("Cancelar", use_container_width=True, key=f"tr_ec2_{_tid}"):
+                            if _sc2.button("Cancelar", width='stretch', key=f"tr_ec2_{_tid}"):
                                 st.session_state.pop(f"tr_editing_{_tid}", None)
                                 st.rerun(scope="fragment")
             _tr_editar_eliminar()
@@ -4750,7 +4749,7 @@ if _stab_transferencias:
                     _dc1, _dc2 = st.columns(2)
                     _tr_v_desde = _dc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="tr_all_desde")
                     _tr_v_hasta = _dc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="tr_all_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _lista = [t for t in _lista if _tr_v_desde <= _safe_date(t.get("fecha")) <= _tr_v_hasta]
                 if not _lista:
                     st.caption("Sin registros en el rango seleccionado.")
@@ -4771,7 +4770,7 @@ if _stab_transferencias:
                                           "Concepto": _t.get("concepto") or "—",
                                           "Monto": float(_t.get("monto") or 0)}
                                          for _t in sorted(_dst_items, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                                st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                                st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                              column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
             _tr_todos_vista()
 
@@ -4812,7 +4811,7 @@ if tab_ingresos:
                     ]
                     st.dataframe(
                         pd.DataFrame(_tabla_fac),
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True,
                         column_config={
                             "Total": st.column_config.NumberColumn("Total", format="$ %.2f"),
@@ -4850,7 +4849,7 @@ if tab_ingresos:
                             "Facturas cobradas": _facts,
                             "Monto":             float(_c.get("monto") or 0),
                         })
-                    st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+                    st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                  column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")})
 
 if tab_ing_cobros_wix:
@@ -4896,13 +4895,13 @@ if tab_ing_cobros_wix:
                     _wc1, _wc2 = st.columns(2)
                     _wix_desde = _wc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_cob_desde")
                     _wix_hasta = _wc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_cob_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary", use_container_width=True)
+                    st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
                 _wix_sorted_cob = [o for o in _wix_sorted_cob
                                     if _wix_desde <= _safe_date(str(o.get("createdDate") or "")[:10]) <= _wix_hasta]
 
                 with st.form("form_cobros_wix_cajas", border=True):
                     _gcb1, _gcb2 = st.columns([2, 5])
-                    _guardar_cob = _gcb1.form_submit_button("💾 Guardar", type="primary", use_container_width=True)
+                    _guardar_cob = _gcb1.form_submit_button("💾 Guardar", type="primary", width='stretch')
                     _gcb2.empty()
                     _nuevas_fpago_cob = {}
                     _nuevas_cajas_cob = {}
@@ -4999,7 +4998,7 @@ with tab_sync:
                 "Hasta", value=_sync_hasta_default, key="sync_central_hasta", format="DD/MM/YYYY"
             )
         sincronizar_todo = st.form_submit_button(
-            "🔄 Sincronizar", type="primary", use_container_width=True
+            "🔄 Sincronizar", type="primary", width='stretch'
         )
 
     if sincronizar_todo:
@@ -5099,7 +5098,7 @@ with tab_editar:
         )
         tabla_editada = st.data_editor(
             tabla_editor,
-            use_container_width=False,
+            width='content',
             num_rows="fixed",
             disabled=["origen_label", "componente_label"],
             column_config={
@@ -5272,7 +5271,7 @@ with tab_comprar:
             boton_actualizar = st.form_submit_button(
                 "🔄 Actualizar",
                 type="primary",
-                use_container_width=False,
+                width='content',
             )
 
         # Calcular fechas_entrega como todas las fechas en el rango que tienen pedidos asignados
@@ -5389,7 +5388,7 @@ with tab_comprar:
                                     pd.DataFrame(filas_it)[["producto", "cantidad"]].rename(
                                         columns={"producto": "Prod", "cantidad": "Cant"}
                                     ),
-                                    use_container_width=False,
+                                    width='content',
                                     hide_index=True,
                                 )
                             else:
@@ -5423,7 +5422,7 @@ with tab_comprar:
                                     })
                                 st.dataframe(
                                     pd.DataFrame(filas_iw),
-                                    use_container_width=False,
+                                    width='content',
                                     hide_index=True,
                                 )
                             else:
@@ -5448,7 +5447,7 @@ with tab_comprar:
                     )
                     .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
                     .rename(columns={"producto": "Producto", "cantidad": "Cant"}),
-                    use_container_width=False,
+                    width='content',
                     hide_index=True,
                 )
 
@@ -5471,7 +5470,7 @@ with tab_comprar:
                     )
                     .sort_values(["_base", "_prio", "producto"]).drop(columns=["_base", "_prio"])
                     .rename(columns={"producto": "Producto", "estimado": "Cant"}),
-                    use_container_width=False,
+                    width='content',
                     hide_index=True,
                 )
 
@@ -5582,7 +5581,7 @@ with tab_comprar:
                         )
                         st.dataframe(
                             styled,
-                            use_container_width=False,
+                            width='content',
                             hide_index=True,
                         )
 
@@ -5761,7 +5760,7 @@ with tab_comprar:
                         )
                         st.dataframe(
                             styled_grupo,
-                            use_container_width=False,
+                            width='content',
                             hide_index=True,
                         )
 
@@ -5910,7 +5909,7 @@ with tab_estimado:
                         )
                         edited = st.data_editor(
                             _df_est_sorted[["codigo", "Variante", "estimado"]].reset_index(drop=True),
-                            use_container_width=False,
+                            width='content',
                             hide_index=True,
                             disabled=["codigo", "Variante"],
                             # column_order oculta 'codigo' del display sin
@@ -6038,7 +6037,7 @@ with tab_stock:
             actualizar = st.form_submit_button(
                 "🔄 Actualizar",
                 type="primary",
-                use_container_width=True,
+                width='stretch',
             )
 
         if actualizar:
@@ -6156,7 +6155,7 @@ with tab_stock:
                         if _filas_ini:
                             st.dataframe(
                                 pd.DataFrame(_filas_ini).sort_values("Prod"),
-                                use_container_width=False,
+                                width='content',
                                 hide_index=True,
                             )
                         else:
@@ -6189,7 +6188,7 @@ with tab_stock:
                                     ]
                                     st.dataframe(
                                         pd.DataFrame(filas_c),
-                                        use_container_width=False,
+                                        width='content',
                                         hide_index=True,
                                     )
                                 else:
@@ -6225,7 +6224,7 @@ with tab_stock:
                                             ].rename(columns={
                                                 "producto": "Prod", "cantidad": "Cant",
                                             }),
-                                            use_container_width=False,
+                                            width='content',
                                             hide_index=True,
                                         )
                                     else:
@@ -6263,7 +6262,7 @@ with tab_stock:
                                             })
                                         st.dataframe(
                                             pd.DataFrame(filas_iw),
-                                            use_container_width=False,
+                                            width='content',
                                             hide_index=True,
                                         )
                                     else:
@@ -6296,7 +6295,7 @@ with tab_stock:
                         if _filas_real:
                             st.dataframe(
                                 pd.DataFrame(_filas_real).sort_values("Prod"),
-                                use_container_width=False,
+                                width='content',
                                 hide_index=True,
                             )
                         else:
@@ -6398,7 +6397,7 @@ with tab_stock:
                                             "Stock inicial", "+ Compras", "− Pedidos", "= Teórico",
                                             "Stock",
                                         ]].reset_index(drop=True),
-                                        use_container_width=False,
+                                        width='content',
                                         hide_index=True,
                                         disabled=[
                                             "Código", "Variante",
@@ -6623,7 +6622,7 @@ with tab_dux:
                                     _cols_show = [c for c in ["producto", "cantidad"] if c in _df_items.columns]
                                     st.dataframe(
                                         _df_items[_cols_show],
-                                        use_container_width=False,
+                                        width='content',
                                         hide_index=True,
                                     )
                                 else:
@@ -6665,7 +6664,7 @@ if tab_dux_productos:
                 "🔄 Sincronizar productos desde DUX",
                 type="primary",
                 key="dux_sincronizar_productos",
-                use_container_width=True,
+                width='stretch',
             )
 
             if sincronizar:
@@ -6797,7 +6796,7 @@ if tab_dux_productos:
 
                     st.dataframe(
                         df_show,
-                        use_container_width=False,
+                        width='content',
                         hide_index=True,
                     )
                 else:
@@ -6823,7 +6822,7 @@ if tab_dux_rubros:
                 "🔄 Sincronizar desde DUX",
                 type="primary",
                 key="dux_sincronizar_rubros",
-                use_container_width=True,
+                width='stretch',
             )
 
             if sincronizar_rubros:
@@ -6888,7 +6887,7 @@ if tab_dux_rubros:
                 df_subrubros = db.cargar_subrubros()
                 if not df_subrubros.empty:
                     cols_sr = [c for c in ["rubro_nombre", "nombre"] if c in df_subrubros.columns]
-                    st.dataframe(df_subrubros[cols_sr].sort_values(["rubro_nombre", "nombre"]).reset_index(drop=True), use_container_width=True, hide_index=True)
+                    st.dataframe(df_subrubros[cols_sr].sort_values(["rubro_nombre", "nombre"]).reset_index(drop=True), width='stretch', hide_index=True)
                 else:
                     st.info("Sin subrubros.")
             except Exception as e:
@@ -7123,7 +7122,7 @@ with tab_wix:
                                         )
                                     st.dataframe(
                                         pd.DataFrame(filas),
-                                        use_container_width=False,
+                                        width='content',
                                         hide_index=True,
                                     )
 
@@ -7160,7 +7159,7 @@ if tab_wix_productos:
                 "🔄 Sincronizar productos desde Wix",
                 type="primary",
                 key="wix_sincronizar_productos",
-                use_container_width=True,
+                width='stretch',
             )
 
             if sincronizar_wix_p:
@@ -7274,7 +7273,7 @@ if tab_wix_productos:
 
                     st.dataframe(
                         df_show_wp[["wix_id", "producto", "descripcion"]],
-                        use_container_width=False,
+                        width='content',
                         hide_index=True,
                         column_config={
                             "wix_id": st.column_config.TextColumn("ID Wix"),
@@ -7380,7 +7379,7 @@ if tab_proveedores:
                 st.dataframe(
                     df_norm[["proveedor_id", "proveedor", "cuit_cuil", "telefono",
                              "celular", "email", "localidad"]].head(20),
-                    use_container_width=False,
+                    width='content',
                     hide_index=True,
                 )
 
@@ -7420,7 +7419,7 @@ if tab_proveedores:
                 st.caption(f"{len(df_prov_show)} de {len(df_prov_csv)} proveedores.")
                 st.dataframe(
                     df_prov_show[SCHEMA_PROV],
-                    use_container_width=False,
+                    width='content',
                     hide_index=True,
                     column_config={
                         "proveedor_id": st.column_config.TextColumn("ID"),
@@ -7495,7 +7494,7 @@ if tab_eg_compras:
                         "Precio unit.": float(r.get("precio", 0) or 0),
                         "Subtotal":    float(r.get("subtotal", 0) or 0),
                     } for _, r in df_grupo.iterrows()]
-                    st.dataframe(pd.DataFrame(filas_items), use_container_width=True, hide_index=True,
+                    st.dataframe(pd.DataFrame(filas_items), width='stretch', hide_index=True,
                                  column_config={
                                      "Precio unit.": st.column_config.NumberColumn("Precio unit.", format="$ %.2f"),
                                      "Subtotal":     st.column_config.NumberColumn("Subtotal",     format="$ %.2f"),
@@ -7526,7 +7525,7 @@ if tab_eg_gastos:
                 "Items":       ", ".join(d.get("item","") for d in (g.get("detalles") or []) if (d.get("item") or "").strip()),
                 "Total":       float(g.get("total") or 0),
             } for g in gastos_sorted]
-            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+            st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                          column_config={"Total": st.column_config.NumberColumn("Total", format="$ %.0f")})
 
 if tab_eg_pagos:
@@ -7559,7 +7558,7 @@ if tab_eg_pagos:
                     "Comprobantes": _comps,
                     "Monto":        float(_p.get("monto") or 0),
                 })
-            st.dataframe(pd.DataFrame(_rows), use_container_width=True, hide_index=True,
+            st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                          column_config={"Monto": st.column_config.NumberColumn("Monto", format="$ %.0f")})
 
 with tab_mapeo:
@@ -7799,7 +7798,7 @@ with tab_packs:
     
                         edited = st.data_editor(
                             comp_view,
-                            use_container_width=False,
+                            width='content',
                             num_rows="dynamic",
                             column_config={
                                 "producto": st.column_config.SelectboxColumn(
@@ -8474,7 +8473,7 @@ if tab_cajas:
         with st.form("form_cajas_config", border=False):
             _cajas_editadas = st.data_editor(
                 _cajas_df,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 num_rows="dynamic",
                 column_config={
@@ -8483,7 +8482,7 @@ if tab_cajas:
                     "activa": st.column_config.CheckboxColumn("Activa", default=True),
                 },
             )
-            _guardar_cajas = st.form_submit_button("💾 Guardar cajas", type="primary", use_container_width=True)
+            _guardar_cajas = st.form_submit_button("💾 Guardar cajas", type="primary", width='stretch')
 
         if _guardar_cajas:
             try:
@@ -8516,7 +8515,7 @@ if tab_gastos_catalogo:
                     "sub_rubro":    "Sub Rubro",
                     "proveedor":    "Proveedor",
                 }),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
             )
             if st.button("🗑 Borrar todo el catálogo", type="secondary", key="btn_borrar_cat_gastos"):
@@ -8553,7 +8552,7 @@ if tab_gastos_catalogo:
                     st.markdown(f"**Vista previa — {len(_df_import)} items**")
                     st.dataframe(
                         _df_import.rename(columns={v: k for k, v in _col_map.items()}),
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True,
                     )
                     if st.button("✅ Importar y reemplazar catálogo", type="primary", key="btn_importar_cat_gastos"):
@@ -8589,7 +8588,7 @@ if tab_percepciones:
                     "jurisdiccion":             "Jurisdicción",
                     "descripcion":              "Descripción",
                 }),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
             )
         else:
