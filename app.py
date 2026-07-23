@@ -4801,7 +4801,7 @@ if tab_ingresos:
                     _tabla_fac = [
                         {
                             "Comprobante": r["Comprobante"] + (" ⛔" if r["Anulada"] == "S" else ""),
-                            "Fecha": r["Fecha"],
+                            "Fecha": r["Fecha devengada"],
                             "Cliente": r["Cliente"],
                             "Nro Pedido": str(r["Nro Pedido"] or ""),
                             "Total": r["Total"],
