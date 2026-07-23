@@ -5040,7 +5040,7 @@ with tab_sync:
         else:
             db.guardar_config({"dux_fecha_desde": str(sync_desde), "dux_fecha_hasta": str(sync_hasta)})
             st.cache_data.clear()
-            st.success("✅ Sincronización completada correctamente.")
+            st.rerun()
 
 with tab_grupo_config:
     tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
