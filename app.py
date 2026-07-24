@@ -2219,6 +2219,15 @@ def _render_movimiento_caja(cobros, pagos):
             continue
         _all_aj_sum[_cn] = _all_aj_sum.get(_cn, 0.0) + float(_aj.get("monto") or 0)
 
+    for _cn, _ajs in _ajustes_periodo.items():
+        _periodo_total.setdefault(_cn, {"Entradas": 0.0, "Salidas": 0.0})
+        for _aj in _ajs:
+            _monto = float(_aj.get("monto") or 0)
+            if _monto >= 0:
+                _periodo_total[_cn]["Entradas"] += _monto
+            else:
+                _periodo_total[_cn]["Salidas"] += abs(_monto)
+
     _total_saldo = sum(
         _inicial.get(_cn, 0.0) + _hist_total.get(_cn, {"Entradas": 0.0, "Salidas": 0.0})["Entradas"]
         - _hist_total.get(_cn, {"Entradas": 0.0, "Salidas": 0.0})["Salidas"]
