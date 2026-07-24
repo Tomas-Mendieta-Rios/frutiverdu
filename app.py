@@ -2566,7 +2566,7 @@ if _sub_pendientes:
                 for _f in _fac_deud:
                     _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                     _by_cli_dux.setdefault(_cli, []).append(_f)
-                for _cli, _ci in sorted(_by_cli_dux.items(), key=lambda kv: max(str(f.get("fecha_comp") or "") for f in kv[1]), reverse=True):
+                for _cli, _ci in sorted(_by_cli_dux.items(), key=lambda kv: max(pd.to_datetime(str(f.get("fecha_comp") or "1900-01-01"), errors="coerce") for f in kv[1]), reverse=True):
                     _ctot = sum(_pend_saldo_f(f) for f in _ci)
                     with st.expander(f"{_cli} ({len(_ci)}) — $ {_pesos(_ctot)}"):
                         _fp = [f for f in _ci if _pend_cobrado_f(f) > 0]
@@ -2582,7 +2582,7 @@ if _sub_pendientes:
                                     "Total":       float(_f.get("total") or 0),
                                     **( {"Cobrado": _pend_cobrado_f(_f), "Saldo": _pend_saldo_f(_f)} if _lbl == "Parciales" else {} ),
                                     "PDF":         _f.get("url_factura") or None,
-                                } for _f in sorted(_lst, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True)]
+                                } for _f in sorted(_lst, key=lambda x: pd.to_datetime(str(x.get("fecha_comp") or "1900-01-01"), errors="coerce"), reverse=True)]
                                 _fcfg = {
                                     "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
                                     "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
