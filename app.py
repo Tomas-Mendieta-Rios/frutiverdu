@@ -2503,7 +2503,7 @@ if _sub_pendientes:
                 _by_prov_comp = {}
                 for _c in _comp_pend_hist:
                     _by_prov_comp.setdefault(_c.get("proveedor") or "—", []).append(_c)
-                for _prov, _pi in sorted(_by_prov_comp.items(), key=lambda kv: sum(_pend_saldo_c(c) for c in kv[1]), reverse=True):
+                for _prov, _pi in sorted(_by_prov_comp.items(), key=lambda kv: max(str(c.get("fecha") or "") for c in kv[1]), reverse=True):
                     _ptot = sum(_pend_saldo_c(c) for c in _pi)
                     with st.expander(f"{_prov} ({len(_pi)}) — $ {_pesos(_ptot)}"):
                         _cp = [c for c in _pi if _pend_pagado_c(c) > 0]
@@ -2534,7 +2534,7 @@ if _sub_pendientes:
                 for _o in _oe_pend_hist:
                     _rub = (_o.get("rubros_egresos") or {}).get("nombre") or "—"
                     _by_rubro_oe.setdefault(_rub, []).append(_o)
-                for _rub, _rlst in sorted(_by_rubro_oe.items(), key=lambda kv: sum(float(o.get("monto") or 0) for o in kv[1]), reverse=True):
+                for _rub, _rlst in sorted(_by_rubro_oe.items(), key=lambda kv: max(str(o.get("fecha") or "") for o in kv[1]), reverse=True):
                     _rtot = sum(float(o.get("monto") or 0) for o in _rlst)
                     with st.expander(f"{_rub} ({len(_rlst)}) — $ {_pesos(_rtot)}"):
                         _rows = [{
@@ -2566,7 +2566,7 @@ if _sub_pendientes:
                 for _f in _fac_deud:
                     _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                     _by_cli_dux.setdefault(_cli, []).append(_f)
-                for _cli, _ci in sorted(_by_cli_dux.items(), key=lambda kv: sum(_pend_saldo_f(f) for f in kv[1]), reverse=True):
+                for _cli, _ci in sorted(_by_cli_dux.items(), key=lambda kv: max(str(f.get("fecha_comp") or "") for f in kv[1]), reverse=True):
                     _ctot = sum(_pend_saldo_f(f) for f in _ci)
                     with st.expander(f"{_cli} ({len(_ci)}) — $ {_pesos(_ctot)}"):
                         _fp = [f for f in _ci if _pend_cobrado_f(f) > 0]
@@ -2602,7 +2602,7 @@ if _sub_pendientes:
                     _bi = (_p.get("billingInfo") or {}).get("contactDetails") or {}
                     _cli = f"{_bi.get('firstName','') or ''} {_bi.get('lastName','') or ''}".strip() or "—"
                     _by_cli_wix.setdefault(_cli, []).append(_p)
-                for _cli, _citems in sorted(_by_cli_wix.items(), key=lambda kv: sum(_wix_monto(p) for p in kv[1]), reverse=True):
+                for _cli, _citems in sorted(_by_cli_wix.items(), key=lambda kv: max(str(p.get("createdDate") or "") for p in kv[1]), reverse=True):
                     _ctot = sum(_wix_monto(p) for p in _citems)
                     with st.expander(f"{_cli} ({len(_citems)}) — $ {_pesos(_ctot)}"):
                         _rows = [{
