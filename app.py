@@ -2549,7 +2549,7 @@ if _sub_pendientes:
             st.divider()
     
             # ── DEUDORES (lo que nos deben) ────────────────────────────────────
-            _fac_deud  = [f for f in facturas_bal    if str(f.get("anulada","N")).upper() != "S" and _pend_saldo_f(f) > 0 and _pend_en_rango(f.get("fecha_comp"))]
+            _fac_deud  = [f for f in facturas_bal    if str(f.get("anulada","N")).upper() != "S" and "NOTA" not in str(f.get("tipo_comp") or "").upper() and _pend_saldo_f(f) > 0 and _pend_en_rango(f.get("fecha_comp"))]
             _wix_deud  = [p for p in pedidos_wix_bal if str(p.get("paymentStatus") or "").upper() != "PAID" and str(p.get("status") or "").upper() != "CANCELED" and _pend_en_rango(p.get("createdDate"))]
             _total_deud_dux = sum(_pend_saldo_f(f) for f in _fac_deud)
             _total_deud_wix = sum(_wix_monto(p) for p in _wix_deud)
