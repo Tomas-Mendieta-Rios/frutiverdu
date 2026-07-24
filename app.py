@@ -2272,8 +2272,17 @@ def _render_movimiento_caja(cobros, pagos):
         _metric_card(_m2, "Entradas",     _fmt_monto(_pt['Entradas']), "#2e7d32")
         _metric_card(_m3, "Salidas",      _fmt_monto(_pt['Salidas']), "#c62828")
 
+        def _nro_sort(nro_str):
+            s = str(nro_str or "")
+            digits = "".join(c for c in s.split("-")[-1] if c.isdigit())
+            return int(digits) if digits else 0
+
         _v = _por_caja.get(_caja, {"detalle": []})
-        _det = sorted(_v["detalle"], key=lambda r: r["Fecha"], reverse=True)
+        _det = sorted(
+            _v["detalle"],
+            key=lambda r: (r["Fecha"], _nro_sort(r.get("Cobro #") or r.get("Pago #") or "")),
+            reverse=True,
+        )
         _cfg_fecha = st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
         _cfg_monto = st.column_config.NumberColumn("Monto", format="$ %,.0f")
 
