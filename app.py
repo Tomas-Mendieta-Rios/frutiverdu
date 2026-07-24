@@ -5002,6 +5002,7 @@ with tab_sync:
         )
 
     if sincronizar_todo:
+        _sync_t0 = time.time()
         # Orden: DUX[0], Wix (en el gap del rate limit), DUX[1..n]
         _sync_steps = [
             ("Gastos",               _sync_gastos),
@@ -5031,7 +5032,8 @@ with tab_sync:
                 _ok, _msg = False, msg_error_sheets(_slabel, _e)
             _results.append((_ok, _slabel, _msg))
 
-        _prog_bar.progress(1.0, text="100%")
+        _sync_dur = time.time() - _sync_t0
+        _prog_bar.progress(1.0, text=f"100% · {_sync_dur:.0f}s")
 
         _errors = [(_slabel, _msg) for _ok, _slabel, _msg in _results if not _ok]
         if _errors:
