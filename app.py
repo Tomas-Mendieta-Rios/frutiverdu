@@ -3311,16 +3311,17 @@ if _sub_percibido:
 
             # ── INGRESOS ────────────────────────────────────────────────────────────
             st.divider()
-            _aj_pos_cell = f"  {_metric_cell('Ajustes (+)', f'$ {_pesos(total_aj_pos_p)}', '#2e7d32')}" if total_aj_pos_p else ""
+            _aj_pos_cell = f"{_metric_cell('Ajustes (+)', f'$ {_pesos(total_aj_pos_p)}', '#2e7d32')}" if total_aj_pos_p else ""
+            _ing_cols = "1fr 1fr 1fr 1fr 1fr" if total_aj_pos_p else "1fr 1fr 1fr 1fr"
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos percibidos</h2>
-  <div style='display:grid;grid-template-columns:{"1fr 1fr 1fr 1fr" if total_aj_pos_p else "1fr 1fr 1fr"};gap:16px'>
+  <div style='display:grid;grid-template-columns:{_ing_cols};gap:16px'>
+    {_metric_cell("Total", f"$ {_pesos(total_ingresos)}", "#2e7d32")}
     {_metric_cell("DUX", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")}
     {_metric_cell("WIX", f"$ {_pesos(total_cobrado_wix)}", "#2e7d32")}
-    {_metric_cell("Otros", f"$ {_pesos(total_otros_ing)}", "#2e7d32")}
+    {_metric_cell("Ingresos", f"$ {_pesos(total_otros_ing)}", "#2e7d32")}
     {_aj_pos_cell}
   </div>
-  <div style='text-align:center;margin-top:10px;font-size:1.1em;font-weight:600'>Total: $ {_pesos(total_ingresos)}</div>
 </div>""", unsafe_allow_html=True)
 
             # Sección DUX cobros
@@ -3446,12 +3447,12 @@ if _sub_percibido:
             st.divider()
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Egresos percibidos</h2>
-  <div style='display:grid;grid-template-columns:{"1fr 1fr 1fr" if total_aj_neg_p else "1fr 1fr"};gap:16px'>
+  <div style='display:grid;grid-template-columns:{"1fr 1fr 1fr 1fr" if total_aj_neg_p else "1fr 1fr 1fr"};gap:16px'>
+    {_metric_cell("Total", f"$ {_pesos(total_egresos)}", "#c62828")}
     {_metric_cell("Compras", f"$ {_pesos(total_pagado_compras)}", "#c62828")}
     {_metric_cell("Gastos", f"$ {_pesos(total_gastos)}", "#c62828")}
     {_metric_cell("Ajustes (−)", f"$ {_pesos(abs(total_aj_neg_p))}", "#c62828") if total_aj_neg_p else ""}
   </div>
-  <div style='text-align:center;margin-top:10px;font-size:1.1em;font-weight:600'>Total: $ {_pesos(total_egresos)}</div>
 </div>""", unsafe_allow_html=True)
 
             # Compras (pagos proveedores)
