@@ -4978,10 +4978,12 @@ if tab_ing_cobros_wix:
                         db.guardar_fechas_pago_wix(_nuevas_fpago_cob)
                         db.cargar_pedidos_wix.clear()
                         db.cargar_fechas_pago_wix.clear()
-                        st.success("Guardado.")
+                        st.session_state["cob_wix_guardado_ok"] = True
                         st.rerun(scope="fragment")
                     except Exception as _e_cob:
                         st.error(f"❌ {_e_cob}")
+                if st.session_state.pop("cob_wix_guardado_ok", False):
+                    st.success("Guardado.")
         _frag_cobros_wix()
 
 with tab_sync:
