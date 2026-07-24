@@ -4977,6 +4977,7 @@ if tab_ing_cobros_wix:
                         db.asignar_cajas_pedidos_wix(_nuevas_cajas_cob)
                         db.guardar_fechas_pago_wix(_nuevas_fpago_cob)
                         db.cargar_pedidos_wix.clear()
+                        db.cargar_fechas_pago_wix.clear()
                         st.success("Guardado.")
                         st.rerun(scope="fragment")
                     except Exception as _e_cob:
