@@ -4916,7 +4916,8 @@ if tab_ing_cobros_wix:
                 with st.form("form_cobros_wix_cajas", border=True):
                     _gcb1, _gcb2 = st.columns([2, 5])
                     _guardar_cob = _gcb1.form_submit_button("💾 Guardar", type="primary", width='stretch')
-                    _gcb2.empty()
+                    if st.session_state.pop("cob_wix_guardado_ok", False):
+                        _gcb2.success("✅ Guardado.")
                     _nuevas_fpago_cob = {}
                     _nuevas_cajas_cob = {}
                     for _o in _wix_sorted_cob:
@@ -4982,8 +4983,6 @@ if tab_ing_cobros_wix:
                         st.rerun(scope="fragment")
                     except Exception as _e_cob:
                         st.error(f"❌ {_e_cob}")
-                if st.session_state.pop("cob_wix_guardado_ok", False):
-                    st.success("Guardado.")
         _frag_cobros_wix()
 
 with tab_sync:

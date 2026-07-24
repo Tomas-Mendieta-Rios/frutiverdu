@@ -804,6 +804,7 @@ def asignar_cajas_pedidos_wix(asignaciones):
     cargar_pedidos_wix.clear()
 
 
+@st.cache_data(ttl=600)
 def cargar_fechas_pago_wix():
     """Devuelve dict {order_id: fecha_pago}."""
     client = get_client()
@@ -818,6 +819,7 @@ def guardar_fechas_pago_wix(fechas):
         client.table("fechas_pago_wix").upsert(
             {"order_id": str(order_id), "fecha_pago": str(fecha_pago) if fecha_pago else None}
         ).execute()
+    cargar_fechas_pago_wix.clear()
 
 
 # ---------------- PERCEPCIONES E IMPUESTOS ----------------
