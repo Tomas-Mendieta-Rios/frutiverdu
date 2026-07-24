@@ -2824,7 +2824,7 @@ if _sub_resumen:
                                 _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_cli_tot)}"
                             with st.expander(_cli_hdr):
                                 _rows = []
-                                for _f in sorted(_fitems, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                                for _f in sorted(_fitems, key=lambda x: pd.to_datetime(str(x.get("fecha_comp") or "1900-01-01"), errors="coerce"), reverse=True):
                                     _ftot = float(_f.get("total") or 0)
                                     _fcob = _cobrado_por_fac.get(str(_f.get("id") or ""), 0.0)
                                     _fsal = max(0.0, _ftot - _fcob)
@@ -2855,7 +2855,7 @@ if _sub_resumen:
                 _notas_sign_str = f"— $ {_pesos(abs(total_notas_net))}" + (" (reducen pendiente)" if total_notas_net < 0 else " (aumentan pendiente)")
                 with st.expander(f"Notas C/D ({len(notas_vig)}) {_notas_sign_str}"):
                     _rows_notas = []
-                    for _f in sorted(notas_vig, key=lambda x: str(x.get("fecha_comp") or ""), reverse=True):
+                    for _f in sorted(notas_vig, key=lambda x: pd.to_datetime(str(x.get("fecha_comp") or "1900-01-01"), errors="coerce"), reverse=True):
                         _cli = f"{_f.get('apellido_razon_soc','') or ''} {_f.get('nombre','') or ''}".strip() or "—"
                         _comp = f"{_f.get('tipo_comp','')} {_f.get('letra_comp','')} {_f.get('nro_pto_vta','')}-{_f.get('nro_comp','')}".strip()
                         _rows_notas.append({
