@@ -3281,7 +3281,13 @@ if _sub_percibido:
             _oi_rango = [o for o in _otros_ing_p if _perc_en_rango(o.get("fecha_movimiento") or o.get("fecha"))]
             total_otros_ing = sum(float(o.get("monto") or 0) for o in _oi_rango)
 
-            total_ingresos = total_cobrado_dux + total_cobrado_wix + total_otros_ing
+            # ── AJUSTES DE CAJA ───────────────────────────────────────────
+            _aj_perc = [a for a in db.cargar_ajustes_caja()
+                        if a.get("tipo") == "ajuste" and _perc_en_rango(a.get("fecha"))]
+            total_aj_pos_p = sum(float(a.get("monto") or 0) for a in _aj_perc if float(a.get("monto") or 0) >= 0)
+            total_aj_neg_p = sum(float(a.get("monto") or 0) for a in _aj_perc if float(a.get("monto") or 0) < 0)
+
+            total_ingresos = total_cobrado_dux + total_cobrado_wix + total_otros_ing + total_aj_pos_p
 
             # ── PAGOS PROVEEDORES ─────────────────────────────────────────
             _pagos_rango = [p for p in pagos_bal if _perc_en_rango(p.get("fecha"))]
@@ -3299,18 +3305,20 @@ if _sub_percibido:
             total_gastos = sum(float(o.get("monto") or 0) for o in _gastos_p)
             total_retiros_p = sum(float(o.get("monto") or 0) for o in _retiros_p)
 
-            total_egresos = total_pagado_compras + total_gastos
+            total_egresos = total_pagado_compras + total_gastos + abs(total_aj_neg_p)
             resultado_op = total_ingresos - total_egresos
             resultado_neto = resultado_op - total_retiros_p
 
             # ── INGRESOS ────────────────────────────────────────────────────────────
             st.divider()
+            _aj_pos_cell = f"  {_metric_cell('Ajustes (+)', f'$ {_pesos(total_aj_pos_p)}', '#2e7d32')}" if total_aj_pos_p else ""
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos percibidos</h2>
-  <div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px'>
+  <div style='display:grid;grid-template-columns:{"1fr 1fr 1fr 1fr" if total_aj_pos_p else "1fr 1fr 1fr"};gap:16px'>
     {_metric_cell("DUX", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")}
     {_metric_cell("WIX", f"$ {_pesos(total_cobrado_wix)}", "#2e7d32")}
     {_metric_cell("Otros", f"$ {_pesos(total_otros_ing)}", "#2e7d32")}
+    {_aj_pos_cell}
   </div>
   <div style='text-align:center;margin-top:10px;font-size:1.1em;font-weight:600'>Total: $ {_pesos(total_ingresos)}</div>
 </div>""", unsafe_allow_html=True)
@@ -3438,9 +3446,10 @@ if _sub_percibido:
             st.divider()
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Egresos percibidos</h2>
-  <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+  <div style='display:grid;grid-template-columns:{"1fr 1fr 1fr" if total_aj_neg_p else "1fr 1fr"};gap:16px'>
     {_metric_cell("Compras", f"$ {_pesos(total_pagado_compras)}", "#c62828")}
     {_metric_cell("Gastos", f"$ {_pesos(total_gastos)}", "#c62828")}
+    {_metric_cell("Ajustes (−)", f"$ {_pesos(abs(total_aj_neg_p))}", "#c62828") if total_aj_neg_p else ""}
   </div>
   <div style='text-align:center;margin-top:10px;font-size:1.1em;font-weight:600'>Total: $ {_pesos(total_egresos)}</div>
 </div>""", unsafe_allow_html=True)
