@@ -1659,9 +1659,13 @@ def _render_movimiento_caja(cobros, pagos):
             _desde = st.date_input("Desde", value=_desde_def, key="caja_desde_in", format="DD/MM/YYYY")
         with _cc2:
             _hasta_in = st.date_input("Hasta", value=_hasta_def, key="caja_hasta_in", format="DD/MM/YYYY")
-        _btn_caja = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
+        _caja_btn_col, _caja_msg_col = st.columns([1, 3])
+        _btn_caja = _caja_btn_col.form_submit_button("🔄 Actualizar", type="primary")
+        if st.session_state.pop("caja_actualizado_ok", False):
+            _caja_msg_col.success("✅ Confirmado.")
     if _btn_caja:
         db.guardar_config({"caja_desde": str(_desde), "caja_hasta": str(_hasta_in)})
+        st.session_state["caja_actualizado_ok"] = True
     _hasta = _hasta_in
     _hasta_label = _hasta.strftime('%d/%m/%Y')
     _hasta_suffix = " (hoy)" if _hasta == _hoy else ""
@@ -2446,9 +2450,13 @@ if _sub_pendientes:
                     _pend_desde = st.date_input("Desde", value=_pend_desde_def, key="pend_desde_in", format="DD/MM/YYYY")
                 with _fc2:
                     _pend_hasta = st.date_input("Hasta", value=_pend_hasta_def, key="pend_hasta_in", format="DD/MM/YYYY")
-                _btn_pend = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
+                _pend_btn_col, _pend_msg_col = st.columns([1, 3])
+                _btn_pend = _pend_btn_col.form_submit_button("🔄 Actualizar", type="primary")
+                if st.session_state.pop("pend_actualizado_ok", False):
+                    _pend_msg_col.success("✅ Confirmado.")
             if _btn_pend:
                 db.guardar_config({"pend_desde": str(_pend_desde), "pend_hasta": str(_pend_hasta)})
+                st.session_state["pend_actualizado_ok"] = True
     
             def _pend_en_rango(fecha_str):
                 try:
@@ -2648,9 +2656,13 @@ if _sub_resumen:
                     bal_desde = st.date_input("Desde", value=_bal_desde_def, key="bal_desde_in", format="DD/MM/YYYY")
                 with _bc2:
                     bal_hasta = st.date_input("Hasta", value=_bal_hasta_def, key="bal_hasta_in", format="DD/MM/YYYY")
-                _btn_bal = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
+                _bal_btn_col, _bal_msg_col = st.columns([1, 3])
+                _btn_bal = _bal_btn_col.form_submit_button("🔄 Actualizar", type="primary")
+                if st.session_state.pop("bal_actualizado_ok", False):
+                    _bal_msg_col.success("✅ Confirmado.")
             if _btn_bal:
                 db.guardar_config({"bal_desde": str(bal_desde), "bal_hasta": str(bal_hasta)})
+                st.session_state["bal_actualizado_ok"] = True
     
             def _en_rango(fecha_str):
                 try:
@@ -3232,9 +3244,13 @@ if _sub_percibido:
                     perc_desde = st.date_input("Desde", value=_perc_desde_def, key="perc_desde_in", format="DD/MM/YYYY")
                 with _pc2:
                     perc_hasta = st.date_input("Hasta", value=_perc_hasta_def, key="perc_hasta_in", format="DD/MM/YYYY")
-                _btn_perc = st.form_submit_button("🔄 Actualizar", type="primary", width='stretch')
+                _perc_btn_col, _perc_msg_col = st.columns([1, 3])
+                _btn_perc = _perc_btn_col.form_submit_button("🔄 Actualizar", type="primary")
+                if st.session_state.pop("perc_actualizado_ok", False):
+                    _perc_msg_col.success("✅ Confirmado.")
             if _btn_perc:
                 db.guardar_config({"perc_desde": str(perc_desde), "perc_hasta": str(perc_hasta)})
+                st.session_state["perc_actualizado_ok"] = True
 
             def _perc_en_rango(fecha_str):
                 try:
