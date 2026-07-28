@@ -3412,7 +3412,8 @@ if _sub_percibido:
                             _ctot = _sum_cob_cobranza(_rows)
                             _ctot_imp = sum(r["Imputado"] for r in _rows)
                             _ret_cli = _ctot_imp - _ctot
-                            with st.expander(f"{_cli} ({len(_rows)}) — $ {_pesos(_ctot)}"):
+                            _ret_lbl = f" · Ret: $ {_pesos(_ret_cli)}" if _ret_cli > 0.01 else ""
+                            with st.expander(f"{_cli} ({len(_rows)}) — $ {_pesos(_ctot)}{_ret_lbl}"):
                                 _df_rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in _rows]
                                 st.dataframe(pd.DataFrame(_df_rows), width='stretch', hide_index=True, column_config=_cob_cfg)
                                 if _ret_cli > 0.01:
