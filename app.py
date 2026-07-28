@@ -3406,8 +3406,12 @@ if _sub_percibido:
                     _grp = {cli: rows for cli, rows in _grp.items() if rows}
                     if not _grp:
                         continue
-                    _grp_tot = _sum_cob_cobranza([r for rows in _grp.values() for r in rows])
-                    with st.expander(f"{_lbl} ({sum(len(v) for v in _grp.values())}) — $ {_pesos(_grp_tot)}"):
+                    _all_grp_rows = [r for rows in _grp.values() for r in rows]
+                    _grp_tot = _sum_cob_cobranza(_all_grp_rows)
+                    _grp_imp = sum(r["Imputado"] for r in _all_grp_rows)
+                    _grp_ret = _grp_imp - _grp_tot
+                    _grp_ret_lbl = f" · Ret: $ {_pesos(_grp_ret)}" if _grp_ret > 0.01 else ""
+                    with st.expander(f"{_lbl} ({sum(len(v) for v in _grp.values())}) — $ {_pesos(_grp_tot)}{_grp_ret_lbl}"):
                         for _cli, _rows in sorted(_grp.items()):
                             _ctot = _sum_cob_cobranza(_rows)
                             _ctot_imp = sum(r["Imputado"] for r in _rows)
