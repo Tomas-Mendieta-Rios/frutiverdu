@@ -3278,7 +3278,11 @@ if _sub_percibido:
 
             # ── COBROS DUX ────────────────────────────────────────────────
             _cobros_rango = [c for c in cobros_bal if _perc_en_rango(c.get("fecha"))]
-            total_cobrado_dux = sum(float(c.get("monto") or 0) for c in _cobros_rango)
+            total_cobrado_dux = sum(
+                float(cob.get("monto") or 0)
+                for c in _cobros_rango
+                for cob in (c.get("cobranza") or [])
+            )
 
             # ── COBROS WIX ────────────────────────────────────────────────
             _wix_cobrados = []
