@@ -3159,11 +3159,11 @@ if _sub_resumen:
             _ret_section_html = f"""
       <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
         <div>
-          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado real</p>
+          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado teórico</p>
           {_bars_dev_html}
         </div>
         <div>
-          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado teórico</p>
+          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado real</p>
           {_bars_perc_html}
         </div>
       </div>""" if (_bars_dev_html or _bars_perc_html) else ""
@@ -3171,8 +3171,8 @@ if _sub_resumen:
     <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
       <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
       <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
-        {_metric_cell_sub("Real", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
-        {_metric_cell_sub("Teórico", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
+        {_metric_cell_sub("Teórico", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
+        {_metric_cell_sub("Real", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
       </div>
       {_ret_section_html}
     </div>""", unsafe_allow_html=True)
@@ -3221,8 +3221,8 @@ if _sub_resumen:
     <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
       <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
       <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
-        {_metric_cell_sub("Real", f"{_net_dev_signo}$ {_pesos(abs(_net_dev))}", _net_dev_color, "Resultado − Retiros")}
-        {_metric_cell_sub("Teórico", f"{_net_real_signo}$ {_pesos(abs(_net_real))}", _net_real_color, "Teórico − Retiros pagados")}
+        {_metric_cell_sub("Teórico", f"{_net_dev_signo}$ {_pesos(abs(_net_dev))}", _net_dev_color, "Resultado − Retiros")}
+        {_metric_cell_sub("Real", f"{_net_real_signo}$ {_pesos(abs(_net_real))}", _net_real_color, "Real − Retiros pagados")}
       </div>
     </div>""", unsafe_allow_html=True)
     
