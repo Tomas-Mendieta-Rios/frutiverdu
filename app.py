@@ -1368,6 +1368,8 @@ def _sync_cobros(fecha_desde, fecha_hasta):
         page_offset += page_size
         time.sleep(DUX_RATE_LIMIT_SECONDS)
     db.guardar_cobros(all_cobros)
+    ids_activos = [int(c["id_cobro"]) for c in all_cobros if c.get("id_cobro")]
+    db.limpiar_cobros_huerfanos(fecha_desde, fecha_hasta, ids_activos)
     return True, len(all_cobros), f"✅ {len(all_cobros)} cobros sincronizados."
 
 
@@ -1505,6 +1507,12 @@ def _safe_date(val, default=date.min):
         return _dt.date() if not pd.isna(_dt) else default
     except Exception:
         return default
+
+
+def _nro_comprobante_sort(nro_str):
+    s = str(nro_str or "")
+    digits = "".join(c for c in s.split("-")[-1] if c.isdigit())
+    return int(digits) if digits else 0
 
 
 def _caja_key(tipo_valor, descripcion):
@@ -2272,15 +2280,10 @@ def _render_movimiento_caja(cobros, pagos):
         _metric_card(_m2, "Entradas",     _fmt_monto(_pt['Entradas']), "#2e7d32")
         _metric_card(_m3, "Salidas",      _fmt_monto(_pt['Salidas']), "#c62828")
 
-        def _nro_sort(nro_str):
-            s = str(nro_str or "")
-            digits = "".join(c for c in s.split("-")[-1] if c.isdigit())
-            return int(digits) if digits else 0
-
         _v = _por_caja.get(_caja, {"detalle": []})
         _det = sorted(
             _v["detalle"],
-            key=lambda r: (r["Fecha"], _nro_sort(r.get("Cobro #") or r.get("Pago #") or "")),
+            key=lambda r: (r["Fecha"], _nro_comprobante_sort(r.get("Cobro #") or r.get("Pago #") or "")),
             reverse=True,
         )
         _cfg_fecha = st.column_config.DateColumn("Fecha", format="DD/MM/YYYY")
@@ -2544,7 +2547,7 @@ if _sub_pendientes:
                                     "Comprobante":     _c.get("nro_comprobante") or "—",
                                     "Total":       float(_c.get("total") or 0),
                                     **( {"Pagado": _pend_pagado_c(_c), "Saldo": _pend_saldo_c(_c)} if _lbl == "Parciales" else {} ),
-                                } for _c in sorted(_lst, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                                } for _c in sorted(_lst, key=lambda x: (str(x.get("fecha") or ""), _nro_comprobante_sort(x.get("nro_comprobante"))), reverse=True)]
                                 _ccfg = {"Total": st.column_config.NumberColumn("Total", format="$ %,.2f")}
                                 if _lbl == "Parciales":
                                     _ccfg["Pagado"] = st.column_config.NumberColumn("Pagado", format="$ %,.2f")
@@ -2613,7 +2616,7 @@ if _sub_pendientes:
                                     "Total":       float(_f.get("total") or 0),
                                     **( {"Cobrado": _pend_cobrado_f(_f), "Saldo": _pend_saldo_f(_f)} if _lbl == "Parciales" else {} ),
                                     "PDF":         _f.get("url_factura") or None,
-                                } for _f in sorted(_lst, key=lambda x: pd.to_datetime(str(x.get("fecha_comp") or "1900-01-01"), errors="coerce"), reverse=True)]
+                                } for _f in sorted(_lst, key=lambda x: (pd.to_datetime(str(x.get("fecha_comp") or "1900-01-01"), errors="coerce"), _nro_comprobante_sort(x.get("nro_comprobante"))), reverse=True)]
                                 _fcfg = {
                                     "Total": st.column_config.NumberColumn("Total", format="$ %,.2f"),
                                     "PDF":   st.column_config.LinkColumn("PDF", display_text="Ver PDF"),
@@ -2859,7 +2862,7 @@ if _sub_resumen:
                                 _cli_hdr = f"{_cli} — {len(_fitems)} factura{'s' if len(_fitems)!=1 else ''} — $ {_pesos(_cli_tot)}"
                             with st.expander(_cli_hdr):
                                 _rows = []
-                                for _f in sorted(_fitems, key=lambda x: pd.to_datetime(str(x.get("fecha_comp") or "1900-01-01"), errors="coerce"), reverse=True):
+                                for _f in sorted(_fitems, key=lambda x: (pd.to_datetime(str(x.get("fecha_comp") or "1900-01-01"), errors="coerce"), _nro_comprobante_sort(x.get("nro_comprobante"))), reverse=True):
                                     _ftot = float(_f.get("total") or 0)
                                     _fcob = _cobrado_por_fac.get(str(_f.get("id") or ""), 0.0)
                                     _fsal = max(0.0, _ftot - _fcob)
@@ -3045,7 +3048,7 @@ if _sub_resumen:
                                 _p_hdr = f"{_prov} — {len(_pitems)} comprobante{'s' if len(_pitems)!=1 else ''} — $ {_pesos(_p_tot)}"
                             with st.expander(_p_hdr):
                                 _rows = []
-                                for _c in sorted(_pitems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                                for _c in sorted(_pitems, key=lambda x: (str(x.get("fecha") or ""), _nro_comprobante_sort(x.get("nro_comprobante"))), reverse=True):
                                     _ctot = float(_c.get("total") or 0)
                                     _cpag = _pagado_comp(_c)
                                     _csal = _saldo_comp(_c)
@@ -3382,7 +3385,7 @@ if _sub_percibido:
                     "Imputado":      st.column_config.NumberColumn("Imputado ($)", format="$ %,.0f"),
                     "PDF":           st.column_config.LinkColumn("PDF", display_text="Ver"),
                 }
-                _all_cob_rows = {cli: [r for c in sorted(cobs, key=lambda x: str(x.get("fecha") or ""), reverse=True) for r in _cob_rows(c)] for cli, cobs in _cob_by_cli.items()}
+                _all_cob_rows = {cli: [r for c in sorted(cobs, key=lambda x: (str(x.get("fecha") or ""), _nro_comprobante_sort(x.get("nro_comprobante"))), reverse=True) for r in _cob_rows(c)] for cli, cobs in _cob_by_cli.items()}
                 for _lbl, _is_parc in [("Parciales", True), ("Totales", False)]:
                     _grp = {cli: [r for r in rows if r["_parcial"] == _is_parc] for cli, rows in _all_cob_rows.items()}
                     _grp = {cli: rows for cli, rows in _grp.items() if rows}
@@ -3500,7 +3503,7 @@ if _sub_percibido:
                     "Imputado":    st.column_config.NumberColumn("Imputado ($)", format="$ %,.0f"),
                     "Total Comp.": st.column_config.NumberColumn("Total Comp. ($)", format="$ %,.0f"),
                 }
-                _all_pag_rows = [r for p in sorted(_pagos_rango, key=lambda x: str(x.get("fecha") or ""), reverse=True) for r in _pago_rows(p)]
+                _all_pag_rows = [r for p in sorted(_pagos_rango, key=lambda x: (str(x.get("fecha") or ""), _nro_comprobante_sort(x.get("nro_comprobante"))), reverse=True) for r in _pago_rows(p)]
                 for _lbl, _is_parc in [("Parciales", True), ("Totales", False)]:
                     _grp_p = {}
                     for _r in _all_pag_rows:

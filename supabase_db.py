@@ -1815,6 +1815,20 @@ def cargar_cobros():
     return cobros
 
 
+def limpiar_cobros_huerfanos(fecha_desde, fecha_hasta, ids_activos):
+    """Borra cobros del período que DUX ya no devuelve (anulados/eliminados)."""
+    if not ids_activos:
+        return
+    client = get_client()
+    client.table("cobros") \
+        .delete() \
+        .gte("fecha", str(fecha_desde)) \
+        .lte("fecha", str(fecha_hasta)) \
+        .not_.in_("id", ids_activos) \
+        .execute()
+    cargar_cobros.clear()
+
+
 def guardar_cobros(cobros):
     client = get_client()
     cobro_rows = []
