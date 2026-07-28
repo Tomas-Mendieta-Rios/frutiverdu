@@ -3367,6 +3367,7 @@ if _sub_percibido:
                     _imps = c.get("imputaciones") or []
                     if not _imps:
                         _imps = [{}]
+                    _cob_total = sum(float(x.get("monto") or 0) for x in (c.get("cobranza") or []))
                     rows = []
                     for _imp in _imps:
                         _fac_id      = str(_imp.get("id_comp_venta") or "")
@@ -3382,8 +3383,18 @@ if _sub_percibido:
                             "Imputado":      _imp_mto,
                             "Total Factura": _fac_tot or None,
                             "_parcial":      bool(_fac_tot) and _tot_cob_fac < _fac_tot - 0.01,
+                            "_cob_id":       c.get("id_cobro") or c.get("nro_comprobante"),
+                            "_cob_total":    _cob_total,
                         })
                     return rows
+
+                def _sum_cob_cobranza(rows):
+                    seen = {}
+                    for r in rows:
+                        cid = r["_cob_id"]
+                        if cid not in seen:
+                            seen[cid] = r["_cob_total"]
+                    return sum(seen.values())
                 _cob_cfg = {
                     "Total Factura": st.column_config.NumberColumn("Total Factura ($)", format="$ %,.0f"),
                     "Imputado":      st.column_config.NumberColumn("Imputado ($)", format="$ %,.0f"),
@@ -3395,12 +3406,12 @@ if _sub_percibido:
                     _grp = {cli: rows for cli, rows in _grp.items() if rows}
                     if not _grp:
                         continue
-                    _grp_tot = sum(r["Imputado"] for rows in _grp.values() for r in rows)
+                    _grp_tot = _sum_cob_cobranza([r for rows in _grp.values() for r in rows])
                     with st.expander(f"{_lbl} ({sum(len(v) for v in _grp.values())}) — $ {_pesos(_grp_tot)}"):
                         for _cli, _rows in sorted(_grp.items()):
-                            _ctot = sum(r["Imputado"] for r in _rows)
+                            _ctot = _sum_cob_cobranza(_rows)
                             with st.expander(f"{_cli} ({len(_rows)}) — $ {_pesos(_ctot)}"):
-                                _df_rows = [{k: v for k, v in r.items() if k != "_parcial"} for r in _rows]
+                                _df_rows = [{k: v for k, v in r.items() if not k.startswith("_")} for r in _rows]
                                 st.dataframe(pd.DataFrame(_df_rows), width='stretch', hide_index=True, column_config=_cob_cfg)
 
             # Sección WIX cobros
