@@ -116,11 +116,8 @@ def cargar_productos():
 
 
 def guardar_productos(df):
-    client = get_client()
-    client.table("productos").delete().neq("codigo", "___never___").execute()
-    if not df.empty:
-        records = df.where(pd.notnull(df), None).to_dict(orient="records")
-        client.table("productos").insert(records).execute()
+    records = [] if df.empty else df.where(pd.notnull(df), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_productos", {"rows": records}))
 
 
 # ---------------- RUBROS / SUBRUBROS ----------------
@@ -136,10 +133,7 @@ def cargar_rubros():
 
 
 def guardar_rubros(registros):
-    client = get_client()
-    client.table("rubros").delete().neq("id", -1).execute()
-    if registros:
-        client.table("rubros").insert(registros).execute()
+    _exec(get_client().rpc("replace_rubros", {"rows": registros or []}))
 
 
 def cargar_subrubros():
@@ -153,11 +147,7 @@ def cargar_subrubros():
 
 
 def guardar_subrubros(registros):
-    client = get_client()
-    client.table("subrubros").delete().neq("id", -1).execute()
-    batch = 200
-    for i in range(0, len(registros), batch):
-        client.table("subrubros").insert(registros[i:i + batch]).execute()
+    _exec(get_client().rpc("replace_subrubros", {"rows": registros or []}))
 
 
 # ---------------- GASTOS CATÁLOGO ----------------
@@ -173,10 +163,7 @@ def cargar_gastos_catalogo():
 
 
 def guardar_gastos_catalogo(registros):
-    client = get_client()
-    client.table("gastos_catalogo").delete().neq("id", -1).execute()
-    if registros:
-        client.table("gastos_catalogo").insert(registros).execute()
+    _exec(get_client().rpc("replace_gastos_catalogo", {"rows": registros or []}))
     st.cache_data.clear()
 
 
@@ -207,11 +194,8 @@ def cargar_compuestos():
 
 
 def guardar_compuestos(df):
-    client = get_client()
-    client.table("compuestos").delete().gte("id", 1).execute()
-    if not df.empty:
-        records = df.where(pd.notnull(df), None).to_dict(orient="records")
-        client.table("compuestos").insert(records).execute()
+    records = [] if df.empty else df.where(pd.notnull(df), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_compuestos", {"rows": records}))
 
 
 # ---------------- STOCK ----------------
@@ -298,13 +282,8 @@ def cargar_stock(fecha=None):
 
 
 def guardar_stock(df_fecha, fecha):
-    client = get_client()
-    client.table("stock_historico").delete().eq("fecha", str(fecha)).execute()
-    if not df_fecha.empty:
-        nuevo = df_fecha.copy()
-        nuevo["fecha"] = str(fecha)
-        records = nuevo.where(pd.notnull(nuevo), None).to_dict(orient="records")
-        client.table("stock_historico").insert(records).execute()
+    records = [] if df_fecha.empty else df_fecha.where(pd.notnull(df_fecha), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_stock_fecha", {"p_fecha": str(fecha), "rows": records}))
 
 
 def fechas_stock():
@@ -351,13 +330,8 @@ def cargar_estimado(fecha=None):
 
 
 def guardar_estimado(df_fecha, fecha):
-    client = get_client()
-    client.table("estimado_historico").delete().eq("fecha", str(fecha)).execute()
-    if not df_fecha.empty:
-        nuevo = df_fecha.copy()
-        nuevo["fecha"] = str(fecha)
-        records = nuevo.where(pd.notnull(nuevo), None).to_dict(orient="records")
-        client.table("estimado_historico").insert(records).execute()
+    records = [] if df_fecha.empty else df_fecha.where(pd.notnull(df_fecha), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_estimado_fecha", {"p_fecha": str(fecha), "rows": records}))
 
 
 def fechas_estimado():
@@ -387,13 +361,8 @@ def cargar_estimado_semanal(dia=None):
 
 
 def guardar_estimado_semanal_dia(df_dia, dia):
-    client = get_client()
-    client.table("estimado_semanal").delete().eq("dia_semana", str(dia)).execute()
-    if not df_dia.empty:
-        nuevo = df_dia.copy()
-        nuevo["dia_semana"] = str(dia)
-        records = nuevo.where(pd.notnull(nuevo), None).to_dict(orient="records")
-        client.table("estimado_semanal").insert(records).execute()
+    records = [] if df_dia.empty else df_dia.where(pd.notnull(df_dia), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_estimado_semanal_dia", {"p_dia": str(dia), "rows": records}))
 
 
 def dias_semana_con_estimado():
@@ -419,11 +388,8 @@ def cargar_wix_productos():
 
 
 def guardar_wix_productos(df):
-    client = get_client()
-    client.table("wix_productos").delete().neq("wix_id", "___never___").execute()
-    if not df.empty:
-        records = df.where(pd.notnull(df), None).to_dict(orient="records")
-        client.table("wix_productos").insert(records).execute()
+    records = [] if df.empty else df.where(pd.notnull(df), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_wix_productos", {"rows": records}))
 
 
 # ---------------- MAPPING WIX DUX ----------------
@@ -446,11 +412,8 @@ def cargar_mapping_wix_dux():
 
 
 def guardar_mapping_wix_dux(df):
-    client = get_client()
-    client.table("mapping_wix_dux").delete().gte("id", 1).execute()
-    if not df.empty:
-        records = df.where(pd.notnull(df), None).to_dict(orient="records")
-        client.table("mapping_wix_dux").insert(records).execute()
+    records = [] if df.empty else df.where(pd.notnull(df), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_mapping_wix_dux", {"rows": records}))
 
 
 # ---------------- PACKS WIX ----------------
@@ -473,11 +436,8 @@ def cargar_packs_wix():
 
 
 def guardar_packs_wix(df):
-    client = get_client()
-    client.table("packs_wix").delete().gte("id", 1).execute()
-    if not df.empty:
-        records = df.where(pd.notnull(df), None).to_dict(orient="records")
-        client.table("packs_wix").insert(records).execute()
+    records = [] if df.empty else df.where(pd.notnull(df), None).to_dict(orient="records")
+    _exec(get_client().rpc("replace_packs_wix", {"rows": records}))
 
 
 # ---------------- SELECCIONES ----------------
@@ -493,16 +453,12 @@ def cargar_selecciones(fuente):
 
 def guardar_selecciones(fuente, selecciones):
     """fuente: 'dux' o 'wix'. selecciones: dict {order_id: fecha_entrega}."""
-    client = get_client()
-    tabla = f"selecciones_{fuente}"
-    client.table(tabla).delete().neq("order_id", "___never___").execute()
     rows = [
         {"order_id": str(oid), "fecha_entrega": str(fent)}
         for oid, fent in selecciones.items()
         if fent
     ]
-    if rows:
-        client.table(tabla).insert(rows).execute()
+    _exec(get_client().rpc(f"replace_selecciones_{fuente}", {"rows": rows}))
 
 
 # ---------------- PEDIDOS ----------------
