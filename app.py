@@ -4363,6 +4363,8 @@ if _stab_otros_egresos:
                                     fecha_movimiento=_f["fecha_mov"],
                                 )
                                 db.cargar_otros_egresos.clear()
+                                for _k in ["ne_rubro", "ne_sub", "ne_item", "ne_monto", "ne_caja", "ne_desc", "ne_estado", "ne_fmov"]:
+                                    st.session_state.pop(_k, None)
                                 st.session_state["oe_guardado_ok"] = True
                                 st.rerun(scope="fragment")
                             except Exception as e:
