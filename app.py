@@ -4333,6 +4333,10 @@ if _stab_otros_egresos:
                     if st.button("Guardar egreso", type="primary", key="ne_guardar"):
                         if not _f["rubro"]:
                             st.error("Seleccioná un rubro.")
+                        elif not _f["subrubro"]:
+                            st.error("Seleccioná un subrubro.")
+                        elif not _f["item_id"]:
+                            st.error("Seleccioná un item.")
                         elif _f["monto"] <= 0:
                             st.error("El monto debe ser mayor a 0.")
                         else:
@@ -4435,24 +4439,33 @@ if _stab_otros_egresos:
                             })
                             _e_col1, _e_col2 = st.columns(2)
                             if _e_col1.button("Guardar", type="primary", key=f"eeo_{_oe_id}"):
-                                try:
-                                    db.actualizar_otro_egreso(
-                                        id=_oe_id,
-                                        fecha=_e["fecha"],
-                                        rubro_id=_oe_rubro_opts.get(_e["rubro"]),
-                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
-                                        item_id=_e["item_id"],
-                                        monto=_e["monto"],
-                                        caja_id=_oe_caja_opts.get(_e["caja"]),
-                                        descripcion=_e["desc"],
-                                        estado=_e["estado"],
-                                        fecha_movimiento=_e["fecha_mov"],
-                                    )
-                                    db.cargar_otros_egresos.clear()
-                                    st.session_state.pop(f"oe_editing_{_oe_id}", None)
-                                    st.rerun(scope="fragment")
-                                except Exception as e:
-                                    st.error(f"Error: {e}")
+                                if not _e["rubro"]:
+                                    st.error("Seleccioná un rubro.")
+                                elif not _e["subrubro"]:
+                                    st.error("Seleccioná un subrubro.")
+                                elif not _e["item_id"]:
+                                    st.error("Seleccioná un item.")
+                                elif _e["monto"] <= 0:
+                                    st.error("El monto debe ser mayor a 0.")
+                                else:
+                                    try:
+                                        db.actualizar_otro_egreso(
+                                            id=_oe_id,
+                                            fecha=_e["fecha"],
+                                            rubro_id=_oe_rubro_opts.get(_e["rubro"]),
+                                            subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
+                                            item_id=_e["item_id"],
+                                            monto=_e["monto"],
+                                            caja_id=_oe_caja_opts.get(_e["caja"]),
+                                            descripcion=_e["desc"],
+                                            estado=_e["estado"],
+                                            fecha_movimiento=_e["fecha_mov"],
+                                        )
+                                        db.cargar_otros_egresos.clear()
+                                        st.session_state.pop(f"oe_editing_{_oe_id}", None)
+                                        st.rerun(scope="fragment")
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
                             if _e_col2.button("Cancelar", key=f"eec2_{_oe_id}"):
                                 st.session_state.pop(f"oe_editing_{_oe_id}", None)
                                 st.rerun(scope="fragment")
