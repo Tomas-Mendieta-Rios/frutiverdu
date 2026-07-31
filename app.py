@@ -2790,8 +2790,14 @@ if _sub_resumen:
             total_ingresos = total_facturas + total_wix + total_otros_ing + total_aj_pos
             total_ing_cobr = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
             total_ing_pend = total_fac_pend + total_wix_pend + total_otros_pend
-            total_egresos  = total_compras + total_otros_egr + abs(total_aj_neg)
-            total_egr_pag  = total_egr_pag + abs(total_aj_neg)
+            _cobros_rng = [c for c in cobros_bal if _en_rango(c.get("fecha"))]
+            total_ret_resumen = sum(
+                max(0.0, sum(float(i.get("monto_imputado") or 0) for i in (c.get("imputaciones") or []))
+                       - sum(float(cob.get("monto") or 0) for cob in (c.get("cobranza") or [])))
+                for c in _cobros_rng
+            )
+            total_egresos  = total_compras + total_otros_egr + abs(total_aj_neg) + total_ret_resumen
+            total_egr_pag  = total_egr_pag + abs(total_aj_neg) + total_ret_resumen
             resultado      = total_ingresos - total_egresos
     
             # ── INGRESOS ────────────────────────────────────────────────────────────
@@ -3120,10 +3126,30 @@ if _sub_resumen:
                     st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                  column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
     
+            # Retenciones
+            if total_ret_resumen > 0.01:
+                st.markdown(f"#### Retenciones · {len(_cobros_rng)} cobros")
+                _bal_metric(st.columns(1)[0], "Total retenido", f"$ {_pesos(total_ret_resumen)}", "#f57c00")
+                _ret_by_cli = {}
+                for _c in _cobros_rng:
+                    _imp = sum(float(i.get("monto_imputado") or 0) for i in (_c.get("imputaciones") or []))
+                    _cob = sum(float(cob.get("monto") or 0) for cob in (_c.get("cobranza") or []))
+                    _ret = _imp - _cob
+                    if _ret > 0.01:
+                        _cli = str(_c.get("cliente") or _c.get("nombre_cliente") or "—")
+                        _ret_by_cli.setdefault(_cli, 0.0)
+                        _ret_by_cli[_cli] += _ret
+                if _ret_by_cli:
+                    with st.expander(f"Detalle por cliente ({len(_ret_by_cli)}) — $ {_pesos(total_ret_resumen)}"):
+                        _rows = [{"Cliente": cli, "Retención": monto}
+                                 for cli, monto in sorted(_ret_by_cli.items(), key=lambda x: -x[1])]
+                        st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True,
+                                     column_config={"Retención": st.column_config.NumberColumn("Retención ($)", format="$ %,.2f")})
+
             # ── RESULTADO ────────────────────────────────────────────────────────────
             st.divider()
             _ing_real   = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
-            _egr_real   = total_comp_pag + total_otros_egr_pag + abs(total_aj_neg)
+            _egr_real   = total_comp_pag + total_otros_egr_pag + abs(total_aj_neg) + total_ret_resumen
             _res_real   = _ing_real - _egr_real
             _fic_color  = "#2e7d32" if resultado >= 0 else "#c62828"
             _fic_signo  = "+" if resultado >= 0 else ""
