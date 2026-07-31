@@ -4065,6 +4065,16 @@ if _stab_otros_ingresos:
 
         _oi_lista = db.cargar_otros_ingresos()
 
+        # Pre-cargar toda la jerarquía una sola vez; filtrar en memoria en _oi_render_fields
+        _all_oi_subs_raw  = db.cargar_subrubros_ingresos()
+        _all_oi_items_raw = db.cargar_items_ingresos()
+        _oi_subs_by_rubro: dict = {}
+        for _s in _all_oi_subs_raw:
+            _oi_subs_by_rubro.setdefault(_s["rubro_id"], []).append(_s)
+        _oi_items_by_sub: dict = {}
+        for _i in _all_oi_items_raw:
+            _oi_items_by_sub.setdefault(_i["subrubro_id"], []).append(_i)
+
         _oi_tab1, _oi_tab2, _oi_tab3 = st.tabs(["➕ Ingresar", "✏️ Editar / Eliminar", "📋 Todos los ingresos"])
 
         # ── TAB 1: Nuevo ingreso ──────────────────────────────────────────────
@@ -4075,13 +4085,12 @@ if _stab_otros_ingresos:
             rubro  = st.selectbox("Rubro", options=[""] + list(_oi_rubro_opts.keys()), index=rubro_idx, key=f"{pfx}_rubro")
             sub_opts = {}
             if rubro:
-                sub_opts = {s["nombre"]: s["id"] for s in db.cargar_subrubros_ingresos(_oi_rubro_opts[rubro])}
+                sub_opts = {s["nombre"]: s["id"] for s in _oi_subs_by_rubro.get(_oi_rubro_opts[rubro], [])}
             sub_nm_idx = ([""] + list(sub_opts.keys())).index(d.get("sub_nm", "")) if d.get("sub_nm") in sub_opts else 0
             subrubro = st.selectbox("Subrubro", options=[""] + list(sub_opts.keys()), index=sub_nm_idx, key=f"{pfx}_sub")
             item_map = {}
             if subrubro and subrubro in sub_opts:
-                _items_raw = db.cargar_items_ingresos(sub_opts[subrubro])
-                item_map = {i["nombre"]: i["id"] for i in _items_raw}
+                item_map = {i["nombre"]: i["id"] for i in _oi_items_by_sub.get(sub_opts[subrubro], [])}
             _def_item_nm = d.get("item", "")
             item_idx = ([""] + list(item_map.keys())).index(_def_item_nm) if _def_item_nm in item_map else 0
             item_nm = st.selectbox("Item", options=[""] + list(item_map.keys()), index=item_idx, key=f"{pfx}_item")
@@ -4107,11 +4116,18 @@ if _stab_otros_ingresos:
         with _oi_tab1:
             @st.fragment
             def _oi_nuevo_ingreso():
+                _seed = st.session_state.get("ni_seed", 0)
+                _pfx  = f"ni{_seed}"
+                _fecha_default = st.session_state.pop("ni_fecha_keep", date.today())
                 with st.container(border=True):
-                    _f = _oi_render_fields("ni")
-                    if st.button("Guardar ingreso", type="primary", key="ni_guardar"):
+                    _f = _oi_render_fields(_pfx, defaults={"fecha": _fecha_default})
+                    if st.button("Guardar ingreso", type="primary", key=f"ni_guardar{_seed}"):
                         if not _f["rubro"]:
                             st.error("Seleccioná un rubro.")
+                        elif not _f["subrubro"]:
+                            st.error("Seleccioná un subrubro.")
+                        elif not _f["item_id"]:
+                            st.error("Seleccioná un item.")
                         elif _f["monto"] <= 0:
                             st.error("El monto debe ser mayor a 0.")
                         else:
@@ -4129,6 +4145,8 @@ if _stab_otros_ingresos:
                                     fecha_movimiento=_f["fecha_mov"],
                                 )
                                 db.cargar_otros_ingresos.clear()
+                                st.session_state["ni_fecha_keep"] = _f["fecha"]
+                                st.session_state["ni_seed"] = _seed + 1
                                 st.session_state["oi_guardado_ok"] = True
                                 st.rerun(scope="fragment")
                             except Exception as e:
@@ -4197,24 +4215,33 @@ if _stab_otros_ingresos:
                             })
                             _e_col1, _e_col2 = st.columns(2)
                             if _e_col1.button("Guardar", type="primary", key=f"eo_{_oi_id}"):
-                                try:
-                                    db.actualizar_otro_ingreso(
-                                        id=_oi_id,
-                                        fecha=_e["fecha"],
-                                        rubro_id=_oi_rubro_opts.get(_e["rubro"]),
-                                        subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
-                                        item_id=_e["item_id"],
-                                        monto=_e["monto"],
-                                        caja_id=_oi_caja_opts.get(_e["caja"]),
-                                        descripcion=_e["desc"],
-                                        estado=_e["estado"],
-                                        fecha_movimiento=_e["fecha_mov"],
-                                    )
-                                    db.cargar_otros_ingresos.clear()
-                                    st.session_state.pop(f"oi_editing_{_oi_id}", None)
-                                    st.rerun(scope="fragment")
-                                except Exception as e:
-                                    st.error(f"Error: {e}")
+                                if not _e["rubro"]:
+                                    st.error("Seleccioná un rubro.")
+                                elif not _e["subrubro"]:
+                                    st.error("Seleccioná un subrubro.")
+                                elif not _e["item_id"]:
+                                    st.error("Seleccioná un item.")
+                                elif _e["monto"] <= 0:
+                                    st.error("El monto debe ser mayor a 0.")
+                                else:
+                                    try:
+                                        db.actualizar_otro_ingreso(
+                                            id=_oi_id,
+                                            fecha=_e["fecha"],
+                                            rubro_id=_oi_rubro_opts.get(_e["rubro"]),
+                                            subrubro_id=_e["sub_opts"].get(_e["subrubro"]),
+                                            item_id=_e["item_id"],
+                                            monto=_e["monto"],
+                                            caja_id=_oi_caja_opts.get(_e["caja"]),
+                                            descripcion=_e["desc"],
+                                            estado=_e["estado"],
+                                            fecha_movimiento=_e["fecha_mov"],
+                                        )
+                                        db.cargar_otros_ingresos.clear()
+                                        st.session_state.pop(f"oi_editing_{_oi_id}", None)
+                                        st.rerun(scope="fragment")
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
                             if _e_col2.button("Cancelar", key=f"ec2_{_oi_id}"):
                                 st.session_state.pop(f"oi_editing_{_oi_id}", None)
                                 st.rerun(scope="fragment")
