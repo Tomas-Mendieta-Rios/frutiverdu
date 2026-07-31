@@ -4285,6 +4285,16 @@ if _stab_otros_egresos:
 
         _oe_lista = db.cargar_otros_egresos()
 
+        # Pre-cargar toda la jerarquía una sola vez; filtrar en memoria en _oe_render_fields
+        _all_subs_raw  = db.cargar_subrubros_egresos()
+        _all_items_raw = db.cargar_items_egresos()
+        _subs_by_rubro: dict = {}
+        for _s in _all_subs_raw:
+            _subs_by_rubro.setdefault(_s["rubro_id"], []).append(_s)
+        _items_by_sub: dict = {}
+        for _i in _all_items_raw:
+            _items_by_sub.setdefault(_i["subrubro_id"], []).append(_i)
+
         _oe_tab1, _oe_tab2, _oe_tab3 = st.tabs(["➕ Ingresar", "✏️ Editar / Eliminar", "📋 Todos los egresos"])
 
         def _oe_render_fields(pfx, defaults=None):
@@ -4295,13 +4305,12 @@ if _stab_otros_egresos:
             sub_opts = {}
             item_opts = []
             if rubro:
-                sub_opts = {s["nombre"]: s["id"] for s in db.cargar_subrubros_egresos(_oe_rubro_opts[rubro])}
+                sub_opts = {s["nombre"]: s["id"] for s in _subs_by_rubro.get(_oe_rubro_opts[rubro], [])}
             sub_nm_idx = ([""] + list(sub_opts.keys())).index(d.get("sub_nm", "")) if d.get("sub_nm") in sub_opts else 0
             subrubro = st.selectbox("Subrubro", options=[""] + list(sub_opts.keys()), index=sub_nm_idx, key=f"{pfx}_sub")
             item_map = {}
             if subrubro and subrubro in sub_opts:
-                _items_raw = db.cargar_items_egresos(sub_opts[subrubro])
-                item_map = {i["nombre"]: i["id"] for i in _items_raw}
+                item_map = {i["nombre"]: i["id"] for i in _items_by_sub.get(sub_opts[subrubro], [])}
             item_opts = list(item_map.keys())
             _def_item_nm = d.get("item", "")
             item_idx = ([""] + item_opts).index(_def_item_nm) if _def_item_nm in item_opts else 0
