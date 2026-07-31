@@ -3141,24 +3141,33 @@ if _sub_resumen:
                 for _c in _cobros_con_ret:
                     _cli = str(_c.get("cliente") or _c.get("nombre_cliente") or "—")
                     _ret_by_cli.setdefault(_cli, []).append(_c)
+                _fac_lkp_ret = {str(f.get("id") or ""): f for f in facturas_bal}
                 for _cli, _citems in sorted(_ret_by_cli.items()):
                     _cli_tot = sum(_c["_ret"] for _c in _citems)
                     with st.expander(f"{_cli} ({len(_citems)} cobro{'s' if len(_citems) != 1 else ''}) — $ {_pesos(_cli_tot)}"):
                         _rows = []
                         for _c in sorted(_citems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                            _facturas = ", ".join(
-                                i.get("nro_comprobante") or "—"
-                                for i in (_c.get("imputaciones") or [])
-                                if i.get("nro_comprobante")
-                            ) or "—"
-                            _rows.append({
-                                "Fecha cobro": _fmt_fecha(_c.get("fecha")),
-                                "Cobro #":     _c.get("nro_comprobante") or "—",
-                                "Facturas":    _facturas,
-                                "Retención":   _c["_ret"],
-                            })
+                            _imps = _c.get("imputaciones") or []
+                            _total_imp = sum(float(i.get("monto_imputado") or 0) for i in _imps)
+                            for _imp in _imps:
+                                _fid = str(_imp.get("id_comp_venta") or "")
+                                _fac = _fac_lkp_ret.get(_fid, {})
+                                _imp_mto = float(_imp.get("monto_imputado") or 0)
+                                _ret_prop = round(_c["_ret"] * (_imp_mto / _total_imp), 2) if _total_imp > 0 else 0.0
+                                _rows.append({
+                                    "Fecha cobro": _fmt_fecha(_c.get("fecha")),
+                                    "Cobro #":     _c.get("nro_comprobante") or "—",
+                                    "Factura":     _imp.get("nro_comprobante") or "—",
+                                    "Imputado":    _imp_mto,
+                                    "Retención":   _ret_prop,
+                                    "PDF":         _fac.get("url_factura") or None,
+                                })
                         st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True,
-                                     column_config={"Retención": st.column_config.NumberColumn("Retención ($)", format="$ %,.2f")})
+                                     column_config={
+                                         "Imputado":  st.column_config.NumberColumn("Imputado ($)",  format="$ %,.2f"),
+                                         "Retención": st.column_config.NumberColumn("Retención ($)", format="$ %,.2f"),
+                                         "PDF":       st.column_config.LinkColumn("PDF", display_text="Ver"),
+                                     })
 
             # ── RESULTADO ────────────────────────────────────────────────────────────
             st.divider()
