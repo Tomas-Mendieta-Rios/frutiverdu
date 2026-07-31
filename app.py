@@ -3326,9 +3326,16 @@ if _sub_percibido:
             resultado_neto = resultado_op - total_retiros_p
 
             # ── INGRESOS ────────────────────────────────────────────────────────────
+            total_ret_dux = sum(
+                max(0.0, sum(float(i.get("monto_imputado") or 0) for i in (c.get("imputaciones") or []))
+                       - sum(float(cob.get("monto") or 0) for cob in (c.get("cobranza") or [])))
+                for c in _cobros_rango
+            )
             st.divider()
             _aj_pos_cell = f"{_metric_cell('Ajustes (+)', f'$ {_pesos(total_aj_pos_p)}', '#2e7d32')}" if total_aj_pos_p else ""
-            _ing_cols = "1fr 1fr 1fr 1fr 1fr" if total_aj_pos_p else "1fr 1fr 1fr 1fr"
+            _ret_cell = f"{_metric_cell('Retenciones', f'$ {_pesos(total_ret_dux)}', '#f57c00')}" if total_ret_dux > 0.01 else ""
+            _ing_cols_n = 4 + bool(total_aj_pos_p) + bool(total_ret_dux > 0.01)
+            _ing_cols = " ".join(["1fr"] * _ing_cols_n)
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos percibidos</h2>
   <div style='display:grid;grid-template-columns:{_ing_cols};gap:16px'>
@@ -3337,6 +3344,7 @@ if _sub_percibido:
     {_metric_cell("WIX", f"$ {_pesos(total_cobrado_wix)}", "#2e7d32")}
     {_metric_cell("Ingresos", f"$ {_pesos(total_otros_ing)}", "#2e7d32")}
     {_aj_pos_cell}
+    {_ret_cell}
   </div>
 </div>""", unsafe_allow_html=True)
 
