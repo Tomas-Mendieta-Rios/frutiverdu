@@ -3333,18 +3333,18 @@ if _sub_percibido:
             )
             st.divider()
             _aj_pos_cell = f"{_metric_cell('Ajustes (+)', f'$ {_pesos(total_aj_pos_p)}', '#2e7d32')}" if total_aj_pos_p else ""
-            _ret_cell = f"{_metric_cell('Retenciones', f'$ {_pesos(total_ret_dux)}', '#f57c00')}" if total_ret_dux > 0.01 else ""
-            _ing_cols_n = 4 + bool(total_aj_pos_p) + bool(total_ret_dux > 0.01)
-            _ing_cols = " ".join(["1fr"] * _ing_cols_n)
+            _ing_cols = "1fr 1fr 1fr 1fr 1fr" if total_aj_pos_p else "1fr 1fr 1fr 1fr"
+            _dux_ret_sub = f"Ret: $ {_pesos(total_ret_dux)}" if total_ret_dux > 0.01 else ""
+            _dux_cell = (_metric_cell_sub("DUX", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32", _dux_ret_sub)
+                         if _dux_ret_sub else _metric_cell("DUX", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32"))
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Ingresos percibidos</h2>
   <div style='display:grid;grid-template-columns:{_ing_cols};gap:16px'>
     {_metric_cell("Total", f"$ {_pesos(total_ingresos)}", "#2e7d32")}
-    {_metric_cell("DUX", f"$ {_pesos(total_cobrado_dux)}", "#2e7d32")}
+    {_dux_cell}
     {_metric_cell("WIX", f"$ {_pesos(total_cobrado_wix)}", "#2e7d32")}
     {_metric_cell("Ingresos", f"$ {_pesos(total_otros_ing)}", "#2e7d32")}
     {_aj_pos_cell}
-    {_ret_cell}
   </div>
 </div>""", unsafe_allow_html=True)
 
