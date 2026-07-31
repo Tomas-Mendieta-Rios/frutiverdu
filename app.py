@@ -2790,12 +2790,33 @@ if _sub_resumen:
             total_ingresos = total_facturas + total_wix + total_otros_ing + total_aj_pos
             total_ing_cobr = total_fac_cobr + total_wix_cobr + total_otros_cobr + total_aj_pos
             total_ing_pend = total_fac_pend + total_wix_pend + total_otros_pend
-            _cobros_rng = [c for c in cobros_bal if _en_rango(c.get("fecha"))]
-            total_ret_resumen = sum(
-                max(0.0, sum(float(i.get("monto_imputado") or 0) for i in (c.get("imputaciones") or []))
-                       - sum(float(cob.get("monto") or 0) for cob in (c.get("cobranza") or [])))
-                for c in _cobros_rng
-            )
+            _fac_lkp_r = {str(f.get("id") or ""): f for f in facturas_bal}
+            _ret_data = []
+            for _c in cobros_bal:
+                _imps = _c.get("imputaciones") or []
+                _cob_tot = sum(float(cob.get("monto") or 0) for cob in (_c.get("cobranza") or []))
+                _imp_tot = sum(float(i.get("monto_imputado") or 0) for i in _imps)
+                _ret_tot = max(0.0, _imp_tot - _cob_tot)
+                if _ret_tot <= 0.01:
+                    continue
+                for _imp in _imps:
+                    _fid = str(_imp.get("id_comp_venta") or "")
+                    _fac = _fac_lkp_r.get(_fid, {})
+                    if not _en_rango(_fac.get("fecha_comp") or ""):
+                        continue
+                    _imp_mto = float(_imp.get("monto_imputado") or 0)
+                    _ret_prop = round(_ret_tot * (_imp_mto / _imp_tot), 2) if _imp_tot > 0 else 0.0
+                    if _ret_prop <= 0.01:
+                        continue
+                    _ret_data.append({
+                        "cli":     str(_c.get("cliente") or _c.get("nombre_cliente") or "—"),
+                        "fecha":   _fac.get("fecha_comp") or "",
+                        "fac_nro": _imp.get("nro_comprobante") or "—",
+                        "imp_mto": _imp_mto,
+                        "ret":     _ret_prop,
+                        "url":     _fac.get("url_factura") or None,
+                    })
+            total_ret_resumen = sum(d["ret"] for d in _ret_data)
             total_egresos  = total_compras + total_otros_egr + abs(total_aj_neg) + total_ret_resumen
             total_egr_pag  = total_egr_pag + abs(total_aj_neg) + total_ret_resumen
             resultado      = total_ingresos - total_egresos
@@ -3127,41 +3148,25 @@ if _sub_resumen:
                                  column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
     
             # Retenciones
-            _cobros_con_ret = []
-            for _c in _cobros_rng:
-                _imp = sum(float(i.get("monto_imputado") or 0) for i in (_c.get("imputaciones") or []))
-                _cob = sum(float(cob.get("monto") or 0) for cob in (_c.get("cobranza") or []))
-                _ret = _imp - _cob
-                if _ret > 0.01:
-                    _cobros_con_ret.append({**_c, "_ret": _ret})
-            if _cobros_con_ret:
-                st.markdown(f"#### Retenciones · {len(_cobros_con_ret)} cobros")
+            if _ret_data:
+                st.markdown(f"#### Retenciones · {len(_ret_data)} facturas")
                 _bal_metric(st.columns(1)[0], "Total retenido", f"$ {_pesos(total_ret_resumen)}", "#f57c00")
                 _ret_by_cli = {}
-                for _c in _cobros_con_ret:
-                    _cli = str(_c.get("cliente") or _c.get("nombre_cliente") or "—")
-                    _ret_by_cli.setdefault(_cli, []).append(_c)
-                _fac_lkp_ret = {str(f.get("id") or ""): f for f in facturas_bal}
-                for _cli, _citems in sorted(_ret_by_cli.items()):
-                    _cli_tot = sum(_c["_ret"] for _c in _citems)
-                    with st.expander(f"{_cli} ({len(_citems)} cobro{'s' if len(_citems) != 1 else ''}) — $ {_pesos(_cli_tot)}"):
-                        _rows = []
-                        for _c in sorted(_citems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
-                            _imps = _c.get("imputaciones") or []
-                            _total_imp = sum(float(i.get("monto_imputado") or 0) for i in _imps)
-                            for _imp in _imps:
-                                _fid = str(_imp.get("id_comp_venta") or "")
-                                _fac = _fac_lkp_ret.get(_fid, {})
-                                _imp_mto = float(_imp.get("monto_imputado") or 0)
-                                _ret_prop = round(_c["_ret"] * (_imp_mto / _total_imp), 2) if _total_imp > 0 else 0.0
-                                _rows.append({
-                                    "Fecha cobro": _fmt_fecha(_c.get("fecha")),
-                                    "Cobro #":     _c.get("nro_comprobante") or "—",
-                                    "Factura":     _imp.get("nro_comprobante") or "—",
-                                    "Imputado":    _imp_mto,
-                                    "Retención":   _ret_prop,
-                                    "PDF":         _fac.get("url_factura") or None,
-                                })
+                for _d in _ret_data:
+                    _ret_by_cli.setdefault(_d["cli"], []).append(_d)
+                for _cli, _ditems in sorted(_ret_by_cli.items()):
+                    _cli_tot = sum(_d["ret"] for _d in _ditems)
+                    with st.expander(f"{_cli} ({len(_ditems)} factura{'s' if len(_ditems) != 1 else ''}) — $ {_pesos(_cli_tot)}"):
+                        _rows = [
+                            {
+                                "Fecha factura": _fmt_fecha(_d["fecha"]),
+                                "Factura":       _d["fac_nro"],
+                                "Imputado":      _d["imp_mto"],
+                                "Retención":     _d["ret"],
+                                "PDF":           _d["url"],
+                            }
+                            for _d in sorted(_ditems, key=lambda x: str(x["fecha"]), reverse=True)
+                        ]
                         st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True,
                                      column_config={
                                          "Imputado":  st.column_config.NumberColumn("Imputado ($)",  format="$ %,.2f"),
