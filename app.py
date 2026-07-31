@@ -4337,9 +4337,12 @@ if _stab_otros_egresos:
         with _oe_tab1:
             @st.fragment
             def _oe_nuevo_egreso():
+                _seed = st.session_state.get("ne_seed", 0)
+                _pfx  = f"ne{_seed}"
+                _fecha_default = st.session_state.pop("ne_fecha_keep", date.today())
                 with st.container(border=True):
-                    _f = _oe_render_fields("ne")
-                    if st.button("Guardar egreso", type="primary", key="ne_guardar"):
+                    _f = _oe_render_fields(_pfx, defaults={"fecha": _fecha_default})
+                    if st.button("Guardar egreso", type="primary", key=f"ne_guardar{_seed}"):
                         if not _f["rubro"]:
                             st.error("Seleccioná un rubro.")
                         elif not _f["subrubro"]:
@@ -4363,8 +4366,8 @@ if _stab_otros_egresos:
                                     fecha_movimiento=_f["fecha_mov"],
                                 )
                                 db.cargar_otros_egresos.clear()
-                                for _k in ["ne_rubro", "ne_sub", "ne_item", "ne_monto", "ne_caja", "ne_desc", "ne_estado", "ne_fmov"]:
-                                    st.session_state.pop(_k, None)
+                                st.session_state["ne_fecha_keep"] = _f["fecha"]
+                                st.session_state["ne_seed"] = _seed + 1
                                 st.session_state["oe_guardado_ok"] = True
                                 st.rerun(scope="fragment")
                             except Exception as e:
