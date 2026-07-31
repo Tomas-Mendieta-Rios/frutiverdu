@@ -3150,7 +3150,7 @@ if _sub_resumen:
             # Retenciones
             if _ret_data:
                 st.markdown(f"#### Retenciones · {len(_ret_data)} facturas")
-                _bal_metric(st.columns(1)[0], "Total retenido", f"$ {_pesos(total_ret_resumen)}", "#f57c00")
+                _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_ret_resumen)}", "#1a1a1a")
                 _ret_by_cli = {}
                 for _d in _ret_data:
                     _ret_by_cli.setdefault(_d["cli"], []).append(_d)
