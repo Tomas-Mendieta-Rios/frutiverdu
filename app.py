@@ -3127,22 +3127,36 @@ if _sub_resumen:
                                  column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
     
             # Retenciones
-            if total_ret_resumen > 0.01:
-                st.markdown(f"#### Retenciones · {len(_cobros_rng)} cobros")
+            _cobros_con_ret = []
+            for _c in _cobros_rng:
+                _imp = sum(float(i.get("monto_imputado") or 0) for i in (_c.get("imputaciones") or []))
+                _cob = sum(float(cob.get("monto") or 0) for cob in (_c.get("cobranza") or []))
+                _ret = _imp - _cob
+                if _ret > 0.01:
+                    _cobros_con_ret.append({**_c, "_ret": _ret})
+            if _cobros_con_ret:
+                st.markdown(f"#### Retenciones · {len(_cobros_con_ret)} cobros")
                 _bal_metric(st.columns(1)[0], "Total retenido", f"$ {_pesos(total_ret_resumen)}", "#f57c00")
                 _ret_by_cli = {}
-                for _c in _cobros_rng:
-                    _imp = sum(float(i.get("monto_imputado") or 0) for i in (_c.get("imputaciones") or []))
-                    _cob = sum(float(cob.get("monto") or 0) for cob in (_c.get("cobranza") or []))
-                    _ret = _imp - _cob
-                    if _ret > 0.01:
-                        _cli = str(_c.get("cliente") or _c.get("nombre_cliente") or "—")
-                        _ret_by_cli.setdefault(_cli, 0.0)
-                        _ret_by_cli[_cli] += _ret
-                if _ret_by_cli:
-                    with st.expander(f"Detalle por cliente ({len(_ret_by_cli)}) — $ {_pesos(total_ret_resumen)}"):
-                        _rows = [{"Cliente": cli, "Retención": monto}
-                                 for cli, monto in sorted(_ret_by_cli.items(), key=lambda x: -x[1])]
+                for _c in _cobros_con_ret:
+                    _cli = str(_c.get("cliente") or _c.get("nombre_cliente") or "—")
+                    _ret_by_cli.setdefault(_cli, []).append(_c)
+                for _cli, _citems in sorted(_ret_by_cli.items()):
+                    _cli_tot = sum(_c["_ret"] for _c in _citems)
+                    with st.expander(f"{_cli} ({len(_citems)} cobro{'s' if len(_citems) != 1 else ''}) — $ {_pesos(_cli_tot)}"):
+                        _rows = []
+                        for _c in sorted(_citems, key=lambda x: str(x.get("fecha") or ""), reverse=True):
+                            _facturas = ", ".join(
+                                i.get("nro_comprobante") or "—"
+                                for i in (_c.get("imputaciones") or [])
+                                if i.get("nro_comprobante")
+                            ) or "—"
+                            _rows.append({
+                                "Fecha cobro": _fmt_fecha(_c.get("fecha")),
+                                "Cobro #":     _c.get("nro_comprobante") or "—",
+                                "Facturas":    _facturas,
+                                "Retención":   _c["_ret"],
+                            })
                         st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True,
                                      column_config={"Retención": st.column_config.NumberColumn("Retención ($)", format="$ %,.2f")})
 
