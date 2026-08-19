@@ -3703,10 +3703,6 @@ if _sub_percibido:
                 _res_disp_p  = resultado_op - total_devol_p
                 _disp_color  = "#2e7d32" if _res_disp_p >= 0 else "#c62828"
                 _disp_signo  = "+" if _res_disp_p >= 0 else "-"
-                _dev_line_p  = (f"<div style='display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #c8cdd8;margin-top:8px'>"
-                                f"<span style='font-size:0.85rem;color:#555'>− Devoluciones préstamos</span>"
-                                f"<span style='font-size:0.85rem;color:#c62828'>$ {_pesos(total_devol_p)}</span></div>"
-                                if total_devol_p > 0.01 else "")
                 # Barras en función del resultado disponible
                 def _bar_sug_disp(nombre, pct):
                     _monto = _res_disp_p * pct
@@ -3737,11 +3733,8 @@ if _sub_percibido:
 </div>"""
                 st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado disponible</h2>
-  {_dev_line_p}
-  <div style='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #c8cdd8;margin-top:4px'>
-    <span style='font-size:1rem;font-weight:700'>Total disponible</span>
-    <span style='font-size:1.25rem;font-weight:700;color:{_disp_color}'>{_disp_signo}$ {_pesos(abs(_res_disp_p))}</span>
-  </div>
+  <div style='text-align:center;font-size:1.5em;font-weight:700;color:{_disp_color}'>{_disp_signo}$ {_pesos(abs(_res_disp_p))}</div>
+  <div style='text-align:center;color:#666;font-size:0.9em'>Resultado operativo − Devoluciones préstamos</div>
   {_ret_sug_disp_html}
   {_ret_op_disp_html}
 </div>""", unsafe_allow_html=True)
