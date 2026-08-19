@@ -3699,6 +3699,7 @@ if _sub_percibido:
                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.2f")})
 
             # ── RESULTADO DISPONIBLE ─────────────────────────────────────────────────
+            _ret_op_disp_html = ""
             if _socios_pct_p:
                 _res_disp_p  = resultado_op - total_devol_p
                 _disp_color  = "#2e7d32" if _res_disp_p >= 0 else "#c62828"
@@ -3736,7 +3737,6 @@ if _sub_percibido:
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{_disp_color}'>{_disp_signo}$ {_pesos(abs(_res_disp_p))}</div>
   <div style='text-align:center;color:#666;font-size:0.9em'>Resultado operativo − Devoluciones préstamos</div>
   {_ret_sug_disp_html}
-  {_ret_op_disp_html}
 </div>""", unsafe_allow_html=True)
 
             # Retiros
@@ -3774,6 +3774,7 @@ if _sub_percibido:
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado neto</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{_neto_color}'>{_neto_signo}$ {_pesos(abs(resultado_neto))}</div>
   <div style='text-align:center;color:#666;font-size:0.9em'>Operativo − Retiros</div>
+  {_ret_op_disp_html}
 </div>""", unsafe_allow_html=True)
 
         _percibido_frag()
