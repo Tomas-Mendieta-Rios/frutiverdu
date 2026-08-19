@@ -3697,8 +3697,6 @@ if _sub_percibido:
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
   <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
-  {_ret_sug_html}
-  {_ret_op_html}
 </div>""", unsafe_allow_html=True)
 
             # ── DEVOLUCIONES PRÉSTAMOS ───────────────────────────────────────────────
@@ -3754,6 +3752,8 @@ if _sub_percibido:
     <span style='font-size:1.25rem;font-weight:700;color:{_disp_color}'>{_disp_signo}$ {_pesos(abs(_res_disp_p))}</span>
   </div>
   <div style='margin-top:8px;padding-top:8px;border-top:1px solid #c8cdd8'>{_socio_rows_p}</div>
+  {_ret_sug_html}
+  {_ret_op_html}
 </div>""", unsafe_allow_html=True)
 
             # Retiros
