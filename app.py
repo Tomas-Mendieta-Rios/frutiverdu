@@ -3231,6 +3231,26 @@ if _sub_resumen:
       {_ret_section_html}
     </div>""", unsafe_allow_html=True)
 
+            # ── RESULTADO DISPONIBLE (informativo) ───────────────────────────────────
+            _aportes_res   = db.cargar_aportes_socios()
+            _devol_res     = [a for a in _aportes_res if a.get("tipo") == "devolucion" and _en_rango(a.get("fecha") or "")]
+            _total_dev_res = sum(float(a.get("monto") or 0) for a in _devol_res)
+            _disp_teo      = resultado - _total_dev_res
+            _disp_real     = _res_real - _total_dev_res
+            _dt_color = "#2e7d32" if _disp_teo  >= 0 else "#c62828"
+            _dt_signo = "+" if _disp_teo  >= 0 else "-"
+            _dr_color = "#2e7d32" if _disp_real >= 0 else "#c62828"
+            _dr_signo = "+" if _disp_real >= 0 else "-"
+            st.markdown(f"""
+    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+      <h2 style='text-align:center;margin:0 0 14px 0'>Resultado disponible</h2>
+      <div style='text-align:center;font-size:0.8rem;color:#888;margin-bottom:10px'>Resultado − Devoluciones préstamos del período ($ {_pesos(_total_dev_res)})</div>
+      <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px'>
+        {_metric_cell_sub("Teórico", f"{_dt_signo}$ {_pesos(abs(_disp_teo))}", _dt_color, "Facturado − Comprado/Gastado − Devuelto")}
+        {_metric_cell_sub("Real", f"{_dr_signo}$ {_pesos(abs(_disp_real))}", _dr_color, "Cobrado − Pagado − Devuelto")}
+      </div>
+    </div>""", unsafe_allow_html=True)
+
             if total_retiros > 0:
                 st.divider()
                 st.markdown(f"#### Retiros · {len(_retiros_f)} registros")
