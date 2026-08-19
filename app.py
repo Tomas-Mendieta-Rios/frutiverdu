@@ -2820,6 +2820,12 @@ if _sub_resumen:
             total_egresos  = total_compras + total_otros_egr + abs(total_aj_neg) + total_ret_resumen
             total_egr_pag  = total_egr_pag + abs(total_aj_neg) + total_ret_resumen
             resultado      = total_ingresos - total_egresos
+
+            # Devoluciones de préstamos del período (informativo, no afecta resultado operativo)
+            _aportes_all      = db.cargar_aportes_socios()
+            _devol_rango      = [a for a in _aportes_all if a.get("tipo") == "devolucion" and _en_rango(a.get("fecha") or "")]
+            total_dev_resumen = sum(float(a.get("monto") or 0) for a in _devol_rango)
+            resultado_disp    = resultado - total_dev_resumen
     
             # ── INGRESOS ────────────────────────────────────────────────────────────
             st.divider()
@@ -3229,6 +3235,42 @@ if _sub_resumen:
         {_metric_cell_sub("Real", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
       </div>
       {_ret_section_html}
+    </div>""", unsafe_allow_html=True)
+
+            # ── RESULTADO DISPONIBLE ──────────────────────────────────────────────────
+            _socios_db  = db.cargar_socios()
+            _socios_pct = [(s["nombre"], float(s["pct"]) / 100) for s in _socios_db]
+            if _socios_pct:
+                _disp_color  = "#2e7d32" if resultado_disp >= 0 else "#c62828"
+                _disp_signo  = "+" if resultado_disp >= 0 else "-"
+                _dev_line    = (f"<div style='display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #c8cdd8;margin-top:8px'>"
+                                f"<span style='font-size:0.85rem;color:#555'>− Devoluciones préstamos</span>"
+                                f"<span style='font-size:0.85rem;color:#c62828'>$ {_pesos(total_dev_resumen)}</span></div>"
+                                if total_dev_resumen > 0.01 else "")
+                _socio_rows  = ""
+                for _sn, _spct in _socios_pct:
+                    _sug     = resultado_disp * _spct
+                    _ret_soc = _ret_subs_pag.get(_sn, 0.0)
+                    _pct_ret = round(_ret_soc / _sug * 100, 1) if _sug > 0.01 else 0.0
+                    _socio_rows += (
+                        f"<div style='display:flex;justify-content:space-between;align-items:center;padding:4px 0'>"
+                        f"<span style='font-size:0.85rem;font-weight:600'>{_sn} · {round(_spct*100)}%</span>"
+                        f"<span style='font-size:0.85rem;color:#555'>"
+                        f"Sug: $ {_pesos(_sug)} &nbsp;·&nbsp; "
+                        f"Retiró: $ {_pesos(_ret_soc)} ({_pct_ret}%)"
+                        f"</span></div>"
+                    )
+                st.markdown(f"""
+    <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
+      <h2 style='text-align:center;margin:0 0 14px 0'>Resultado disponible</h2>
+      {_dev_line}
+      <div style='display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid #c8cdd8;margin-top:4px'>
+        <span style='font-size:1rem;font-weight:700'>Total disponible</span>
+        <span style='font-size:1.25rem;font-weight:700;color:{_disp_color}'>{_disp_signo}$ {_pesos(abs(resultado_disp))}</span>
+      </div>
+      <div style='margin-top:8px;padding-top:8px;border-top:1px solid #c8cdd8'>
+        {_socio_rows}
+      </div>
     </div>""", unsafe_allow_html=True)
 
             if total_retiros > 0:
