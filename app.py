@@ -3639,27 +3639,9 @@ if _sub_percibido:
                                         st.dataframe(pd.DataFrame(_rows), width='stretch', hide_index=True,
                                                      column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.0f")})
 
-            # ── DEVOLUCIONES PRÉSTAMOS ───────────────────────────────────────────────
             _aportes_p    = db.cargar_aportes_socios()
             _devol_p      = [a for a in _aportes_p if a.get("tipo") == "devolucion" and _perc_en_rango(a.get("fecha") or "")]
             total_devol_p = sum(float(a.get("monto") or 0) for a in _devol_p)
-            if _devol_p:
-                st.divider()
-                st.markdown(f"#### Devoluciones préstamos · {len(_devol_p)} registros")
-                _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_devol_p)}", "#1a1a1a")
-                _devol_by_socio = {}
-                for _d in _devol_p:
-                    _devol_by_socio.setdefault(_d.get("socio") or "—", []).append(_d)
-                for _soc, _ditems in sorted(_devol_by_socio.items()):
-                    _soc_tot = sum(float(d.get("monto") or 0) for d in _ditems)
-                    with st.expander(f"{_soc} ({len(_ditems)} devolución{'es' if len(_ditems) != 1 else ''}) — $ {_pesos(_soc_tot)}"):
-                        _rows = [{
-                            "Fecha":    _fmt_fecha(d.get("fecha")),
-                            "Monto":    float(d.get("monto") or 0),
-                            "Concepto": d.get("concepto") or "",
-                        } for d in sorted(_ditems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
-                        st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True,
-                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.2f")})
 
             # ── RESULTADO OPERATIVO ──────────────────────────────────────────────────
             st.divider()
@@ -3718,6 +3700,25 @@ if _sub_percibido:
   {_ret_sug_html}
   {_ret_op_html}
 </div>""", unsafe_allow_html=True)
+
+            # ── DEVOLUCIONES PRÉSTAMOS ───────────────────────────────────────────────
+            st.divider()
+            st.markdown(f"#### Devoluciones préstamos · {len(_devol_p)} registro{'s' if len(_devol_p) != 1 else ''}")
+            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_devol_p)}", "#1a1a1a")
+            if _devol_p:
+                _devol_by_socio = {}
+                for _d in _devol_p:
+                    _devol_by_socio.setdefault(_d.get("socio") or "—", []).append(_d)
+                for _soc, _ditems in sorted(_devol_by_socio.items()):
+                    _soc_tot = sum(float(d.get("monto") or 0) for d in _ditems)
+                    with st.expander(f"{_soc} ({len(_ditems)} devolución{'es' if len(_ditems) != 1 else ''}) — $ {_pesos(_soc_tot)}"):
+                        _rows = [{
+                            "Fecha":    _fmt_fecha(d.get("fecha")),
+                            "Monto":    float(d.get("monto") or 0),
+                            "Concepto": d.get("concepto") or "",
+                        } for d in sorted(_ditems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.2f")})
 
             # ── RESULTADO DISPONIBLE ─────────────────────────────────────────────────
             if _socios_pct_p:
