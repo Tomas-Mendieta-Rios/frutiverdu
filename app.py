@@ -3257,11 +3257,11 @@ if _sub_resumen:
             _devol_res     = [a for a in _aportes_res if a.get("tipo") == "devolucion" and _disp_en_rango(a.get("fecha") or "")]
             _total_dev_res = sum(float(a.get("monto") or 0) for a in _devol_res)
 
-            # ── Sección devoluciones (siempre visible) ───────────────────────────────
-            st.divider()
-            st.markdown(f"#### Devoluciones préstamos · {len(_devol_res)} registro{'s' if len(_devol_res) != 1 else ''}")
-            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(_total_dev_res)}", "#1a1a1a")
+            # ── Sección devoluciones (solo si hay registros) ─────────────────────────
             if _devol_res:
+                st.divider()
+                st.markdown(f"#### Devoluciones préstamos · {len(_devol_res)} registro{'s' if len(_devol_res) != 1 else ''}")
+                _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(_total_dev_res)}", "#1a1a1a")
                 _devol_by_socio_res = {}
                 for _d in _devol_res:
                     _devol_by_socio_res.setdefault(_d.get("socio") or "—", []).append(_d)
@@ -3736,11 +3736,11 @@ if _sub_percibido:
   <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
 </div>""", unsafe_allow_html=True)
 
-            # ── DEVOLUCIONES PRÉSTAMOS ───────────────────────────────────────────────
-            st.divider()
-            st.markdown(f"#### Devoluciones préstamos · {len(_devol_p)} registro{'s' if len(_devol_p) != 1 else ''}")
-            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_devol_p)}", "#1a1a1a")
+            # ── DEVOLUCIONES PRÉSTAMOS (solo si hay registros) ──────────────────────
             if _devol_p:
+                st.divider()
+                st.markdown(f"#### Devoluciones préstamos · {len(_devol_p)} registro{'s' if len(_devol_p) != 1 else ''}")
+                _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(total_devol_p)}", "#1a1a1a")
                 _devol_by_socio = {}
                 for _d in _devol_p:
                     _devol_by_socio.setdefault(_d.get("socio") or "—", []).append(_d)
