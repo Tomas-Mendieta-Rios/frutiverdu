@@ -3196,36 +3196,6 @@ if _sub_resumen:
                     if (_o.get("estado") or "pendiente") == "pagado":
                         _ret_subs_pag.setdefault(_sk, 0.0)
                         _ret_subs_pag[_sk] += _amt
-            def _ret_bar(sk, sv, base, color):
-                _pct = round(sv / base * 100, 1) if base > 0 else 0.0
-                return (
-                    f"<div style='margin-bottom:6px'>"
-                    f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                    f"<span style='font-size:0.82rem;font-weight:600'>{sk}</span>"
-                    f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(sv)} · {_pct}%</span>"
-                    f"</div>"
-                    f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
-                    f"<div style='background:{color};width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
-                    f"</div></div>"
-                )
-            _bars_dev_html = "".join(_ret_bar(sk, sv, resultado, "#c62828") for sk, sv in sorted(_ret_subs_dev.items())) if _ret_subs_dev and resultado > 0 else ""
-            _bars_perc_html = "".join(_ret_bar(sk, _ret_subs_pag.get(sk, 0.0), _res_real, "#c62828") for sk in sorted(_ret_subs_dev)) if _ret_subs_dev and _res_real > 0 else ""
-            _teo_col = f"""<div>
-          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado teórico</p>
-          {_bars_dev_html}
-        </div>""" if _bars_dev_html else ""
-            _real_col = f"""<div>
-          <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado real</p>
-          {_bars_perc_html}
-        </div>""" if _bars_perc_html else ""
-            if _teo_col and _real_col:
-                _grid_style = "display:grid;grid-template-columns:1fr 1fr;gap:16px"
-            else:
-                _grid_style = "display:grid;grid-template-columns:1fr;gap:16px"
-            _ret_section_html = f"""
-      <div style='{_grid_style};margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
-        {_teo_col}{_real_col}
-      </div>""" if (_teo_col or _real_col) else ""
             st.markdown(f"""
     <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
       <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
@@ -3233,7 +3203,6 @@ if _sub_resumen:
         {_metric_cell_sub("Teórico", f"{_fic_signo}$ {_pesos(abs(resultado))}", _fic_color, "Facturado − Comprado/Gastado")}
         {_metric_cell_sub("Real", f"{_real_signo}$ {_pesos(abs(_res_real))}", _real_color, "Cobrado − Pagado")}
       </div>
-      {_ret_section_html}
     </div>""", unsafe_allow_html=True)
 
             # ── RESULTADO DISPONIBLE (informativo) ───────────────────────────────────
