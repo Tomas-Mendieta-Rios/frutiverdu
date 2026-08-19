@@ -3237,8 +3237,24 @@ if _sub_resumen:
     </div>""", unsafe_allow_html=True)
 
             # ── RESULTADO DISPONIBLE (informativo) ───────────────────────────────────
+            # Devoluciones filtradas por el período de Percibido (son eventos de caja)
+            _hoy_disp = date.today()
+            try:
+                _disp_desde = date.fromisoformat(_cfg_bal.get("perc_desde", ""))
+            except Exception:
+                _disp_desde = _hoy_disp.replace(day=1)
+            try:
+                _disp_hasta = date.fromisoformat(_cfg_bal.get("perc_hasta", ""))
+            except Exception:
+                _disp_hasta = _hoy_disp
+            def _disp_en_rango(fecha_str):
+                try:
+                    f = pd.to_datetime(str(fecha_str or "")).date()
+                    return _disp_desde <= f <= _disp_hasta
+                except Exception:
+                    return False
             _aportes_res   = db.cargar_aportes_socios()
-            _devol_res     = [a for a in _aportes_res if a.get("tipo") == "devolucion" and _en_rango(a.get("fecha") or "")]
+            _devol_res     = [a for a in _aportes_res if a.get("tipo") == "devolucion" and _disp_en_rango(a.get("fecha") or "")]
             _total_dev_res = sum(float(a.get("monto") or 0) for a in _devol_res)
             _disp_teo      = resultado - _total_dev_res
             _disp_real     = _res_real - _total_dev_res
