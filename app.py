@@ -3702,71 +3702,6 @@ if _sub_percibido:
                     f"<div style='background:#c62828;width:{min(_pct,100)}%;height:100%;border-radius:5px'></div>"
                     f"</div></div>"
                 )
-            _ret_sug_html = ""
-            _socios_db = db.cargar_socios()
-            _socios_pct = [(s["nombre"], float(s["pct"]) / 100) for s in _socios_db] or [("AM", 0.25), ("Carlos", 0.75)]
-            _aportes_all = db.cargar_aportes_socios()
-            # FIFO: devoluciones se descuentan del préstamo más viejo por socio
-            _prest_pend = {}
-            for _sn in set(a.get("socio", "") for a in _aportes_all if a.get("tipo") == "aporte"):
-                _aps_sn  = sorted(
-                    [a for a in _aportes_all if a.get("socio") == _sn and a.get("tipo") == "aporte"],
-                    key=lambda a: str(a.get("fecha") or "")
-                )
-                _devs_sn = sorted(
-                    [a for a in _aportes_all if a.get("socio") == _sn and a.get("tipo") == "devolucion"],
-                    key=lambda a: str(a.get("fecha") or "")
-                )
-                # Aplicar devoluciones FIFO
-                _saldos = [float(a.get("monto") or 0) for a in _aps_sn]
-                for _dv in _devs_sn:
-                    _dm = float(_dv.get("monto") or 0)
-                    for _i in range(len(_saldos)):
-                        if _dm <= 0:
-                            break
-                        _desc = min(_dm, _saldos[_i])
-                        _saldos[_i] -= _desc
-                        _dm -= _desc
-                # Saldo pendiente por préstamo (después de FIFO)
-                _sugerido_sn = sum(_saldo for _saldo in _saldos if _saldo > 0)
-                if _sugerido_sn > 0:
-                    _prest_pend[_sn] = _sugerido_sn
-            _total_prest = sum(_prest_pend.values())
-            if resultado_op > 0 or _total_prest > 0:
-                _base_sug  = max(resultado_op, 0.0)
-                _prest_cap = min(_total_prest, _base_sug)
-                _net_op    = _base_sug - _prest_cap
-                _base_b    = max(_base_sug, 1.0)
-                def _bar_sug2(nombre, pct):
-                    _op_puro  = _base_sug * pct
-                    _op_ajust = _net_op * pct + _prest_pend.get(nombre, 0.0)
-                    _pct_op   = round(_op_puro  / _base_b * 100, 1)
-                    _pct_aj   = round(_op_ajust / _base_b * 100, 1)
-                    _lbl_aj   = "+ préstamo" if _prest_pend.get(nombre, 0.0) > 0 else "ajustado"
-                    return (
-                        f"<div style='margin-bottom:10px'>"
-                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                        f"<span style='font-size:0.82rem;font-weight:600'>{nombre}</span>"
-                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_op_puro)} · {_pct_op}%</span>"
-                        f"</div>"
-                        f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
-                        f"<div style='background:#c62828;width:{min(_pct_op,100)}%;height:100%;border-radius:5px'></div>"
-                        f"</div>"
-                        f"<div style='margin-top:3px'>"
-                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                        f"<span style='font-size:0.75rem;color:#1565c0'>{_lbl_aj}</span>"
-                        f"<span style='font-size:0.75rem;color:#1565c0'>$ {_pesos(_op_ajust)} · {_pct_aj}%</span>"
-                        f"</div>"
-                        f"<div style='background:#c8cdd8;border-radius:5px;height:6px;overflow:hidden'>"
-                        f"<div style='background:#1565c0;width:{min(_pct_aj,100)}%;height:100%;border-radius:5px'></div>"
-                        f"</div></div>"
-                        f"</div>"
-                    )
-                _bars_sug = "".join(_bar_sug2(n, p) for n, p in _socios_pct)
-                _ret_sug_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
-  <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro sugerido</p>
-  {_bars_sug}
-</div>"""
             _ret_op_html = ""
             if _ret_subs_op and resultado_op > 0:
                 _bars_op = "".join(_ret_bar_op(sk, sv, resultado_op) for sk, sv in sorted(_ret_subs_op.items()))
@@ -3778,7 +3713,6 @@ if _sub_percibido:
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
   <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
-  {_ret_sug_html}
   {_ret_op_html}
 </div>""", unsafe_allow_html=True)
 
