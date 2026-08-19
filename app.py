@@ -3673,26 +3673,6 @@ if _sub_percibido:
 </div>"""
             _socios_db_p  = db.cargar_socios()
             _socios_pct_p = [(s["nombre"], float(s["pct"]) / 100) for s in _socios_db_p]
-            _ret_sug_html = ""
-            if _socios_pct_p and resultado_op > 0:
-                def _bar_sug_simple(nombre, pct):
-                    _monto = resultado_op * pct
-                    _pct_v = round(pct * 100, 1)
-                    return (
-                        f"<div style='margin-bottom:6px'>"
-                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
-                        f"<span style='font-size:0.82rem;font-weight:600'>{nombre}</span>"
-                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_monto)} · {_pct_v}%</span>"
-                        f"</div>"
-                        f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
-                        f"<div style='background:#c62828;width:{min(_pct_v,100)}%;height:100%;border-radius:5px'></div>"
-                        f"</div></div>"
-                    )
-                _bars_sug = "".join(_bar_sug_simple(n, p) for n, p in _socios_pct_p)
-                _ret_sug_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
-  <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro sugerido</p>
-  {_bars_sug}
-</div>"""
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
@@ -3723,27 +3703,38 @@ if _sub_percibido:
                 _res_disp_p  = resultado_op - total_devol_p
                 _disp_color  = "#2e7d32" if _res_disp_p >= 0 else "#c62828"
                 _disp_signo  = "+" if _res_disp_p >= 0 else "-"
-                _ret_subs_pag_p = {}
-                for _o in _retiros_p:
-                    if (_o.get("estado") or "pendiente") == "pagado":
-                        _sk = (_o.get("subrubros_egresos") or {}).get("nombre") or "—"
-                        _ret_subs_pag_p[_sk] = _ret_subs_pag_p.get(_sk, 0.0) + float(_o.get("monto") or 0)
-                _dev_line_p = (f"<div style='display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #c8cdd8;margin-top:8px'>"
-                               f"<span style='font-size:0.85rem;color:#555'>− Devoluciones préstamos</span>"
-                               f"<span style='font-size:0.85rem;color:#c62828'>$ {_pesos(total_devol_p)}</span></div>"
-                               if total_devol_p > 0.01 else "")
-                _socio_rows_p = ""
-                for _sn, _spct in _socios_pct_p:
-                    _sug     = _res_disp_p * _spct
-                    _ret_soc = _ret_subs_pag_p.get(_sn, 0.0)
-                    _pct_ret = round(_ret_soc / _sug * 100, 1) if _sug > 0.01 else 0.0
-                    _socio_rows_p += (
-                        f"<div style='display:flex;justify-content:space-between;align-items:center;padding:4px 0'>"
-                        f"<span style='font-size:0.85rem;font-weight:600'>{_sn} · {round(_spct*100)}%</span>"
-                        f"<span style='font-size:0.85rem;color:#555'>"
-                        f"Sug: $ {_pesos(_sug)} &nbsp;·&nbsp; Retiró: $ {_pesos(_ret_soc)} ({_pct_ret}%)"
-                        f"</span></div>"
+                _dev_line_p  = (f"<div style='display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #c8cdd8;margin-top:8px'>"
+                                f"<span style='font-size:0.85rem;color:#555'>− Devoluciones préstamos</span>"
+                                f"<span style='font-size:0.85rem;color:#c62828'>$ {_pesos(total_devol_p)}</span></div>"
+                                if total_devol_p > 0.01 else "")
+                # Barras en función del resultado disponible
+                def _bar_sug_disp(nombre, pct):
+                    _monto = _res_disp_p * pct
+                    _pct_v = round(pct * 100, 1)
+                    return (
+                        f"<div style='margin-bottom:6px'>"
+                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                        f"<span style='font-size:0.82rem;font-weight:600'>{nombre}</span>"
+                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_monto)} · {_pct_v}%</span>"
+                        f"</div>"
+                        f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
+                        f"<div style='background:#c62828;width:{min(_pct_v,100)}%;height:100%;border-radius:5px'></div>"
+                        f"</div></div>"
                     )
+                _ret_sug_disp_html = ""
+                if _res_disp_p > 0:
+                    _bars_sug_d = "".join(_bar_sug_disp(n, p) for n, p in _socios_pct_p)
+                    _ret_sug_disp_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
+  <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro sugerido</p>
+  {_bars_sug_d}
+</div>"""
+                _ret_op_disp_html = ""
+                if _ret_subs_op and _res_disp_p > 0:
+                    _bars_op_d = "".join(_ret_bar_op(sk, sv, _res_disp_p) for sk, sv in sorted(_ret_subs_op.items()))
+                    _ret_op_disp_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
+  <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado disponible</p>
+  {_bars_op_d}
+</div>"""
                 st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado disponible</h2>
   {_dev_line_p}
@@ -3751,9 +3742,8 @@ if _sub_percibido:
     <span style='font-size:1rem;font-weight:700'>Total disponible</span>
     <span style='font-size:1.25rem;font-weight:700;color:{_disp_color}'>{_disp_signo}$ {_pesos(abs(_res_disp_p))}</span>
   </div>
-  <div style='margin-top:8px;padding-top:8px;border-top:1px solid #c8cdd8'>{_socio_rows_p}</div>
-  {_ret_sug_html}
-  {_ret_op_html}
+  {_ret_sug_disp_html}
+  {_ret_op_disp_html}
 </div>""", unsafe_allow_html=True)
 
             # Retiros
