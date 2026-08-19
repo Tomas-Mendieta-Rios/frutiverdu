@@ -3256,6 +3256,22 @@ if _sub_resumen:
             _aportes_res   = db.cargar_aportes_socios()
             _devol_res     = [a for a in _aportes_res if a.get("tipo") == "devolucion" and _disp_en_rango(a.get("fecha") or "")]
             _total_dev_res = sum(float(a.get("monto") or 0) for a in _devol_res)
+
+            # ── Sección devoluciones (siempre visible) ───────────────────────────────
+            st.divider()
+            st.markdown(f"#### Devoluciones préstamos · {len(_devol_res)} registro{'s' if len(_devol_res) != 1 else ''}")
+            _bal_metric(st.columns(1)[0], "Total", f"$ {_pesos(_total_dev_res)}", "#1a1a1a")
+            if _devol_res:
+                _devol_by_socio_res = {}
+                for _d in _devol_res:
+                    _devol_by_socio_res.setdefault(_d.get("socio") or "—", []).append(_d)
+                for _soc, _ditems in sorted(_devol_by_socio_res.items()):
+                    _soc_tot = sum(float(d.get("monto") or 0) for d in _ditems)
+                    with st.expander(f"{_soc} ({len(_ditems)} devolución{'es' if len(_ditems) != 1 else ''}) — $ {_pesos(_soc_tot)}"):
+                        _rows = [{"Fecha": _fmt_fecha(d.get("fecha")), "Monto": float(d.get("monto") or 0), "Concepto": d.get("concepto") or ""} for d in sorted(_ditems, key=lambda x: str(x.get("fecha") or ""), reverse=True)]
+                        st.dataframe(pd.DataFrame(_rows), width="stretch", hide_index=True,
+                                     column_config={"Monto": st.column_config.NumberColumn("Monto ($)", format="$ %,.2f")})
+
             _disp_teo      = resultado - _total_dev_res
             _disp_real     = _res_real - _total_dev_res
             _dt_color = "#2e7d32" if _disp_teo  >= 0 else "#c62828"
