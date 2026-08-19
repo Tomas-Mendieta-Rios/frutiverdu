@@ -3210,17 +3210,22 @@ if _sub_resumen:
                 )
             _bars_dev_html = "".join(_ret_bar(sk, sv, resultado, "#c62828") for sk, sv in sorted(_ret_subs_dev.items())) if _ret_subs_dev and resultado > 0 else ""
             _bars_perc_html = "".join(_ret_bar(sk, _ret_subs_pag.get(sk, 0.0), _res_real, "#c62828") for sk in sorted(_ret_subs_dev)) if _ret_subs_dev and _res_real > 0 else ""
-            _ret_section_html = f"""
-      <div style='display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
-        <div>
+            _teo_col = f"""<div>
           <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado teórico</p>
           {_bars_dev_html}
-        </div>
-        <div>
+        </div>""" if _bars_dev_html else ""
+            _real_col = f"""<div>
           <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado real</p>
           {_bars_perc_html}
-        </div>
-      </div>""" if (_bars_dev_html or _bars_perc_html) else ""
+        </div>""" if _bars_perc_html else ""
+            if _teo_col and _real_col:
+                _grid_style = "display:grid;grid-template-columns:1fr 1fr;gap:16px"
+            else:
+                _grid_style = "display:grid;grid-template-columns:1fr;gap:16px"
+            _ret_section_html = f"""
+      <div style='{_grid_style};margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
+        {_teo_col}{_real_col}
+      </div>""" if (_teo_col or _real_col) else ""
             st.markdown(f"""
     <div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
       <h2 style='text-align:center;margin:0 0 14px 0'>Resultado</h2>
