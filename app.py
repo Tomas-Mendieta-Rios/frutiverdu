@@ -3709,10 +3709,33 @@ if _sub_percibido:
   <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro / Resultado operativo</p>
   {_bars_op}
 </div>"""
+            _socios_db_p  = db.cargar_socios()
+            _socios_pct_p = [(s["nombre"], float(s["pct"]) / 100) for s in _socios_db_p]
+            _ret_sug_html = ""
+            if _socios_pct_p and resultado_op > 0:
+                def _bar_sug_simple(nombre, pct):
+                    _monto = resultado_op * pct
+                    _pct_v = round(pct * 100, 1)
+                    return (
+                        f"<div style='margin-bottom:6px'>"
+                        f"<div style='display:flex;justify-content:space-between;margin-bottom:2px'>"
+                        f"<span style='font-size:0.82rem;font-weight:600'>{nombre}</span>"
+                        f"<span style='font-size:0.82rem;color:#555'>$ {_pesos(_monto)} · {_pct_v}%</span>"
+                        f"</div>"
+                        f"<div style='background:#c8cdd8;border-radius:5px;height:8px;overflow:hidden'>"
+                        f"<div style='background:#c62828;width:{min(_pct_v,100)}%;height:100%;border-radius:5px'></div>"
+                        f"</div></div>"
+                    )
+                _bars_sug = "".join(_bar_sug_simple(n, p) for n, p in _socios_pct_p)
+                _ret_sug_html = f"""<div style='margin-top:16px;padding-top:12px;border-top:1px solid #c8cdd8'>
+  <p style='margin:0 0 8px;font-size:0.8rem;font-weight:600;color:#777'>Retiro sugerido</p>
+  {_bars_sug}
+</div>"""
             st.markdown(f"""<div style='background:#eef2f7;border-radius:10px;padding:16px 24px;margin-bottom:8px'>
   <h2 style='text-align:center;margin:0 0 14px 0'>Resultado operativo</h2>
   <div style='text-align:center;font-size:1.5em;font-weight:700;color:{res_color}'>{res_signo}$ {_pesos(abs(resultado_op))}</div>
   <div style='text-align:center;color:#666;font-size:0.9em'>Ingresos percibidos − Egresos percibidos</div>
+  {_ret_sug_html}
   {_ret_op_html}
 </div>""", unsafe_allow_html=True)
 
