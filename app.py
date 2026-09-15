@@ -6564,7 +6564,7 @@ with tab_stock:
                 df_editor["Base"] = _split_series.apply(lambda t: t[0])
                 df_editor["Variante"] = _split_series.apply(lambda t: t[1])
 
-                _EXCLUIR_SIN_RUBRO = {"VACIO"}
+                _EXCLUIR_SIN_RUBRO = {"VACIO", "RECUPERO VACIO"}
                 _sin_rubro = df_editor[df_editor["Rubro"] == ""]
                 _sin_rubro_a_avisar = _sin_rubro[
                     ~_sin_rubro["Base"].str.upper().isin(_EXCLUIR_SIN_RUBRO)
