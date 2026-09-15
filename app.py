@@ -6312,11 +6312,35 @@ with tab_stock:
                 ))
 
             try:
-                compras_res = db.cargar_compras_desde_gastos(fc)
+                _df_compras = db.cargar_compras()
+                _fc_str = str(fc)
+                if not _df_compras.empty and "fecha" in _df_compras.columns:
+                    _df_compras_hoy = _df_compras[_df_compras["fecha"] == _fc_str]
+                else:
+                    _df_compras_hoy = pd.DataFrame()
+                map_compras = {}
+                if not _df_compras_hoy.empty:
+                    for _, _cr in _df_compras_hoy.iterrows():
+                        _cod = str(_cr.get("codigo_producto") or "").strip()
+                        _ctd = float(_cr.get("cantidad") or 0)
+                        if _cod and _ctd:
+                            map_compras[_cod] = map_compras.get(_cod, 0.0) + _ctd
+                # compras_raw para el expander: agrupar por comprobante
+                compras_raw = []
+                if not _df_compras_hoy.empty:
+                    for _comp_id, _grp in _df_compras_hoy.groupby("comprobante_id"):
+                        compras_raw.append({
+                            "nro_comprobante": _grp.iloc[0].get("comprobante", "—"),
+                            "proveedor": {"razon_social": _grp.iloc[0].get("proveedor_nombre", "")},
+                            "items": [
+                                {"cod_item": str(r.get("codigo_producto") or ""),
+                                 "ctd_recepcionada": float(r.get("cantidad") or 0)}
+                                for _, r in _grp.iterrows()
+                            ],
+                        })
             except Exception:
-                compras_res = {"cantidades": {}, "compras": []}
-            map_compras = compras_res.get("cantidades", {})
-            compras_raw = compras_res.get("compras", [])
+                map_compras = {}
+                compras_raw = []
 
             try:
                 df_ped_agg = cargar_pedidos_dux_aggregated(
