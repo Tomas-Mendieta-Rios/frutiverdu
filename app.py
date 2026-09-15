@@ -1169,8 +1169,8 @@ def _sync_pedidos_dux(fecha_desde, fecha_hasta):
     while True:
         params_p = {
             "idEmpresa": _id_empresa, "idSucursal": _id_sucursal,
-            "fechaDesde": fecha_desde.strftime("%d/%m/%Y"),
-            "fechaHasta": fecha_hasta.strftime("%d/%m/%Y"),
+            "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+            "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
             "offset": page_offset, "limit": page_size,
         }
         try:
@@ -1269,8 +1269,8 @@ def _sync_facturas(fecha_desde, fecha_hasta):
         offset = 0
         while True:
             params_f = {
-                "fechaDesde": fecha_desde.strftime("%d/%m/%Y"),
-                "fechaHasta": fecha_hasta.strftime("%d/%m/%Y"),
+                "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
+                "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
                 "idEmpresa": _id_empresa,
                 "idSucursal": _id_sucursal,
                 "offset": offset,
