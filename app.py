@@ -5249,18 +5249,17 @@ with tab_sync:
             try:
                 _ok, _n, _msg = _sfn(sync_desde, sync_hasta)
             except Exception as _e:
-                _ok, _msg = False, msg_error_sheets(_slabel, _e)
+                _ok, _n, _msg = False, 0, msg_error_sheets(_slabel, _e)
             _results.append((_ok, _slabel, _msg))
+            if _ok:
+                st.success(_msg)
+            else:
+                st.error(_msg)
 
         _sync_dur = time.time() - _sync_t0
         _prog_bar.progress(1.0, text=f"100% · {_sync_dur:.0f}s")
 
         _errors = [(_slabel, _msg) for _ok, _slabel, _msg in _results if not _ok]
-        for _ok, _slabel, _msg in _results:
-            if _ok:
-                st.success(_msg)
-            else:
-                st.error(_msg)
         if not _errors:
             db.guardar_config({"dux_fecha_desde": str(sync_desde), "dux_fecha_hasta": str(sync_hasta)})
             st.cache_data.clear()
