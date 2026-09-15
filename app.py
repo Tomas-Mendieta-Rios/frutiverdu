@@ -6926,6 +6926,7 @@ if tab_dux_productos:
 
                 while True:
                     params_pr = {
+                        "id_empresa": id_empresa_default,
                         "offset": page_offset,
                         "limit": page_size,
                     }
