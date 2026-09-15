@@ -6796,12 +6796,23 @@ with tab_dux:
                     all_orders_saved, key=_nro_dux_sort, reverse=True
                 )
 
+                _cfg_ped = db.cargar_config()
+                try:
+                    _dux_desde_default = date.fromisoformat(_cfg_ped.get("ped_dux_desde", ""))
+                except Exception:
+                    _dux_desde_default = date(date.today().year, date.today().month, 1)
+                try:
+                    _dux_hasta_default = date.fromisoformat(_cfg_ped.get("ped_dux_hasta", ""))
+                except Exception:
+                    _dux_hasta_default = date.today()
                 with st.form("form_dux_ped_filtro", border=False):
                     _ddc1, _ddc2 = st.columns(2)
-                    _dux_desde = _ddc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="dux_ped_desde")
-                    _dux_hasta = _ddc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="dux_ped_hasta")
+                    _dux_desde = _ddc1.date_input("Desde", value=_dux_desde_default, format="DD/MM/YYYY", key="dux_ped_desde")
+                    _dux_hasta = _ddc2.date_input("Hasta", value=_dux_hasta_default, format="DD/MM/YYYY", key="dux_ped_hasta")
                     _dux_orden = st.selectbox("Ordenar por", ["Fecha (más reciente)", "Número de pedido (mayor)"], key="dux_ped_orden")
-                    st.form_submit_button("🔄 Actualizar", type="primary")
+                    _dux_actualizar = st.form_submit_button("🔄 Actualizar", type="primary")
+                if _dux_actualizar:
+                    db.guardar_config({"ped_dux_desde": str(_dux_desde), "ped_dux_hasta": str(_dux_hasta)})
                 all_orders_sorted = [o for o in all_orders_sorted
                                       if _dux_desde <= _fecha_dux(o).date() <= _dux_hasta]
                 if _dux_orden == "Fecha (más reciente)":
