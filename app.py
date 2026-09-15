@@ -1154,7 +1154,7 @@ def _sync_compras(fecha_desde, fecha_hasta):
     compras_raw = list(_seen.values())
     n_items = sum(len(c.get("items", []) or []) for c in compras_raw)
     db.guardar_compras_sync(compras_raw)
-    return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes sincronizados ({n_items} ítems)."
+    return True, len(compras_raw), f"✅ {len(compras_raw)} comprobantes de compra sincronizados ({n_items} ítems)."
 
 
 def _sync_pedidos_dux(fecha_desde, fecha_hasta):
@@ -1184,7 +1184,7 @@ def _sync_pedidos_dux(fecha_desde, fecha_hasta):
         except ValueError:
             return False, 0, "❌ DUX devolvió una respuesta inválida (pedidos)."
         if isinstance(d, dict) and "message" in d and "results" not in d:
-            return False, 0, f"❌ DUX (pedidos): {d['message']} | URL: {r.url} | resp: {d}"
+            return False, 0, f"❌ DUX (pedidos): {d['message']}"
         if isinstance(d, dict) and "results" in d:
             page = d["results"]
         elif isinstance(d, list):
@@ -1289,7 +1289,7 @@ def _sync_facturas(fecha_desde, fecha_hasta):
             except ValueError:
                 return None, "❌ DUX devolvió una respuesta inválida (facturas)."
             if isinstance(d, dict) and "message" in d and "results" not in d:
-                return None, f"❌ DUX (facturas): {d['message']} | URL: {r.url} | resp: {d}"
+                return None, f"❌ DUX (facturas): {d['message']}"
             results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
             if not results:
                 break
@@ -1327,7 +1327,7 @@ def _sync_facturas(fecha_desde, fecha_hasta):
     db.guardar_facturas(all_facturas)
     n_cobr = sum(1 for f in all_facturas if f.get("con_cobro"))
     n_anul = len(anuladas or [])
-    return True, len(all_facturas), f"✅ {len(all_facturas)} facturas — {n_cobr} cobradas, {n_anul} anuladas. [{_debug_cobro}]"
+    return True, len(all_facturas), f"✅ {len(all_facturas)} facturas de venta — {n_cobr} cobradas, {n_anul} anuladas."
 
 
 def _sync_cobros(fecha_desde, fecha_hasta):
@@ -5252,7 +5252,8 @@ with tab_sync:
                 _ok, _n, _msg = False, 0, msg_error_sheets(_slabel, _e)
             _results.append((_ok, _slabel, _msg))
             if _ok:
-                st.success(_msg)
+                if _slabel != "Gastos":
+                    st.success(_msg)
             else:
                 st.error(_msg)
 
