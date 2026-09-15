@@ -1261,7 +1261,7 @@ def _sync_facturas(fecha_desde, fecha_hasta):
     _id_empresa = int(dux_cfg.get("id_empresa", 3455))
     _id_sucursal = int(dux_cfg.get("id_sucursal", 3))
     url_f = f"{_base_url}/facturas"
-    headers_f = {"accept": "application/json", "authorization": f"Bearer {_token}"}
+    headers_f = {"accept": "application/json", "authorization": _token}
     page_size = 50
 
     def _fetch_facturas(extra_params=None):
