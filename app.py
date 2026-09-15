@@ -7286,11 +7286,22 @@ with tab_wix:
                     orders_saved, key=_nro_wix_sort, reverse=True
                 )
 
+                _cfg_wix_ped = db.cargar_config()
+                try:
+                    _wix_ped_desde_default = date.fromisoformat(_cfg_wix_ped.get("ped_wix_desde", ""))
+                except Exception:
+                    _wix_ped_desde_default = date(date.today().year, date.today().month, 1)
+                try:
+                    _wix_ped_hasta_default = date.fromisoformat(_cfg_wix_ped.get("ped_wix_hasta", ""))
+                except Exception:
+                    _wix_ped_hasta_default = date.today()
                 with st.form("form_wix_ped_filtro", border=False):
                     _wpc1, _wpc2 = st.columns(2)
-                    _wix_ped_desde = _wpc1.date_input("Desde", value=date(date.today().year, date.today().month, 1), format="DD/MM/YYYY", key="wix_ped_desde")
-                    _wix_ped_hasta = _wpc2.date_input("Hasta", value=date.today(), format="DD/MM/YYYY", key="wix_ped_hasta")
-                    st.form_submit_button("🔄 Actualizar", type="primary")
+                    _wix_ped_desde = _wpc1.date_input("Desde", value=_wix_ped_desde_default, format="DD/MM/YYYY", key="wix_ped_desde")
+                    _wix_ped_hasta = _wpc2.date_input("Hasta", value=_wix_ped_hasta_default, format="DD/MM/YYYY", key="wix_ped_hasta")
+                    _wix_actualizar = st.form_submit_button("🔄 Actualizar", type="primary")
+                if _wix_actualizar:
+                    db.guardar_config({"ped_wix_desde": str(_wix_ped_desde), "ped_wix_hasta": str(_wix_ped_hasta)})
                 orders_saved_sorted = [o for o in orders_saved_sorted
                                         if _wix_ped_desde <= _fecha_wix(o).date() <= _wix_ped_hasta]
 
