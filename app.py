@@ -6564,6 +6564,13 @@ with tab_stock:
                 df_editor["Base"] = _split_series.apply(lambda t: t[0])
                 df_editor["Variante"] = _split_series.apply(lambda t: t[1])
 
+                _sin_rubro = df_editor[df_editor["Rubro"] == ""]
+                if not _sin_rubro.empty:
+                    _prods_sin_rubro = sorted(_sin_rubro["Producto"].unique())
+                    st.warning(
+                        f"⚠️ {len(_prods_sin_rubro)} producto(s) sin rubro asignado no se muestran: "
+                        + ", ".join(_prods_sin_rubro)
+                    )
                 df_editor = df_editor[df_editor["Rubro"] != ""].copy()
 
                 orden_rubros = [
