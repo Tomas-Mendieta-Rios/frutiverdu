@@ -5706,6 +5706,21 @@ with tab_comprar:
                 zip(stock_actual["codigo"].astype(str), stock_actual["cantidad"].astype(float))
             )
             _raw["stock"] = _raw["codigo"].map(_stk_map).fillna(0.0).astype(float)
+            # Agregar productos con stock pero sin pedido ni estimado
+            _codigos_con_pedido = set(_raw["codigo"])
+            _stk_solo = stock_actual[
+                ~stock_actual["codigo"].astype(str).isin(_codigos_con_pedido)
+                & (stock_actual["cantidad"].astype(float) > 0)
+            ]
+            if not _stk_solo.empty:
+                _stk_solo_raw = pd.DataFrame({
+                    "codigo": _stk_solo["codigo"].astype(str).values,
+                    "producto": _stk_solo["producto"].values,
+                    "cantidad": 0.0,
+                    "estimado": 0.0,
+                    "stock": _stk_solo["cantidad"].astype(float).values,
+                })
+                _raw = pd.concat([_raw, _stk_solo_raw], ignore_index=True)
         else:
             _raw["stock"] = 0.0
         _raw_view = _raw[
