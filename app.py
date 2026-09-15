@@ -1269,8 +1269,8 @@ def _sync_facturas(fecha_desde, fecha_hasta):
         offset = 0
         while True:
             params_f = {
-                "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
-                "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+                "fechaDesde": fecha_desde.strftime("%d/%m/%Y"),
+                "fechaHasta": fecha_hasta.strftime("%d/%m/%Y"),
                 "idEmpresa": _id_empresa,
                 "idSucursal": _id_sucursal,
                 "offset": offset,
@@ -1342,8 +1342,8 @@ def _sync_cobros(fecha_desde, fecha_hasta):
     while True:
         params = {
             "id_empresa": _id_empresa, "id_sucursal": _id_sucursal,
-            "fecha_desde": fecha_desde.strftime("%Y-%m-%d"),
-            "fecha_hasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "fecha_desde": fecha_desde.strftime("%d/%m/%Y"),
+            "fecha_hasta": fecha_hasta.strftime("%d/%m/%Y"),
             "offset": page_offset, "limit": page_size,
         }
         try:
