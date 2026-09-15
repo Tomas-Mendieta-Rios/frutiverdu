@@ -1169,8 +1169,8 @@ def _sync_pedidos_dux(fecha_desde, fecha_hasta):
     while True:
         params_p = {
             "idEmpresa": _id_empresa, "idSucursal": _id_sucursal,
-            "fechaDesde": fecha_desde.strftime("%Y-%m-%d"),
-            "fechaHasta": fecha_hasta.strftime("%Y-%m-%d"),
+            "fechaDesde": fecha_desde.strftime("%d/%m/%Y"),
+            "fechaHasta": fecha_hasta.strftime("%d/%m/%Y"),
             "offset": page_offset, "limit": page_size,
         }
         try:
@@ -1184,7 +1184,7 @@ def _sync_pedidos_dux(fecha_desde, fecha_hasta):
         except ValueError:
             return False, 0, "❌ DUX devolvió una respuesta inválida (pedidos)."
         if isinstance(d, dict) and "message" in d and "results" not in d:
-            return False, 0, f"❌ DUX (pedidos): {d['message']}"
+            return False, 0, f"❌ DUX (pedidos): {d['message']} | URL: {r.url} | resp: {d}"
         if isinstance(d, dict) and "results" in d:
             page = d["results"]
         elif isinstance(d, list):
@@ -1289,7 +1289,7 @@ def _sync_facturas(fecha_desde, fecha_hasta):
             except ValueError:
                 return None, "❌ DUX devolvió una respuesta inválida (facturas)."
             if isinstance(d, dict) and "message" in d and "results" not in d:
-                return None, f"❌ DUX (facturas): {d['message']}"
+                return None, f"❌ DUX (facturas): {d['message']} | URL: {r.url} | resp: {d}"
             results = d.get("results", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
             if not results:
                 break
@@ -1351,7 +1351,7 @@ def _sync_cobros(fecha_desde, fecha_hasta):
         except requests.RequestException as e:
             return False, 0, msg_error_red("DUX (cobros)", e)
         if r.status_code != 200:
-            return False, 0, msg_error_http("DUX (cobros)", r.status_code, r.text)
+            return False, 0, f"❌ Error de DUX (cobros) (código {r.status_code}). URL: {r.url} | {r.text}"
         try:
             d = r.json()
         except ValueError:
