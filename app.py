@@ -5256,13 +5256,14 @@ with tab_sync:
         _prog_bar.progress(1.0, text=f"100% · {_sync_dur:.0f}s")
 
         _errors = [(_slabel, _msg) for _ok, _slabel, _msg in _results if not _ok]
-        if _errors:
-            for _slabel, _msg in _errors:
+        for _ok, _slabel, _msg in _results:
+            if _ok:
+                st.success(_msg)
+            else:
                 st.error(_msg)
-        else:
+        if not _errors:
             db.guardar_config({"dux_fecha_desde": str(sync_desde), "dux_fecha_hasta": str(sync_hasta)})
             st.cache_data.clear()
-            st.rerun()
 
 with tab_grupo_config:
     tab_mapeo, tab_packs, tab_mixes, tab_editar = st.tabs(
