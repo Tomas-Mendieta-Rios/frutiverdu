@@ -6286,6 +6286,7 @@ with tab_stock:
                     "st_teorico_ultimo_f0": str(f0),
                     "st_teorico_ultimo_fc": str(fc),
                     "st_teorico_ultimo_fp": str(fp),
+                    "st_teorico_fecha_conteo": str(fecha_conteo),
                 })
             except Exception:
                 pass
